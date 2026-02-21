@@ -122,10 +122,14 @@ private:
     // Microphone gain control
     std::atomic<float> m_micGain{0.25f}; // Default 25% (macOS mic input is typically hot)
 
-    // Audio buffer sizes for ~100ms latency
-    // Output: 12kHz * 2 channels * 4 bytes/sample * 0.1 sec = 9600 bytes
+    // Audio throughput: 12kHz × 2ch × sizeof(float) = 96,000 bytes/sec = 96 bytes/ms
+    static constexpr int BYTES_PER_MS = 96;
+
+    // Audio buffer sizes
+    // QAudioSink buffer: 500ms — large enough for 4+ max-size packets (SL7 = 11,520 bytes = 120ms)
+    // Ensures bytesFree() always exceeds one max packet, preventing partial writes and data loss
+    static constexpr int OUTPUT_BUFFER_SIZE = 500 * BYTES_PER_MS; // 48,000 bytes
     // Input: 48kHz * 4 bytes/sample * 0.1 sec = 19200 bytes
-    static constexpr int OUTPUT_BUFFER_SIZE = 9600;
     static constexpr int INPUT_BUFFER_SIZE = 19200;
 
     // Microphone gain scaling factor (gain slider 0-1 maps to 0-2x, so 0.5 = unity)
@@ -142,11 +146,21 @@ private:
 
     // Jitter buffer for RX audio playback
     QQueue<QByteArray> m_audioQueue;
-    QMutex m_queueMutex; // Protects m_audioQueue and m_prebuffering
+    int m_queueBytes = 0; // Total decoded bytes in m_audioQueue (tracked for time-based thresholds)
+    QMutex m_queueMutex;  // Protects m_audioQueue, m_queueBytes, m_prebuffering
     QTimer *m_feedTimer;
     bool m_prebuffering = true;
-    static constexpr int PREBUFFER_PACKETS = 2;  // ~40ms prebuffer (2 × 20ms Opus packets)
-    static constexpr int MAX_QUEUE_PACKETS = 50; // ~1s overflow cap
+
+    // Write staging buffer: holds processed PCM that couldn't be written in one feed cycle
+    // Audio-thread-only (no mutex needed) — safety net for partial QIODevice::write()
+    QByteArray m_writeBuffer;
+
+    // Jitter buffer constants (adapt to any SL level automatically)
+    // Prebuffer: start playback as soon as the first packet arrives.
+    // The SL level already provides jitter tolerance (larger packets = more runway),
+    // so additional prebuffering just adds latency without benefit.
+    static constexpr int PREBUFFER_PACKETS = 1;
+    static constexpr int MAX_QUEUE_BYTES = 1000 * BYTES_PER_MS; // 96,000 bytes (1s cap)
     static constexpr int FEED_INTERVAL_MS = 10;
 };
 

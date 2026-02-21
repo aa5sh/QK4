@@ -1899,9 +1899,6 @@ void MainWindow::setupMenuBar() {
     connect(optionsAction, &QAction::triggered, this, [this]() {
         OptionsDialog dialog(m_radioState, m_audioEngine, m_kpodDevice, m_catServer, m_halikeyDevice, this);
         dialog.exec();
-        // Flush audio to resync with spectrum after modal dialog
-        if (m_audioEngine)
-            QMetaObject::invokeMethod(m_audioEngine, "flushQueue", Qt::QueuedConnection);
     });
     toolsMenu->addAction(optionsAction);
 
@@ -2763,16 +2760,9 @@ void MainWindow::setupUi() {
     // Connect microphone frames to encoding/transmission
     connect(m_audioEngine, &AudioEngine::microphoneFrame, this, &MainWindow::onMicrophoneFrame);
 
-    // Flush audio jitter buffer on discrete filter/mode changes to avoid stale audio lag.
-    // These signals fire once per button press (not continuously like VFO tuning).
-    connect(m_radioState, &RadioState::modeChanged, m_audioEngine, &AudioEngine::flushQueue);
-    connect(m_radioState, &RadioState::modeBChanged, m_audioEngine, &AudioEngine::flushQueue);
-    connect(m_radioState, &RadioState::filterBandwidthChanged, m_audioEngine, &AudioEngine::flushQueue);
-    connect(m_radioState, &RadioState::filterBandwidthBChanged, m_audioEngine, &AudioEngine::flushQueue);
-    connect(m_radioState, &RadioState::filterPositionChanged, m_audioEngine, &AudioEngine::flushQueue);
-    connect(m_radioState, &RadioState::filterPositionBChanged, m_audioEngine, &AudioEngine::flushQueue);
-    connect(m_radioState, &RadioState::dataSubModeChanged, m_audioEngine, &AudioEngine::flushQueue);
-    connect(m_radioState, &RadioState::dataSubModeBChanged, m_audioEngine, &AudioEngine::flushQueue);
+    // Note: audio buffer flushing on mode/filter changes was removed — AudioEngine now runs
+    // on a dedicated thread with a properly sized jitter buffer, so stale audio lag no longer
+    // occurs. Flushing would cause a brief audio dropout on every mode/filter switch.
 }
 
 void MainWindow::setupTopStatusBar(QWidget *parent) {

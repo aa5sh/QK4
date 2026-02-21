@@ -58,8 +58,10 @@ void AudioEngine::stop() {
     {
         QMutexLocker lock(&m_queueMutex);
         m_audioQueue.clear();
+        m_queueBytes = 0;
         m_prebuffering = true;
     }
+    m_writeBuffer.clear();
 
     // Stop mic polling timer
     if (m_micPollTimer) {
@@ -171,25 +173,41 @@ void AudioEngine::enqueueAudio(const QByteArray &pcmData) {
 
     QMutexLocker lock(&m_queueMutex);
 
-    // Overflow protection: drop oldest if queue too deep
-    while (m_audioQueue.size() >= MAX_QUEUE_PACKETS) {
-        m_audioQueue.dequeue();
+    // Overflow protection: drop oldest packets if queue exceeds 1s of audio
+    while (m_queueBytes + pcmData.size() > MAX_QUEUE_BYTES && !m_audioQueue.isEmpty()) {
+        m_queueBytes -= m_audioQueue.dequeue().size();
     }
 
     m_audioQueue.enqueue(pcmData);
+    m_queueBytes += pcmData.size();
 }
 
 void AudioEngine::flushQueue() {
     QMutexLocker lock(&m_queueMutex);
     m_audioQueue.clear();
+    m_queueBytes = 0;
     m_prebuffering = true;
+    m_writeBuffer.clear();
 }
 
 void AudioEngine::feedAudioDevice() {
     if (!m_audioSinkDevice)
         return;
 
-    // Query sink capacity outside the lock (audio-thread-only, no mutex needed)
+    // Drain any leftover write buffer from a previous partial write
+    if (!m_writeBuffer.isEmpty()) {
+        int bytesFree = m_audioSink->bytesFree();
+        if (bytesFree > 0) {
+            qint64 toWrite = qMin(static_cast<qint64>(m_writeBuffer.size()), static_cast<qint64>(bytesFree));
+            qint64 written = m_audioSinkDevice->write(m_writeBuffer.constData(), toWrite);
+            if (written > 0)
+                m_writeBuffer.remove(0, static_cast<int>(written));
+        }
+        if (!m_writeBuffer.isEmpty())
+            return; // Still have leftover — don't pull more from queue yet
+    }
+
+    // Query sink capacity (audio-thread-only, no mutex needed)
     int bytesFree = m_audioSink->bytesFree();
 
     // Drain queue under a short lock, then write outside the lock
@@ -200,7 +218,7 @@ void AudioEngine::feedAudioDevice() {
         if (m_audioQueue.isEmpty())
             return;
 
-        // Wait for prebuffer to fill before starting playback
+        // Wait for at least one packet before starting playback
         if (m_prebuffering) {
             if (m_audioQueue.size() < PREBUFFER_PACKETS)
                 return;
@@ -209,19 +227,25 @@ void AudioEngine::feedAudioDevice() {
 
         // Drain packets that fit in the sink's free space
         while (!m_audioQueue.isEmpty()) {
-            if (bytesFree < m_audioQueue.head().size())
+            int headSize = m_audioQueue.head().size();
+            if (bytesFree < headSize)
                 break;
 
             QByteArray pkt = m_audioQueue.dequeue();
-            bytesFree -= pkt.size();
+            m_queueBytes -= pkt.size();
+            bytesFree -= headSize;
             localPackets.append(std::move(pkt));
         }
     }
 
-    // Write packets to audio sink without holding the lock
+    // Apply mix/volume and write to audio sink without holding the lock
     for (QByteArray &packet : localPackets) {
         applyMixAndVolume(packet);
-        m_audioSinkDevice->write(packet);
+        qint64 written = m_audioSinkDevice->write(packet.constData(), packet.size());
+        if (written < packet.size()) {
+            // Partial write — save remainder for next feed cycle
+            m_writeBuffer.append(packet.constData() + written, packet.size() - static_cast<int>(written));
+        }
     }
 }
 
