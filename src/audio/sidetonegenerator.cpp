@@ -14,8 +14,12 @@ SidetoneGenerator::SidetoneGenerator(QObject *parent) : QObject(parent) {
 }
 
 SidetoneGenerator::~SidetoneGenerator() {
+    // Audio sink should already be cleaned up by stop() on the correct thread.
+    // Guard against missing stop() call, but this runs on the wrong thread.
     if (m_audioSink) {
-        m_audioSink->stop();
+        qWarning() << "SidetoneGenerator: audio sink not cleaned up by stop() — destroying from wrong thread";
+        delete m_audioSink;
+        m_audioSink = nullptr;
     }
 }
 
@@ -50,6 +54,9 @@ void SidetoneGenerator::stop() {
     m_repeatTimer->stop();
     if (m_audioSink) {
         m_audioSink->stop();
+        delete m_audioSink;
+        m_audioSink = nullptr;
+        m_pushDevice = nullptr;
     }
 }
 

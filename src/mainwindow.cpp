@@ -1711,6 +1711,8 @@ MainWindow::MainWindow(QWidget *parent)
     // Also control local sidetone for immediate audio feedback
     // Sidetone calls use invokeMethod since SidetoneGenerator lives on sidetone thread
     connect(m_halikeyDevice, &HalikeyDevice::ditStateChanged, this, [this](bool pressed) {
+        if (!m_tcpClient->isConnected())
+            return;
         if (pressed) {
             m_tcpClient->sendCAT("KZ.;");
             QMetaObject::invokeMethod(m_sidetoneGenerator, "startDit", Qt::QueuedConnection);
@@ -1719,6 +1721,8 @@ MainWindow::MainWindow(QWidget *parent)
         }
     });
     connect(m_halikeyDevice, &HalikeyDevice::dahStateChanged, this, [this](bool pressed) {
+        if (!m_tcpClient->isConnected())
+            return;
         if (pressed) {
             m_tcpClient->sendCAT("KZ-;");
             QMetaObject::invokeMethod(m_sidetoneGenerator, "startDah", Qt::QueuedConnection);
@@ -1832,6 +1836,13 @@ MainWindow::MainWindow(QWidget *parent)
 }
 
 MainWindow::~MainWindow() {
+    // Close HaliKey FIRST — its closePort() emits disconnected(), which triggers
+    // lambdas that call invokeMethod on m_sidetoneGenerator/m_tcpClient.
+    // Must happen while those objects are still alive.
+    if (m_halikeyDevice) {
+        m_halikeyDevice->closePort();
+    }
+
     // Shut down I/O thread first (stop producing audio before stopping consumer)
     if (m_ioThread) {
         QMetaObject::invokeMethod(m_tcpClient, "disconnectFromHost", Qt::BlockingQueuedConnection);
