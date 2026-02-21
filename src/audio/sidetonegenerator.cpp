@@ -6,9 +6,8 @@
 #include <QtMath>
 
 SidetoneGenerator::SidetoneGenerator(QObject *parent) : QObject(parent) {
-    initAudio();
-
-    // Create repeat timer for continuous keying while paddle is held
+    // Repeat timer created here (moves with parent via moveToThread)
+    // Audio init deferred to start() which runs on the sidetone thread
     m_repeatTimer = new QTimer(this);
     m_repeatTimer->setTimerType(Qt::PreciseTimer);
     connect(m_repeatTimer, &QTimer::timeout, this, &SidetoneGenerator::onRepeatTimer);
@@ -43,16 +42,27 @@ void SidetoneGenerator::initAudio() {
     }
 }
 
+void SidetoneGenerator::start() {
+    initAudio();
+}
+
+void SidetoneGenerator::stop() {
+    m_repeatTimer->stop();
+    if (m_audioSink) {
+        m_audioSink->stop();
+    }
+}
+
 void SidetoneGenerator::setFrequency(int hz) {
-    m_frequency = hz;
+    m_frequency.store(hz, std::memory_order_relaxed);
 }
 
 void SidetoneGenerator::setVolume(float volume) {
-    m_volume = volume;
+    m_volume.store(volume, std::memory_order_relaxed);
 }
 
 void SidetoneGenerator::setKeyerSpeed(int wpm) {
-    m_keyerWpm = qBound(5, wpm, 60);
+    m_keyerWpm.store(qBound(5, wpm, 60), std::memory_order_relaxed);
 }
 
 void SidetoneGenerator::startDit() {
@@ -103,7 +113,7 @@ void SidetoneGenerator::onRepeatTimer() {
 }
 
 int SidetoneGenerator::ditDurationMs() const {
-    return 1200 / m_keyerWpm;
+    return 1200 / m_keyerWpm.load(std::memory_order_relaxed);
 }
 
 int SidetoneGenerator::dahDurationMs() const {
@@ -132,7 +142,9 @@ void SidetoneGenerator::playElement(int durationMs) {
     QByteArray buffer(totalSamples * sizeof(qint16), 0);
     qint16 *samples = reinterpret_cast<qint16 *>(buffer.data());
 
-    double phaseIncrement = 2.0 * M_PI * m_frequency / sampleRate;
+    int freq = m_frequency.load(std::memory_order_relaxed);
+    float vol = m_volume.load(std::memory_order_relaxed);
+    double phaseIncrement = 2.0 * M_PI * freq / sampleRate;
 
     // Generate tone samples
     for (int i = 0; i < toneSamples; ++i) {
@@ -144,7 +156,7 @@ void SidetoneGenerator::playElement(int durationMs) {
             envelope = 0.5f * (1.0f + qCos(M_PI * fallIndex / fallTimeSamples));
         }
 
-        double sample = qSin(m_phase) * m_volume * envelope * 32767.0;
+        double sample = qSin(m_phase) * vol * envelope * 32767.0;
         samples[i] = static_cast<qint16>(sample);
         m_phase += phaseIncrement;
         if (m_phase >= 2.0 * M_PI) {

@@ -3,7 +3,9 @@
 
 #include <QObject>
 #include <QSslSocket>
+#include <QThread>
 #include <QTimer>
+#include <atomic>
 #include "protocol.h"
 
 class TcpClient : public QObject {
@@ -16,15 +18,15 @@ public:
     explicit TcpClient(QObject *parent = nullptr);
     ~TcpClient();
 
-    void connectToHost(const QString &host, quint16 port, const QString &password, bool useTls = false,
-                       const QString &identity = QString(), int encodeMode = 3, int streamingLatency = 3);
-    void disconnectFromHost();
+    Q_INVOKABLE void connectToHost(const QString &host, quint16 port, const QString &password, bool useTls = false,
+                                   const QString &identity = QString(), int encodeMode = 3, int streamingLatency = 3);
+    Q_INVOKABLE void disconnectFromHost();
     bool isConnected() const;
     ConnectionState connectionState() const;
     bool isUsingTls() const { return m_useTls; }
 
-    void sendCAT(const QString &command);
-    void sendRaw(const QByteArray &data);
+    Q_INVOKABLE void sendCAT(const QString &command);
+    Q_INVOKABLE void sendRaw(const QByteArray &data);
 
     Protocol *protocol() { return m_protocol; }
 
@@ -67,6 +69,7 @@ private:
     int m_encodeMode;       // Audio encode mode (0-3)
     int m_streamingLatency; // Remote streaming audio latency (0-7)
     ConnectionState m_state;
+    std::atomic<bool> m_connected{false}; // Thread-safe read for isConnected()
     bool m_authResponseReceived;
 };
 

@@ -61,7 +61,7 @@ OptionsDialog::OptionsDialog(RadioState *radioState, AudioEngine *audioEngine, K
 OptionsDialog::~OptionsDialog() {
     // Make sure to stop mic test if dialog is closed
     if (m_micTestActive && m_audioEngine) {
-        m_audioEngine->setMicEnabled(false);
+        QMetaObject::invokeMethod(m_audioEngine, "setMicEnabled", Qt::QueuedConnection, Q_ARG(bool, false));
     }
 }
 
@@ -655,7 +655,7 @@ void OptionsDialog::onMicDeviceChanged(int index) {
     RadioSettings::instance()->setMicDevice(deviceId);
 
     if (m_audioEngine) {
-        m_audioEngine->setMicDevice(deviceId);
+        QMetaObject::invokeMethod(m_audioEngine, "setMicDevice", Qt::QueuedConnection, Q_ARG(QString, deviceId));
     }
 }
 
@@ -679,7 +679,7 @@ void OptionsDialog::onMicTestToggled(bool checked) {
     }
 
     if (m_audioEngine) {
-        m_audioEngine->setMicEnabled(checked);
+        QMetaObject::invokeMethod(m_audioEngine, "setMicEnabled", Qt::QueuedConnection, Q_ARG(bool, checked));
     }
 
     // Reset meter when stopping
@@ -792,7 +792,7 @@ void OptionsDialog::onSpeakerDeviceChanged(int index) {
     RadioSettings::instance()->setSpeakerDevice(deviceId);
 
     if (m_audioEngine) {
-        m_audioEngine->setOutputDevice(deviceId);
+        QMetaObject::invokeMethod(m_audioEngine, "setOutputDevice", Qt::QueuedConnection, Q_ARG(QString, deviceId));
     }
 }
 

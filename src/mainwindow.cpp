@@ -92,8 +92,8 @@ static int getNextSpanDown(int currentSpan) {
 
 // ============== MainWindow Implementation ==============
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent), m_tcpClient(new TcpClient(this)), m_radioState(new RadioState(this)),
-      m_clockTimer(new QTimer(this)), m_audioEngine(new AudioEngine(this)), m_opusDecoder(new OpusDecoder(this)),
+    : QMainWindow(parent), m_tcpClient(new TcpClient(nullptr)), m_radioState(new RadioState(this)),
+      m_clockTimer(new QTimer(this)), m_audioEngine(new AudioEngine(nullptr)), m_opusDecoder(new OpusDecoder(nullptr)),
       m_opusEncoder(new OpusEncoder(this)), m_menuModel(new MenuModel(this)), m_menuOverlay(nullptr) {
     // Initialize Opus decoder (K4 sends 12kHz stereo: left=Main, right=Sub)
     m_opusDecoder->initialize(12000, 2);
@@ -101,7 +101,8 @@ MainWindow::MainWindow(QWidget *parent)
     // Initialize Opus encoder for TX audio (12kHz mono)
     m_opusEncoder->initialize(12000, 1);
 
-    // Load saved audio device settings
+    // Load saved audio device settings BEFORE moveToThread (only stores strings/floats,
+    // no Qt audio objects exist yet, so direct calls are safe)
     QString savedMicDevice = RadioSettings::instance()->micDevice();
     if (!savedMicDevice.isEmpty()) {
         m_audioEngine->setMicDevice(savedMicDevice);
@@ -111,6 +112,19 @@ MainWindow::MainWindow(QWidget *parent)
         m_audioEngine->setOutputDevice(savedSpeakerDevice);
     }
     m_audioEngine->setMicGain(RadioSettings::instance()->micGain() / 100.0f);
+
+    // Move AudioEngine to dedicated thread for glitch-free audio playback
+    m_audioThread = new QThread(this);
+    m_audioThread->setObjectName("AudioEngine");
+    m_audioEngine->moveToThread(m_audioThread);
+    m_audioThread->start();
+
+    // Move TcpClient (+ Protocol, socket, timers as children) to dedicated I/O thread
+    // so network data flows independently of UI work
+    m_ioThread = new QThread(this);
+    m_ioThread->setObjectName("I/O");
+    m_tcpClient->moveToThread(m_ioThread);
+    m_ioThread->start();
 
     // IMPORTANT: setupUi() MUST be called BEFORE setupMenuBar()!
     // Qt 6.10.1 bug on macOS Tahoe: calling menuBar() before creating QRhiWidget
@@ -1579,8 +1593,16 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_tcpClient->protocol(), &Protocol::spectrumDataReady, this, &MainWindow::onSpectrumData);
     connect(m_tcpClient->protocol(), &Protocol::miniSpectrumDataReady, this, &MainWindow::onMiniSpectrumData);
 
-    // Protocol audio data -> Opus decoder -> Speaker
-    connect(m_tcpClient->protocol(), &Protocol::audioDataReady, this, &MainWindow::onAudioData);
+    // Protocol audio data -> direct decode + enqueue on I/O thread (bypasses main thread entirely)
+    // m_opusDecoder is only called from this lambda → single-threaded access on I/O thread
+    // m_audioEngine->enqueueAudio() is mutex-protected → safe from any thread
+    connect(m_tcpClient->protocol(), &Protocol::audioDataReady, m_tcpClient->protocol(),
+            [this](const QByteArray &payload) {
+                QByteArray pcmData = m_opusDecoder->decodeK4Packet(payload);
+                if (!pcmData.isEmpty()) {
+                    m_audioEngine->enqueueAudio(pcmData);
+                }
+            });
 
     // Clock timer for date/time display
     connect(m_clockTimer, &QTimer::timeout, this, &MainWindow::updateDateTime);
@@ -1653,7 +1675,12 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Local sidetone generator for CW keying (low-latency local audio feedback)
     // MUST be created BEFORE HaliKey signal connections that use it
-    m_sidetoneGenerator = new SidetoneGenerator(this);
+    m_sidetoneGenerator = new SidetoneGenerator(nullptr);
+    m_sidetoneThread = new QThread(this);
+    m_sidetoneThread->setObjectName("Sidetone");
+    m_sidetoneGenerator->moveToThread(m_sidetoneThread);
+    m_sidetoneThread->start();
+    QMetaObject::invokeMethod(m_sidetoneGenerator, "start", Qt::QueuedConnection);
 
     // Set initial sidetone frequency from radio state if available
     if (m_radioState->cwPitch() > 0) {
@@ -1682,26 +1709,28 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Connect HaliKey paddle signals - relay paddle state to K4 in real-time
     // Also control local sidetone for immediate audio feedback
+    // Sidetone calls use invokeMethod since SidetoneGenerator lives on sidetone thread
     connect(m_halikeyDevice, &HalikeyDevice::ditStateChanged, this, [this](bool pressed) {
         if (pressed) {
             m_tcpClient->sendCAT("KZ.;");
-            m_sidetoneGenerator->startDit();
+            QMetaObject::invokeMethod(m_sidetoneGenerator, "startDit", Qt::QueuedConnection);
         } else {
-            m_sidetoneGenerator->stopElement();
+            QMetaObject::invokeMethod(m_sidetoneGenerator, "stopElement", Qt::QueuedConnection);
         }
     });
     connect(m_halikeyDevice, &HalikeyDevice::dahStateChanged, this, [this](bool pressed) {
         if (pressed) {
             m_tcpClient->sendCAT("KZ-;");
-            m_sidetoneGenerator->startDah();
+            QMetaObject::invokeMethod(m_sidetoneGenerator, "startDah", Qt::QueuedConnection);
         } else {
-            m_sidetoneGenerator->stopElement();
+            QMetaObject::invokeMethod(m_sidetoneGenerator, "stopElement", Qt::QueuedConnection);
         }
     });
 
     // Stop sidetone when HaliKey disconnects (prevents runaway repeat timer
     // if paddle was held when disconnected — Note Off never arrives)
-    connect(m_halikeyDevice, &HalikeyDevice::disconnected, this, [this]() { m_sidetoneGenerator->stopElement(); });
+    connect(m_halikeyDevice, &HalikeyDevice::disconnected, this,
+            [this]() { QMetaObject::invokeMethod(m_sidetoneGenerator, "stopElement", Qt::QueuedConnection); });
 
     // Send repeated KZ commands when sidetone repeat timer fires (V14 mode only)
     connect(m_sidetoneGenerator, &SidetoneGenerator::ditRepeated, this, [this]() { m_tcpClient->sendCAT("KZ.;"); });
@@ -1803,6 +1832,32 @@ MainWindow::MainWindow(QWidget *parent)
 }
 
 MainWindow::~MainWindow() {
+    // Shut down I/O thread first (stop producing audio before stopping consumer)
+    if (m_ioThread) {
+        QMetaObject::invokeMethod(m_tcpClient, "disconnectFromHost", Qt::BlockingQueuedConnection);
+        m_ioThread->quit();
+        m_ioThread->wait(2000);
+    }
+    delete m_tcpClient;   // No parent, must delete manually
+    delete m_opusDecoder; // No parent, must delete manually
+
+    // Shut down sidetone thread
+    if (m_sidetoneThread) {
+        QMetaObject::invokeMethod(m_sidetoneGenerator, "stop", Qt::BlockingQueuedConnection);
+        m_sidetoneThread->quit();
+        m_sidetoneThread->wait(2000);
+    }
+    delete m_sidetoneGenerator; // No parent, must delete manually
+
+    // Shut down audio thread (consumer stops after producer)
+    if (m_audioThread) {
+        QMetaObject::invokeMethod(m_audioEngine, "stop", Qt::BlockingQueuedConnection);
+        m_audioThread->quit();
+        m_audioThread->wait(2000);
+    }
+    delete m_audioEngine; // No parent, must delete manually
+    m_audioEngine = nullptr;
+
     // Disconnect KPA1500 signals before child destruction to prevent
     // callbacks accessing destroyed widgets during cleanup
     if (m_kpa1500Client) {
@@ -1833,6 +1888,9 @@ void MainWindow::setupMenuBar() {
     connect(optionsAction, &QAction::triggered, this, [this]() {
         OptionsDialog dialog(m_radioState, m_audioEngine, m_kpodDevice, m_catServer, m_halikeyDevice, this);
         dialog.exec();
+        // Flush audio to resync with spectrum after modal dialog
+        if (m_audioEngine)
+            QMetaObject::invokeMethod(m_audioEngine, "flushQueue", Qt::QueuedConnection);
     });
     toolsMenu->addAction(optionsAction);
 
@@ -3719,7 +3777,7 @@ void MainWindow::showRadioManager() {
     connect(&dialog, &RadioManagerDialog::connectRequested, this, &MainWindow::connectToRadio);
     connect(&dialog, &RadioManagerDialog::disconnectRequested, this, [this]() {
         // TcpClient::disconnectFromHost() sends RRN; automatically
-        m_tcpClient->disconnectFromHost();
+        QMetaObject::invokeMethod(m_tcpClient, "disconnectFromHost", Qt::QueuedConnection);
     });
 
     // Set the connected host so dialog can show "Disconnect" for active connection
@@ -3732,7 +3790,7 @@ void MainWindow::showRadioManager() {
 
 void MainWindow::connectToRadio(const RadioEntry &radio) {
     if (m_tcpClient->isConnected()) {
-        m_tcpClient->disconnectFromHost();
+        QMetaObject::invokeMethod(m_tcpClient, "disconnectFromHost", Qt::QueuedConnection);
     }
 
     m_currentRadio = radio;
@@ -3740,8 +3798,10 @@ void MainWindow::connectToRadio(const RadioEntry &radio) {
 
     qDebug() << "Connecting to" << radio.host << ":" << radio.port << (radio.useTls ? "(TLS/PSK)" : "(unencrypted)")
              << "encodeMode:" << radio.encodeMode << "streamingLatency:" << radio.streamingLatency;
-    m_tcpClient->connectToHost(radio.host, radio.port, radio.password, radio.useTls, radio.identity, radio.encodeMode,
-                               radio.streamingLatency);
+    QMetaObject::invokeMethod(m_tcpClient, "connectToHost", Qt::QueuedConnection, Q_ARG(QString, radio.host),
+                              Q_ARG(quint16, radio.port), Q_ARG(QString, radio.password), Q_ARG(bool, radio.useTls),
+                              Q_ARG(QString, radio.identity), Q_ARG(int, radio.encodeMode),
+                              Q_ARG(int, radio.streamingLatency));
 }
 
 void MainWindow::onConnectClicked() {
@@ -3749,7 +3809,7 @@ void MainWindow::onConnectClicked() {
 }
 
 void MainWindow::onDisconnectClicked() {
-    m_tcpClient->disconnectFromHost();
+    QMetaObject::invokeMethod(m_tcpClient, "disconnectFromHost", Qt::QueuedConnection);
 }
 
 void MainWindow::onStateChanged(TcpClient::ConnectionState state) {
@@ -3765,13 +3825,14 @@ void MainWindow::onError(const QString &error) {
 void MainWindow::onAuthenticated() {
     qDebug() << "Successfully authenticated with K4 radio";
 
-    // Start audio engine for RX audio
-    if (m_audioEngine->start()) {
+    // Start audio engine on its dedicated thread (BlockingQueued to get return value)
+    bool audioStarted = false;
+    QMetaObject::invokeMethod(m_audioEngine, "start", Qt::BlockingQueuedConnection, Q_RETURN_ARG(bool, audioStarted));
+    if (audioStarted) {
         qDebug() << "Audio engine started for RX audio";
-        // Apply current volume slider settings to AudioEngine (for channel mixing)
+        // Volume setters are atomic — safe as direct calls from any thread
         m_audioEngine->setMainVolume(m_sideControlPanel->volume() / 100.0f);
         m_audioEngine->setSubVolume(m_sideControlPanel->subVolume() / 100.0f);
-        // Apply saved mic gain setting
         m_audioEngine->setMicGain(RadioSettings::instance()->micGain() / 100.0f);
     } else {
         qWarning() << "Failed to start audio engine";
@@ -3906,7 +3967,7 @@ void MainWindow::updateConnectionState(TcpClient::ConnectionState state) {
         m_titleLabel->setText("Elecraft K4");
         // Stop audio engine to prevent accessing invalid data
         if (m_audioEngine) {
-            m_audioEngine->stop();
+            QMetaObject::invokeMethod(m_audioEngine, "stop", Qt::QueuedConnection);
         }
 
         // Clear all UI state to avoid showing stale data
@@ -4398,21 +4459,6 @@ void MainWindow::onMiniSpectrumData(int receiver, const QByteArray &data) {
     }
 }
 
-void MainWindow::onAudioData(const QByteArray &payload) {
-    // Only process audio when connected
-    if (!m_tcpClient->isConnected()) {
-        return;
-    }
-
-    // Decode K4 audio packet (handles header parsing, stereo decode, volume/balance mixing)
-    // Returns stereo Float32 PCM (L=Main, R=Sub with mute/balance applied)
-    QByteArray pcmData = m_opusDecoder->decodeK4Packet(payload);
-
-    if (!pcmData.isEmpty()) {
-        m_audioEngine->enqueueAudio(pcmData);
-    }
-}
-
 void MainWindow::onPttPressed() {
     if (!m_tcpClient->isConnected()) {
         return;
@@ -4420,14 +4466,14 @@ void MainWindow::onPttPressed() {
 
     m_pttActive = true;
     m_txSequence = 0; // Reset sequence on new PTT press
-    m_audioEngine->setMicEnabled(true);
+    QMetaObject::invokeMethod(m_audioEngine, "setMicEnabled", Qt::QueuedConnection, Q_ARG(bool, true));
     m_bottomMenuBar->setPttActive(true);
     qDebug() << "PTT pressed - microphone enabled";
 }
 
 void MainWindow::onPttReleased() {
     m_pttActive = false;
-    m_audioEngine->setMicEnabled(false);
+    QMetaObject::invokeMethod(m_audioEngine, "setMicEnabled", Qt::QueuedConnection, Q_ARG(bool, false));
     m_bottomMenuBar->setPttActive(false);
     qDebug() << "PTT released - microphone disabled";
 }
@@ -4607,11 +4653,8 @@ void MainWindow::showEvent(QShowEvent *event) {
 }
 
 void MainWindow::changeEvent(QEvent *event) {
-    if (event->type() == QEvent::WindowStateChange && !isMinimized()) {
-        // Flush stale audio when restoring from minimized to resync with spectrum
-        if (m_audioEngine)
-            m_audioEngine->flushQueue();
-    }
+    // Audio runs on its own thread now — no flush needed on minimize/restore.
+    // The audio thread keeps playing smoothly; the waterfall catches up visually on restore.
     QMainWindow::changeEvent(event);
 }
 

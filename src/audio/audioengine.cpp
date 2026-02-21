@@ -6,7 +6,7 @@
 
 AudioEngine::AudioEngine(QObject *parent)
     : QObject(parent), m_audioSink(nullptr), m_audioSinkDevice(nullptr), m_audioSource(nullptr),
-      m_audioSourceDevice(nullptr), m_micEnabled(false), m_micPollTimer(nullptr) {
+      m_audioSourceDevice(nullptr), m_micPollTimer(nullptr) {
 
     // Output format: K4 uses 12kHz stereo Float32 PCM (L=Main RX, R=Sub RX)
     m_outputFormat.setSampleRate(12000);
@@ -19,18 +19,16 @@ AudioEngine::AudioEngine(QObject *parent)
     m_inputFormat.setChannelCount(1);
     m_inputFormat.setSampleFormat(QAudioFormat::Float);
 
-    // Create timer for polling microphone data (more reliable than readyRead signal)
+    // Timers are children of AudioEngine so moveToThread() moves them too
     m_micPollTimer = new QTimer(this);
     m_micPollTimer->setInterval(10); // Poll every 10ms for low latency
     connect(m_micPollTimer, &QTimer::timeout, this, &AudioEngine::onMicDataReady);
 
-    // Create feed timer for jitter-buffered RX audio playback
     m_feedTimer = new QTimer(this);
     m_feedTimer->setInterval(FEED_INTERVAL_MS);
     connect(m_feedTimer, &QTimer::timeout, this, &AudioEngine::feedAudioDevice);
 
-    // Setup audio input immediately so mic testing works without radio connection
-    setupAudioInput();
+    // Note: setupAudioInput() is deferred to start() so it runs on the audio thread
 }
 
 AudioEngine::~AudioEngine() {
@@ -44,7 +42,7 @@ bool AudioEngine::start() {
         m_feedTimer->start();
     }
 
-    // Setup audio input if not already done (it's also called in constructor)
+    // Setup audio input on the audio thread (deferred from constructor for thread safety)
     bool inputOk = (m_audioSource != nullptr) || setupAudioInput();
 
     Q_UNUSED(inputOk);
@@ -57,8 +55,11 @@ void AudioEngine::stop() {
     if (m_feedTimer) {
         m_feedTimer->stop();
     }
-    m_audioQueue.clear();
-    m_prebuffering = true;
+    {
+        QMutexLocker lock(&m_queueMutex);
+        m_audioQueue.clear();
+        m_prebuffering = true;
+    }
 
     // Stop mic polling timer
     if (m_micPollTimer) {
@@ -123,7 +124,7 @@ bool AudioEngine::setupAudioOutput() {
     }
 
     // Apply current volume setting to the newly created sink
-    m_audioSink->setVolume(m_volume);
+    m_audioSink->setVolume(m_volume.load(std::memory_order_relaxed));
 
     return true;
 }
@@ -168,6 +169,8 @@ void AudioEngine::enqueueAudio(const QByteArray &pcmData) {
     if (pcmData.isEmpty())
         return;
 
+    QMutexLocker lock(&m_queueMutex);
+
     // Overflow protection: drop oldest if queue too deep
     while (m_audioQueue.size() >= MAX_QUEUE_PACKETS) {
         m_audioQueue.dequeue();
@@ -177,31 +180,46 @@ void AudioEngine::enqueueAudio(const QByteArray &pcmData) {
 }
 
 void AudioEngine::flushQueue() {
+    QMutexLocker lock(&m_queueMutex);
     m_audioQueue.clear();
     m_prebuffering = true;
 }
 
 void AudioEngine::feedAudioDevice() {
-    if (!m_audioSinkDevice || m_audioQueue.isEmpty())
+    if (!m_audioSinkDevice)
         return;
 
-    // Wait for prebuffer to fill before starting playback
-    if (m_prebuffering) {
-        if (m_audioQueue.size() < PREBUFFER_PACKETS)
+    // Query sink capacity outside the lock (audio-thread-only, no mutex needed)
+    int bytesFree = m_audioSink->bytesFree();
+
+    // Drain queue under a short lock, then write outside the lock
+    QList<QByteArray> localPackets;
+    {
+        QMutexLocker lock(&m_queueMutex);
+
+        if (m_audioQueue.isEmpty())
             return;
-        m_prebuffering = false;
+
+        // Wait for prebuffer to fill before starting playback
+        if (m_prebuffering) {
+            if (m_audioQueue.size() < PREBUFFER_PACKETS)
+                return;
+            m_prebuffering = false;
+        }
+
+        // Drain packets that fit in the sink's free space
+        while (!m_audioQueue.isEmpty()) {
+            if (bytesFree < m_audioQueue.head().size())
+                break;
+
+            QByteArray pkt = m_audioQueue.dequeue();
+            bytesFree -= pkt.size();
+            localPackets.append(std::move(pkt));
+        }
     }
 
-    // Write as many queued packets as the sink can accept
-    // Volume/routing/balance is applied here at playback time so slider
-    // changes take effect instantly regardless of queue depth
-    while (!m_audioQueue.isEmpty()) {
-        const QByteArray &front = m_audioQueue.head();
-        int bytesFree = m_audioSink->bytesFree();
-        if (bytesFree < front.size())
-            break;
-
-        QByteArray packet = m_audioQueue.dequeue();
+    // Write packets to audio sink without holding the lock
+    for (QByteArray &packet : localPackets) {
         applyMixAndVolume(packet);
         m_audioSinkDevice->write(packet);
     }
@@ -228,11 +246,25 @@ void AudioEngine::applyMixAndVolume(QByteArray &packet) {
     int totalFloats = packet.size() / sizeof(float);
     int sampleCount = totalFloats / 2;
 
+    // Load atomic/guarded values once per packet (not per sample)
+    const float mainVol = m_mainVolume.load(std::memory_order_relaxed);
+    const float subVol = m_subVolume.load(std::memory_order_relaxed);
+    const bool subMuted = m_subMuted.load(std::memory_order_relaxed);
+    const int balMode = m_balanceMode.load(std::memory_order_relaxed);
+    const int balOffset = m_balanceOffset.load(std::memory_order_relaxed);
+
+    MixSource mixL, mixR;
+    {
+        QMutexLocker lock(&m_mixMutex);
+        mixL = m_mixLeft;
+        mixR = m_mixRight;
+    }
+
     // Pre-compute BL balance gains (BAL mode only, applied after MX routing)
     float balLeftGain = 1.0f, balRightGain = 1.0f;
-    if (m_balanceMode == 1) {
-        balLeftGain = qBound(0.0f, (50.0f - m_balanceOffset) / 50.0f, 1.0f);
-        balRightGain = qBound(0.0f, (50.0f + m_balanceOffset) / 50.0f, 1.0f);
+    if (balMode == 1) {
+        balLeftGain = qBound(0.0f, (50.0f - balOffset) / 50.0f, 1.0f);
+        balRightGain = qBound(0.0f, (50.0f + balOffset) / 50.0f, 1.0f);
     }
 
     for (int i = 0; i < sampleCount; i++) {
@@ -241,8 +273,8 @@ void AudioEngine::applyMixAndVolume(QByteArray &packet) {
 
         // Step 1: SUB RX off — both channels get main audio only, sub slider has no effect
         // BL balance still applies (L/R gain is independent of SUB RX state)
-        if (m_subMuted) {
-            float s = mainSample * m_mainVolume;
+        if (subMuted) {
+            float s = mainSample * mainVol;
             samples[i * 2] = qBound(-1.0f, s * balLeftGain, 1.0f);
             samples[i * 2 + 1] = qBound(-1.0f, s * balRightGain, 1.0f);
             continue;
@@ -250,14 +282,14 @@ void AudioEngine::applyMixAndVolume(QByteArray &packet) {
 
         // Step 2: SUB RX on — apply MX routing
         float left, right;
-        if (m_balanceMode == 0) {
+        if (balMode == 0) {
             // NOR mode: main slider controls main, sub slider controls sub
-            left = mixChannel(mainSample, subSample, m_mixLeft, m_mainVolume, m_subVolume);
-            right = mixChannel(mainSample, subSample, m_mixRight, m_mainVolume, m_subVolume);
+            left = mixChannel(mainSample, subSample, mixL, mainVol, subVol);
+            right = mixChannel(mainSample, subSample, mixR, mainVol, subVol);
         } else {
             // BAL mode: mainVolume controls both receivers (sub slider repurposed as balance)
-            left = mixChannel(mainSample, subSample, m_mixLeft, m_mainVolume, m_mainVolume);
-            right = mixChannel(mainSample, subSample, m_mixRight, m_mainVolume, m_mainVolume);
+            left = mixChannel(mainSample, subSample, mixL, mainVol, mainVol);
+            right = mixChannel(mainSample, subSample, mixR, mainVol, mainVol);
 
             // Step 3: Apply BL balance (L/R gain adjustment after MX routing)
             left *= balLeftGain;
@@ -271,10 +303,10 @@ void AudioEngine::applyMixAndVolume(QByteArray &packet) {
 }
 
 void AudioEngine::setMicEnabled(bool enabled) {
-    if (m_micEnabled == enabled)
+    if (m_micEnabled.load(std::memory_order_relaxed) == enabled)
         return;
 
-    m_micEnabled = enabled;
+    m_micEnabled.store(enabled, std::memory_order_relaxed);
 
     if (!m_audioSource) {
         qWarning() << "AudioEngine: m_audioSource is NULL - mic not available";
@@ -325,7 +357,7 @@ QByteArray AudioEngine::resample48kTo12k(const QByteArray &input48k) {
 }
 
 void AudioEngine::onMicDataReady() {
-    if (!m_audioSourceDevice || !m_micEnabled)
+    if (!m_audioSourceDevice || !m_micEnabled.load(std::memory_order_relaxed))
         return;
 
     QByteArray data48k = m_audioSourceDevice->readAll();
@@ -346,11 +378,12 @@ void AudioEngine::onMicDataReady() {
 
     // Calculate RMS level AFTER gain for meter display (shows what will be transmitted)
     float sumSquares = 0.0f;
+    const float gain = m_micGain.load(std::memory_order_relaxed);
 
     // Convert and append to buffer with gain applied
     for (int i = 0; i < floatSamples; i++) {
         // Apply mic gain and clamp (MIC_GAIN_SCALE makes 50% slider = unity gain)
-        float sample = qBound(-1.0f, floatData[i] * m_micGain * MIC_GAIN_SCALE, 1.0f);
+        float sample = qBound(-1.0f, floatData[i] * gain * MIC_GAIN_SCALE, 1.0f);
         qint16 s16Sample = static_cast<qint16>(sample * 32767.0f);
 
         // Accumulate for RMS calculation (after gain)
@@ -373,39 +406,40 @@ void AudioEngine::onMicDataReady() {
 }
 
 void AudioEngine::setVolume(float volume) {
-    m_volume = qBound(0.0f, volume, 1.0f);
-    if (m_audioSink) {
-        m_audioSink->setVolume(m_volume);
-    }
+    m_volume.store(qBound(0.0f, volume, 1.0f), std::memory_order_relaxed);
+    // Note: QAudioSink::setVolume() must be called on the audio thread.
+    // Since setVolume() is rarely used (system volume), we skip the cross-thread
+    // call here — the stored value will be applied on next start().
 }
 
 void AudioEngine::setMainVolume(float volume) {
-    m_mainVolume = qBound(0.0f, volume, 1.0f);
+    m_mainVolume.store(qBound(0.0f, volume, 1.0f), std::memory_order_relaxed);
 }
 
 void AudioEngine::setSubVolume(float volume) {
-    m_subVolume = qBound(0.0f, volume, 1.0f);
+    m_subVolume.store(qBound(0.0f, volume, 1.0f), std::memory_order_relaxed);
 }
 
 void AudioEngine::setSubMuted(bool muted) {
-    m_subMuted = muted;
+    m_subMuted.store(muted, std::memory_order_relaxed);
 }
 
 void AudioEngine::setAudioMix(int left, int right) {
+    QMutexLocker lock(&m_mixMutex);
     m_mixLeft = static_cast<MixSource>(qBound(0, left, 3));
     m_mixRight = static_cast<MixSource>(qBound(0, right, 3));
 }
 
 void AudioEngine::setBalanceMode(int mode) {
-    m_balanceMode = qBound(0, mode, 1);
+    m_balanceMode.store(qBound(0, mode, 1), std::memory_order_relaxed);
 }
 
 void AudioEngine::setBalanceOffset(int offset) {
-    m_balanceOffset = qBound(-50, offset, 50);
+    m_balanceOffset.store(qBound(-50, offset, 50), std::memory_order_relaxed);
 }
 
 void AudioEngine::setMicGain(float gain) {
-    m_micGain = qBound(0.0f, gain, 1.0f);
+    m_micGain.store(qBound(0.0f, gain, 1.0f), std::memory_order_relaxed);
 }
 
 void AudioEngine::setMicDevice(const QString &deviceId) {
@@ -413,7 +447,7 @@ void AudioEngine::setMicDevice(const QString &deviceId) {
         m_selectedMicDeviceId = deviceId;
 
         // If mic is currently enabled, we need to restart it with the new device
-        bool wasEnabled = m_micEnabled;
+        bool wasEnabled = m_micEnabled.load(std::memory_order_relaxed);
         if (wasEnabled) {
             setMicEnabled(false);
         }

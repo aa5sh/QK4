@@ -8,6 +8,8 @@
 #include <QIODevice>
 #include <QTimer>
 #include <QQueue>
+#include <QMutex>
+#include <atomic>
 
 class AudioEngine : public QObject {
     Q_OBJECT
@@ -18,22 +20,22 @@ public:
     explicit AudioEngine(QObject *parent = nullptr);
     ~AudioEngine();
 
-    bool start();
-    void stop();
+    Q_INVOKABLE bool start();
+    Q_INVOKABLE void stop();
     void enqueueAudio(const QByteArray &pcmData);
-    void flushQueue();
+    Q_INVOKABLE void flushQueue();
 
-    void setMicEnabled(bool enabled);
-    bool isMicEnabled() const { return m_micEnabled; }
+    Q_INVOKABLE void setMicEnabled(bool enabled);
+    bool isMicEnabled() const { return m_micEnabled.load(std::memory_order_relaxed); }
 
     void setVolume(float volume); // 0.0 to 1.0
-    float volume() const { return m_volume; }
+    float volume() const { return m_volume.load(std::memory_order_relaxed); }
 
     // Channel volume controls (applied at playback time for instant response)
     void setMainVolume(float volume);
     void setSubVolume(float volume);
-    float mainVolume() const { return m_mainVolume; }
-    float subVolume() const { return m_subVolume; }
+    float mainVolume() const { return m_mainVolume.load(std::memory_order_relaxed); }
+    float subVolume() const { return m_subVolume.load(std::memory_order_relaxed); }
 
     // SUB RX mute control (when sub receiver is off, sub channel is silent)
     void setSubMuted(bool muted);
@@ -47,16 +49,16 @@ public:
 
     // Microphone settings
     void setMicGain(float gain); // 0.0 to 1.0
-    float micGain() const { return m_micGain; }
+    float micGain() const { return m_micGain.load(std::memory_order_relaxed); }
 
-    void setMicDevice(const QString &deviceId);
+    Q_INVOKABLE void setMicDevice(const QString &deviceId);
     QString micDeviceId() const;
 
     // Get list of available input devices (for settings UI)
     static QList<QPair<QString, QString>> availableInputDevices(); // (id, description)
 
     // Output device settings
-    void setOutputDevice(const QString &deviceId);
+    Q_INVOKABLE void setOutputDevice(const QString &deviceId);
     QString outputDeviceId() const;
 
     // Get list of available output devices (for settings UI)
@@ -94,30 +96,31 @@ private:
     // Audio input (microphone)
     QAudioSource *m_audioSource;
     QIODevice *m_audioSourceDevice;
-    bool m_micEnabled;
+    std::atomic<bool> m_micEnabled{false};
     QString m_selectedMicDeviceId;    // Empty = use system default
     QString m_selectedOutputDeviceId; // Empty = use system default
 
     // Volume control (QAudioSink system volume)
-    float m_volume = 1.0f;
+    std::atomic<float> m_volume{1.0f};
 
     // Channel volume controls (0.0 to 1.0)
-    float m_mainVolume = 1.0f;
-    float m_subVolume = 1.0f;
+    std::atomic<float> m_mainVolume{1.0f};
+    std::atomic<float> m_subVolume{1.0f};
 
     // SUB RX mute state (true = sub muted, sub channel is silent)
-    bool m_subMuted = true; // Starts muted (SUB RX is off at startup)
+    std::atomic<bool> m_subMuted{true}; // Starts muted (SUB RX is off at startup)
 
     // Audio mix routing (MX command) - default A.B (main left, sub right)
     MixSource m_mixLeft = MixA;
     MixSource m_mixRight = MixB;
+    QMutex m_mixMutex; // Protects m_mixLeft and m_mixRight (always set together)
 
     // Balance mode (0=NOR: independent volume, 1=BAL: L/R balance)
-    int m_balanceMode = 0;
-    int m_balanceOffset = 0; // -50 to +50
+    std::atomic<int> m_balanceMode{0};
+    std::atomic<int> m_balanceOffset{0}; // -50 to +50
 
     // Microphone gain control
-    float m_micGain = 0.25f; // Default 25% (macOS mic input is typically hot)
+    std::atomic<float> m_micGain{0.25f}; // Default 25% (macOS mic input is typically hot)
 
     // Audio buffer sizes for ~100ms latency
     // Output: 12kHz * 2 channels * 4 bytes/sample * 0.1 sec = 9600 bytes
@@ -139,6 +142,7 @@ private:
 
     // Jitter buffer for RX audio playback
     QQueue<QByteArray> m_audioQueue;
+    QMutex m_queueMutex; // Protects m_audioQueue and m_prebuffering
     QTimer *m_feedTimer;
     bool m_prebuffering = true;
     static constexpr int PREBUFFER_PACKETS = 2;  // ~40ms prebuffer (2 × 20ms Opus packets)

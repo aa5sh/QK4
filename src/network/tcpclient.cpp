@@ -140,7 +140,7 @@ void TcpClient::disconnectFromHost() {
 }
 
 bool TcpClient::isConnected() const {
-    return m_state == Connected;
+    return m_connected.load(std::memory_order_relaxed);
 }
 
 TcpClient::ConnectionState TcpClient::connectionState() const {
@@ -148,6 +148,10 @@ TcpClient::ConnectionState TcpClient::connectionState() const {
 }
 
 void TcpClient::sendCAT(const QString &command) {
+    if (QThread::currentThread() != thread()) {
+        QMetaObject::invokeMethod(this, "sendCAT", Qt::QueuedConnection, Q_ARG(QString, command));
+        return;
+    }
     if (m_state == Connected) {
         QByteArray packet = Protocol::buildCATPacket(command);
         m_socket->write(packet);
@@ -156,6 +160,10 @@ void TcpClient::sendCAT(const QString &command) {
 }
 
 void TcpClient::sendRaw(const QByteArray &data) {
+    if (QThread::currentThread() != thread()) {
+        QMetaObject::invokeMethod(this, "sendRaw", Qt::QueuedConnection, Q_ARG(QByteArray, data));
+        return;
+    }
     if (m_socket->state() == QAbstractSocket::ConnectedState) {
         m_socket->write(data);
     }
@@ -164,6 +172,7 @@ void TcpClient::sendRaw(const QByteArray &data) {
 void TcpClient::setState(ConnectionState state) {
     if (m_state != state) {
         m_state = state;
+        m_connected.store(state == Connected, std::memory_order_relaxed);
         emit stateChanged(state);
 
         if (state == Connected) {
