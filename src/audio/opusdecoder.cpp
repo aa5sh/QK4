@@ -47,10 +47,6 @@ QByteArray OpusDecoder::decodeK4Packet(const QByteArray &packet) {
 
     unsigned char encodeMode = static_cast<unsigned char>(packet[3]);
 
-    // Extract frame size (little-endian UInt16 at bytes 4-5)
-    quint16 frameSize = static_cast<unsigned char>(packet[4]) | (static_cast<unsigned char>(packet[5]) << 8);
-    Q_UNUSED(frameSize)
-
     // Extract audio data starting at byte 7
     QByteArray audioData = packet.mid(7);
 
@@ -141,7 +137,7 @@ QByteArray OpusDecoder::decode(const QByteArray &opusData) {
                               pcm.data(), maxFrameSize, 0);
 
     if (samples < 0) {
-        qWarning() << "OpusDecoder: Decode failed:" << opus_strerror(samples);
+        qWarning() << "OpusDecoder: decode failed:" << opus_strerror(samples);
         return QByteArray();
     }
 
@@ -160,7 +156,7 @@ QByteArray OpusDecoder::decodeFloat(const QByteArray &opusData) {
                                     opusData.size(), pcm.data(), maxFrameSize, 0);
 
     if (samples < 0) {
-        qWarning() << "OpusDecoder: Float decode failed:" << opus_strerror(samples);
+        qWarning() << "OpusDecoder: decodeFloat failed:" << opus_strerror(samples);
         return QByteArray();
     }
 

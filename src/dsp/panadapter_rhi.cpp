@@ -554,7 +554,7 @@ void PanadapterRhiWidget::initialize(QRhiCommandBuffer *cb) {
     m_markerUniformBuffer->create();
 
     // Separate buffers for notch to avoid conflicts with grid (which shares overlay buffers)
-    m_notchVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, 64 * sizeof(float)));
+    m_notchVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, 1200 * sizeof(float)));
     m_notchVbo->create();
 
     m_notchUniformBuffer.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 32));
@@ -1220,62 +1220,38 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
                 cb->draw(6);
             }
 
-            // Draw notch filter marker (red line) - uses dedicated notch buffers
-            // Calculate notch position relative to the passband center
-            // This ensures correct alignment regardless of tunedFreq/centerFreq mismatch
+            // Draw notch filter marker (dotted line) - uses dedicated notch buffers
+            // Calculate notch offset from tunedFreq (consistent with mini-pan)
             if (m_notchEnabled && m_notchPitchHz > 0 && m_spanHz > 0) {
-                // First, find where the passband center is on screen
-                // For CW: passbandCenter = tunedFreq + cwPitch
-                // For USB/DATA: passbandCenter = tunedFreq + shiftOffset
-                // For LSB: passbandCenter = tunedFreq - shiftOffset
-                // For AM/FM: passbandCenter = tunedFreq
-                qint64 passbandCenterFreq;
-                if (m_mode == "CW") {
-                    passbandCenterFreq = m_tunedFreq + m_cwPitch;
-                } else if (m_mode == "CW-R") {
-                    passbandCenterFreq = m_tunedFreq - m_cwPitch;
-                } else if (m_mode == "LSB") {
-                    int shiftOffsetHz = m_ifShift * 10;
-                    passbandCenterFreq = m_tunedFreq - shiftOffsetHz;
-                } else if (m_mode == "USB" || m_mode == "DATA" || m_mode == "DATA-R") {
-                    int shiftOffsetHz = m_ifShift * 10;
-                    passbandCenterFreq = m_tunedFreq + shiftOffsetHz;
+                // NM value is audio frequency offset from dial frequency (tunedFreq).
+                // CW/CW-R use the same mapping as USB/LSB respectively:
+                // CW:   notchRF = tunedFreq + NM  (USB-like sideband)
+                // CW-R: notchRF = tunedFreq - NM  (LSB-like sideband)
+                int offsetHz;
+                if (m_mode == "LSB" || m_mode == "CW-R") {
+                    offsetHz = -m_notchPitchHz;
                 } else {
-                    // AM/FM: centered on carrier
-                    passbandCenterFreq = m_tunedFreq;
+                    // USB, CW, DATA, DATA-R, AM, FM
+                    offsetHz = m_notchPitchHz;
                 }
 
-                // Calculate notch RF frequency - notch pitch is audio offset from carrier
-                qint64 notchFreq;
-                if (m_mode == "LSB") {
-                    notchFreq = m_tunedFreq - m_notchPitchHz;
-                } else {
-                    notchFreq = m_tunedFreq + m_notchPitchHz;
-                }
-
-                // Calculate notch offset from passband center in Hz
-                qint64 notchOffsetHz = notchFreq - passbandCenterFreq;
-
-                // Get passband center screen position and add the offset
-                float passbandCenterX = freqToNormalized(passbandCenterFreq) * w;
-                float notchX = passbandCenterX + (static_cast<float>(notchOffsetHz) * w) / m_spanHz;
+                float tunedX = freqToNormalized(m_tunedFreq) * w;
+                float notchX = tunedX + (static_cast<float>(offsetHz) * w) / m_spanHz;
                 bool inBounds = (notchX >= 0 && notchX <= w);
 
                 if (inBounds) {
-                    // Draw as filled rectangle (2px wide) instead of line for robust rendering
+                    // Draw as dotted line (2px wide segments with gaps)
                     float notchWidth = 2.0f;
-                    QVector<float> notchVerts = {notchX,
-                                                 0.0f,
-                                                 notchX + notchWidth,
-                                                 0.0f,
-                                                 notchX + notchWidth,
-                                                 spectrumHeight,
-                                                 notchX,
-                                                 0.0f,
-                                                 notchX + notchWidth,
-                                                 spectrumHeight,
-                                                 notchX,
-                                                 spectrumHeight};
+                    float dashLen = 6.0f;
+                    float gapLen = 4.0f;
+                    float stride = dashLen + gapLen;
+                    QVector<float> notchVerts;
+                    for (float y = 0.0f; y < spectrumHeight; y += stride) {
+                        float yEnd = qMin(y + dashLen, spectrumHeight);
+                        // Two triangles per dash segment
+                        notchVerts << notchX << y << notchX + notchWidth << y << notchX + notchWidth << yEnd << notchX
+                                   << y << notchX + notchWidth << yEnd << notchX << yEnd;
+                    }
 
                     QRhiResourceUpdateBatch *notchRub = m_rhi->nextResourceUpdateBatch();
                     notchRub->updateDynamicBuffer(m_notchVbo.get(), 0, notchVerts.size() * sizeof(float),
@@ -1297,11 +1273,11 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
                     notchRub->updateDynamicBuffer(m_notchUniformBuffer.get(), 0, sizeof(notchUniforms), &notchUniforms);
 
                     cb->resourceUpdate(notchRub);
-                    cb->setGraphicsPipeline(m_overlayTrianglePipeline.get()); // Use triangles not lines
+                    cb->setGraphicsPipeline(m_overlayTrianglePipeline.get());
                     cb->setShaderResources(m_notchSrb.get());
                     const QRhiCommandBuffer::VertexInput notchVbufBinding(m_notchVbo.get(), 0);
                     cb->setVertexInput(0, 1, &notchVbufBinding);
-                    cb->draw(6); // 2 triangles = 6 vertices
+                    cb->draw(notchVerts.size() / 2); // 2 floats per vertex
                 }
             }
         }

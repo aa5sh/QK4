@@ -8,6 +8,7 @@
 #include <QMenu>
 #include <QProgressBar>
 #include <QTimer>
+#include <QThread>
 #include <QStackedWidget>
 #include "network/tcpclient.h"
 #include "settings/radiosettings.h"
@@ -47,6 +48,7 @@ class TxMeterWidget;
 class KPA1500Client;
 class KPA1500Window;
 class CatServer;
+class OptionsDialog;
 class NotificationWidget;
 class VfoRowWidget;
 class SidetoneGenerator;
@@ -103,7 +105,6 @@ private slots:
     void onProcessingChangedB();
     void onSpectrumData(int receiver, const QByteArray &data, qint64 centerFreq, qint32 sampleRate, float noiseFloor);
     void onMiniSpectrumData(int receiver, const QByteArray &data);
-    void onAudioData(const QByteArray &opusData);
     void showRadioManager();
     void connectToRadio(const RadioEntry &radio);
     void updateDateTime();
@@ -176,8 +177,12 @@ private:
     RadioState *m_radioState;
     QTimer *m_clockTimer;
 
+    // I/O thread (TcpClient + Protocol + OpusDecoder)
+    QThread *m_ioThread = nullptr;
+
     // Audio
     AudioEngine *m_audioEngine;
+    QThread *m_audioThread = nullptr;
     OpusDecoder *m_opusDecoder;
     OpusEncoder *m_opusEncoder;
 
@@ -313,12 +318,16 @@ private:
 
     // Local sidetone generator for CW keying
     SidetoneGenerator *m_sidetoneGenerator;
+    QThread *m_sidetoneThread = nullptr;
 
     // KPA1500 amplifier client
     KPA1500Client *m_kpa1500Client;
 
     // CAT server for external app integration (WSJT-X, MacLoggerDX, etc.)
     CatServer *m_catServer;
+
+    // Persistent Options dialog (lazy-created on first open)
+    OptionsDialog *m_optionsDialog = nullptr;
 
     // Notification popup for K4 error/status messages (ERxx:)
     NotificationWidget *m_notificationWidget;
