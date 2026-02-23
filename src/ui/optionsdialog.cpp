@@ -30,12 +30,8 @@ OptionsDialog::OptionsDialog(RadioState *radioState, AudioEngine *audioEngine, K
       m_catServerClientsLabel(nullptr), m_cwKeyerDeviceTypeCombo(nullptr), m_cwKeyerDescLabel(nullptr),
       m_cwKeyerPortCombo(nullptr), m_cwKeyerRefreshBtn(nullptr), m_cwKeyerConnectBtn(nullptr),
       m_cwKeyerStatusLabel(nullptr) {
+    setWindowModality(Qt::ApplicationModal);
     setupUi();
-
-    // Connect to AudioEngine for mic level updates
-    if (m_audioEngine) {
-        connect(m_audioEngine, &AudioEngine::micLevelChanged, this, &OptionsDialog::onMicLevelChanged);
-    }
 
     // Connect to KPOD device signals for real-time status updates
     if (m_kpodDevice) {
@@ -98,20 +94,103 @@ void OptionsDialog::setupUi() {
     m_tabList->addItem("K-Pod");
     m_tabList->setCurrentRow(0);
 
-    // Right side: stacked pages
+    // Right side: stacked pages (lazy — only About is created eagerly)
     m_pageStack = new QStackedWidget(this);
     m_pageStack->addWidget(createAboutPage());
-    m_pageStack->addWidget(createAudioInputPage());
-    m_pageStack->addWidget(createAudioOutputPage());
-    m_pageStack->addWidget(createRigControlPage());
-    m_pageStack->addWidget(createCwKeyerPage());
-    m_pageStack->addWidget(createKpodPage());
+    m_pageCreated[PageAbout] = true;
+    for (int i = 1; i < PageCount; ++i)
+        m_pageStack->addWidget(new QWidget(this));
 
-    // Connect tab selection to page switching
-    connect(m_tabList, &QListWidget::currentRowChanged, m_pageStack, &QStackedWidget::setCurrentIndex);
+    // Connect tab selection to page switching with lazy creation
+    connect(m_tabList, &QListWidget::currentRowChanged, this, [this](int index) {
+        ensurePageCreated(index);
+        m_pageStack->setCurrentIndex(index);
+    });
 
     mainLayout->addWidget(m_tabList);
     mainLayout->addWidget(m_pageStack, 1);
+}
+
+void OptionsDialog::ensurePageCreated(int index) {
+    if (index < 0 || index >= PageCount || m_pageCreated[index])
+        return;
+
+    QWidget *page = nullptr;
+    switch (index) {
+    case PageAudioInput:
+        page = createAudioInputPage();
+        break;
+    case PageAudioOutput:
+        page = createAudioOutputPage();
+        break;
+    case PageRigControl:
+        page = createRigControlPage();
+        break;
+    case PageCwKeyer:
+        page = createCwKeyerPage();
+        break;
+    case PageKpod:
+        page = createKpodPage();
+        break;
+    default:
+        return;
+    }
+
+    // Swap out the placeholder widget at this index
+    QWidget *placeholder = m_pageStack->widget(index);
+    m_pageStack->removeWidget(placeholder);
+    delete placeholder;
+    m_pageStack->insertWidget(index, page);
+    m_pageCreated[index] = true;
+}
+
+void OptionsDialog::showEvent(QShowEvent *event) {
+    QDialog::showEvent(event);
+    refreshCurrentPage();
+}
+
+void OptionsDialog::hideEvent(QHideEvent *event) {
+    // Stop mic test when dialog is hidden
+    if (m_micTestActive && m_audioEngine) {
+        QMetaObject::invokeMethod(m_audioEngine, "setMicEnabled", Qt::QueuedConnection, Q_ARG(bool, false));
+        m_micTestActive = false;
+        if (m_micTestBtn)
+            m_micTestBtn->setChecked(false);
+        if (m_micMeter)
+            m_micMeter->setLevel(0.0f);
+    }
+    QDialog::hideEvent(event);
+}
+
+void OptionsDialog::refreshCurrentPage() {
+    refreshPage(m_pageStack->currentIndex());
+}
+
+void OptionsDialog::refreshPage(int index) {
+    if (index < 0 || index >= PageCount || !m_pageCreated[index])
+        return;
+
+    switch (index) {
+    case PageAudioInput:
+        populateMicDevices();
+        break;
+    case PageAudioOutput:
+        populateSpeakerDevices();
+        break;
+    case PageRigControl:
+        updateCatServerStatus();
+        break;
+    case PageCwKeyer:
+        populateCwKeyerPorts();
+        updateCwKeyerStatus();
+        break;
+    case PageKpod:
+        updateKpodStatus();
+        break;
+    case PageAbout:
+    default:
+        break;
+    }
 }
 
 namespace {
@@ -419,6 +498,8 @@ QWidget *OptionsDialog::createKpodPage() {
 }
 
 void OptionsDialog::updateKpodStatus() {
+    if (!m_kpodStatusLabel)
+        return;
     if (!m_kpodDevice)
         return;
 
@@ -619,6 +700,12 @@ QWidget *OptionsDialog::createAudioInputPage() {
                                     .arg(K4Styles::Colors::GradientBottom));
     connect(m_micTestBtn, &QPushButton::toggled, this, &OptionsDialog::onMicTestToggled);
     layout->addWidget(m_micTestBtn);
+
+    // Connect to AudioEngine for mic level updates (queued — AudioEngine lives on audio thread)
+    if (m_audioEngine) {
+        connect(m_audioEngine, &AudioEngine::micLevelChanged, this, &OptionsDialog::onMicLevelChanged,
+                Qt::QueuedConnection);
+    }
 
     layout->addStretch();
     return page;

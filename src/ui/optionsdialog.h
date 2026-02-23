@@ -10,6 +10,8 @@
 #include <QComboBox>
 #include <QSlider>
 #include <QPushButton>
+#include <QShowEvent>
+#include <QHideEvent>
 
 class RadioState;
 class AudioEngine;
@@ -22,9 +24,15 @@ class OptionsDialog : public QDialog {
     Q_OBJECT
 
 public:
+    enum Page { PageAbout = 0, PageAudioInput, PageAudioOutput, PageRigControl, PageCwKeyer, PageKpod, PageCount };
+
     explicit OptionsDialog(RadioState *radioState, AudioEngine *audioEngine, KpodDevice *kpodDevice,
                            CatServer *catServer, HalikeyDevice *halikeyDevice, QWidget *parent = nullptr);
     ~OptionsDialog();
+
+protected:
+    void showEvent(QShowEvent *event) override;
+    void hideEvent(QHideEvent *event) override;
 
 private slots:
     void onMicTestToggled(bool checked);
@@ -38,6 +46,9 @@ private slots:
 
 private:
     void setupUi();
+    void ensurePageCreated(int index);
+    void refreshCurrentPage();
+    void refreshPage(int index);
     QWidget *createAboutPage();
     QWidget *createKpodPage();
     QWidget *createAudioInputPage();
@@ -46,6 +57,8 @@ private:
     QWidget *createCwKeyerPage();
     void updateCatServerStatus();
     void populateMicDevices();
+    void populateSpeakerDevices();
+    void populateCwKeyerPorts();
 
     RadioState *m_radioState;
     AudioEngine *m_audioEngine;
@@ -54,6 +67,7 @@ private:
     HalikeyDevice *m_halikeyDevice;
     QListWidget *m_tabList;
     QStackedWidget *m_pageStack;
+    bool m_pageCreated[PageCount] = {};
 
     // KPOD page elements (for real-time updates)
     QCheckBox *m_kpodEnableCheckbox;
@@ -84,7 +98,6 @@ private:
     QLabel *m_catServerStatusLabel;
     QLabel *m_catServerClientsLabel;
 
-    void populateSpeakerDevices();
     void onSpeakerDeviceChanged(int index);
 
     // CW Keyer page elements
@@ -96,7 +109,6 @@ private:
     QLabel *m_cwKeyerStatusLabel;
     QSlider *m_sidetoneVolumeSlider = nullptr;
     QLabel *m_sidetoneVolumeValueLabel = nullptr;
-    void populateCwKeyerPorts();
     void updateCwKeyerDescription();
 };
 

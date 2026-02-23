@@ -48,6 +48,7 @@ class TxMeterWidget;
 class KPA1500Client;
 class KPA1500Window;
 class CatServer;
+class OptionsDialog;
 class NotificationWidget;
 class VfoRowWidget;
 class SidetoneGenerator;
@@ -324,6 +325,9 @@ private:
 
     // CAT server for external app integration (WSJT-X, MacLoggerDX, etc.)
     CatServer *m_catServer;
+
+    // Persistent Options dialog (lazy-created on first open)
+    OptionsDialog *m_optionsDialog = nullptr;
 
     // Notification popup for K4 error/status messages (ERxx:)
     NotificationWidget *m_notificationWidget;
