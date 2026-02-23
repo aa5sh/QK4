@@ -30,13 +30,8 @@ A cross-platform desktop application for remote control of Elecraft K4 radios ov
 
 ## Download
 
-Pre-built releases are available on the [Releases](https://github.com/mikeg-dal/QK4/releases) page. Current release: **v0.4.0-beta.3**
+Pre-built releases are available on the [Releases](https://github.com/mikeg-dal/QK4/releases) page.
 
-| Platform | Download | Notes |
-|----------|----------|-------|
-| macOS | [QK4-macos.dmg](https://github.com/mikeg-dal/QK4/releases/download/v0.4.0-beta.3/QK4-macos.dmg) | Signed and notarized — open the DMG and drag to Applications |
-| Windows | [QK4-windows.zip](https://github.com/mikeg-dal/QK4/releases/download/v0.4.0-beta.3/QK4-windows.zip) | Extract and run `QK4.exe` |
-| Raspberry Pi | [QK4-raspberry-pi-arm64.tar.gz](https://github.com/mikeg-dal/QK4/releases/download/v0.4.0-beta.3/QK4-raspberry-pi-arm64.tar.gz) | Extract and run `./QK4/run.sh` |
 
 ### Windows Prerequisite
 
