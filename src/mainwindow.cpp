@@ -1646,32 +1646,44 @@ MainWindow::MainWindow(QWidget *parent)
     // HaliKey CW paddle device
     m_halikeyDevice = new HalikeyDevice(this);
 
-    // Repeat timers for continuous paddle input - K4 keyer handles timing
-    // Repeat timers for held paddles - DISABLED for now
-    // The K4's keyer handles element timing based on WPM setting.
-    // We send a single element on paddle press; K4 generates the element.
-    // TODO: Implement proper iambic repeat based on WPM timing if needed.
+    // WPM-matched repeat timers for continuous paddle input — send one KZ command per
+    // element cycle while paddle is held. Interval = K4 element cycle time (dit*2 for
+    // dit, dit*4 for dah), matching the rate the K4 keyer consumes elements. Only one
+    // timer is active at a time to prevent command flooding during squeeze keying.
     m_ditRepeatTimer = new QTimer(this);
-    m_ditRepeatTimer->setInterval(500); // Much slower - only for sustained holding
+    m_ditRepeatTimer->setTimerType(Qt::PreciseTimer);
     connect(m_ditRepeatTimer, &QTimer::timeout, this, [this]() {
-        if (m_halikeyDevice && m_halikeyDevice->ditPressed()) {
-            qDebug() << "Dit repeat timer fired - sending another dit";
+        if (m_halikeyDevice && m_halikeyDevice->ditPressed() && m_tcpClient->isConnected()) {
             m_tcpClient->sendCAT("KZ.;");
+            QMetaObject::invokeMethod(m_sidetoneGenerator, "playSingleDit", Qt::QueuedConnection);
+            m_ditRepeatTimer->setInterval(m_ditMs * 2);
         } else {
             m_ditRepeatTimer->stop();
         }
     });
 
     m_dahRepeatTimer = new QTimer(this);
-    m_dahRepeatTimer->setInterval(500); // Much slower
+    m_dahRepeatTimer->setTimerType(Qt::PreciseTimer);
     connect(m_dahRepeatTimer, &QTimer::timeout, this, [this]() {
-        if (m_halikeyDevice && m_halikeyDevice->dahPressed()) {
-            qDebug() << "Dah repeat timer fired - sending another dah";
+        if (m_halikeyDevice && m_halikeyDevice->dahPressed() && m_tcpClient->isConnected()) {
             m_tcpClient->sendCAT("KZ-;");
+            QMetaObject::invokeMethod(m_sidetoneGenerator, "playSingleDah", Qt::QueuedConnection);
+            m_dahRepeatTimer->setInterval(m_ditMs * 4);
         } else {
             m_dahRepeatTimer->stop();
         }
     });
+
+    // Set initial repeat intervals from radio WPM (or default 20 WPM)
+    // Repeat interval matches element audio duration (dit=2*ditMs, dah=4*ditMs) so
+    // consecutive same-elements have correct inter-element spacing with no extra gap.
+    // Quick taps are safe: the release handler stops the timer well before it fires.
+    int initWpm = m_radioState->keyerSpeed();
+    if (initWpm <= 0)
+        initWpm = 20;
+    m_ditMs = 1200 / initWpm;
+    m_ditRepeatTimer->setInterval(m_ditMs * 2);
+    m_dahRepeatTimer->setInterval(m_ditMs * 4);
 
     // Local sidetone generator for CW keying (low-latency local audio feedback)
     // MUST be created BEFORE HaliKey signal connections that use it
@@ -1703,9 +1715,15 @@ MainWindow::MainWindow(QWidget *parent)
         m_sidetoneGenerator->setKeyerSpeed(m_radioState->keyerSpeed());
     }
 
-    // Update sidetone keyer speed when it changes
-    connect(m_radioState, &RadioState::keyerSpeedChanged, this,
-            [this](int wpm) { m_sidetoneGenerator->setKeyerSpeed(wpm); });
+    // Update sidetone keyer speed and repeat timer intervals when WPM changes
+    connect(m_radioState, &RadioState::keyerSpeedChanged, this, [this](int wpm) {
+        m_sidetoneGenerator->setKeyerSpeed(wpm);
+        if (wpm > 0) {
+            m_ditMs = 1200 / wpm;
+            m_ditRepeatTimer->setInterval(m_ditMs * 2);
+            m_dahRepeatTimer->setInterval(m_ditMs * 4);
+        }
+    });
 
     // Connect HaliKey paddle signals - relay paddle state to K4 in real-time
     // Also control local sidetone for immediate audio feedback
@@ -1715,9 +1733,21 @@ MainWindow::MainWindow(QWidget *parent)
             return;
         if (pressed) {
             m_tcpClient->sendCAT("KZ.;");
-            QMetaObject::invokeMethod(m_sidetoneGenerator, "startDit", Qt::QueuedConnection);
+            m_dahRepeatTimer->stop();
+            m_ditRepeatTimer->start(m_ditMs * 2); // Matches dit audio duration
+            QMetaObject::invokeMethod(m_sidetoneGenerator, "playSingleDit", Qt::QueuedConnection);
         } else {
-            QMetaObject::invokeMethod(m_sidetoneGenerator, "stopElement", Qt::QueuedConnection);
+            m_ditRepeatTimer->stop();
+            if (m_halikeyDevice->dahPressed()) {
+                if (!m_dahRepeatTimer->isActive()) {
+                    m_tcpClient->sendCAT("KZ-;");
+                    m_dahRepeatTimer->start(m_ditMs * 4); // Resume dah repeat
+                    QMetaObject::invokeMethod(m_sidetoneGenerator, "playSingleDah", Qt::QueuedConnection);
+                }
+                // If timer IS active: dah already sounding, don't restart sidetone
+            } else {
+                QMetaObject::invokeMethod(m_sidetoneGenerator, "stopElement", Qt::QueuedConnection);
+            }
         }
     });
     connect(m_halikeyDevice, &HalikeyDevice::dahStateChanged, this, [this](bool pressed) {
@@ -1725,20 +1755,31 @@ MainWindow::MainWindow(QWidget *parent)
             return;
         if (pressed) {
             m_tcpClient->sendCAT("KZ-;");
-            QMetaObject::invokeMethod(m_sidetoneGenerator, "startDah", Qt::QueuedConnection);
+            m_ditRepeatTimer->stop();
+            m_dahRepeatTimer->start(m_ditMs * 4); // Matches dah audio duration
+            QMetaObject::invokeMethod(m_sidetoneGenerator, "playSingleDah", Qt::QueuedConnection);
         } else {
-            QMetaObject::invokeMethod(m_sidetoneGenerator, "stopElement", Qt::QueuedConnection);
+            m_dahRepeatTimer->stop();
+            if (m_halikeyDevice->ditPressed()) {
+                if (!m_ditRepeatTimer->isActive()) {
+                    m_tcpClient->sendCAT("KZ.;");
+                    m_ditRepeatTimer->start(m_ditMs * 2); // Resume dit repeat
+                    QMetaObject::invokeMethod(m_sidetoneGenerator, "playSingleDit", Qt::QueuedConnection);
+                }
+                // If timer IS active: dit already sounding, don't restart sidetone
+            } else {
+                QMetaObject::invokeMethod(m_sidetoneGenerator, "stopElement", Qt::QueuedConnection);
+            }
         }
     });
 
-    // Stop sidetone when HaliKey disconnects (prevents runaway repeat timer
+    // Stop repeat timers and sidetone when HaliKey disconnects (prevents runaway repeat
     // if paddle was held when disconnected — Note Off never arrives)
-    connect(m_halikeyDevice, &HalikeyDevice::disconnected, this,
-            [this]() { QMetaObject::invokeMethod(m_sidetoneGenerator, "stopElement", Qt::QueuedConnection); });
-
-    // Send repeated KZ commands when sidetone repeat timer fires (V14 mode only)
-    connect(m_sidetoneGenerator, &SidetoneGenerator::ditRepeated, this, [this]() { m_tcpClient->sendCAT("KZ.;"); });
-    connect(m_sidetoneGenerator, &SidetoneGenerator::dahRepeated, this, [this]() { m_tcpClient->sendCAT("KZ-;"); });
+    connect(m_halikeyDevice, &HalikeyDevice::disconnected, this, [this]() {
+        m_ditRepeatTimer->stop();
+        m_dahRepeatTimer->stop();
+        QMetaObject::invokeMethod(m_sidetoneGenerator, "stopElement", Qt::QueuedConnection);
+    });
 
     // KPA1500 amplifier client
     m_kpa1500Client = new KPA1500Client(this);
@@ -3831,18 +3872,16 @@ void MainWindow::onError(const QString &error) {
 void MainWindow::onAuthenticated() {
     qDebug() << "Successfully authenticated with K4 radio";
 
-    // Start audio engine on its dedicated thread (BlockingQueued to get return value)
-    bool audioStarted = false;
-    QMetaObject::invokeMethod(m_audioEngine, "start", Qt::BlockingQueuedConnection, Q_RETURN_ARG(bool, audioStarted));
-    if (audioStarted) {
-        qDebug() << "Audio engine started for RX audio";
-        // Volume setters are atomic — safe as direct calls from any thread
-        m_audioEngine->setMainVolume(m_sideControlPanel->volume() / 100.0f);
-        m_audioEngine->setSubVolume(m_sideControlPanel->subVolume() / 100.0f);
-        m_audioEngine->setMicGain(RadioSettings::instance()->micGain() / 100.0f);
-    } else {
-        qWarning() << "Failed to start audio engine";
-    }
+    // Start audio engine asynchronously on its dedicated thread.
+    // Must NOT use BlockingQueuedConnection — setupAudioInput() (now deferred to
+    // first mic use) can trigger macOS permission dialogs that need the main thread
+    // runloop, which would deadlock if the main thread were blocked here.
+    QMetaObject::invokeMethod(m_audioEngine, "start", Qt::QueuedConnection);
+
+    // Volume setters are atomic — safe as direct calls from any thread
+    m_audioEngine->setMainVolume(m_sideControlPanel->volume() / 100.0f);
+    m_audioEngine->setSubVolume(m_sideControlPanel->subVolume() / 100.0f);
+    m_audioEngine->setMicGain(RadioSettings::instance()->micGain() / 100.0f);
 
     // Most state is already included in the RDY; response from TcpClient.
     // Only query commands NOT included in RDY dump:

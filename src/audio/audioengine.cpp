@@ -28,7 +28,8 @@ AudioEngine::AudioEngine(QObject *parent)
     m_feedTimer->setInterval(FEED_INTERVAL_MS);
     connect(m_feedTimer, &QTimer::timeout, this, &AudioEngine::feedAudioDevice);
 
-    // Note: setupAudioInput() is deferred to start() so it runs on the audio thread
+    // Note: setupAudioInput() is deferred to first setMicEnabled(true) call
+    // to avoid macOS mic permission deadlock during connection
 }
 
 AudioEngine::~AudioEngine() {
@@ -39,13 +40,14 @@ bool AudioEngine::start() {
     bool outputOk = setupAudioOutput();
 
     if (outputOk) {
+        flushQueue();
         m_feedTimer->start();
     }
 
-    // Setup audio input on the audio thread (deferred from constructor for thread safety)
-    bool inputOk = (m_audioSource != nullptr) || setupAudioInput();
-
-    Q_UNUSED(inputOk);
+    // Audio input setup deferred to first setMicEnabled(true) call
+    // to avoid triggering macOS mic permission dialog during connection
+    // (the permission callback needs the main thread runloop, which would
+    // deadlock if start() were called via BlockingQueuedConnection)
 
     return outputOk;
 }
@@ -332,12 +334,16 @@ void AudioEngine::setMicEnabled(bool enabled) {
 
     m_micEnabled.store(enabled, std::memory_order_relaxed);
 
-    if (!m_audioSource) {
-        qWarning() << "AudioEngine: m_audioSource is NULL - mic not available";
-        return;
-    }
-
     if (enabled) {
+        // Lazy mic initialization — deferred from start() to avoid triggering
+        // macOS mic permission dialog during connection (which would deadlock)
+        if (!m_audioSource) {
+            if (!setupAudioInput()) {
+                qWarning() << "AudioEngine: Failed to setup audio input";
+                m_micEnabled.store(false, std::memory_order_relaxed);
+                return;
+            }
+        }
         m_audioSourceDevice = m_audioSource->start();
         if (m_audioSourceDevice) {
             // Use timer-based polling instead of readyRead signal
@@ -348,7 +354,9 @@ void AudioEngine::setMicEnabled(bool enabled) {
         }
     } else {
         m_micPollTimer->stop();
-        m_audioSource->stop();
+        if (m_audioSource) {
+            m_audioSource->stop();
+        }
         m_audioSourceDevice = nullptr;
         m_micBuffer.clear(); // Clear any buffered data
     }
@@ -476,12 +484,12 @@ void AudioEngine::setMicDevice(const QString &deviceId) {
             setMicEnabled(false);
         }
 
-        // Recreate the audio source with the new device
+        // Tear down existing audio source — it will be recreated lazily
+        // by the next setMicEnabled(true) call with the new device ID
         if (m_audioSource) {
             delete m_audioSource;
             m_audioSource = nullptr;
         }
-        setupAudioInput();
 
         if (wasEnabled) {
             setMicEnabled(true);
