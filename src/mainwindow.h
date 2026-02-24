@@ -315,6 +315,7 @@ private:
     HalikeyDevice *m_halikeyDevice;
     QTimer *m_ditRepeatTimer;
     QTimer *m_dahRepeatTimer;
+    int m_ditMs = 60; // dit duration in ms (1200/WPM), used for repeat timer intervals
 
     // Local sidetone generator for CW keying
     SidetoneGenerator *m_sidetoneGenerator;
