@@ -50,6 +50,7 @@ public:
     void setNotchFilter(bool enabled, int pitchHz);
     void setCursorVisible(bool visible);
     void setAmplitudeUnits(bool useSUnits); // false=dBm, true=S-units
+    void setAveraging(int n); // 1..15 (1 = no averaging)
 
     // Secondary VFO (other receiver's passband)
     void setSecondaryVfo(qint64 freq, int bwHz, const QString &mode, int ifShift, int cwPitch);
@@ -169,6 +170,18 @@ private:
     QVector<float> m_currentSpectrum;
     QVector<float> m_rawSpectrum;
     QVector<float> m_peakHold;
+
+    // Averaging (N-frame moving average)
+    int m_averaging = 1;                 // 1..20
+    QVector<QVector<float>> m_avgFrames; // ring buffer of frames
+    QVector<float> m_avgSum;             // running sum of bins
+    QVector<float> m_avgSpectrum;        // computed average output
+    int m_avgWriteIdx = 0;
+    int m_avgCount = 0;
+
+    void resetAveragingState();
+    void pushAveragingFrame(const QVector<float>& frame);
+    const QVector<float>& averagedSpectrum(const QVector<float>& frame);
 
     // K4 spectrum calibration: dBm = raw_byte - K4_DBM_OFFSET
     // Calibrated by comparing peak signals with K4 display

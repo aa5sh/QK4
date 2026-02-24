@@ -1370,6 +1370,11 @@ MainWindow::MainWindow(QWidget *parent)
         m_panadapterB->setWaterfallHeight(percent);
     });
 
+    connect(m_radioState, &RadioState::averagingChanged, this, [this](int averaging){
+        m_panadapterA->setAveraging(averaging);
+        m_panadapterB->setAveraging(averaging);
+    });
+
     // RadioState display state -> DisplayPopup (for button face updates)
     // Separate LCD and EXT signals
     connect(m_radioState, &RadioState::dualPanModeLcdChanged, m_displayPopup, &DisplayPopupWidget::setDualPanModeLcd);

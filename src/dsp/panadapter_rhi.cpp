@@ -1281,7 +1281,7 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
                 }
             }
         }
-    }
+        }
 
     cb->endPass();
 }
@@ -1310,16 +1310,13 @@ void PanadapterRhiWidget::updateSpectrum(const QByteArray &bins, qint64 centerFr
     // Decompress bins to dB values
     decompressBins(binsToUse, m_rawSpectrum);
 
-    // Apply exponential smoothing for gradual decay (attack fast, decay slow)
-    constexpr float attackAlpha = 0.85f; // Fast attack (new peaks appear quickly)
-    constexpr float decayAlpha = 0.45f;  // Moderate decay for crisp waterfall
+    float alpha = 1.0f / float(m_averaging);        
 
     if (m_currentSpectrum.size() != m_rawSpectrum.size()) {
         m_currentSpectrum = m_rawSpectrum;
     } else {
         for (int i = 0; i < m_rawSpectrum.size(); ++i) {
-            float alpha = (m_rawSpectrum[i] > m_currentSpectrum[i]) ? attackAlpha : decayAlpha;
-            m_currentSpectrum[i] = alpha * m_rawSpectrum[i] + (1.0f - alpha) * m_currentSpectrum[i];
+            m_currentSpectrum[i] = (1.0f - alpha) * m_currentSpectrum[i] + alpha * m_rawSpectrum[i];
         }
     }
 
@@ -1347,16 +1344,13 @@ void PanadapterRhiWidget::updateMiniSpectrum(const QByteArray &bins) {
         m_rawSpectrum[i] = static_cast<quint8>(bins[i]) * 10.0f - 160.0f;
     }
 
-    // Apply exponential smoothing for gradual decay (attack fast, decay slow)
-    constexpr float attackAlpha = 0.85f; // Fast attack
-    constexpr float decayAlpha = 0.38f;  // Slower decay (visible glow effect)
+    float alpha = 1.0f / float(m_averaging);       
 
     if (m_currentSpectrum.size() != m_rawSpectrum.size()) {
         m_currentSpectrum = m_rawSpectrum;
     } else {
         for (int i = 0; i < m_rawSpectrum.size(); ++i) {
-            float alpha = (m_rawSpectrum[i] > m_currentSpectrum[i]) ? attackAlpha : decayAlpha;
-            m_currentSpectrum[i] = alpha * m_rawSpectrum[i] + (1.0f - alpha) * m_currentSpectrum[i];
+            m_currentSpectrum[i] = (1.0f - alpha) * m_currentSpectrum[i] + alpha * m_rawSpectrum[i];
         }
     }
 
@@ -1394,6 +1388,76 @@ void PanadapterRhiWidget::updateWaterfallData() {
 
 float PanadapterRhiWidget::normalizeDb(float db) {
     return qBound(0.0f, (db - m_minDb) / (m_maxDb - m_minDb), 1.0f);
+}
+
+void PanadapterRhiWidget::setAveraging(int n)
+{
+    n = qBound(1, n, 20);
+    if (m_averaging == n) return;
+    m_averaging = n;
+    resetAveragingState();
+    update();
+}
+
+void PanadapterRhiWidget::resetAveragingState()
+{
+    m_avgFrames.clear();
+    m_avgSum.clear();
+    m_avgSpectrum.clear();
+    m_avgWriteIdx = 0;
+    m_avgCount = 0;
+}
+
+void PanadapterRhiWidget::pushAveragingFrame(const QVector<float>& frame)
+{
+    const int bins = frame.size();
+    if (bins <= 0) return;
+
+    // (Re)initialize if bin count changed or buffers empty
+    if (m_avgSum.size() != bins || m_avgFrames.size() != m_averaging) {
+        m_avgFrames = QVector<QVector<float>>(m_averaging);
+        for (int i = 0; i < m_averaging; ++i)
+            m_avgFrames[i].resize(bins);
+
+        m_avgSum.fill(0.0f, bins);
+        m_avgSpectrum.resize(bins);
+        m_avgWriteIdx = 0;
+        m_avgCount = 0;
+    }
+
+    // If ring is full, subtract the frame we’re overwriting
+    if (m_avgCount == m_averaging) {
+        const QVector<float>& old = m_avgFrames[m_avgWriteIdx];
+        for (int i = 0; i < bins; ++i)
+            m_avgSum[i] -= old[i];
+    } else {
+        m_avgCount++;
+    }
+
+    // Write new frame and add to sum
+    QVector<float>& slot = m_avgFrames[m_avgWriteIdx];
+    slot = frame;
+    for (int i = 0; i < bins; ++i)
+        m_avgSum[i] += frame[i];
+
+    m_avgWriteIdx = (m_avgWriteIdx + 1) % m_averaging;
+}
+
+const QVector<float>& PanadapterRhiWidget::averagedSpectrum(const QVector<float>& frame)
+{
+    if (m_averaging <= 1) {
+        return frame;
+    }
+
+    pushAveragingFrame(frame);
+
+    const int bins = frame.size();
+    const float denom = (m_avgCount > 0) ? (1.0f / float(m_avgCount)) : 1.0f;
+
+    for (int i = 0; i < bins; ++i)
+        m_avgSpectrum[i] = m_avgSum[i] * denom;
+
+    return m_avgSpectrum;
 }
 
 float PanadapterRhiWidget::freqToNormalized(qint64 freq) {
