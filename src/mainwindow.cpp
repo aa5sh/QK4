@@ -3586,7 +3586,11 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
             return;
         if (!m_tcpClient->isConnected() || freq <= 0)
             return;
-        QString cmd = QString("FB%1;").arg(freq, 11, 10, QChar('0'));
+        int stepHz = tuningStepToHz(m_radioState->tuningStepB());
+        qint64 snapped = (freq / stepHz) * stepHz;
+        if (snapped <= 0)
+            return;
+        QString cmd = QString("FB%1;").arg(snapped, 11, 10, QChar('0'));
         m_tcpClient->sendCAT(cmd);
         m_radioState->parseCATCommand(cmd);
     });
@@ -3733,7 +3737,11 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
         if (!m_tcpClient->isConnected() || freq <= 0)
             return;
         // L=A R=B mode: right-drag always tunes VFO B
-        QString cmd = QString("FB%1;").arg(freq, 11, 10, QChar('0'));
+        int stepHz = tuningStepToHz(m_radioState->tuningStepB());
+        qint64 snapped = (freq / stepHz) * stepHz;
+        if (snapped <= 0)
+            return;
+        QString cmd = QString("FB%1;").arg(snapped, 11, 10, QChar('0'));
         m_tcpClient->sendCAT(cmd);
         m_radioState->parseCATCommand(cmd);
     });
