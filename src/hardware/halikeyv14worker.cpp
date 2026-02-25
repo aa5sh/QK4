@@ -213,7 +213,23 @@ void HaliKeyV14Worker::monitorLoop() {
             return;
         }
 
-        // TIOCMIWAIT already debounces at kernel level, but do minimal check
+        // Confirm state is stable (matches macOS/Windows debounce)
+        bool stable = true;
+        for (int i = 1; i < DEBOUNCE_COUNT && m_running; ++i) {
+            usleep(500);
+            bool d = false, h = false;
+            if (!readPinState(d, h)) {
+                stable = false;
+                break;
+            }
+            if (d != ditState || h != dahState) {
+                stable = false;
+                break;
+            }
+        }
+        if (!stable || !m_running)
+            continue;
+
         if (ditState != lastDitState) {
             lastDitState = ditState;
             emit ditStateChanged(ditState);
