@@ -25,6 +25,11 @@ private:
     void handleMidiMessage(double deltaTime, const std::vector<unsigned char> &message);
 
     std::unique_ptr<RtMidiIn> m_midiIn;
+
+    // MoMIDI protocol state
+    bool m_momidiDetected = false;
+    int m_momidiVersion = -1;
+    int m_pendingTimeMsb = 0;
 };
 
 #endif // HALIKEYMIDIWORKER_H
