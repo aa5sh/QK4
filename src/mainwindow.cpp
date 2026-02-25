@@ -1685,6 +1685,39 @@ MainWindow::MainWindow(QWidget *parent)
     m_ditRepeatTimer->setInterval(m_ditMs * 2);
     m_dahRepeatTimer->setInterval(m_ditMs * 4);
 
+    // Settling timer — after a paddle release, wait 3ms for the other paddle's release
+    // event to arrive before deciding what to do. Eliminates phantom extra elements
+    // when both paddles release simultaneously (squeeze keying).
+    m_releaseSettlingTimer = new QTimer(this);
+    m_releaseSettlingTimer->setSingleShot(true);
+    m_releaseSettlingTimer->setTimerType(Qt::PreciseTimer);
+    m_releaseSettlingTimer->setInterval(3);
+    connect(m_releaseSettlingTimer, &QTimer::timeout, this, [this]() {
+        if (!m_tcpClient->isConnected() || !m_halikeyDevice)
+            return;
+
+        bool ditHeld = m_halikeyDevice->ditPressed();
+        bool dahHeld = m_halikeyDevice->dahPressed();
+
+        if (ditHeld && !dahHeld) {
+            if (!m_ditRepeatTimer->isActive()) {
+                m_tcpClient->sendCAT("KZ.;");
+                m_ditRepeatTimer->start(m_ditMs * 2);
+                QMetaObject::invokeMethod(m_sidetoneGenerator, "playSingleDit", Qt::QueuedConnection);
+            }
+        } else if (dahHeld && !ditHeld) {
+            if (!m_dahRepeatTimer->isActive()) {
+                m_tcpClient->sendCAT("KZ-;");
+                m_dahRepeatTimer->start(m_ditMs * 4);
+                QMetaObject::invokeMethod(m_sidetoneGenerator, "playSingleDah", Qt::QueuedConnection);
+            }
+        } else if (!ditHeld && !dahHeld) {
+            m_tcpClient->sendCAT("KZU0000;");
+            QMetaObject::invokeMethod(m_sidetoneGenerator, "stopElement", Qt::QueuedConnection);
+        }
+        // Both held: squeeze in progress, press handler already started correct timer
+    });
+
     // Local sidetone generator for CW keying (low-latency local audio feedback)
     // MUST be created BEFORE HaliKey signal connections that use it
     m_sidetoneGenerator = new SidetoneGenerator(nullptr);
@@ -1734,20 +1767,12 @@ MainWindow::MainWindow(QWidget *parent)
         if (pressed) {
             m_tcpClient->sendCAT("KZ.;");
             m_dahRepeatTimer->stop();
-            m_ditRepeatTimer->start(m_ditMs * 2); // Matches dit audio duration
+            m_releaseSettlingTimer->stop();
+            m_ditRepeatTimer->start(m_ditMs * 2);
             QMetaObject::invokeMethod(m_sidetoneGenerator, "playSingleDit", Qt::QueuedConnection);
         } else {
             m_ditRepeatTimer->stop();
-            if (m_halikeyDevice->dahPressed()) {
-                if (!m_dahRepeatTimer->isActive()) {
-                    m_tcpClient->sendCAT("KZ-;");
-                    m_dahRepeatTimer->start(m_ditMs * 4); // Resume dah repeat
-                    QMetaObject::invokeMethod(m_sidetoneGenerator, "playSingleDah", Qt::QueuedConnection);
-                }
-                // If timer IS active: dah already sounding, don't restart sidetone
-            } else {
-                QMetaObject::invokeMethod(m_sidetoneGenerator, "stopElement", Qt::QueuedConnection);
-            }
+            m_releaseSettlingTimer->start();
         }
     });
     connect(m_halikeyDevice, &HalikeyDevice::dahStateChanged, this, [this](bool pressed) {
@@ -1756,20 +1781,12 @@ MainWindow::MainWindow(QWidget *parent)
         if (pressed) {
             m_tcpClient->sendCAT("KZ-;");
             m_ditRepeatTimer->stop();
-            m_dahRepeatTimer->start(m_ditMs * 4); // Matches dah audio duration
+            m_releaseSettlingTimer->stop();
+            m_dahRepeatTimer->start(m_ditMs * 4);
             QMetaObject::invokeMethod(m_sidetoneGenerator, "playSingleDah", Qt::QueuedConnection);
         } else {
             m_dahRepeatTimer->stop();
-            if (m_halikeyDevice->ditPressed()) {
-                if (!m_ditRepeatTimer->isActive()) {
-                    m_tcpClient->sendCAT("KZ.;");
-                    m_ditRepeatTimer->start(m_ditMs * 2); // Resume dit repeat
-                    QMetaObject::invokeMethod(m_sidetoneGenerator, "playSingleDit", Qt::QueuedConnection);
-                }
-                // If timer IS active: dit already sounding, don't restart sidetone
-            } else {
-                QMetaObject::invokeMethod(m_sidetoneGenerator, "stopElement", Qt::QueuedConnection);
-            }
+            m_releaseSettlingTimer->start();
         }
     });
 
@@ -1778,6 +1795,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_halikeyDevice, &HalikeyDevice::disconnected, this, [this]() {
         m_ditRepeatTimer->stop();
         m_dahRepeatTimer->stop();
+        m_releaseSettlingTimer->stop();
         QMetaObject::invokeMethod(m_sidetoneGenerator, "stopElement", Qt::QueuedConnection);
     });
 
@@ -1915,6 +1933,13 @@ MainWindow::~MainWindow() {
     if (m_kpa1500Client) {
         disconnect(m_kpa1500Client, nullptr, this, nullptr);
         m_kpa1500Client->disconnectFromHost();
+    }
+
+    // Stop KPOD before deleteChildren() runs — its destructor emits
+    // deviceDisconnected(), which triggers OptionsDialog::updateKpodStatus().
+    // If OptionsDialog is already destroyed, that's a use-after-free SEGV.
+    if (m_kpodDevice) {
+        m_kpodDevice->stopPolling();
     }
 }
 

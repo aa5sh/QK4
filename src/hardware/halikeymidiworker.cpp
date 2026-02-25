@@ -88,30 +88,60 @@ void HaliKeyMidiWorker::midiCallback(double deltaTime, std::vector<unsigned char
 }
 
 void HaliKeyMidiWorker::handleMidiMessage(double deltaTime, const std::vector<unsigned char> &message) {
+    Q_UNUSED(deltaTime);
     if (message.size() < 3)
         return;
 
-    unsigned char status = message[0] & 0xF0; // Strip channel nibble
-    unsigned char note = message[1];
-    unsigned char velocity = message[2];
+    unsigned char status = message[0] & 0xF0;
+    unsigned char channel = message[0] & 0x0F;
+    unsigned char data1 = message[1];
+    unsigned char data2 = message[2];
 
-    bool pressed = false;
-    if (status == 0x90 && velocity > 0) {
-        pressed = true; // Note On
-    } else if (status == 0x80 || (status == 0x90 && velocity == 0)) {
-        pressed = false; // Note Off
-    } else {
-        return; // Not a note event
+    // --- CC events: MoMIDI version detection and timing MSB ---
+    if (status == 0xB0) {
+        if (channel == 0 && !m_momidiDetected) {
+            m_momidiDetected = true;
+            m_momidiVersion = data2;
+            qDebug() << "HaliKeyMidiWorker: MoMIDI detected, version" << m_momidiVersion;
+        } else if (channel != 0) {
+            m_pendingTimeMsb = data2;
+        }
+        return;
     }
 
-    switch (note) {
+    // --- Note events ---
+    bool pressed = false;
+    if (status == 0x90) {
+        if (m_momidiDetected) {
+            // MoMIDI: Note On is ALWAYS key down; velocity carries timing LSB
+            pressed = true;
+            if (data2 > 0 && data2 < 127) {
+                int timeDeltaMs = (data2 - 1) + m_pendingTimeMsb * 126;
+                Q_UNUSED(timeDeltaMs);
+            }
+            m_pendingTimeMsb = 0;
+        } else {
+            // Traditional MIDI: velocity 0 on Note On = Note Off
+            pressed = (data2 > 0);
+        }
+    } else if (status == 0x80) {
+        pressed = false;
+        m_pendingTimeMsb = 0;
+    } else {
+        return;
+    }
+
+    switch (data1) {
     case NOTE_LEFT_PADDLE:
         emit ditStateChanged(pressed);
         break;
     case NOTE_RIGHT_PADDLE:
         emit dahStateChanged(pressed);
         break;
+    case NOTE_PTT:
+        emit pttStateChanged(pressed);
+        break;
     default:
-        break; // Ignore PTT (Note 31), straight key (Note 30), and unknown notes
+        break;
     }
 }
