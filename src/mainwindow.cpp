@@ -1916,6 +1916,13 @@ MainWindow::~MainWindow() {
         disconnect(m_kpa1500Client, nullptr, this, nullptr);
         m_kpa1500Client->disconnectFromHost();
     }
+
+    // Stop KPOD before deleteChildren() runs — its destructor emits
+    // deviceDisconnected(), which triggers OptionsDialog::updateKpodStatus().
+    // If OptionsDialog is already destroyed, that's a use-after-free SEGV.
+    if (m_kpodDevice) {
+        m_kpodDevice->stopPolling();
+    }
 }
 
 void MainWindow::setupMenuBar() {
