@@ -36,6 +36,9 @@ void RadioState::reset() {
     m_rfGainB = -999;
     m_squelchLevelB = -1;
     m_keyerSpeed = -1;
+    m_iambicMode = QChar();
+    m_paddleOrientation = QChar();
+    m_keyingWeight = -1;
 
     // Meters
     m_sMeter = 0.0;
@@ -967,6 +970,7 @@ void RadioState::registerCommandHandlers() {
     m_commandHandlers.append({"CP", [this](const QString &c) { handleCP(c); }});
     m_commandHandlers.append({"PC", [this](const QString &c) { handlePC(c); }});
     m_commandHandlers.append({"KS", [this](const QString &c) { handleKS(c); }});
+    m_commandHandlers.append({"KP", [this](const QString &c) { handleKP(c); }});
     m_commandHandlers.append({"SM", [this](const QString &c) { handleSM(c); }});
     m_commandHandlers.append({"PO", [this](const QString &c) { handlePO(c); }});
     m_commandHandlers.append({"TM", [this](const QString &c) { handleTM(c); }});
@@ -1397,6 +1401,56 @@ void RadioState::handleKS(const QString &cmd) {
     if (ok && m_keyerSpeed != wpm) {
         m_keyerSpeed = wpm;
         emit keyerSpeedChanged(m_keyerSpeed);
+    }
+}
+
+void RadioState::handleKP(const QString &cmd) {
+    // KPionnn; where i=iambic(A/B), o=paddle(N/R), nnn=weight(090-125)
+    if (cmd.length() < 7)
+        return;
+    QChar iambic = cmd[2];
+    QChar paddle = cmd[3];
+    bool ok;
+    int weight = cmd.mid(4, 3).toInt(&ok);
+    if (!ok)
+        return;
+    bool changed = false;
+    if (m_iambicMode != iambic) {
+        m_iambicMode = iambic;
+        changed = true;
+    }
+    if (m_paddleOrientation != paddle) {
+        m_paddleOrientation = paddle;
+        changed = true;
+    }
+    if (m_keyingWeight != weight) {
+        m_keyingWeight = weight;
+        changed = true;
+    }
+    if (changed) {
+        emit keyerPaddleChanged(m_iambicMode, m_paddleOrientation, m_keyingWeight);
+    }
+}
+
+void RadioState::setIambicMode(QChar mode) {
+    if (m_iambicMode != mode) {
+        m_iambicMode = mode;
+        emit keyerPaddleChanged(m_iambicMode, m_paddleOrientation, m_keyingWeight);
+    }
+}
+
+void RadioState::setPaddleOrientation(QChar orientation) {
+    if (m_paddleOrientation != orientation) {
+        m_paddleOrientation = orientation;
+        emit keyerPaddleChanged(m_iambicMode, m_paddleOrientation, m_keyingWeight);
+    }
+}
+
+void RadioState::setKeyingWeight(int weight) {
+    weight = qBound(90, weight, 125);
+    if (m_keyingWeight != weight) {
+        m_keyingWeight = weight;
+        emit keyerPaddleChanged(m_iambicMode, m_paddleOrientation, m_keyingWeight);
     }
 }
 
