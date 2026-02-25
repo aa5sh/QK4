@@ -316,6 +316,7 @@ private:
     QTimer *m_ditRepeatTimer;
     QTimer *m_dahRepeatTimer;
     int m_ditMs = 60; // dit duration in ms (1200/WPM), used for repeat timer intervals
+    QTimer *m_releaseSettlingTimer = nullptr;
 
     // Local sidetone generator for CW keying
     SidetoneGenerator *m_sidetoneGenerator;
