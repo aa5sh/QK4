@@ -47,6 +47,11 @@ public:
     int cwPitch() const { return m_cwPitch; }
     int keyerSpeed() const { return m_keyerSpeed; }
 
+    // Keyer Paddle settings (KP command)
+    QChar iambicMode() const { return m_iambicMode; }               // A or B
+    QChar paddleOrientation() const { return m_paddleOrientation; } // N(ormal) or R(everse)
+    int keyingWeight() const { return m_keyingWeight; }             // 090-125 (ratio * 100)
+
     // Power and levels
     double rfPower() const { return m_rfPower; }
     bool isQrpMode() const { return m_isQrpMode; }
@@ -72,6 +77,11 @@ public:
     void setSquelchLevelB(int level);
     void setMicGain(int gain);
     void setCompression(int level);
+
+    // Optimistic setters for keyer paddle (KP command)
+    void setIambicMode(QChar mode);
+    void setPaddleOrientation(QChar orientation);
+    void setKeyingWeight(int weight);
 
     // Optimistic setters for NB/NR (radio doesn't echo these commands)
     void setNoiseBlankerLevel(int level);
@@ -567,30 +577,31 @@ signals:
     void antennaNameChanged(int index, const QString &name);
     void ritXitChanged(bool ritEnabled, bool xitEnabled, int offset);
     void messageBankChanged(int bank);
-    void processingChanged();                  // NB, NR, PA, RA, GT changes for Main RX
-    void processingChangedB();                 // NB, NR, PA, RA, GT changes for Sub RX
-    void refLevelChanged(int level);           // Panadapter reference level (#REF command)
-    void scaleChanged(int scale);              // Panadapter scale (#SCL command, 10-150) - GLOBAL, applies to both
-    void spanChanged(int spanHz);              // Panadapter span (#SPN command)
-    void refLevelBChanged(int level);          // Sub RX panadapter reference level (#REF$ command)
-    void spanBChanged(int spanHz);             // Sub RX panadapter span (#SPN$ command)
-    void keyerSpeedChanged(int wpm);           // CW keyer speed
-    void qskDelayChanged(int delay);           // QSK/VOX delay in 10ms increments
-    void rfGainChanged(int gain);              // RF gain
-    void squelchChanged(int level);            // Squelch level
-    void rfGainBChanged(int gain);             // RF gain Sub RX
-    void squelchBChanged(int level);           // Squelch Sub RX
-    void micGainChanged(int gain);             // Mic gain (0-80)
-    void compressionChanged(int level);        // Speech compression (0-30, SSB only)
-    void voxChanged(bool enabled);             // VOX state (any mode)
-    void qskEnabledChanged(bool enabled);      // QSK (full break-in) state
-    void testModeChanged(bool enabled);        // TX test mode state
-    void atuModeChanged(int mode);             // ATU mode (1=bypass, 2=auto)
-    void bSetChanged(bool enabled);            // B SET (Target B) state
-    void notchChanged();                       // Manual notch state/pitch changed (Main RX)
-    void notchBChanged();                      // Manual notch state/pitch changed (Sub RX)
-    void miniPanAEnabledChanged(bool enabled); // Mini-Pan A state (#MP command)
-    void miniPanBEnabledChanged(bool enabled); // Mini-Pan B state (#MP$ command)
+    void processingChanged();         // NB, NR, PA, RA, GT changes for Main RX
+    void processingChangedB();        // NB, NR, PA, RA, GT changes for Sub RX
+    void refLevelChanged(int level);  // Panadapter reference level (#REF command)
+    void scaleChanged(int scale);     // Panadapter scale (#SCL command, 10-150) - GLOBAL, applies to both
+    void spanChanged(int spanHz);     // Panadapter span (#SPN command)
+    void refLevelBChanged(int level); // Sub RX panadapter reference level (#REF$ command)
+    void spanBChanged(int spanHz);    // Sub RX panadapter span (#SPN$ command)
+    void keyerSpeedChanged(int wpm);  // CW keyer speed
+    void keyerPaddleChanged(QChar iambic, QChar paddle, int weight); // KP keyer paddle settings
+    void qskDelayChanged(int delay);                                 // QSK/VOX delay in 10ms increments
+    void rfGainChanged(int gain);                                    // RF gain
+    void squelchChanged(int level);                                  // Squelch level
+    void rfGainBChanged(int gain);                                   // RF gain Sub RX
+    void squelchBChanged(int level);                                 // Squelch Sub RX
+    void micGainChanged(int gain);                                   // Mic gain (0-80)
+    void compressionChanged(int level);                              // Speech compression (0-30, SSB only)
+    void voxChanged(bool enabled);                                   // VOX state (any mode)
+    void qskEnabledChanged(bool enabled);                            // QSK (full break-in) state
+    void testModeChanged(bool enabled);                              // TX test mode state
+    void atuModeChanged(int mode);                                   // ATU mode (1=bypass, 2=auto)
+    void bSetChanged(bool enabled);                                  // B SET (Target B) state
+    void notchChanged();                                             // Manual notch state/pitch changed (Main RX)
+    void notchBChanged();                                            // Manual notch state/pitch changed (Sub RX)
+    void miniPanAEnabledChanged(bool enabled);                       // Mini-Pan A state (#MP command)
+    void miniPanBEnabledChanged(bool enabled);                       // Mini-Pan B state (#MP$ command)
 
     // Display state signals (separate LCD and EXT)
     void dualPanModeLcdChanged(int mode);        // #DPM: LCD 0=A, 1=B, 2=Dual
@@ -684,13 +695,16 @@ private:
     // Power and levels
     double m_rfPower = -1.0; // Init to invalid to ensure first emit
     bool m_isQrpMode = false;
-    int m_micGain = -1;       // Init to invalid to ensure first emit (0-80)
-    int m_compression = -1;   // Init to invalid to ensure first emit (0-30, SSB only)
-    int m_rfGain = -999;      // Init to invalid to ensure first emit
-    int m_squelchLevel = -1;  // Init to invalid to ensure first emit
-    int m_rfGainB = -999;     // Sub RX RF gain
-    int m_squelchLevelB = -1; // Sub RX squelch
-    int m_keyerSpeed = -1;    // WPM - init to -1 to ensure first emit
+    int m_micGain = -1;        // Init to invalid to ensure first emit (0-80)
+    int m_compression = -1;    // Init to invalid to ensure first emit (0-30, SSB only)
+    int m_rfGain = -999;       // Init to invalid to ensure first emit
+    int m_squelchLevel = -1;   // Init to invalid to ensure first emit
+    int m_rfGainB = -999;      // Sub RX RF gain
+    int m_squelchLevelB = -1;  // Sub RX squelch
+    int m_keyerSpeed = -1;     // WPM - init to -1 to ensure first emit
+    QChar m_iambicMode;        // A or B (null = not yet received)
+    QChar m_paddleOrientation; // N(ormal) or R(everse) (null = not yet received)
+    int m_keyingWeight = -1;   // 090-125 (ratio * 100), -1 = not yet received
 
     // Meters
     double m_sMeter = 0.0;
@@ -977,6 +991,7 @@ private:
     void handleML(const QString &cmd);    // Monitor Level
     void handlePC(const QString &cmd);    // Power Control
     void handleKS(const QString &cmd);    // Keyer Speed
+    void handleKP(const QString &cmd);    // Keyer Paddle (iambic/paddle/weight)
 
     // Meter commands
     void handleSM(const QString &cmd);    // S-Meter Main
