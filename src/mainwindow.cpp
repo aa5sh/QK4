@@ -1776,11 +1776,9 @@ MainWindow::MainWindow(QWidget *parent)
         QMetaObject::invokeMethod(m_sidetoneGenerator, isDit ? "playSingleDit" : "playSingleDah", Qt::QueuedConnection);
     });
 
-    // Keyer finished — unkey radio + stop sidetone
-    connect(m_iambicKeyer, &IambicKeyer::keyingFinished, this, [this]() {
-        m_tcpClient->sendCAT("KZU0000;");
-        QMetaObject::invokeMethod(m_sidetoneGenerator, "stopElement", Qt::QueuedConnection);
-    });
+    // Keyer finished — stop local sidetone (K4 unkeys itself after each KZ element)
+    connect(m_iambicKeyer, &IambicKeyer::keyingFinished, this,
+            [this]() { QMetaObject::invokeMethod(m_sidetoneGenerator, "stopElement", Qt::QueuedConnection); });
 
     // Connect HaliKey paddle signals to iambic keyer (guarded by connection state)
     connect(m_halikeyDevice, &HalikeyDevice::ditStateChanged, this, [this](bool pressed) {
