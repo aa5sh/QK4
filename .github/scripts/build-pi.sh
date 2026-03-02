@@ -242,9 +242,9 @@ chmod +x $DIST/run.sh
 # Package
 # -----------------------------------------------------------------------------
 cd dist
-tar czf ../QK4-raspberry-pi-arm64.tar.gz QK4/
+tar czf "../QK4-${1}-raspberry-pi-arm64.tar.gz" QK4/
 
 echo "============================================="
 echo "Build complete!"
-echo "Output: QK4-raspberry-pi-arm64.tar.gz"
+echo "Output: QK4-${1}-raspberry-pi-arm64.tar.gz"
 echo "============================================="
