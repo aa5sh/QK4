@@ -154,6 +154,8 @@ void OptionsDialog::refreshPage(int index) {
         updateKpodStatus();
         break;
     case PageAbout:
+        refreshAboutPage();
+        break;
     default:
         break;
     }
@@ -181,6 +183,83 @@ QStringList decodeOptionModules(const QString &om) {
     return options;
 }
 } // namespace
+
+void OptionsDialog::refreshAboutPage() {
+    if (!m_aboutRadioIdLabel)
+        return;
+
+    m_aboutRadioIdLabel->setText(m_radioState ? m_radioState->radioID() : "Not connected");
+    m_aboutRadioModelLabel->setText(m_radioState ? m_radioState->radioModel() : "Unknown");
+
+    // Rebuild options list
+    QLayout *optLayout = m_aboutOptionsWidget->layout();
+    while (QLayoutItem *item = optLayout->takeAt(0)) {
+        delete item->widget();
+        delete item;
+    }
+    if (m_radioState && !m_radioState->optionModules().isEmpty()) {
+        QStringList options = decodeOptionModules(m_radioState->optionModules());
+        if (options.isEmpty()) {
+            auto *label = new QLabel("No additional options", m_aboutOptionsWidget);
+            label->setStyleSheet(QString("color: %1; font-size: %2px; font-style: italic;")
+                                     .arg(K4Styles::Colors::TextGray)
+                                     .arg(K4Styles::Dimensions::FontSizeButton));
+            optLayout->addWidget(label);
+        } else {
+            for (const QString &opt : options) {
+                auto *label = new QLabel(QString::fromUtf8("\u2022 ") + opt, m_aboutOptionsWidget);
+                label->setStyleSheet(QString("color: %1; font-size: %2px;")
+                                         .arg(K4Styles::Colors::TextWhite)
+                                         .arg(K4Styles::Dimensions::FontSizeButton));
+                optLayout->addWidget(label);
+            }
+        }
+    } else {
+        auto *label = new QLabel("Not connected", m_aboutOptionsWidget);
+        label->setStyleSheet(QString("color: %1; font-size: %2px; font-style: italic;")
+                                 .arg(K4Styles::Colors::TextGray)
+                                 .arg(K4Styles::Dimensions::FontSizeButton));
+        optLayout->addWidget(label);
+    }
+
+    // Rebuild firmware versions list
+    QLayout *verLayout = m_aboutVersionsWidget->layout();
+    while (QLayoutItem *item = verLayout->takeAt(0)) {
+        delete item->widget();
+        delete item;
+    }
+    if (m_radioState && !m_radioState->firmwareVersions().isEmpty()) {
+        static const QMap<QString, QString> componentNames = {
+            {"DDC0", "DDC 0"},   {"DDC1", "DDC 1"},    {"DUC", "DUC"},   {"FP", "Front Panel"}, {"DSP", "DSP"},
+            {"RFB", "RF Board"}, {"REF", "Reference"}, {"DAP", "DAP"},   {"KSRV", "K Server"},  {"KUI", "K UI"},
+            {"KUP", "K Update"}, {"KCFG", "K Config"}, {"R", "Revision"}};
+        const QMap<QString, QString> versions = m_radioState->firmwareVersions();
+        for (auto it = versions.constBegin(); it != versions.constEnd(); ++it) {
+            auto *row = new QWidget(m_aboutVersionsWidget);
+            auto *rowLayout = new QHBoxLayout(row);
+            rowLayout->setContentsMargins(0, 0, 0, 0);
+            auto *nameLabel = new QLabel(componentNames.value(it.key(), it.key()) + ":", row);
+            nameLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
+                                         .arg(K4Styles::Colors::TextGray)
+                                         .arg(K4Styles::Dimensions::FontSizeButton));
+            nameLabel->setFixedWidth(K4Styles::Dimensions::InputFieldWidthMedium);
+            auto *valueLabel = new QLabel(it.value(), row);
+            valueLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
+                                          .arg(K4Styles::Colors::TextWhite)
+                                          .arg(K4Styles::Dimensions::FontSizeButton));
+            rowLayout->addWidget(nameLabel);
+            rowLayout->addWidget(valueLabel);
+            rowLayout->addStretch();
+            verLayout->addWidget(row);
+        }
+    } else {
+        auto *label = new QLabel("Connect to a radio to view version information", m_aboutVersionsWidget);
+        label->setStyleSheet(QString("color: %1; font-size: %2px; font-style: italic;")
+                                 .arg(K4Styles::Colors::TextGray)
+                                 .arg(K4Styles::Dimensions::FontSizeButton));
+        verLayout->addWidget(label);
+    }
+}
 
 QWidget *OptionsDialog::createAboutPage() {
     auto *page = new QWidget(this);
@@ -223,14 +302,13 @@ QWidget *OptionsDialog::createAboutPage() {
                                     .arg(K4Styles::Dimensions::FontSizePopup));
     idTitleLabel->setFixedWidth(K4Styles::Dimensions::FormLabelWidth);
 
-    QString radioId = m_radioState ? m_radioState->radioID() : "Not connected";
-    auto *idValueLabel = new QLabel(radioId, leftWidget);
-    idValueLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                    .arg(K4Styles::Colors::TextWhite)
-                                    .arg(K4Styles::Dimensions::FontSizePopup));
+    m_aboutRadioIdLabel = new QLabel(QString(), leftWidget);
+    m_aboutRadioIdLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                           .arg(K4Styles::Colors::TextWhite)
+                                           .arg(K4Styles::Dimensions::FontSizePopup));
 
     idLayout->addWidget(idTitleLabel);
-    idLayout->addWidget(idValueLabel);
+    idLayout->addWidget(m_aboutRadioIdLabel);
     idLayout->addStretch();
     leftColumn->addLayout(idLayout);
 
@@ -242,14 +320,13 @@ QWidget *OptionsDialog::createAboutPage() {
                                        .arg(K4Styles::Dimensions::FontSizePopup));
     modelTitleLabel->setFixedWidth(K4Styles::Dimensions::FormLabelWidth);
 
-    QString radioModel = m_radioState ? m_radioState->radioModel() : "Unknown";
-    auto *modelValueLabel = new QLabel(radioModel, leftWidget);
-    modelValueLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                       .arg(K4Styles::Colors::TextWhite)
-                                       .arg(K4Styles::Dimensions::FontSizePopup));
+    m_aboutRadioModelLabel = new QLabel(QString(), leftWidget);
+    m_aboutRadioModelLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
+                                              .arg(K4Styles::Colors::TextWhite)
+                                              .arg(K4Styles::Dimensions::FontSizePopup));
 
     modelLayout->addWidget(modelTitleLabel);
-    modelLayout->addWidget(modelValueLabel);
+    modelLayout->addWidget(m_aboutRadioModelLabel);
     modelLayout->addStretch();
     leftColumn->addLayout(modelLayout);
     leftColumn->addStretch();
@@ -273,30 +350,11 @@ QWidget *OptionsDialog::createAboutPage() {
                                     .arg(K4Styles::Dimensions::FontSizePopup));
     rightColumn->addWidget(optionsTitle);
 
-    if (m_radioState && !m_radioState->optionModules().isEmpty()) {
-        QStringList options = decodeOptionModules(m_radioState->optionModules());
-        if (options.isEmpty()) {
-            auto *noOptionsLabel = new QLabel("No additional options", rightWidget);
-            noOptionsLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-style: italic;")
-                                              .arg(K4Styles::Colors::TextGray)
-                                              .arg(K4Styles::Dimensions::FontSizeButton));
-            rightColumn->addWidget(noOptionsLabel);
-        } else {
-            for (const QString &opt : options) {
-                auto *optLabel = new QLabel(QString::fromUtf8("\u2022 ") + opt, rightWidget);
-                optLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                            .arg(K4Styles::Colors::TextWhite)
-                                            .arg(K4Styles::Dimensions::FontSizeButton));
-                rightColumn->addWidget(optLabel);
-            }
-        }
-    } else {
-        auto *noDataLabel = new QLabel("Not connected", rightWidget);
-        noDataLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-style: italic;")
-                                       .arg(K4Styles::Colors::TextGray)
-                                       .arg(K4Styles::Dimensions::FontSizeButton));
-        rightColumn->addWidget(noDataLabel);
-    }
+    m_aboutOptionsWidget = new QWidget(rightWidget);
+    auto *optionsItemLayout = new QVBoxLayout(m_aboutOptionsWidget);
+    optionsItemLayout->setContentsMargins(0, 0, 0, 0);
+    optionsItemLayout->setSpacing(K4Styles::Dimensions::PaddingSmall);
+    rightColumn->addWidget(m_aboutOptionsWidget);
     rightColumn->addStretch();
 
     // Assemble the info row
@@ -321,43 +379,11 @@ QWidget *OptionsDialog::createAboutPage() {
     line2->setFixedHeight(K4Styles::Dimensions::SeparatorHeight);
     layout->addWidget(line2);
 
-    // Firmware versions list
-    if (m_radioState) {
-        QMap<QString, QString> versions = m_radioState->firmwareVersions();
-
-        // Component name mappings for readable display
-        QMap<QString, QString> componentNames = {
-            {"DDC0", "DDC 0"},   {"DDC1", "DDC 1"},    {"DUC", "DUC"},   {"FP", "Front Panel"}, {"DSP", "DSP"},
-            {"RFB", "RF Board"}, {"REF", "Reference"}, {"DAP", "DAP"},   {"KSRV", "K Server"},  {"KUI", "K UI"},
-            {"KUP", "K Update"}, {"KCFG", "K Config"}, {"R", "Revision"}};
-
-        for (auto it = versions.constBegin(); it != versions.constEnd(); ++it) {
-            auto *versionLayout = new QHBoxLayout();
-
-            QString displayName = componentNames.value(it.key(), it.key());
-            auto *nameLabel = new QLabel(displayName + ":", page);
-            nameLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                         .arg(K4Styles::Colors::TextGray)
-                                         .arg(K4Styles::Dimensions::FontSizeButton));
-            nameLabel->setFixedWidth(K4Styles::Dimensions::InputFieldWidthMedium);
-
-            auto *valueLabel = new QLabel(it.value(), page);
-            valueLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                          .arg(K4Styles::Colors::TextWhite)
-                                          .arg(K4Styles::Dimensions::FontSizeButton));
-
-            versionLayout->addWidget(nameLabel);
-            versionLayout->addWidget(valueLabel);
-            versionLayout->addStretch();
-            layout->addLayout(versionLayout);
-        }
-    } else {
-        auto *noDataLabel = new QLabel("Connect to a radio to view version information", page);
-        noDataLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-style: italic;")
-                                       .arg(K4Styles::Colors::TextGray)
-                                       .arg(K4Styles::Dimensions::FontSizeButton));
-        layout->addWidget(noDataLabel);
-    }
+    m_aboutVersionsWidget = new QWidget(page);
+    auto *versionsItemLayout = new QVBoxLayout(m_aboutVersionsWidget);
+    versionsItemLayout->setContentsMargins(0, 0, 0, 0);
+    versionsItemLayout->setSpacing(K4Styles::Dimensions::PaddingSmall);
+    layout->addWidget(m_aboutVersionsWidget);
 
     layout->addStretch();
     return page;
