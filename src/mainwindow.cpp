@@ -1861,7 +1861,7 @@ MainWindow::MainWindow(QWidget *parent)
         if (on) {
             m_txSequence = 0;
         }
-        m_audioEngine->setMicEnabled(on);
+        QMetaObject::invokeMethod(m_audioEngine, "setMicEnabled", Qt::QueuedConnection, Q_ARG(bool, on));
         m_bottomMenuBar->setPttActive(on);
     });
 
