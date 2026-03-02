@@ -1438,6 +1438,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_radioState, &RadioState::waterfallHeightChanged, this, [this](int percent) {
         m_panadapterA->setWaterfallHeight(percent);
         m_panadapterB->setWaterfallHeight(percent);
+        m_vfoA->setMiniPanWaterfallHeight(percent);
+        m_vfoB->setMiniPanWaterfallHeight(percent);
     });
 
     // RadioState display state -> DisplayPopup (for button face updates)
@@ -1533,6 +1535,8 @@ MainWindow::MainWindow(QWidget *parent)
             m_panadapterA->setWaterfallHeight(next);
             m_panadapterB->setWaterfallHeight(next);
             m_displayPopup->setWaterfallHeight(next);
+            m_vfoA->setMiniPanWaterfallHeight(next);
+            m_vfoB->setMiniPanWaterfallHeight(next);
         } else {
             m_radioState->setWaterfallHeightExt(next);
             m_displayPopup->setWaterfallHeightExt(next);
@@ -1551,6 +1555,8 @@ MainWindow::MainWindow(QWidget *parent)
             m_panadapterA->setWaterfallHeight(next);
             m_panadapterB->setWaterfallHeight(next);
             m_displayPopup->setWaterfallHeight(next);
+            m_vfoA->setMiniPanWaterfallHeight(next);
+            m_vfoB->setMiniPanWaterfallHeight(next);
         } else {
             m_radioState->setWaterfallHeightExt(next);
             m_displayPopup->setWaterfallHeightExt(next);
@@ -1851,8 +1857,15 @@ MainWindow::MainWindow(QWidget *parent)
     m_catServer->setTcpClient(m_tcpClient);
 
     // Forward CAT commands from external apps to the real K4
-    connect(m_catServer, &CatServer::catCommandReceived, this,
-            [this](const QString &command) { m_tcpClient->sendCAT(command); });
+    connect(m_catServer, &CatServer::catCommandReceived, this, [this](const QString &command) {
+        m_tcpClient->sendCAT(command);
+        // Optimistically update RadioState so the panadapter passband tracks immediately,
+        // without waiting for the K4's AI4 roundtrip. Spectrum packets from the K4 arrive
+        // before the CAT echo, so m_centerFreq moves while m_tunedFreq is still stale —
+        // the passband goes off-screen until the echo lands. Mirrors what the VFO scroll
+        // wheel handler already does: sendCAT + parseCATCommand together.
+        m_radioState->parseCATCommand(command);
+    });
 
     // TX;/RX; from external apps controls audio input gate
     // Audio stream itself triggers K4 TX - timing-critical for FT8/FT4
@@ -1861,7 +1874,7 @@ MainWindow::MainWindow(QWidget *parent)
         if (on) {
             m_txSequence = 0;
         }
-        m_audioEngine->setMicEnabled(on);
+        QMetaObject::invokeMethod(m_audioEngine, "setMicEnabled", Qt::QueuedConnection, Q_ARG(bool, on));
         m_bottomMenuBar->setPttActive(on);
     });
 

@@ -470,7 +470,7 @@ void MiniPanRhiWidget::render(QRhiCommandBuffer *cb) {
             float normalized = normalizeDb(peak);
             float adjusted = normalized - m_smoothedBaseline;
             float lineHeight = adjusted * spectrumHeight * 0.95f * m_heightBoost;
-            float y = spectrumHeight - lineHeight;
+            float y = qMax(0.0f, spectrumHeight - lineHeight);
 
             // Bottom vertex (baseline) - spectrum color with transparency
             vertices.append(static_cast<float>(x));
@@ -882,6 +882,12 @@ void MiniPanRhiWidget::setPassbandColor(const QColor &color) {
         m_passbandColor = color;
         update();
     }
+}
+
+void MiniPanRhiWidget::setWaterfallHeight(int percent) {
+    float ratio = (100.0f - qBound(10, percent, 90)) / 100.0f;
+    m_spectrumRatio = qBound(0.1f, ratio, 0.9f);
+    update();
 }
 
 void MiniPanRhiWidget::setNotchFilter(bool enabled, int pitchHz) {

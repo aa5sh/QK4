@@ -48,6 +48,7 @@ private:
     void setupUi();
     void refreshCurrentPage();
     void refreshPage(int index);
+    void refreshAboutPage();
     QWidget *createAboutPage();
     QWidget *createKpodPage();
     QWidget *createAudioInputPage();
@@ -67,6 +68,12 @@ private:
     QListWidget *m_tabList;
     QStackedWidget *m_pageStack;
     bool m_pageCreated[PageCount] = {};
+
+    // About page elements (for live refresh on connect)
+    QLabel *m_aboutRadioIdLabel = nullptr;
+    QLabel *m_aboutRadioModelLabel = nullptr;
+    QWidget *m_aboutOptionsWidget = nullptr;
+    QWidget *m_aboutVersionsWidget = nullptr;
 
     // KPOD page elements (for real-time updates)
     QCheckBox *m_kpodEnableCheckbox = nullptr;

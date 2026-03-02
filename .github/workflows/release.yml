@@ -257,6 +257,7 @@ jobs:
           APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
           APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}
         run: |
+          DMG_NAME="QK4-${{ steps.version.outputs.version }}-macos.dmg"
           APP_BUNDLE="build/QK4.app"
 
           # Create DMG staging directory with app and Applications symlink
@@ -291,7 +292,7 @@ jobs:
           echo "=== Signing DMG ==="
           codesign --force --sign "Developer ID Application: Michael Richard Garcia ($APPLE_TEAM_ID)" \
             "QK4-unsigned.dmg"
-          mv "QK4-unsigned.dmg" "QK4-macos.dmg"
+          mv "QK4-unsigned.dmg" "$DMG_NAME"
 
           # Create API key file for notarization
           mkdir -p ~/private_keys
@@ -299,7 +300,7 @@ jobs:
 
           # Notarize the DMG
           echo "=== Submitting DMG for notarization ==="
-          xcrun notarytool submit "QK4-macos.dmg" \
+          xcrun notarytool submit "$DMG_NAME" \
             --key ~/private_keys/AuthKey_$APPLE_API_KEY_ID.p8 \
             --key-id "$APPLE_API_KEY_ID" \
             --issuer "$APPLE_API_ISSUER_ID" \
@@ -308,16 +309,16 @@ jobs:
 
           # Staple the notarization ticket to the DMG
           echo "=== Stapling notarization ticket to DMG ==="
-          xcrun stapler staple "QK4-macos.dmg"
+          xcrun stapler staple "$DMG_NAME"
 
           # Verify
           echo "=== Verifying DMG ==="
-          xcrun stapler validate "QK4-macos.dmg"
-          spctl --assess --type open --context context:primary-signature "QK4-macos.dmg" || echo "spctl check completed"
+          xcrun stapler validate "$DMG_NAME"
+          spctl --assess --type open --context context:primary-signature "$DMG_NAME" || echo "spctl check completed"
 
           # Show package info
           echo "=== Release DMG created ==="
-          ls -lh QK4-macos.dmg
+          ls -lh $DMG_NAME
 
           # Clean up
           rm -rf dmg-staging ~/private_keys
@@ -326,7 +327,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: QK4-macos
-          path: QK4-macos.dmg
+          path: QK4-${{ steps.version.outputs.version }}-macos.dmg
 
   build-windows:
     runs-on: windows-latest
@@ -399,13 +400,14 @@ jobs:
           copy C:\vcpkg\installed\x64-windows\bin\libssl-3-x64.dll QK4-windows\
           copy C:\vcpkg\installed\x64-windows\bin\libcrypto-3-x64.dll QK4-windows\
 
-          Compress-Archive -Path QK4-windows -DestinationPath QK4-windows.zip
+          $ZIP_NAME = "QK4-${{ steps.version.outputs.version }}-windows.zip"
+          Compress-Archive -Path QK4-windows -DestinationPath $ZIP_NAME
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: QK4-windows
-          path: QK4-windows.zip
+          path: QK4-${{ steps.version.outputs.version }}-windows.zip
 
   build-raspberry-pi:
     runs-on: ubuntu-24.04
@@ -446,7 +448,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: QK4-raspberry-pi
-          path: QK4-raspberry-pi-arm64.tar.gz
+          path: QK4-${{ steps.version.outputs.version }}-raspberry-pi-arm64.tar.gz
 
   release:
     needs: [build-macos, build-windows, build-raspberry-pi]
@@ -457,6 +459,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Install git-cliff
         run: |
@@ -488,9 +496,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            QK4-macos.dmg
-            QK4-windows.zip
-            QK4-raspberry-pi-arm64.tar.gz
+            QK4-${{ steps.version.outputs.version }}-macos.dmg
+            QK4-${{ steps.version.outputs.version }}-windows.zip
+            QK4-${{ steps.version.outputs.version }}-raspberry-pi-arm64.tar.gz
           body_path: release_notes.md
           prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') }}
 
@@ -527,23 +535,26 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           VERSION="${TAG#v}"
           DATE=$(date -u +%Y-%m-%d)
+          MAC_DMG="QK4-${VERSION}-macos.dmg"
+          WIN_ZIP="QK4-${VERSION}-windows.zip"
+          PI_TGZ="QK4-${VERSION}-raspberry-pi-arm64.tar.gz"
 
           # Remove old downloads, add new
           rm -rf downloads/
           mkdir -p "downloads/$TAG"
-          cp artifacts/macos/QK4-macos.dmg "downloads/$TAG/"
-          cp artifacts/windows/QK4-windows.zip "downloads/$TAG/"
-          cp artifacts/raspberry-pi/QK4-raspberry-pi-arm64.tar.gz "downloads/$TAG/"
+          cp artifacts/macos/$MAC_DMG "downloads/$TAG/"
+          cp artifacts/windows/$WIN_ZIP "downloads/$TAG/"
+          cp artifacts/raspberry-pi/$PI_TGZ "downloads/$TAG/"
 
           # Compute human-readable sizes
-          SZ_MAC=$(du -h "downloads/$TAG/QK4-macos.dmg" | cut -f1 | xargs)
-          SZ_WIN=$(du -h "downloads/$TAG/QK4-windows.zip" | cut -f1 | xargs)
-          SZ_PI=$(du -h "downloads/$TAG/QK4-raspberry-pi-arm64.tar.gz" | cut -f1 | xargs)
+          SZ_MAC=$(du -h "downloads/$TAG/$MAC_DMG" | cut -f1 | xargs)
+          SZ_WIN=$(du -h "downloads/$TAG/$WIN_ZIP" | cut -f1 | xargs)
+          SZ_PI=$(du -h "downloads/$TAG/$PI_TGZ" | cut -f1 | xargs)
 
           # Compute SHA256 hashes
-          HASH_MAC=$(sha256sum "downloads/$TAG/QK4-macos.dmg" | cut -d' ' -f1)
-          HASH_WIN=$(sha256sum "downloads/$TAG/QK4-windows.zip" | cut -d' ' -f1)
-          HASH_PI=$(sha256sum "downloads/$TAG/QK4-raspberry-pi-arm64.tar.gz" | cut -d' ' -f1)
+          HASH_MAC=$(sha256sum "downloads/$TAG/$MAC_DMG" | cut -d' ' -f1)
+          HASH_WIN=$(sha256sum "downloads/$TAG/$WIN_ZIP" | cut -d' ' -f1)
+          HASH_PI=$(sha256sum "downloads/$TAG/$PI_TGZ" | cut -d' ' -f1)
 
           # Detect prerelease
           if echo "$TAG" | grep -qE 'alpha|beta'; then
@@ -561,20 +572,20 @@ jobs:
             "prerelease": $PRERELEASE,
             "assets": {
               "macos": {
-                "name": "QK4-macos.dmg",
-                "url": "./downloads/$TAG/QK4-macos.dmg",
+                "name": "$MAC_DMG",
+                "url": "./downloads/$TAG/$MAC_DMG",
                 "size": "$SZ_MAC",
                 "sha256": "$HASH_MAC"
               },
               "windows": {
-                "name": "QK4-windows.zip",
-                "url": "./downloads/$TAG/QK4-windows.zip",
+                "name": "$WIN_ZIP",
+                "url": "./downloads/$TAG/$WIN_ZIP",
                 "size": "$SZ_WIN",
                 "sha256": "$HASH_WIN"
               },
               "raspberry-pi": {
-                "name": "QK4-raspberry-pi-arm64.tar.gz",
-                "url": "./downloads/$TAG/QK4-raspberry-pi-arm64.tar.gz",
+                "name": "$PI_TGZ",
+                "url": "./downloads/$TAG/$PI_TGZ",
                 "size": "$SZ_PI",
                 "sha256": "$HASH_PI"
               }

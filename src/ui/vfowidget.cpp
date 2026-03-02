@@ -270,6 +270,8 @@ void VFOWidget::showMiniPan() {
         m_miniPan->setIfShift(m_pendingIfShift);
         m_miniPan->setCwPitch(m_pendingCwPitch);
         m_miniPan->setNotchFilter(m_pendingNotchEnabled, m_pendingNotchPitchHz);
+        if (m_pendingWaterfallHeight >= 0)
+            m_miniPan->setWaterfallHeight(m_pendingWaterfallHeight);
 
         // Connect mini-pan click to show normal view and emit signal
         connect(m_miniPan, &MiniPanRhiWidget::clicked, this, [this]() {
@@ -322,6 +324,12 @@ void VFOWidget::setMiniPanPassbandColor(const QColor &color) {
     m_pendingPassbandColor = color;
     if (m_miniPan)
         m_miniPan->setPassbandColor(color);
+}
+
+void VFOWidget::setMiniPanWaterfallHeight(int percent) {
+    m_pendingWaterfallHeight = percent;
+    if (m_miniPan)
+        m_miniPan->setWaterfallHeight(percent);
 }
 
 void VFOWidget::showNormal() {
