@@ -1851,8 +1851,15 @@ MainWindow::MainWindow(QWidget *parent)
     m_catServer->setTcpClient(m_tcpClient);
 
     // Forward CAT commands from external apps to the real K4
-    connect(m_catServer, &CatServer::catCommandReceived, this,
-            [this](const QString &command) { m_tcpClient->sendCAT(command); });
+    connect(m_catServer, &CatServer::catCommandReceived, this, [this](const QString &command) {
+        m_tcpClient->sendCAT(command);
+        // Optimistically update RadioState so the panadapter passband tracks immediately,
+        // without waiting for the K4's AI4 roundtrip. Spectrum packets from the K4 arrive
+        // before the CAT echo, so m_centerFreq moves while m_tunedFreq is still stale —
+        // the passband goes off-screen until the echo lands. Mirrors what the VFO scroll
+        // wheel handler already does: sendCAT + parseCATCommand together.
+        m_radioState->parseCATCommand(command);
+    });
 
     // TX;/RX; from external apps controls audio input gate
     // Audio stream itself triggers K4 TX - timing-critical for FT8/FT4
