@@ -30,6 +30,9 @@ public:
     // Passband color (default blue)
     void setPassbandColor(const QColor &color);
 
+    // Waterfall height (percent waterfall, matching WTRFALL control)
+    void setWaterfallHeight(int percent);
+
     // Notch filter visualization
     void setNotchFilter(bool enabled, int pitchHz);
     void setMode(const QString &mode);
@@ -134,7 +137,7 @@ private:
     float m_minDb = -1.0f;
     float m_maxDb = 4.0f;
     float m_smoothedBaseline = 0.0f;
-    float m_heightBoost = 1.5f;
+    float m_heightBoost = 1.0f;
     float m_spectrumRatio = 0.40f; // 40% spectrum, 60% waterfall
 
     // Spectrum line color

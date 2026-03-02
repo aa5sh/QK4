@@ -1438,6 +1438,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_radioState, &RadioState::waterfallHeightChanged, this, [this](int percent) {
         m_panadapterA->setWaterfallHeight(percent);
         m_panadapterB->setWaterfallHeight(percent);
+        m_vfoA->setMiniPanWaterfallHeight(percent);
+        m_vfoB->setMiniPanWaterfallHeight(percent);
     });
 
     // RadioState display state -> DisplayPopup (for button face updates)
@@ -1533,6 +1535,8 @@ MainWindow::MainWindow(QWidget *parent)
             m_panadapterA->setWaterfallHeight(next);
             m_panadapterB->setWaterfallHeight(next);
             m_displayPopup->setWaterfallHeight(next);
+            m_vfoA->setMiniPanWaterfallHeight(next);
+            m_vfoB->setMiniPanWaterfallHeight(next);
         } else {
             m_radioState->setWaterfallHeightExt(next);
             m_displayPopup->setWaterfallHeightExt(next);
@@ -1551,6 +1555,8 @@ MainWindow::MainWindow(QWidget *parent)
             m_panadapterA->setWaterfallHeight(next);
             m_panadapterB->setWaterfallHeight(next);
             m_displayPopup->setWaterfallHeight(next);
+            m_vfoA->setMiniPanWaterfallHeight(next);
+            m_vfoB->setMiniPanWaterfallHeight(next);
         } else {
             m_radioState->setWaterfallHeightExt(next);
             m_displayPopup->setWaterfallHeightExt(next);
