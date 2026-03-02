@@ -25,6 +25,7 @@
 #include "ui/micconfigpopup.h"
 #include "ui/voxpopup.h"
 #include "ui/ssbbwpopup.h"
+#include "ui/keyingweightpopup.h"
 #include "ui/textdecodewindow.h"
 #include "ui/frequencydisplaywidget.h"
 #include "models/menumodel.h"
@@ -36,6 +37,7 @@
 #include "audio/sidetonegenerator.h"
 #include "hardware/kpoddevice.h"
 #include "hardware/halikeydevice.h"
+#include "hardware/iambickeyer.h"
 #include "network/kpa1500client.h"
 #include "ui/kpa1500window.h"
 #include "ui/kpa1500panel.h"
@@ -308,8 +310,17 @@ MainWindow::MainWindow(QWidget *parent)
                 m_voxPopup->showAboveWidget(m_txPopup);
             }
             break;
-        case 5: // SSB BW - show SSB TX Bandwidth popup
-            if (m_ssbBwPopup && m_txPopup) {
+        case 5: { // Paddle toggle (CW) or SSB BW popup (voice/data)
+            auto mode = m_radioState->mode();
+            if (mode == RadioState::CW || mode == RadioState::CW_R) {
+                // Toggle paddle orientation N↔R
+                QChar curPaddle = m_radioState->paddleOrientation();
+                QChar newPaddle = (curPaddle == 'R') ? QChar('N') : QChar('R');
+                QChar iambic = m_radioState->iambicMode().isNull() ? QChar('A') : m_radioState->iambicMode();
+                int weight = m_radioState->keyingWeight() < 0 ? 100 : m_radioState->keyingWeight();
+                m_tcpClient->sendCAT(QString("KP%1%2%3;").arg(iambic).arg(newPaddle).arg(weight, 3, 10, QChar('0')));
+                m_radioState->setPaddleOrientation(newPaddle);
+            } else if (m_ssbBwPopup && m_txPopup) {
                 m_ssbBwPopup->setEssbEnabled(m_radioState->essbEnabled());
                 int bw = m_radioState->ssbTxBw();
                 if (bw >= 24 && bw <= 45) {
@@ -318,29 +329,40 @@ MainWindow::MainWindow(QWidget *parent)
                 m_ssbBwPopup->showAboveWidget(m_txPopup);
             }
             break;
-        case 6: { // ESSB toggle
-            bool newState = !m_radioState->essbEnabled();
-            int bw = m_radioState->ssbTxBw();
-            // Ensure bw is valid for the new mode
-            // SSB: 24-28, ESSB: 30-45
-            if (newState) {
-                // Switching to ESSB - use 30 if bw is outside ESSB range
-                if (bw < 30 || bw > 45)
-                    bw = 30;
+        }
+        case 6: { // Keying Weight popup (CW) or ESSB toggle (voice/data)
+            auto mode = m_radioState->mode();
+            if (mode == RadioState::CW || mode == RadioState::CW_R) {
+                if (m_keyingWeightPopup && m_txPopup) {
+                    int weight = m_radioState->keyingWeight();
+                    if (weight >= 90 && weight <= 125)
+                        m_keyingWeightPopup->setWeight(weight);
+                    m_keyingWeightPopup->showAboveWidget(m_txPopup);
+                }
             } else {
-                // Switching to SSB - use 28 if bw is outside SSB range
-                if (bw < 24 || bw > 28)
-                    bw = 28;
-            }
-            m_tcpClient->sendCAT(QString("ES%1%2;").arg(newState ? 1 : 0).arg(bw, 2, 10, QChar('0')));
-            // Optimistic update
-            m_radioState->setEssbEnabled(newState);
-            m_radioState->setSsbTxBw(bw);
-            // Update button labels
-            if (m_txPopup) {
-                QString bwStr = QString("%1k").arg(bw / 10.0, 0, 'f', 1);
-                m_txPopup->setButtonLabel(5, "SSB BW", bwStr, false);
-                m_txPopup->setButtonLabel(6, "ESSB", newState ? "ON" : "OFF", false);
+                bool newState = !m_radioState->essbEnabled();
+                int bw = m_radioState->ssbTxBw();
+                // Ensure bw is valid for the new mode
+                // SSB: 24-28, ESSB: 30-45
+                if (newState) {
+                    // Switching to ESSB - use 30 if bw is outside ESSB range
+                    if (bw < 30 || bw > 45)
+                        bw = 30;
+                } else {
+                    // Switching to SSB - use 28 if bw is outside SSB range
+                    if (bw < 24 || bw > 28)
+                        bw = 28;
+                }
+                m_tcpClient->sendCAT(QString("ES%1%2;").arg(newState ? 1 : 0).arg(bw, 2, 10, QChar('0')));
+                // Optimistic update
+                m_radioState->setEssbEnabled(newState);
+                m_radioState->setSsbTxBw(bw);
+                // Update button labels
+                if (m_txPopup) {
+                    QString bwStr = QString("%1k").arg(bw / 10.0, 0, 'f', 1);
+                    m_txPopup->setButtonLabel(5, "SSB BW", bwStr, false);
+                    m_txPopup->setButtonLabel(6, "ESSB", newState ? "ON" : "OFF", false);
+                }
             }
             break;
         }
@@ -359,6 +381,17 @@ MainWindow::MainWindow(QWidget *parent)
                 m_voxPopup->setValue(m_radioState->antiVox());
                 m_voxPopup->setVoxEnabled(m_radioState->voxForCurrentMode());
                 m_voxPopup->showAboveWidget(m_txPopup);
+            }
+        } else if (index == 5) { // Iambic A↔B toggle (CW mode only)
+            auto mode = m_radioState->mode();
+            if (mode == RadioState::CW || mode == RadioState::CW_R) {
+                QChar curIambic = m_radioState->iambicMode();
+                QChar newIambic = (curIambic == 'B') ? QChar('A') : QChar('B');
+                QChar paddle =
+                    m_radioState->paddleOrientation().isNull() ? QChar('N') : m_radioState->paddleOrientation();
+                int weight = m_radioState->keyingWeight() < 0 ? 100 : m_radioState->keyingWeight();
+                m_tcpClient->sendCAT(QString("KP%1%2%3;").arg(newIambic).arg(paddle).arg(weight, 3, 10, QChar('0')));
+                m_radioState->setIambicMode(newIambic);
             }
         } else if (index == 3) { // MIC CFG
             int input = m_radioState->micInput();
@@ -826,8 +859,9 @@ MainWindow::MainWindow(QWidget *parent)
                 m_ssbBwPopup->setBandwidth(bw);
             }
         }
-        // Update TX popup button labels
-        if (m_txPopup) {
+        // Update TX popup button labels (only in non-CW modes — CW uses paddle/weight buttons)
+        auto mode = m_radioState->mode();
+        if (m_txPopup && mode != RadioState::CW && mode != RadioState::CW_R) {
             // Button 5: SSB BW with current bandwidth value (e.g., "2.8k" or "3.0k")
             if (bw >= 24 && bw <= 45) {
                 QString bwStr = QString("%1k").arg(bw / 10.0, 0, 'f', 1);
@@ -838,6 +872,42 @@ MainWindow::MainWindow(QWidget *parent)
         }
         // Update mode labels to show USB+/LSB+ when ESSB enabled
         updateModeLabels();
+    });
+
+    // Create Keying Weight popup (TX menu button index 6 in CW mode)
+    m_keyingWeightPopup = new KeyingWeightPopupWidget(this);
+    connect(m_keyingWeightPopup, &KeyingWeightPopupWidget::weightChanged, this, [this](int weight) {
+        if (!m_tcpClient || !m_tcpClient->isConnected())
+            return;
+        QChar iambic = m_radioState->iambicMode().isNull() ? QChar('A') : m_radioState->iambicMode();
+        QChar paddle = m_radioState->paddleOrientation().isNull() ? QChar('N') : m_radioState->paddleOrientation();
+        m_radioState->setKeyingWeight(weight);
+        m_tcpClient->sendCAT(QString("KP%1%2%3;").arg(iambic).arg(paddle).arg(weight, 3, 10, QChar('0')));
+        // Update button label with new weight value (optimistic)
+        if (m_txPopup) {
+            QString weightStr = QString::number(weight / 100.0, 'f', 2);
+            m_txPopup->setButtonLabel(6, "WEIGHT", weightStr, false);
+        }
+    });
+
+    // Connect keyerPaddleChanged to update CW button labels and weight popup
+    connect(m_radioState, &RadioState::keyerPaddleChanged, this, [this](QChar iambic, QChar paddle, int weight) {
+        auto mode = m_radioState->mode();
+        if (m_txPopup && (mode == RadioState::CW || mode == RadioState::CW_R)) {
+            // Button 5: paddle orientation + iambic mode
+            QString paddleStr = (paddle == 'R') ? "PDL REV" : "PDL NOR";
+            QString iambicStr = QString("IAMB %1").arg(iambic);
+            m_txPopup->setButtonLabel(5, paddleStr, iambicStr, true);
+            // Button 6: keying weight ratio
+            if (weight >= 90 && weight <= 125) {
+                QString weightStr = QString::number(weight / 100.0, 'f', 2);
+                m_txPopup->setButtonLabel(6, "WEIGHT", weightStr, false);
+            }
+        }
+        // Update weight popup if visible
+        if (m_keyingWeightPopup && m_keyingWeightPopup->isVisible() && weight >= 90 && weight <= 125) {
+            m_keyingWeightPopup->setWeight(weight);
+        }
     });
 
     // Create floating text decode windows (separate for MAIN RX and SUB RX)
@@ -1368,6 +1438,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_radioState, &RadioState::waterfallHeightChanged, this, [this](int percent) {
         m_panadapterA->setWaterfallHeight(percent);
         m_panadapterB->setWaterfallHeight(percent);
+        m_vfoA->setMiniPanWaterfallHeight(percent);
+        m_vfoB->setMiniPanWaterfallHeight(percent);
     });
 
     connect(m_radioState, &RadioState::averagingChanged, this, [this](int averaging){
@@ -1468,6 +1540,8 @@ MainWindow::MainWindow(QWidget *parent)
             m_panadapterA->setWaterfallHeight(next);
             m_panadapterB->setWaterfallHeight(next);
             m_displayPopup->setWaterfallHeight(next);
+            m_vfoA->setMiniPanWaterfallHeight(next);
+            m_vfoB->setMiniPanWaterfallHeight(next);
         } else {
             m_radioState->setWaterfallHeightExt(next);
             m_displayPopup->setWaterfallHeightExt(next);
@@ -1486,6 +1560,8 @@ MainWindow::MainWindow(QWidget *parent)
             m_panadapterA->setWaterfallHeight(next);
             m_panadapterB->setWaterfallHeight(next);
             m_displayPopup->setWaterfallHeight(next);
+            m_vfoA->setMiniPanWaterfallHeight(next);
+            m_vfoB->setMiniPanWaterfallHeight(next);
         } else {
             m_radioState->setWaterfallHeightExt(next);
             m_displayPopup->setWaterfallHeightExt(next);
@@ -1651,35 +1727,8 @@ MainWindow::MainWindow(QWidget *parent)
     // HaliKey CW paddle device
     m_halikeyDevice = new HalikeyDevice(this);
 
-    // Repeat timers for continuous paddle input - K4 keyer handles timing
-    // Repeat timers for held paddles - DISABLED for now
-    // The K4's keyer handles element timing based on WPM setting.
-    // We send a single element on paddle press; K4 generates the element.
-    // TODO: Implement proper iambic repeat based on WPM timing if needed.
-    m_ditRepeatTimer = new QTimer(this);
-    m_ditRepeatTimer->setInterval(500); // Much slower - only for sustained holding
-    connect(m_ditRepeatTimer, &QTimer::timeout, this, [this]() {
-        if (m_halikeyDevice && m_halikeyDevice->ditPressed()) {
-            qDebug() << "Dit repeat timer fired - sending another dit";
-            m_tcpClient->sendCAT("KZ.;");
-        } else {
-            m_ditRepeatTimer->stop();
-        }
-    });
-
-    m_dahRepeatTimer = new QTimer(this);
-    m_dahRepeatTimer->setInterval(500); // Much slower
-    connect(m_dahRepeatTimer, &QTimer::timeout, this, [this]() {
-        if (m_halikeyDevice && m_halikeyDevice->dahPressed()) {
-            qDebug() << "Dah repeat timer fired - sending another dah";
-            m_tcpClient->sendCAT("KZ-;");
-        } else {
-            m_dahRepeatTimer->stop();
-        }
-    });
-
     // Local sidetone generator for CW keying (low-latency local audio feedback)
-    // MUST be created BEFORE HaliKey signal connections that use it
+    // MUST be created BEFORE IambicKeyer signal connections that use it
     m_sidetoneGenerator = new SidetoneGenerator(nullptr);
     m_sidetoneThread = new QThread(this);
     m_sidetoneThread->setObjectName("Sidetone");
@@ -1708,42 +1757,53 @@ MainWindow::MainWindow(QWidget *parent)
         m_sidetoneGenerator->setKeyerSpeed(m_radioState->keyerSpeed());
     }
 
-    // Update sidetone keyer speed when it changes
-    connect(m_radioState, &RadioState::keyerSpeedChanged, this,
-            [this](int wpm) { m_sidetoneGenerator->setKeyerSpeed(wpm); });
+    // Iambic keyer state machine — replaces ad-hoc repeat timers with proper
+    // iambic A/B logic, paddle reversal, and squeeze keying support
+    m_iambicKeyer = new IambicKeyer(this);
 
-    // Connect HaliKey paddle signals - relay paddle state to K4 in real-time
-    // Also control local sidetone for immediate audio feedback
-    // Sidetone calls use invokeMethod since SidetoneGenerator lives on sidetone thread
-    connect(m_halikeyDevice, &HalikeyDevice::ditStateChanged, this, [this](bool pressed) {
-        if (!m_tcpClient->isConnected())
-            return;
-        if (pressed) {
-            m_tcpClient->sendCAT("KZ.;");
-            QMetaObject::invokeMethod(m_sidetoneGenerator, "startDit", Qt::QueuedConnection);
-        } else {
-            QMetaObject::invokeMethod(m_sidetoneGenerator, "stopElement", Qt::QueuedConnection);
-        }
-    });
-    connect(m_halikeyDevice, &HalikeyDevice::dahStateChanged, this, [this](bool pressed) {
-        if (!m_tcpClient->isConnected())
-            return;
-        if (pressed) {
-            m_tcpClient->sendCAT("KZ-;");
-            QMetaObject::invokeMethod(m_sidetoneGenerator, "startDah", Qt::QueuedConnection);
-        } else {
-            QMetaObject::invokeMethod(m_sidetoneGenerator, "stopElement", Qt::QueuedConnection);
-        }
+    // Initialize keyer from RadioState KP settings
+    int initWpm = m_radioState->keyerSpeed();
+    if (initWpm <= 0)
+        initWpm = 20;
+    m_iambicKeyer->setSpeed(initWpm);
+    m_iambicKeyer->setMode(m_radioState->iambicMode() == 'B' ? IambicKeyer::IambicB : IambicKeyer::IambicA);
+    m_iambicKeyer->setReversed(m_radioState->paddleOrientation() == 'R');
+
+    // Update sidetone and keyer speed when WPM changes
+    connect(m_radioState, &RadioState::keyerSpeedChanged, this, [this](int wpm) {
+        m_sidetoneGenerator->setKeyerSpeed(wpm);
+        m_iambicKeyer->setSpeed(wpm);
     });
 
-    // Stop sidetone when HaliKey disconnects (prevents runaway repeat timer
-    // if paddle was held when disconnected — Note Off never arrives)
-    connect(m_halikeyDevice, &HalikeyDevice::disconnected, this,
+    // Update keyer mode/reversal when KP settings change
+    connect(m_radioState, &RadioState::keyerPaddleChanged, this, [this](QChar iambic, QChar paddle, int /*weight*/) {
+        m_iambicKeyer->setMode(iambic == 'B' ? IambicKeyer::IambicB : IambicKeyer::IambicA);
+        m_iambicKeyer->setReversed(paddle == 'R');
+    });
+
+    // Keyer element started — send CAT command + local sidetone
+    connect(m_iambicKeyer, &IambicKeyer::elementStarted, this, [this](bool isDit) {
+        m_tcpClient->sendCAT(isDit ? "KZ.;" : "KZ-;");
+        QMetaObject::invokeMethod(m_sidetoneGenerator, isDit ? "playSingleDit" : "playSingleDah", Qt::QueuedConnection);
+    });
+
+    // Keyer finished — stop local sidetone (K4 unkeys itself after each KZ element)
+    connect(m_iambicKeyer, &IambicKeyer::keyingFinished, this,
             [this]() { QMetaObject::invokeMethod(m_sidetoneGenerator, "stopElement", Qt::QueuedConnection); });
 
-    // Send repeated KZ commands when sidetone repeat timer fires (V14 mode only)
-    connect(m_sidetoneGenerator, &SidetoneGenerator::ditRepeated, this, [this]() { m_tcpClient->sendCAT("KZ.;"); });
-    connect(m_sidetoneGenerator, &SidetoneGenerator::dahRepeated, this, [this]() { m_tcpClient->sendCAT("KZ-;"); });
+    // Connect HaliKey paddle signals to iambic keyer (guarded by connection state)
+    connect(m_halikeyDevice, &HalikeyDevice::ditStateChanged, this, [this](bool pressed) {
+        if (m_tcpClient->isConnected())
+            m_iambicKeyer->setDitPaddle(pressed);
+    });
+    connect(m_halikeyDevice, &HalikeyDevice::dahStateChanged, this, [this](bool pressed) {
+        if (m_tcpClient->isConnected())
+            m_iambicKeyer->setDahPaddle(pressed);
+    });
+
+    // Stop keyer when HaliKey disconnects (prevents runaway keying
+    // if paddle was held when disconnected — Note Off never arrives)
+    connect(m_halikeyDevice, &HalikeyDevice::disconnected, this, [this]() { m_iambicKeyer->stop(); });
 
     // KPA1500 amplifier client
     m_kpa1500Client = new KPA1500Client(this);
@@ -1802,8 +1862,15 @@ MainWindow::MainWindow(QWidget *parent)
     m_catServer->setTcpClient(m_tcpClient);
 
     // Forward CAT commands from external apps to the real K4
-    connect(m_catServer, &CatServer::catCommandReceived, this,
-            [this](const QString &command) { m_tcpClient->sendCAT(command); });
+    connect(m_catServer, &CatServer::catCommandReceived, this, [this](const QString &command) {
+        m_tcpClient->sendCAT(command);
+        // Optimistically update RadioState so the panadapter passband tracks immediately,
+        // without waiting for the K4's AI4 roundtrip. Spectrum packets from the K4 arrive
+        // before the CAT echo, so m_centerFreq moves while m_tunedFreq is still stale —
+        // the passband goes off-screen until the echo lands. Mirrors what the VFO scroll
+        // wheel handler already does: sendCAT + parseCATCommand together.
+        m_radioState->parseCATCommand(command);
+    });
 
     // TX;/RX; from external apps controls audio input gate
     // Audio stream itself triggers K4 TX - timing-critical for FT8/FT4
@@ -1812,7 +1879,7 @@ MainWindow::MainWindow(QWidget *parent)
         if (on) {
             m_txSequence = 0;
         }
-        m_audioEngine->setMicEnabled(on);
+        QMetaObject::invokeMethod(m_audioEngine, "setMicEnabled", Qt::QueuedConnection, Q_ARG(bool, on));
         m_bottomMenuBar->setPttActive(on);
     });
 
@@ -1879,6 +1946,13 @@ MainWindow::~MainWindow() {
     if (m_kpa1500Client) {
         disconnect(m_kpa1500Client, nullptr, this, nullptr);
         m_kpa1500Client->disconnectFromHost();
+    }
+
+    // Stop KPOD before deleteChildren() runs — its destructor emits
+    // deviceDisconnected(), which triggers OptionsDialog::updateKpodStatus().
+    // If OptionsDialog is already destroyed, that's a use-after-free SEGV.
+    if (m_kpodDevice) {
+        m_kpodDevice->stopPolling();
     }
 }
 
@@ -3550,7 +3624,11 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
             return;
         if (!m_tcpClient->isConnected() || freq <= 0)
             return;
-        QString cmd = QString("FB%1;").arg(freq, 11, 10, QChar('0'));
+        int stepHz = tuningStepToHz(m_radioState->tuningStepB());
+        qint64 snapped = (freq / stepHz) * stepHz;
+        if (snapped <= 0)
+            return;
+        QString cmd = QString("FB%1;").arg(snapped, 11, 10, QChar('0'));
         m_tcpClient->sendCAT(cmd);
         m_radioState->parseCATCommand(cmd);
     });
@@ -3697,7 +3775,11 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
         if (!m_tcpClient->isConnected() || freq <= 0)
             return;
         // L=A R=B mode: right-drag always tunes VFO B
-        QString cmd = QString("FB%1;").arg(freq, 11, 10, QChar('0'));
+        int stepHz = tuningStepToHz(m_radioState->tuningStepB());
+        qint64 snapped = (freq / stepHz) * stepHz;
+        if (snapped <= 0)
+            return;
+        QString cmd = QString("FB%1;").arg(snapped, 11, 10, QChar('0'));
         m_tcpClient->sendCAT(cmd);
         m_radioState->parseCATCommand(cmd);
     });
@@ -3836,18 +3918,16 @@ void MainWindow::onError(const QString &error) {
 void MainWindow::onAuthenticated() {
     qDebug() << "Successfully authenticated with K4 radio";
 
-    // Start audio engine on its dedicated thread (BlockingQueued to get return value)
-    bool audioStarted = false;
-    QMetaObject::invokeMethod(m_audioEngine, "start", Qt::BlockingQueuedConnection, Q_RETURN_ARG(bool, audioStarted));
-    if (audioStarted) {
-        qDebug() << "Audio engine started for RX audio";
-        // Volume setters are atomic — safe as direct calls from any thread
-        m_audioEngine->setMainVolume(m_sideControlPanel->volume() / 100.0f);
-        m_audioEngine->setSubVolume(m_sideControlPanel->subVolume() / 100.0f);
-        m_audioEngine->setMicGain(RadioSettings::instance()->micGain() / 100.0f);
-    } else {
-        qWarning() << "Failed to start audio engine";
-    }
+    // Start audio engine asynchronously on its dedicated thread.
+    // Must NOT use BlockingQueuedConnection — setupAudioInput() (now deferred to
+    // first mic use) can trigger macOS permission dialogs that need the main thread
+    // runloop, which would deadlock if the main thread were blocked here.
+    QMetaObject::invokeMethod(m_audioEngine, "start", Qt::QueuedConnection);
+
+    // Volume setters are atomic — safe as direct calls from any thread
+    m_audioEngine->setMainVolume(m_sideControlPanel->volume() / 100.0f);
+    m_audioEngine->setSubVolume(m_sideControlPanel->subVolume() / 100.0f);
+    m_audioEngine->setMicGain(RadioSettings::instance()->micGain() / 100.0f);
 
     // Most state is already included in the RDY; response from TcpClient.
     // Only query commands NOT included in RDY dump:
@@ -3857,7 +3937,7 @@ void MainWindow::onAuthenticated() {
     m_tcpClient->sendCAT("#FPS;");  // Display FPS - not in RDY
     m_tcpClient->sendCAT("#SCL;");  // Panadapter scale - not in RDY, needed for dB range
     m_tcpClient->sendCAT("SIRC1;"); // Enable 1-second client stats updates
-    // Note: ML commands (monitor levels) come in RDY; dump - no need to query
+    // Note: ML and KP commands come in RDY; dump - no need to query
 
     // Create synthetic "Display FPS" menu item with stored preference
     m_menuModel->addSyntheticDisplayFpsItem(m_currentRadio.displayFps);
@@ -3921,10 +4001,43 @@ void MainWindow::onFrequencyBChanged(quint64 freq) {
 }
 
 void MainWindow::onModeChanged(RadioState::Mode mode) {
-    Q_UNUSED(mode)
     // Use full mode string which includes data sub-mode (AFSK, FSK, PSK, DATA)
     // Also adds "+" suffix for USB/LSB when ESSB is enabled
     updateModeLabels();
+
+    // Swap TX popup buttons 5/6 between CW keyer controls and SSB BW/ESSB
+    if (m_txPopup) {
+        if (mode == RadioState::CW || mode == RadioState::CW_R) {
+            // CW mode: swap to paddle/iambic and keying weight buttons
+            QChar iambic = m_radioState->iambicMode();
+            QChar paddle = m_radioState->paddleOrientation();
+            int weight = m_radioState->keyingWeight();
+            if (!iambic.isNull() && !paddle.isNull()) {
+                QString paddleStr = (paddle == 'R') ? "PDL REV" : "PDL NOR";
+                QString iambicStr = QString("IAMB %1").arg(iambic);
+                m_txPopup->setButtonLabel(5, paddleStr, iambicStr, true);
+            } else {
+                // KP state not yet received — show defaults
+                m_txPopup->setButtonLabel(5, "PDL NOR", "IAMB A", true);
+            }
+            if (weight >= 90 && weight <= 125) {
+                QString weightStr = QString::number(weight / 100.0, 'f', 2);
+                m_txPopup->setButtonLabel(6, "WEIGHT", weightStr, false);
+            } else {
+                m_txPopup->setButtonLabel(6, "WEIGHT", "1.00", false);
+            }
+        } else {
+            // Voice/data mode: restore SSB BW and ESSB buttons
+            int bw = m_radioState->ssbTxBw();
+            if (bw >= 24 && bw <= 45) {
+                QString bwStr = QString("%1k").arg(bw / 10.0, 0, 'f', 1);
+                m_txPopup->setButtonLabel(5, "SSB BW", bwStr, false);
+            } else {
+                m_txPopup->setButtonLabel(5, "SSB BW", "2.8k", false);
+            }
+            m_txPopup->setButtonLabel(6, "ESSB", m_radioState->essbEnabled() ? "ON" : "OFF", false);
+        }
+    }
 }
 
 void MainWindow::onModeBChanged(RadioState::Mode mode) {

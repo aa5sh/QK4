@@ -37,6 +37,7 @@ class MicInputPopupWidget;
 class MicConfigPopupWidget;
 class VoxPopupWidget;
 class SsbBwPopupWidget;
+class KeyingWeightPopupWidget;
 class TextDecodeWindow;
 class MacroDialog;
 class FilterIndicatorWidget;
@@ -44,6 +45,7 @@ class FeatureMenuBar;
 class ModePopupWidget;
 class KpodDevice;
 class HalikeyDevice;
+class IambicKeyer;
 class TxMeterWidget;
 class KPA1500Client;
 class KPA1500Window;
@@ -296,6 +298,7 @@ private:
     MicConfigPopupWidget *m_micConfigPopup;
     VoxPopupWidget *m_voxPopup;
     SsbBwPopupWidget *m_ssbBwPopup;
+    KeyingWeightPopupWidget *m_keyingWeightPopup;
     TextDecodeWindow *m_textDecodeWindowMain;
     TextDecodeWindow *m_textDecodeWindowSub;
     AntennaCfgPopupWidget *m_mainRxAntCfgPopup;
@@ -313,8 +316,7 @@ private:
 
     // HaliKey CW paddle device
     HalikeyDevice *m_halikeyDevice;
-    QTimer *m_ditRepeatTimer;
-    QTimer *m_dahRepeatTimer;
+    IambicKeyer *m_iambicKeyer;
 
     // Local sidetone generator for CW keying
     SidetoneGenerator *m_sidetoneGenerator;

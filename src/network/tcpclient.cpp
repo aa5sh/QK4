@@ -7,8 +7,8 @@
 
 TcpClient::TcpClient(QObject *parent)
     : QObject(parent), m_socket(new QSslSocket(this)), m_protocol(new Protocol(this)), m_authTimer(new QTimer(this)),
-      m_pingTimer(new QTimer(this)), m_port(K4Protocol::DEFAULT_PORT), m_useTls(false), m_encodeMode(3),
-      m_streamingLatency(3), m_state(Disconnected), m_authResponseReceived(false) {
+      m_connectTimer(new QTimer(this)), m_pingTimer(new QTimer(this)), m_port(K4Protocol::DEFAULT_PORT),
+      m_useTls(false), m_encodeMode(3), m_streamingLatency(3), m_state(Disconnected), m_authResponseReceived(false) {
     // Socket signals
     connect(m_socket, &QSslSocket::connected, this, &TcpClient::onSocketConnected);
     connect(m_socket, &QSslSocket::encrypted, this, &TcpClient::onSocketEncrypted);
@@ -24,6 +24,10 @@ TcpClient::TcpClient(QObject *parent)
     // Auth timeout timer (single shot)
     m_authTimer->setSingleShot(true);
     connect(m_authTimer, &QTimer::timeout, this, &TcpClient::onAuthTimeout);
+
+    // Connect timeout timer — fires if TCP/TLS connection never establishes
+    m_connectTimer->setSingleShot(true);
+    connect(m_connectTimer, &QTimer::timeout, this, &TcpClient::onConnectTimeout);
 
     // Ping timer for keep-alive
     m_pingTimer->setInterval(K4Protocol::PING_INTERVAL_MS);
@@ -59,6 +63,7 @@ TcpClient::TcpClient(QObject *parent)
 }
 
 TcpClient::~TcpClient() {
+    m_connectTimer->stop();
     stopPingTimer();
     if (m_socket->state() != QAbstractSocket::UnconnectedState) {
         m_socket->abort();
@@ -122,9 +127,12 @@ void TcpClient::connectToHost(const QString &host, quint16 port, const QString &
         qDebug() << "Connecting (unencrypted) to" << host << ":" << port;
         m_socket->connectToHost(host, port);
     }
+
+    m_connectTimer->start(K4Protocol::CONNECTION_TIMEOUT_MS);
 }
 
 void TcpClient::disconnectFromHost() {
+    m_connectTimer->stop();
     stopPingTimer();
     m_authTimer->stop();
 
@@ -190,7 +198,8 @@ void TcpClient::onSocketConnected() {
         qDebug() << "TCP connected, starting TLS handshake...";
         // Don't change state yet - wait for encrypted() signal
     } else {
-        // Non-TLS: need to send SHA-384 password hash
+        // Non-TLS: TCP connected — stop connect timer, start auth phase
+        m_connectTimer->stop();
         qDebug() << "Socket connected, sending authentication...";
         setState(Authenticating);
         sendAuthentication();
@@ -199,6 +208,7 @@ void TcpClient::onSocketConnected() {
 }
 
 void TcpClient::onSocketEncrypted() {
+    m_connectTimer->stop();
     // TLS handshake completed successfully
     QSslCipher negotiated = m_socket->sessionCipher();
     qDebug() << "=== TLS/PSK Connection Established ===";
@@ -232,6 +242,7 @@ void TcpClient::onReadyRead() {
 
 void TcpClient::onSocketError(QAbstractSocket::SocketError error) {
     Q_UNUSED(error)
+    m_connectTimer->stop();
     stopPingTimer();
     m_authTimer->stop();
 
@@ -263,6 +274,15 @@ void TcpClient::onPreSharedKeyAuthenticationRequired(QSslPreSharedKeyAuthenticat
     authenticator->setPreSharedKey(m_password.toUtf8());
 
     qDebug() << "PSK credentials provided, identity:" << (m_identity.isEmpty() ? "(empty)" : m_identity);
+}
+
+void TcpClient::onConnectTimeout() {
+    if (m_state == Connecting) {
+        qDebug() << "Connection timeout - failed to establish" << (m_useTls ? "TLS" : "TCP") << "connection";
+        emit errorOccurred("Connection timed out - radio unreachable");
+        m_socket->abort();
+        setState(Disconnected);
+    }
 }
 
 void TcpClient::onAuthTimeout() {

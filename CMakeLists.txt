@@ -111,6 +111,7 @@ set(SOURCES
     src/ui/micconfigpopup.cpp
     src/ui/voxpopup.cpp
     src/ui/ssbbwpopup.cpp
+    src/ui/keyingweightpopup.cpp
     src/ui/textdecodewindow.cpp
     src/ui/macrodialog.cpp
     src/ui/notificationwidget.cpp
@@ -127,6 +128,7 @@ set(SOURCES
     src/hardware/halikeyworkerbase.cpp
     src/hardware/halikeyv14worker.cpp
     src/hardware/halikeymidiworker.cpp
+    src/hardware/iambickeyer.cpp
     third_party/rtmidi/RtMidi.cpp
 )
 
@@ -172,6 +174,7 @@ set(HEADERS
     src/ui/micconfigpopup.h
     src/ui/voxpopup.h
     src/ui/ssbbwpopup.h
+    src/ui/keyingweightpopup.h
     src/ui/textdecodewindow.h
     src/ui/macrodialog.h
     src/ui/notificationwidget.h
@@ -188,6 +191,7 @@ set(HEADERS
     src/hardware/halikeyworkerbase.h
     src/hardware/halikeyv14worker.h
     src/hardware/halikeymidiworker.h
+    src/hardware/iambickeyer.h
 )
 
 # On macOS, create an app bundle

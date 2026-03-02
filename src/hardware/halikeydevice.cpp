@@ -127,7 +127,10 @@ bool HalikeyDevice::openPort(const QString &portName) {
 }
 
 void HalikeyDevice::closePort() {
+    // Disconnect worker signals FIRST — prevent stale queued events
+    // from reaching slots after state reset
     if (m_worker) {
+        disconnect(m_worker, nullptr, this, nullptr);
         m_worker->stop();
         m_worker->prepareShutdown();
     }
