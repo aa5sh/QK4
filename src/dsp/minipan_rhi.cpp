@@ -606,12 +606,15 @@ void MiniPanRhiWidget::render(QRhiCommandBuffer *cb) {
                     // CW-R: positive offset moves passband left (lower freq)
                     passbandX = centerX - offsetPixels - bwPixels / 2;
                 }
+            } else if ((m_mode == "DATA" || m_mode == "DATA-R") && m_dataSubMode == 3) {
+                // PSK-D: passband centered on dial frequency
+                passbandX = centerX - bwPixels / 2;
+            } else if ((m_mode == "DATA" || m_mode == "DATA-R") && (m_dataSubMode == 1 || m_dataSubMode == 2)) {
+                // AFSK-A / FSK-D: passband extends mostly left of dial (~2/3 left, ~1/3 right)
+                passbandX = centerX - 2.0f * bwPixels / 3.0f;
             } else if (m_mode == "LSB") {
                 // LSB: passband center is shiftHz below carrier
                 passbandX = centerX - shiftPixels - bwPixels / 2;
-            } else if ((m_mode == "DATA" || m_mode == "DATA-R") && (m_dataSubMode == 2 || m_dataSubMode == 3)) {
-                // PSK-D/FSK-D: passband centered on dial frequency
-                passbandX = centerX - bwPixels / 2;
             } else {
                 // USB/AFSK/DATA-A: passband center is shiftHz above carrier
                 passbandX = centerX + shiftPixels - bwPixels / 2;

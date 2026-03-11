@@ -2544,7 +2544,10 @@ void MainWindow::setupUi() {
         RadioState::Mode mode = m_radioState->mode();
         if (mode == RadioState::DATA || mode == RadioState::DATA_R) {
             int subMode = bSet ? m_radioState->dataSubModeB() : m_radioState->dataSubMode();
-            if (subMode == 3) { // PSK-D
+            if (subMode == 2) { // FSK-D
+                bwMin = 150;
+                bwMax = 800;
+            } else if (subMode == 3) { // PSK-D
                 bwMax = 200;
             }
         }
@@ -2572,7 +2575,11 @@ void MainWindow::setupUi() {
         bool isLocked = false;
         if (mode == RadioState::DATA || mode == RadioState::DATA_R) {
             int subMode = bSet ? m_radioState->dataSubModeB() : m_radioState->dataSubMode();
-            if (subMode == 3) { // PSK-D: BW 50-200Hz, IS locked
+            if (subMode == 2) { // FSK-D: BW 150-800Hz, IS locked
+                bwMinDah = 15;
+                bwMaxDah = 80;
+                isLocked = true;
+            } else if (subMode == 3) { // PSK-D: BW 50-200Hz, IS locked
                 bwMaxDah = 20;
                 isLocked = true;
             }
@@ -2621,8 +2628,8 @@ void MainWindow::setupUi() {
             return;
         if (mode == RadioState::DATA || mode == RadioState::DATA_R) {
             int subMode = bSet ? m_radioState->dataSubModeB() : m_radioState->dataSubMode();
-            if (subMode == 3)
-                return; // PSK-D: IS locked
+            if (subMode == 2 || subMode == 3)
+                return; // FSK-D, PSK-D: IS locked
         }
 
         int currentShift = bSet ? m_radioState->ifShiftB() : m_radioState->ifShift();
@@ -2650,7 +2657,11 @@ void MainWindow::setupUi() {
         bool isLocked = false;
         if (mode == RadioState::DATA || mode == RadioState::DATA_R) {
             int subMode = bSet ? m_radioState->dataSubModeB() : m_radioState->dataSubMode();
-            if (subMode == 3) { // PSK-D: BW 50-200Hz, IS locked
+            if (subMode == 2) { // FSK-D: BW 150-800Hz, IS locked
+                bwMinDah = 15;
+                bwMaxDah = 80;
+                isLocked = true;
+            } else if (subMode == 3) { // PSK-D: BW 50-200Hz, IS locked
                 bwMaxDah = 20;
                 isLocked = true;
             }

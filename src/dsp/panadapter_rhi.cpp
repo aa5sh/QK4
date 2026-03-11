@@ -994,21 +994,25 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
             qint64 secLowFreq, secHighFreq;
             int secShiftOffsetHz = m_secondaryIfShift * 10;
 
-            if (m_secondaryMode == "LSB") {
+            bool secIsData = (m_secondaryMode == "DATA" || m_secondaryMode == "DATA-R");
+            bool secIsAfskA = secIsData && m_secondaryDataSubMode == 1;
+            bool secIsFskD = secIsData && m_secondaryDataSubMode == 2;
+            bool secIsPskD = secIsData && m_secondaryDataSubMode == 3;
+
+            if (secIsPskD) {
+                secLowFreq = m_secondaryTunedFreq - m_secondaryFilterBw / 2;
+                secHighFreq = m_secondaryTunedFreq + m_secondaryFilterBw / 2;
+            } else if (secIsFskD || secIsAfskA) {
+                secLowFreq = m_secondaryTunedFreq - 2 * m_secondaryFilterBw / 3;
+                secHighFreq = m_secondaryTunedFreq + m_secondaryFilterBw / 3;
+            } else if (m_secondaryMode == "LSB") {
                 qint64 center = m_secondaryTunedFreq - secShiftOffsetHz;
                 secLowFreq = center - m_secondaryFilterBw / 2;
                 secHighFreq = center + m_secondaryFilterBw / 2;
-            } else if (m_secondaryMode == "USB" || m_secondaryMode == "DATA" || m_secondaryMode == "DATA-R") {
-                bool secDialCentered = (m_secondaryMode == "DATA" || m_secondaryMode == "DATA-R") &&
-                                       (m_secondaryDataSubMode == 2 || m_secondaryDataSubMode == 3);
-                if (secDialCentered) {
-                    secLowFreq = m_secondaryTunedFreq - m_secondaryFilterBw / 2;
-                    secHighFreq = m_secondaryTunedFreq + m_secondaryFilterBw / 2;
-                } else {
-                    qint64 center = m_secondaryTunedFreq + secShiftOffsetHz;
-                    secLowFreq = center - m_secondaryFilterBw / 2;
-                    secHighFreq = center + m_secondaryFilterBw / 2;
-                }
+            } else if (m_secondaryMode == "USB" || secIsData) {
+                qint64 center = m_secondaryTunedFreq + secShiftOffsetHz;
+                secLowFreq = center - m_secondaryFilterBw / 2;
+                secHighFreq = center + m_secondaryFilterBw / 2;
             } else if (m_secondaryMode == "CW" || m_secondaryMode == "CW-R") {
                 qint64 center = (m_secondaryMode == "CW") ? m_secondaryTunedFreq + secShiftOffsetHz
                                                           : m_secondaryTunedFreq - secShiftOffsetHz;
@@ -1120,25 +1124,30 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
             // CW with shift=50 means passband centered at 500 Hz pitch
             int shiftOffsetHz = m_ifShift * 10;
 
-            if (m_mode == "LSB") {
-                // LSB: passband is below dial, shift indicates center offset (negative)
+            // DATA submode-specific passband rendering
+            bool isDataMode = (m_mode == "DATA" || m_mode == "DATA-R");
+            bool isAfskA = isDataMode && m_dataSubMode == 1;
+            bool isFskD = isDataMode && m_dataSubMode == 2;
+            bool isPskD = isDataMode && m_dataSubMode == 3;
+
+            if (isPskD) {
+                // PSK-D: passband centered on dial frequency
+                lowFreq = m_tunedFreq - m_filterBw / 2;
+                highFreq = m_tunedFreq + m_filterBw / 2;
+            } else if (isFskD || isAfskA) {
+                // FSK-D / AFSK-A: passband extends mostly left of dial (~2/3 left, ~1/3 right)
+                lowFreq = m_tunedFreq - 2 * m_filterBw / 3;
+                highFreq = m_tunedFreq + m_filterBw / 3;
+            } else if (m_mode == "LSB") {
+                // LSB: passband below dial, offset by IS
                 qint64 center = m_tunedFreq - shiftOffsetHz;
                 lowFreq = center - m_filterBw / 2;
                 highFreq = center + m_filterBw / 2;
-            } else if (m_mode == "USB" || m_mode == "DATA" || m_mode == "DATA-R") {
-                // Check for DATA submodes that center passband on dial (PSK-D, FSK-D)
-                bool dialCentered =
-                    (m_mode == "DATA" || m_mode == "DATA-R") && (m_dataSubMode == 2 || m_dataSubMode == 3);
-                if (dialCentered) {
-                    // PSK-D/FSK-D: passband centered on dial frequency
-                    lowFreq = m_tunedFreq - m_filterBw / 2;
-                    highFreq = m_tunedFreq + m_filterBw / 2;
-                } else {
-                    // USB/AFSK/DATA-A: passband above dial, offset by IS
-                    qint64 center = m_tunedFreq + shiftOffsetHz;
-                    lowFreq = center - m_filterBw / 2;
-                    highFreq = center + m_filterBw / 2;
-                }
+            } else if (m_mode == "USB" || isDataMode) {
+                // USB/AFSK/DATA-A: passband above dial, offset by IS
+                qint64 center = m_tunedFreq + shiftOffsetHz;
+                lowFreq = center - m_filterBw / 2;
+                highFreq = center + m_filterBw / 2;
             } else if (m_mode == "CW" || m_mode == "CW-R") {
                 // CW uses IS (IF shift) for passband center
                 // CW: passband above dial; CW-R: passband below dial
