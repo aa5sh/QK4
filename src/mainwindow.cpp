@@ -1260,11 +1260,9 @@ MainWindow::MainWindow(QWidget *parent)
         m_sideControlPanel->setBandwidth(bwHz / 1000.0);
         m_sideControlPanel->setShift(shiftHz / 1000.0);
 
-        // Calculate and set HI/LO in kHz
-        // High = Shift + (Bandwidth / 2)
-        // Low  = Shift - (Bandwidth / 2)
-        int highHz = shiftHz + (bwHz / 2);
-        int lowHz = shiftHz - (bwHz / 2);
+        // Calculate and set HI/LO in kHz (clamp LO to 0, then derive HI from LO + BW)
+        int lowHz = qMax(0, shiftHz - (bwHz / 2));
+        int highHz = lowHz + bwHz;
         m_sideControlPanel->setHighCut(highHz / 1000.0);
         m_sideControlPanel->setLowCut(lowHz / 1000.0);
     };
@@ -2550,25 +2548,48 @@ void MainWindow::setupUi() {
         }
     });
     connect(m_sideControlPanel, &SideControlPanel::highCutChanged, this, [this](int delta) {
+        // HI adjusts upper filter edge while keeping LO fixed.
+        // Both BW and IS must change. Work in decahertz (dah) to avoid rounding drift.
+        // Step is 2 dah (20Hz) per scroll tick — even so IS stays on-grid.
         bool bSet = m_radioState->bSetEnabled();
-        int currentBw = bSet ? m_radioState->filterBandwidthB() : m_radioState->filterBandwidth();
-        int newBw = qBound(50, currentBw + (delta * 50), 5000);
-        QString cmd = bSet ? "BW$" : "BW";
-        m_tcpClient->sendCAT(QString("%1%2;").arg(cmd).arg(newBw / 10, 4, 10, QChar('0')));
+        int bwDah = (bSet ? m_radioState->filterBandwidthB() : m_radioState->filterBandwidth()) / 10;
+        int isDah = bSet ? m_radioState->ifShiftB() : m_radioState->ifShift();
+
+        // Compute displayed (clamped) HI/LO
+        int loDah = qMax(0, isDah - bwDah / 2);
+        int hiDah = loDah + bwDah;
+
+        int newHiDah = hiDah + (delta * 2);
+        if (newHiDah <= loDah)
+            return;
+
+        int newBwDah = qBound(5, newHiDah - loDah, 500);
+        int newIsDah =
+            qBound(30, (newHiDah + loDah) / 2,
+                   (m_radioState->mode() == RadioState::CW || m_radioState->mode() == RadioState::CW_R) ? 200 : 300);
+
+        QString bwCmd = bSet ? "BW$" : "BW";
+        m_tcpClient->sendCAT(QString("%1%2;").arg(bwCmd).arg(newBwDah, 4, 10, QChar('0')));
+        QString isPrefix = bSet ? "IS$" : "IS";
+        m_tcpClient->sendCAT(QString("%1+%2;").arg(isPrefix).arg(newIsDah, 4, 10, QChar('0')));
+
         if (bSet) {
-            m_radioState->setFilterBandwidthB(newBw);
+            m_radioState->setFilterBandwidthB(newBwDah * 10);
+            m_radioState->setIfShiftB(newIsDah);
         } else {
-            m_radioState->setFilterBandwidth(newBw);
+            m_radioState->setFilterBandwidth(newBwDah * 10);
+            m_radioState->setIfShift(newIsDah);
         }
     });
     connect(m_sideControlPanel, &SideControlPanel::shiftChanged, this, [this](int delta) {
         bool bSet = m_radioState->bSetEnabled();
         int currentShift = bSet ? m_radioState->ifShiftB() : m_radioState->ifShift();
-        int newShift = qBound(-999, currentShift + delta, 999);
+        int isMax = (m_radioState->mode() == RadioState::CW || m_radioState->mode() == RadioState::CW_R)
+                        ? 200
+                        : 300; // CW/CW-R: 2000Hz, SSB/DATA: 3000Hz
+        int newShift = qBound(30, currentShift + delta, isMax);
         QString prefix = bSet ? "IS$" : "IS";
-        QString cmd =
-            QString("%1%2%3;").arg(prefix).arg(newShift >= 0 ? "+" : "-").arg(qAbs(newShift), 4, 10, QChar('0'));
-        m_tcpClient->sendCAT(cmd);
+        m_tcpClient->sendCAT(QString("%1+%2;").arg(prefix).arg(newShift, 4, 10, QChar('0')));
         if (bSet) {
             m_radioState->setIfShiftB(newShift);
         } else {
@@ -2576,17 +2597,37 @@ void MainWindow::setupUi() {
         }
     });
     connect(m_sideControlPanel, &SideControlPanel::lowCutChanged, this, [this](int delta) {
+        // LO adjusts lower filter edge while keeping HI fixed.
+        // Both BW and IS must change. Work in decahertz (dah) to avoid rounding drift.
+        // Step is 2 dah (20Hz) per scroll tick — even so IS stays on-grid.
         bool bSet = m_radioState->bSetEnabled();
-        int currentShift = bSet ? m_radioState->ifShiftB() : m_radioState->ifShift();
-        int newShift = qBound(-999, currentShift + delta, 999);
-        QString prefix = bSet ? "IS$" : "IS";
-        QString cmd =
-            QString("%1%2%3;").arg(prefix).arg(newShift >= 0 ? "+" : "-").arg(qAbs(newShift), 4, 10, QChar('0'));
-        m_tcpClient->sendCAT(cmd);
+        int bwDah = (bSet ? m_radioState->filterBandwidthB() : m_radioState->filterBandwidth()) / 10;
+        int isDah = bSet ? m_radioState->ifShiftB() : m_radioState->ifShift();
+
+        // Compute displayed (clamped) HI/LO
+        int loDah = qMax(0, isDah - bwDah / 2);
+        int hiDah = loDah + bwDah;
+
+        int newLoDah = loDah + (delta * 2);
+        if (newLoDah >= hiDah)
+            return;
+
+        int newBwDah = qBound(5, hiDah - newLoDah, 500);
+        int newIsDah =
+            qBound(30, (hiDah + newLoDah) / 2,
+                   (m_radioState->mode() == RadioState::CW || m_radioState->mode() == RadioState::CW_R) ? 200 : 300);
+
+        QString bwCmd = bSet ? "BW$" : "BW";
+        m_tcpClient->sendCAT(QString("%1%2;").arg(bwCmd).arg(newBwDah, 4, 10, QChar('0')));
+        QString isPrefix = bSet ? "IS$" : "IS";
+        m_tcpClient->sendCAT(QString("%1+%2;").arg(isPrefix).arg(newIsDah, 4, 10, QChar('0')));
+
         if (bSet) {
-            m_radioState->setIfShiftB(newShift);
+            m_radioState->setFilterBandwidthB(newBwDah * 10);
+            m_radioState->setIfShiftB(newIsDah);
         } else {
-            m_radioState->setIfShift(newShift);
+            m_radioState->setFilterBandwidth(newBwDah * 10);
+            m_radioState->setIfShift(newIsDah);
         }
     });
     // Group 3: M.RF/M.SQL and S.RF/S.SQL

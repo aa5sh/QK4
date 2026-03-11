@@ -1003,8 +1003,8 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
                 secLowFreq = center - m_secondaryFilterBw / 2;
                 secHighFreq = center + m_secondaryFilterBw / 2;
             } else if (m_secondaryMode == "CW" || m_secondaryMode == "CW-R") {
-                int pitchOffset = (m_secondaryMode == "CW") ? m_secondaryCwPitch : -m_secondaryCwPitch;
-                qint64 center = m_secondaryTunedFreq + pitchOffset;
+                qint64 center = (m_secondaryMode == "CW") ? m_secondaryTunedFreq + secShiftOffsetHz
+                                                          : m_secondaryTunedFreq - secShiftOffsetHz;
                 secLowFreq = center - m_secondaryFilterBw / 2;
                 secHighFreq = center + m_secondaryFilterBw / 2;
             } else {
@@ -1053,9 +1053,9 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
             // Secondary VFO marker
             qint64 secMarkerFreq = m_secondaryTunedFreq;
             if (m_secondaryMode == "CW") {
-                secMarkerFreq = m_secondaryTunedFreq + m_secondaryCwPitch;
+                secMarkerFreq = m_secondaryTunedFreq + secShiftOffsetHz;
             } else if (m_secondaryMode == "CW-R") {
-                secMarkerFreq = m_secondaryTunedFreq - m_secondaryCwPitch;
+                secMarkerFreq = m_secondaryTunedFreq - secShiftOffsetHz;
             }
             float secMarkerX = freqToNormalized(secMarkerFreq) * w;
             if (secMarkerX >= 0 && secMarkerX <= w) {
@@ -1124,9 +1124,9 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
                 lowFreq = center - m_filterBw / 2;
                 highFreq = center + m_filterBw / 2;
             } else if (m_mode == "CW" || m_mode == "CW-R") {
-                // CW: shift already includes pitch offset from K4
-                int pitchOffset = (m_mode == "CW") ? m_cwPitch : -m_cwPitch;
-                qint64 center = m_tunedFreq + pitchOffset;
+                // CW uses IS (IF shift) for passband center, same as SSB modes
+                // CW: passband above dial; CW-R: passband below dial
+                qint64 center = (m_mode == "CW") ? m_tunedFreq + shiftOffsetHz : m_tunedFreq - shiftOffsetHz;
                 lowFreq = center - m_filterBw / 2;
                 highFreq = center + m_filterBw / 2;
             } else {
@@ -1182,11 +1182,9 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
             // For SSB/other: marker at dial frequency (passband shifts around it)
             qint64 markerFreq = m_tunedFreq;
             if (m_mode == "CW") {
-                // CW marker at passband center (pitch offset from dial)
-                markerFreq = m_tunedFreq + m_cwPitch;
+                markerFreq = m_tunedFreq + shiftOffsetHz;
             } else if (m_mode == "CW-R") {
-                // CW-R marker at passband center (pitch offset below dial)
-                markerFreq = m_tunedFreq - m_cwPitch;
+                markerFreq = m_tunedFreq - shiftOffsetHz;
             }
             // For USB/LSB/AM/FM: marker stays at dial frequency
             float markerX = freqToNormalized(markerFreq) * w;
