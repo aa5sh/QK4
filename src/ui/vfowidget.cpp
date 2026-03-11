@@ -266,6 +266,7 @@ void VFOWidget::showMiniPan() {
         if (!m_pendingMode.isEmpty()) {
             m_miniPan->setMode(m_pendingMode);
         }
+        m_miniPan->setDataSubMode(m_pendingDataSubMode);
         m_miniPan->setFilterBandwidth(m_pendingFilterBw);
         m_miniPan->setIfShift(m_pendingIfShift);
         m_miniPan->setCwPitch(m_pendingCwPitch);
@@ -287,6 +288,12 @@ void VFOWidget::setMiniPanMode(const QString &mode) {
     m_pendingMode = mode;
     if (m_miniPan)
         m_miniPan->setMode(mode);
+}
+
+void VFOWidget::setMiniPanDataSubMode(int subMode) {
+    m_pendingDataSubMode = subMode;
+    if (m_miniPan)
+        m_miniPan->setDataSubMode(subMode);
 }
 
 void VFOWidget::setMiniPanFilterBandwidth(int bw) {

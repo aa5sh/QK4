@@ -608,14 +608,12 @@ void MiniPanRhiWidget::render(QRhiCommandBuffer *cb) {
                 }
             } else if (m_mode == "LSB") {
                 // LSB: passband center is shiftHz below carrier
-                // Passband left edge = center - shiftPixels - bwPixels/2
-                // Passband right edge = center - shiftPixels + bwPixels/2
-                // With shift=BW/2, right edge touches center line
                 passbandX = centerX - shiftPixels - bwPixels / 2;
+            } else if ((m_mode == "DATA" || m_mode == "DATA-R") && (m_dataSubMode == 2 || m_dataSubMode == 3)) {
+                // PSK-D/FSK-D: passband centered on dial frequency
+                passbandX = centerX - bwPixels / 2;
             } else {
-                // USB/DATA: passband center is shiftHz above carrier
-                // Passband left edge = center + shiftPixels - bwPixels/2
-                // With shift=BW/2, left edge touches center line
+                // USB/AFSK/DATA-A: passband center is shiftHz above carrier
                 passbandX = centerX + shiftPixels - bwPixels / 2;
             }
 
@@ -903,6 +901,13 @@ void MiniPanRhiWidget::setMode(const QString &mode) {
         m_mode = mode;
         m_bandwidthHz = bandwidthForMode(mode);
         updateFrequencyLabels(); // Update corner labels for new bandwidth
+        update();
+    }
+}
+
+void MiniPanRhiWidget::setDataSubMode(int subMode) {
+    if (m_dataSubMode != subMode) {
+        m_dataSubMode = subMode;
         update();
     }
 }

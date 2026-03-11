@@ -36,6 +36,7 @@ public:
     // Notch filter visualization
     void setNotchFilter(bool enabled, int pitchHz);
     void setMode(const QString &mode);
+    void setDataSubMode(int subMode);
 
     // Filter passband visualization
     void setFilterBandwidth(int bwHz);
@@ -150,6 +151,7 @@ private:
     bool m_notchEnabled = false;
     int m_notchPitchHz = 0;
     QString m_mode = "USB";
+    int m_dataSubMode = 0;
     int m_bandwidthHz = 10000; // Mode-dependent span: CW=3kHz, Voice/Data=10kHz
 
     // Filter passband visualization

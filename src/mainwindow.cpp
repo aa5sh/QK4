@@ -2538,7 +2538,18 @@ void MainWindow::setupUi() {
     connect(m_sideControlPanel, &SideControlPanel::bandwidthChanged, this, [this](int delta) {
         bool bSet = m_radioState->bSetEnabled();
         int currentBw = bSet ? m_radioState->filterBandwidthB() : m_radioState->filterBandwidth();
-        int newBw = qBound(50, currentBw + (delta * 50), 5000);
+
+        // Mode-specific BW limits (Hz)
+        int bwMin = 50, bwMax = 5000;
+        RadioState::Mode mode = m_radioState->mode();
+        if (mode == RadioState::DATA || mode == RadioState::DATA_R) {
+            int subMode = bSet ? m_radioState->dataSubModeB() : m_radioState->dataSubMode();
+            if (subMode == 3) { // PSK-D
+                bwMax = 200;
+            }
+        }
+
+        int newBw = qBound(bwMin, currentBw + (delta * 50), bwMax);
         QString cmd = bSet ? "BW$" : "BW";
         m_tcpClient->sendCAT(QString("%1%2;").arg(cmd).arg(newBw / 10, 4, 10, QChar('0')));
         if (bSet) {
@@ -2552,8 +2563,20 @@ void MainWindow::setupUi() {
         // Both BW and IS must change. Work in decahertz (dah) to avoid rounding drift.
         // Step is 2 dah (20Hz) per scroll tick — even so IS stays on-grid.
         bool bSet = m_radioState->bSetEnabled();
+        RadioState::Mode mode = m_radioState->mode();
         int bwDah = (bSet ? m_radioState->filterBandwidthB() : m_radioState->filterBandwidth()) / 10;
         int isDah = bSet ? m_radioState->ifShiftB() : m_radioState->ifShift();
+
+        // Mode-specific BW limits (dah) and IS-locked flag
+        int bwMinDah = 5, bwMaxDah = 500;
+        bool isLocked = false;
+        if (mode == RadioState::DATA || mode == RadioState::DATA_R) {
+            int subMode = bSet ? m_radioState->dataSubModeB() : m_radioState->dataSubMode();
+            if (subMode == 3) { // PSK-D: BW 50-200Hz, IS locked
+                bwMaxDah = 20;
+                isLocked = true;
+            }
+        }
 
         // Compute displayed (clamped) HI/LO
         int loDah = qMax(0, isDah - bwDah / 2);
@@ -2563,30 +2586,47 @@ void MainWindow::setupUi() {
         if (newHiDah <= loDah)
             return;
 
-        int newBwDah = qBound(5, newHiDah - loDah, 500);
-        int newIsDah =
-            qBound(30, (newHiDah + loDah) / 2,
-                   (m_radioState->mode() == RadioState::CW || m_radioState->mode() == RadioState::CW_R) ? 200 : 300);
+        int newBwDah = qBound(bwMinDah, newHiDah - loDah, bwMaxDah);
 
         QString bwCmd = bSet ? "BW$" : "BW";
         m_tcpClient->sendCAT(QString("%1%2;").arg(bwCmd).arg(newBwDah, 4, 10, QChar('0')));
-        QString isPrefix = bSet ? "IS$" : "IS";
-        m_tcpClient->sendCAT(QString("%1+%2;").arg(isPrefix).arg(newIsDah, 4, 10, QChar('0')));
 
-        if (bSet) {
-            m_radioState->setFilterBandwidthB(newBwDah * 10);
-            m_radioState->setIfShiftB(newIsDah);
+        if (isLocked) {
+            // IS stays fixed — only BW changes
+            if (bSet)
+                m_radioState->setFilterBandwidthB(newBwDah * 10);
+            else
+                m_radioState->setFilterBandwidth(newBwDah * 10);
         } else {
-            m_radioState->setFilterBandwidth(newBwDah * 10);
-            m_radioState->setIfShift(newIsDah);
+            int newIsDah =
+                qBound(30, (newHiDah + loDah) / 2, (mode == RadioState::CW || mode == RadioState::CW_R) ? 200 : 300);
+            QString isPrefix = bSet ? "IS$" : "IS";
+            m_tcpClient->sendCAT(QString("%1+%2;").arg(isPrefix).arg(newIsDah, 4, 10, QChar('0')));
+
+            if (bSet) {
+                m_radioState->setFilterBandwidthB(newBwDah * 10);
+                m_radioState->setIfShiftB(newIsDah);
+            } else {
+                m_radioState->setFilterBandwidth(newBwDah * 10);
+                m_radioState->setIfShift(newIsDah);
+            }
         }
     });
     connect(m_sideControlPanel, &SideControlPanel::shiftChanged, this, [this](int delta) {
         bool bSet = m_radioState->bSetEnabled();
+        RadioState::Mode mode = m_radioState->mode();
+
+        // IS is locked in certain modes — ignore scroll
+        if (mode == RadioState::AM || mode == RadioState::FM)
+            return;
+        if (mode == RadioState::DATA || mode == RadioState::DATA_R) {
+            int subMode = bSet ? m_radioState->dataSubModeB() : m_radioState->dataSubMode();
+            if (subMode == 3)
+                return; // PSK-D: IS locked
+        }
+
         int currentShift = bSet ? m_radioState->ifShiftB() : m_radioState->ifShift();
-        int isMax = (m_radioState->mode() == RadioState::CW || m_radioState->mode() == RadioState::CW_R)
-                        ? 200
-                        : 300; // CW/CW-R: 2000Hz, SSB/DATA: 3000Hz
+        int isMax = (mode == RadioState::CW || mode == RadioState::CW_R) ? 200 : 300;
         int newShift = qBound(30, currentShift + delta, isMax);
         QString prefix = bSet ? "IS$" : "IS";
         m_tcpClient->sendCAT(QString("%1+%2;").arg(prefix).arg(newShift, 4, 10, QChar('0')));
@@ -2601,8 +2641,20 @@ void MainWindow::setupUi() {
         // Both BW and IS must change. Work in decahertz (dah) to avoid rounding drift.
         // Step is 2 dah (20Hz) per scroll tick — even so IS stays on-grid.
         bool bSet = m_radioState->bSetEnabled();
+        RadioState::Mode mode = m_radioState->mode();
         int bwDah = (bSet ? m_radioState->filterBandwidthB() : m_radioState->filterBandwidth()) / 10;
         int isDah = bSet ? m_radioState->ifShiftB() : m_radioState->ifShift();
+
+        // Mode-specific BW limits (dah) and IS-locked flag
+        int bwMinDah = 5, bwMaxDah = 500;
+        bool isLocked = false;
+        if (mode == RadioState::DATA || mode == RadioState::DATA_R) {
+            int subMode = bSet ? m_radioState->dataSubModeB() : m_radioState->dataSubMode();
+            if (subMode == 3) { // PSK-D: BW 50-200Hz, IS locked
+                bwMaxDah = 20;
+                isLocked = true;
+            }
+        }
 
         // Compute displayed (clamped) HI/LO
         int loDah = qMax(0, isDah - bwDah / 2);
@@ -2612,22 +2664,30 @@ void MainWindow::setupUi() {
         if (newLoDah >= hiDah)
             return;
 
-        int newBwDah = qBound(5, hiDah - newLoDah, 500);
-        int newIsDah =
-            qBound(30, (hiDah + newLoDah) / 2,
-                   (m_radioState->mode() == RadioState::CW || m_radioState->mode() == RadioState::CW_R) ? 200 : 300);
+        int newBwDah = qBound(bwMinDah, hiDah - newLoDah, bwMaxDah);
 
         QString bwCmd = bSet ? "BW$" : "BW";
         m_tcpClient->sendCAT(QString("%1%2;").arg(bwCmd).arg(newBwDah, 4, 10, QChar('0')));
-        QString isPrefix = bSet ? "IS$" : "IS";
-        m_tcpClient->sendCAT(QString("%1+%2;").arg(isPrefix).arg(newIsDah, 4, 10, QChar('0')));
 
-        if (bSet) {
-            m_radioState->setFilterBandwidthB(newBwDah * 10);
-            m_radioState->setIfShiftB(newIsDah);
+        if (isLocked) {
+            // IS stays fixed — only BW changes
+            if (bSet)
+                m_radioState->setFilterBandwidthB(newBwDah * 10);
+            else
+                m_radioState->setFilterBandwidth(newBwDah * 10);
         } else {
-            m_radioState->setFilterBandwidth(newBwDah * 10);
-            m_radioState->setIfShift(newIsDah);
+            int newIsDah =
+                qBound(30, (hiDah + newLoDah) / 2, (mode == RadioState::CW || mode == RadioState::CW_R) ? 200 : 300);
+            QString isPrefix = bSet ? "IS$" : "IS";
+            m_tcpClient->sendCAT(QString("%1+%2;").arg(isPrefix).arg(newIsDah, 4, 10, QChar('0')));
+
+            if (bSet) {
+                m_radioState->setFilterBandwidthB(newBwDah * 10);
+                m_radioState->setIfShiftB(newIsDah);
+            } else {
+                m_radioState->setFilterBandwidth(newBwDah * 10);
+                m_radioState->setIfShift(newIsDah);
+            }
         }
     });
     // Group 3: M.RF/M.SQL and S.RF/S.SQL
@@ -3597,6 +3657,8 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
     });
     connect(m_radioState, &RadioState::modeChanged, this,
             [this](RadioState::Mode mode) { m_panadapterA->setMode(RadioState::modeToString(mode)); });
+    connect(m_radioState, &RadioState::dataSubModeChanged, this,
+            [this](int subMode) { m_panadapterA->setDataSubMode(subMode); });
     connect(m_radioState, &RadioState::filterBandwidthChanged, this,
             [this](int bw) { m_panadapterA->setFilterBandwidth(bw); });
     connect(m_radioState, &RadioState::ifShiftChanged, this, [this](int shift) { m_panadapterA->setIfShift(shift); });
@@ -3615,6 +3677,8 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
     // Also update mini-pan mode when mode changes
     connect(m_radioState, &RadioState::modeChanged, this,
             [this](RadioState::Mode mode) { m_vfoA->setMiniPanMode(RadioState::modeToString(mode)); });
+    connect(m_radioState, &RadioState::dataSubModeChanged, this,
+            [this](int subMode) { m_vfoA->setMiniPanDataSubMode(subMode); });
 
     // Mini-pan filter passband visualization (using forwarding methods)
     connect(m_radioState, &RadioState::filterBandwidthChanged, this,
@@ -3631,6 +3695,8 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
         // Guard: only send if connected and frequency is valid
         if (!m_tcpClient->isConnected() || freq <= 0)
             return;
+        // PSK-D/FSK-D: passband centered at dial+IS, so subtract IS to place passband on click
+        freq = adjustClickFreqForMode(freq, false);
         QString cmd = QString("FA%1;").arg(freq, 11, 10, QChar('0'));
         m_tcpClient->sendCAT(cmd);
         // Request frequency back to update UI (K4 doesn't echo SET commands)
@@ -3643,6 +3709,7 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
         // Guard: only send if connected and frequency is valid
         if (!m_tcpClient->isConnected() || freq <= 0)
             return;
+        freq = adjustClickFreqForMode(freq, false);
         int stepHz = tuningStepToHz(m_radioState->tuningStep());
         qint64 snapped = (freq / stepHz) * stepHz;
         if (snapped <= 0)
@@ -3699,6 +3766,7 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
             return;
         if (!m_tcpClient->isConnected() || freq <= 0)
             return;
+        freq = adjustClickFreqForMode(freq, true); // right-click on Pan A → VFO B
         QString cmd = QString("FB%1;").arg(freq, 11, 10, QChar('0'));
         m_tcpClient->sendCAT(cmd);
         m_tcpClient->sendCAT("FB;");
@@ -3709,6 +3777,7 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
             return;
         if (!m_tcpClient->isConnected() || freq <= 0)
             return;
+        freq = adjustClickFreqForMode(freq, true); // right-drag on Pan A → VFO B
         int stepHz = tuningStepToHz(m_radioState->tuningStepB());
         qint64 snapped = (freq / stepHz) * stepHz;
         if (snapped <= 0)
@@ -3725,6 +3794,8 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
     });
     connect(m_radioState, &RadioState::modeBChanged, this,
             [this](RadioState::Mode mode) { m_panadapterB->setMode(RadioState::modeToString(mode)); });
+    connect(m_radioState, &RadioState::dataSubModeBChanged, this,
+            [this](int subMode) { m_panadapterB->setDataSubMode(subMode); });
     connect(m_radioState, &RadioState::filterBandwidthBChanged, this,
             [this](int bw) { m_panadapterB->setFilterBandwidth(bw); });
     connect(m_radioState, &RadioState::ifShiftBChanged, this, [this](int shift) { m_panadapterB->setIfShift(shift); });
@@ -3738,6 +3809,8 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
     // VFO B Mini-Pan connections (mode-dependent bandwidth, using forwarding methods)
     connect(m_radioState, &RadioState::modeBChanged, this,
             [this](RadioState::Mode mode) { m_vfoB->setMiniPanMode(RadioState::modeToString(mode)); });
+    connect(m_radioState, &RadioState::dataSubModeBChanged, this,
+            [this](int subMode) { m_vfoB->setMiniPanDataSubMode(subMode); });
     connect(m_radioState, &RadioState::filterBandwidthBChanged, this,
             [this](int bw) { m_vfoB->setMiniPanFilterBandwidth(bw); });
     connect(m_radioState, &RadioState::ifShiftBChanged, this, [this](int shift) { m_vfoB->setMiniPanIfShift(shift); });
@@ -3754,7 +3827,7 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
     auto updatePanadapterASecondary = [this]() {
         m_panadapterA->setSecondaryVfo(m_radioState->vfoB(), m_radioState->filterBandwidthB(),
                                        RadioState::modeToString(m_radioState->modeB()), m_radioState->ifShiftB(),
-                                       m_radioState->cwPitch());
+                                       m_radioState->cwPitch(), m_radioState->dataSubModeB());
     };
     connect(m_radioState, &RadioState::frequencyBChanged, this, updatePanadapterASecondary);
     connect(m_radioState, &RadioState::modeBChanged, this, updatePanadapterASecondary);
@@ -3766,7 +3839,7 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
     auto updatePanadapterBSecondary = [this]() {
         m_panadapterB->setSecondaryVfo(m_radioState->vfoA(), m_radioState->filterBandwidth(),
                                        RadioState::modeToString(m_radioState->mode()), m_radioState->ifShift(),
-                                       m_radioState->cwPitch());
+                                       m_radioState->cwPitch(), m_radioState->dataSubMode());
     };
     connect(m_radioState, &RadioState::frequencyChanged, this, updatePanadapterBSecondary);
     connect(m_radioState, &RadioState::modeChanged, this, updatePanadapterBSecondary);
@@ -3780,7 +3853,9 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
         if (!m_tcpClient->isConnected() || freq <= 0)
             return;
         // L=A R=B mode: left-click on Pan B tunes VFO A
-        QString vfo = (m_mouseQsyMode == 1) ? "FA" : "FB";
+        bool tuneA = (m_mouseQsyMode == 1);
+        freq = adjustClickFreqForMode(freq, !tuneA);
+        QString vfo = tuneA ? "FA" : "FB";
         QString cmd = QString("%1%2;").arg(vfo).arg(freq, 11, 10, QChar('0'));
         m_tcpClient->sendCAT(cmd);
         m_tcpClient->sendCAT(vfo + ";");
@@ -3794,6 +3869,7 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
             return;
         // L=A R=B mode: left-drag on Pan B tunes VFO A
         bool tuneA = (m_mouseQsyMode == 1);
+        freq = adjustClickFreqForMode(freq, !tuneA);
         QString vfo = tuneA ? "FA" : "FB";
         int stepHz = tuningStepToHz(tuneA ? m_radioState->tuningStep() : m_radioState->tuningStepB());
         qint64 snapped = (freq / stepHz) * stepHz;
@@ -3851,6 +3927,7 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
         if (!m_tcpClient->isConnected() || freq <= 0)
             return;
         // L=A R=B mode: right-click always tunes VFO B
+        freq = adjustClickFreqForMode(freq, true);
         QString cmd = QString("FB%1;").arg(freq, 11, 10, QChar('0'));
         m_tcpClient->sendCAT(cmd);
         m_tcpClient->sendCAT("FB;");
@@ -3862,6 +3939,7 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
         if (!m_tcpClient->isConnected() || freq <= 0)
             return;
         // L=A R=B mode: right-drag always tunes VFO B
+        freq = adjustClickFreqForMode(freq, true);
         int stepHz = tuningStepToHz(m_radioState->tuningStepB());
         qint64 snapped = (freq / stepHz) * stepHz;
         if (snapped <= 0)
@@ -4616,6 +4694,13 @@ void MainWindow::onRitXitChanged(bool ritEnabled, bool xitEnabled, int offset) {
     updateTxMarkers();
 }
 
+qint64 MainWindow::adjustClickFreqForMode(qint64 freq, bool vfoB) {
+    // Placeholder for mode-specific click-to-tune adjustments.
+    // Currently all DATA submodes use the same click behavior as USB.
+    Q_UNUSED(vfoB);
+    return freq;
+}
+
 void MainWindow::updatePanadapterPassbands() {
     // Panadapter A always shows VFO A's own passband (it's VFO A's spectrum)
     quint64 rxA = m_radioState->vfoA();
@@ -4639,10 +4724,10 @@ void MainWindow::updatePanadapterPassbands() {
     // VFO B overlay on panadapter A (green passband showing where VFO B is listening)
     m_panadapterA->setSecondaryVfo(rxB, m_radioState->filterBandwidthB(),
                                    RadioState::modeToString(m_radioState->modeB()), m_radioState->ifShiftB(),
-                                   m_radioState->cwPitch());
+                                   m_radioState->cwPitch(), m_radioState->dataSubModeB());
     // VFO A overlay on panadapter B
     m_panadapterB->setSecondaryVfo(rxA, m_radioState->filterBandwidth(), RadioState::modeToString(m_radioState->mode()),
-                                   m_radioState->ifShift(), m_radioState->cwPitch());
+                                   m_radioState->ifShift(), m_radioState->cwPitch(), m_radioState->dataSubMode());
 }
 
 void MainWindow::updateTxMarkers() {

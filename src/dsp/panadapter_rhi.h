@@ -35,6 +35,7 @@ public:
     void setTunedFrequency(qint64 freq);
     void setFilterBandwidth(int bwHz);
     void setMode(const QString &mode);
+    void setDataSubMode(int subMode);
     void setIfShift(int shift);
     void setCwPitch(int pitchHz);
     void clear();
@@ -52,7 +53,7 @@ public:
     void setAmplitudeUnits(bool useSUnits); // false=dBm, true=S-units
 
     // Secondary VFO (other receiver's passband)
-    void setSecondaryVfo(qint64 freq, int bwHz, const QString &mode, int ifShift, int cwPitch);
+    void setSecondaryVfo(qint64 freq, int bwHz, const QString &mode, int ifShift, int cwPitch, int dataSubMode = 0);
     void setSecondaryVisible(bool visible);
     void setSecondaryPassbandColor(const QColor &color);
     void setSecondaryMarkerColor(const QColor &color);
@@ -204,6 +205,7 @@ private:
     qint64 m_tunedFreq = 0;
     int m_filterBw = 2400;
     QString m_mode = "USB";
+    int m_dataSubMode = 0;
     int m_ifShift = 50;
     int m_cwPitch = 500;
 
@@ -230,6 +232,7 @@ private:
     qint64 m_secondaryTunedFreq = 0;
     int m_secondaryFilterBw = 0;
     QString m_secondaryMode = "";
+    int m_secondaryDataSubMode = 0;
     int m_secondaryIfShift = 50;
     int m_secondaryCwPitch = 500;
     bool m_secondaryVisible = false;

@@ -104,6 +104,7 @@ private slots:
     void onRitXitChanged(bool ritEnabled, bool xitEnabled, int offset);
     void updatePanadapterPassbands();
     void updateTxMarkers();
+    qint64 adjustClickFreqForMode(qint64 freq, bool vfoB);
     void onMessageBankChanged(int bank);
     void onProcessingChanged();
     void onProcessingChangedB();

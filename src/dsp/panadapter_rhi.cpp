@@ -999,9 +999,16 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
                 secLowFreq = center - m_secondaryFilterBw / 2;
                 secHighFreq = center + m_secondaryFilterBw / 2;
             } else if (m_secondaryMode == "USB" || m_secondaryMode == "DATA" || m_secondaryMode == "DATA-R") {
-                qint64 center = m_secondaryTunedFreq + secShiftOffsetHz;
-                secLowFreq = center - m_secondaryFilterBw / 2;
-                secHighFreq = center + m_secondaryFilterBw / 2;
+                bool secDialCentered = (m_secondaryMode == "DATA" || m_secondaryMode == "DATA-R") &&
+                                       (m_secondaryDataSubMode == 2 || m_secondaryDataSubMode == 3);
+                if (secDialCentered) {
+                    secLowFreq = m_secondaryTunedFreq - m_secondaryFilterBw / 2;
+                    secHighFreq = m_secondaryTunedFreq + m_secondaryFilterBw / 2;
+                } else {
+                    qint64 center = m_secondaryTunedFreq + secShiftOffsetHz;
+                    secLowFreq = center - m_secondaryFilterBw / 2;
+                    secHighFreq = center + m_secondaryFilterBw / 2;
+                }
             } else if (m_secondaryMode == "CW" || m_secondaryMode == "CW-R") {
                 qint64 center = (m_secondaryMode == "CW") ? m_secondaryTunedFreq + secShiftOffsetHz
                                                           : m_secondaryTunedFreq - secShiftOffsetHz;
@@ -1119,12 +1126,21 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
                 lowFreq = center - m_filterBw / 2;
                 highFreq = center + m_filterBw / 2;
             } else if (m_mode == "USB" || m_mode == "DATA" || m_mode == "DATA-R") {
-                // USB: passband is above dial, shift indicates center offset
-                qint64 center = m_tunedFreq + shiftOffsetHz;
-                lowFreq = center - m_filterBw / 2;
-                highFreq = center + m_filterBw / 2;
+                // Check for DATA submodes that center passband on dial (PSK-D, FSK-D)
+                bool dialCentered =
+                    (m_mode == "DATA" || m_mode == "DATA-R") && (m_dataSubMode == 2 || m_dataSubMode == 3);
+                if (dialCentered) {
+                    // PSK-D/FSK-D: passband centered on dial frequency
+                    lowFreq = m_tunedFreq - m_filterBw / 2;
+                    highFreq = m_tunedFreq + m_filterBw / 2;
+                } else {
+                    // USB/AFSK/DATA-A: passband above dial, offset by IS
+                    qint64 center = m_tunedFreq + shiftOffsetHz;
+                    lowFreq = center - m_filterBw / 2;
+                    highFreq = center + m_filterBw / 2;
+                }
             } else if (m_mode == "CW" || m_mode == "CW-R") {
-                // CW uses IS (IF shift) for passband center, same as SSB modes
+                // CW uses IS (IF shift) for passband center
                 // CW: passband above dial; CW-R: passband below dial
                 qint64 center = (m_mode == "CW") ? m_tunedFreq + shiftOffsetHz : m_tunedFreq - shiftOffsetHz;
                 lowFreq = center - m_filterBw / 2;
@@ -1178,8 +1194,8 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
 
             // Draw frequency marker - use dedicated VBO, uniform buffer, and SRB
             // Use spectrumHeight not h - marker should only appear in spectrum area, not waterfall
-            // For CW modes: marker at passband center (dial + pitch offset)
-            // For SSB/other: marker at dial frequency (passband shifts around it)
+            // For CW modes: marker at passband center (dial + IS offset)
+            // For SSB/DATA: marker at dial frequency (passband shifts around it)
             qint64 markerFreq = m_tunedFreq;
             if (m_mode == "CW") {
                 markerFreq = m_tunedFreq + shiftOffsetHz;
@@ -1563,6 +1579,13 @@ void PanadapterRhiWidget::setMode(const QString &mode) {
     update();
 }
 
+void PanadapterRhiWidget::setDataSubMode(int subMode) {
+    if (m_dataSubMode != subMode) {
+        m_dataSubMode = subMode;
+        update();
+    }
+}
+
 void PanadapterRhiWidget::setIfShift(int shift) {
     if (m_ifShift != shift) {
         m_ifShift = shift;
@@ -1684,10 +1707,12 @@ void PanadapterRhiWidget::setAmplitudeUnits(bool useSUnits) {
 }
 
 // Secondary VFO setters
-void PanadapterRhiWidget::setSecondaryVfo(qint64 freq, int bwHz, const QString &mode, int ifShift, int cwPitch) {
+void PanadapterRhiWidget::setSecondaryVfo(qint64 freq, int bwHz, const QString &mode, int ifShift, int cwPitch,
+                                          int dataSubMode) {
     m_secondaryTunedFreq = freq;
     m_secondaryFilterBw = bwHz;
     m_secondaryMode = mode;
+    m_secondaryDataSubMode = dataSubMode;
     m_secondaryIfShift = ifShift;
     m_secondaryCwPitch = cwPitch;
     update();
