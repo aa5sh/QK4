@@ -105,6 +105,8 @@ void RadioState::reset() {
     m_ritEnabled = false;
     m_xitEnabled = false;
     m_ritXitOffset = 0;
+    m_ritEnabledB = false;
+    m_ritXitOffsetB = 0;
 
     // Message bank
     m_messageBank = -1;
@@ -944,6 +946,8 @@ void RadioState::registerCommandHandlers() {
     m_commandHandlers.append({"LK$", [this](const QString &c) { handleLKSub(c); }});
     m_commandHandlers.append({"VT$", [this](const QString &c) { handleVTSub(c); }});
     m_commandHandlers.append({"AR$", [this](const QString &c) { handleARSub(c); }});
+    m_commandHandlers.append({"RO$", [this](const QString &c) { handleROSub(c); }});
+    m_commandHandlers.append({"RT$", [this](const QString &c) { handleRTSub(c); }});
 
     // 3-char commands
     m_commandHandlers.append({"ACN", [this](const QString &c) { handleACN(c); }});
@@ -2409,6 +2413,29 @@ void RadioState::handleRO(const QString &cmd) {
     if (ok && offset != m_ritXitOffset) {
         m_ritXitOffset = offset;
         emit ritXitChanged(m_ritEnabled, m_xitEnabled, m_ritXitOffset);
+    }
+}
+
+void RadioState::handleROSub(const QString &cmd) {
+    // RO$ — VFO B RIT/XIT offset (e.g., "RO$+0210")
+    if (cmd.length() < 4)
+        return;
+    bool ok;
+    int offset = cmd.mid(3).toInt(&ok); // Skip "RO$"
+    if (ok && offset != m_ritXitOffsetB) {
+        m_ritXitOffsetB = offset;
+        emit ritXitBChanged(m_ritEnabledB, m_ritXitOffsetB);
+    }
+}
+
+void RadioState::handleRTSub(const QString &cmd) {
+    // RT$ — VFO B RIT enable (e.g., "RT$1")
+    if (cmd.length() < 4 || (cmd.at(3) != '0' && cmd.at(3) != '1'))
+        return;
+    bool enabled = (cmd.at(3) == '1');
+    if (enabled != m_ritEnabledB) {
+        m_ritEnabledB = enabled;
+        emit ritXitBChanged(m_ritEnabledB, m_ritXitOffsetB);
     }
 }
 

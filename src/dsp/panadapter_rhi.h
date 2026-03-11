@@ -68,6 +68,9 @@ public:
     void setNotchColor(const QColor &color);
     void setBackgroundGradient(const QColor &center, const QColor &edge);
 
+    // TX frequency marker (shows TX position when RIT/XIT splits TX from RX)
+    void setTxMarker(qint64 freq, bool visible);
+
 signals:
     void frequencyClicked(qint64 freq);
     void frequencyDragged(qint64 freq);
@@ -151,6 +154,10 @@ private:
     std::unique_ptr<QRhiBuffer> m_secondaryMarkerVbo;
     std::unique_ptr<QRhiBuffer> m_secondaryMarkerUniformBuffer;
     std::unique_ptr<QRhiShaderResourceBindings> m_secondaryMarkerSrb;
+    // TX marker buffers (shows TX position when RIT/XIT active)
+    std::unique_ptr<QRhiBuffer> m_txMarkerVbo;
+    std::unique_ptr<QRhiBuffer> m_txMarkerUniformBuffer;
+    std::unique_ptr<QRhiShaderResourceBindings> m_txMarkerSrb;
     QRhiRenderPassDescriptor *m_rpDesc = nullptr;
 
     bool m_rhiInitialized = false;
@@ -241,6 +248,11 @@ private:
     QColor m_notchColor{255, 0, 0};                 // Red
     QColor m_bgCenterColor{56, 56, 56};             // Lighter gray at center
     QColor m_bgEdgeColor{20, 20, 20};               // Darker at edges
+
+    // TX marker state
+    qint64 m_txFreq = 0;
+    bool m_txMarkerVisible = false;
+    QColor m_txMarkerColor{255, 60, 60, 160}; // Translucent red
 
     // Peak hold decay
     QTimer *m_peakDecayTimer = nullptr;

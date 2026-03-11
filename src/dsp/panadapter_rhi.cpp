@@ -573,6 +573,13 @@ void PanadapterRhiWidget::initialize(QRhiCommandBuffer *cb) {
     m_secondaryMarkerUniformBuffer.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 32));
     m_secondaryMarkerUniformBuffer->create();
 
+    // TX marker buffers (shows TX position when RIT/XIT splits TX from RX)
+    m_txMarkerVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, 64 * sizeof(float)));
+    m_txMarkerVbo->create();
+
+    m_txMarkerUniformBuffer.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 32));
+    m_txMarkerUniformBuffer->create();
+
     cb->resourceUpdate(rub);
 
     m_rhiInitialized = true;
@@ -689,6 +696,12 @@ void PanadapterRhiWidget::createPipelines() {
             0, QRhiShaderResourceBinding::VertexStage | QRhiShaderResourceBinding::FragmentStage,
             m_secondaryMarkerUniformBuffer.get())});
         m_secondaryMarkerSrb->create();
+
+        m_txMarkerSrb.reset(m_rhi->newShaderResourceBindings());
+        m_txMarkerSrb->setBindings({QRhiShaderResourceBinding::uniformBuffer(
+            0, QRhiShaderResourceBinding::VertexStage | QRhiShaderResourceBinding::FragmentStage,
+            m_txMarkerUniformBuffer.get())});
+        m_txMarkerSrb->create();
 
         m_overlayLinePipeline.reset(m_rhi->newGraphicsPipeline());
         m_overlayLinePipeline->setShaderStages(
@@ -1220,6 +1233,49 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
                 cb->draw(6);
             }
 
+            // Draw TX marker line when RIT/XIT causes TX freq to differ from RX freq
+            // m_txFreq is the dial TX frequency — apply same CW pitch offset as the RX marker
+            if (m_txMarkerVisible && m_txFreq > 0 && m_spanHz > 0) {
+                qint64 txDisplayFreq = m_txFreq;
+                if (m_mode == "CW") {
+                    txDisplayFreq += m_cwPitch;
+                } else if (m_mode == "CW-R") {
+                    txDisplayFreq -= m_cwPitch;
+                }
+                float txX = freqToNormalized(txDisplayFreq) * w;
+                if (txX >= 0 && txX <= w) {
+                    float txWidth = 2.0f;
+                    QVector<float> txVerts = {txX, 0.0f, txX + txWidth, 0.0f,           txX + txWidth, spectrumHeight,
+                                              txX, 0.0f, txX + txWidth, spectrumHeight, txX,           spectrumHeight};
+
+                    QRhiResourceUpdateBatch *txRub = m_rhi->nextResourceUpdateBatch();
+                    txRub->updateDynamicBuffer(m_txMarkerVbo.get(), 0, txVerts.size() * sizeof(float),
+                                               txVerts.constData());
+
+                    struct {
+                        float viewportWidth;
+                        float viewportHeight;
+                        float pad0, pad1;
+                        float r, g, b, a;
+                    } txUniforms = {w,
+                                    h,
+                                    0,
+                                    0,
+                                    static_cast<float>(m_txMarkerColor.redF()),
+                                    static_cast<float>(m_txMarkerColor.greenF()),
+                                    static_cast<float>(m_txMarkerColor.blueF()),
+                                    static_cast<float>(m_txMarkerColor.alphaF())};
+                    txRub->updateDynamicBuffer(m_txMarkerUniformBuffer.get(), 0, sizeof(txUniforms), &txUniforms);
+
+                    cb->resourceUpdate(txRub);
+                    cb->setGraphicsPipeline(m_overlayTrianglePipeline.get());
+                    cb->setShaderResources(m_txMarkerSrb.get());
+                    const QRhiCommandBuffer::VertexInput txVbufBinding(m_txMarkerVbo.get(), 0);
+                    cb->setVertexInput(0, 1, &txVbufBinding);
+                    cb->draw(6);
+                }
+            }
+
             // Draw notch filter marker (dotted line) - uses dedicated notch buffers
             // Calculate notch offset from tunedFreq (consistent with mini-pan)
             if (m_notchEnabled && m_notchPitchHz > 0 && m_spanHz > 0) {
@@ -1549,6 +1605,10 @@ void PanadapterRhiWidget::clear() {
     m_secondaryTunedFreq = 0;
     m_secondaryFilterBw = 0;
 
+    // TX marker
+    m_txFreq = 0;
+    m_txMarkerVisible = false;
+
     // Hide frequency labels (paintEvent returns early when spanHz <= 0)
     if (m_freqScaleOverlay)
         m_freqScaleOverlay->setFrequencyRange(0, 0, 0, "");
@@ -1686,6 +1746,14 @@ void PanadapterRhiWidget::setPassbandColor(const QColor &color) {
 void PanadapterRhiWidget::setFrequencyMarkerColor(const QColor &color) {
     m_frequencyMarkerColor = color;
     update();
+}
+
+void PanadapterRhiWidget::setTxMarker(qint64 freq, bool visible) {
+    if (m_txFreq != freq || m_txMarkerVisible != visible) {
+        m_txFreq = freq;
+        m_txMarkerVisible = visible;
+        update();
+    }
 }
 
 void PanadapterRhiWidget::setNotchColor(const QColor &color) {

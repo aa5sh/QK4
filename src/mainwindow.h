@@ -102,6 +102,8 @@ private slots:
     void onTestModeChanged(bool enabled);
     void onAtuModeChanged(int mode);
     void onRitXitChanged(bool ritEnabled, bool xitEnabled, int offset);
+    void updatePanadapterPassbands();
+    void updateTxMarkers();
     void onMessageBankChanged(int bank);
     void onProcessingChanged();
     void onProcessingChangedB();

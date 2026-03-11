@@ -1149,6 +1149,17 @@ MainWindow::MainWindow(QWidget *parent)
         m_txIndicator->setStyleSheet(QString("color: %1; font-size: 18px; font-weight: bold;").arg(color));
         m_txTriangle->setStyleSheet(QString("color: %1; font-size: 18px;").arg(color));
         m_txTriangleB->setStyleSheet(QString("color: %1; font-size: 18px;").arg(color));
+
+        // When XIT is active, show the actual TX frequency on the TX VFO display
+        // No split: VFO A displays TX freq; Split: VFO B displays TX freq
+        // On return to RX, restore the normal RX frequency display
+        if (m_radioState->xitEnabled()) {
+            if (m_radioState->splitEnabled()) {
+                onFrequencyBChanged(m_radioState->vfoB());
+            } else {
+                onFrequencyChanged(m_radioState->vfoA());
+            }
+        }
     });
 
     // SUB indicator - green when sub RX enabled, grey when off
@@ -1299,7 +1310,34 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_radioState, &RadioState::qskEnabledChanged, this, &MainWindow::onQskEnabledChanged);
     connect(m_radioState, &RadioState::testModeChanged, this, &MainWindow::onTestModeChanged);
     connect(m_radioState, &RadioState::atuModeChanged, this, &MainWindow::onAtuModeChanged);
-    connect(m_radioState, &RadioState::ritXitChanged, this, &MainWindow::onRitXitChanged);
+    connect(m_radioState, &RadioState::ritXitChanged, this, [this](bool ritEnabled, bool xitEnabled, int offset) {
+        if (!m_radioState->bSetEnabled()) {
+            // BSET off: RIT/XIT state from VFO A
+            // In split mode, XIT offset lives in RO$ (VFO B register).
+            // Use RO$ when XIT is active OR when XIT was active (preserved value on toggle-off)
+            int displayOffset = offset;
+            if (m_radioState->splitEnabled() && !ritEnabled && m_radioState->ritXitOffsetB() != 0)
+                displayOffset = m_radioState->ritXitOffsetB();
+            onRitXitChanged(ritEnabled, xitEnabled, displayOffset);
+        } else {
+            // BSET on: RIT from VFO B (RO$); XIT from RO (no split) or RO$ (split)
+            int displayOffset;
+            if (xitEnabled)
+                displayOffset = m_radioState->splitEnabled() ? m_radioState->ritXitOffsetB() : offset;
+            else
+                displayOffset = m_radioState->ritXitOffsetB();
+            onRitXitChanged(m_radioState->ritEnabledB(), xitEnabled, displayOffset);
+        }
+    });
+    connect(m_radioState, &RadioState::ritXitBChanged, this, [this](bool ritEnabled, int offset) {
+        if (m_radioState->bSetEnabled()) {
+            // BSET on: VFO B offset changed — update display
+            onRitXitChanged(ritEnabled, m_radioState->xitEnabled(), offset);
+        } else if (m_radioState->splitEnabled() && m_radioState->xitEnabled()) {
+            // Split + XIT: K4 routes XIT offset to RO$ (VFO B register)
+            onRitXitChanged(m_radioState->ritEnabled(), true, offset);
+        }
+    });
     connect(m_radioState, &RadioState::messageBankChanged, this, &MainWindow::onMessageBankChanged);
 
     // Filter position indicators
@@ -2367,6 +2405,13 @@ void MainWindow::setupUi() {
 
         // Change side panel BW/SHFT indicator color (cyan=MainRx, green=SubRx)
         m_sideControlPanel->setActiveReceiver(enabled);
+
+        // Switch RIT/XIT display to match active VFO
+        if (enabled) {
+            onRitXitChanged(m_radioState->ritEnabledB(), m_radioState->xitEnabled(), m_radioState->ritXitOffsetB());
+        } else {
+            onRitXitChanged(m_radioState->ritEnabled(), m_radioState->xitEnabled(), m_radioState->ritXitOffset());
+        }
     });
 
     // Bottom Menu Bar
@@ -2973,6 +3018,8 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     m_modeALabel = m_vfoRow->modeALabel();
     m_modeBLabel = m_vfoRow->modeBLabel();
     m_txIndicator = m_vfoRow->txIndicator();
+    m_txIndicator->setCursor(Qt::PointingHandCursor);
+    m_txIndicator->installEventFilter(this);
     m_txTriangle = m_vfoRow->txTriangle();
     m_txTriangleB = m_vfoRow->txTriangleB();
     m_testLabel = m_vfoRow->testLabel();
@@ -2988,7 +3035,7 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     // SPLIT indicator
     m_splitLabel = new QLabel("SPLIT OFF", centerWidget);
     m_splitLabel->setAlignment(Qt::AlignCenter);
-    m_splitLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(K4Styles::Colors::AccentAmber));
+    m_splitLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(K4Styles::Colors::AccentAmber));
     centerLayout->addWidget(m_splitLabel);
 
     // B SET indicator (green rounded rect with black text, hidden by default)
@@ -3008,7 +3055,7 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     // Message Bank indicator
     m_msgBankLabel = new QLabel("MSG: I", centerWidget);
     m_msgBankLabel->setAlignment(Qt::AlignCenter);
-    m_msgBankLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(K4Styles::Colors::TextGray));
+    m_msgBankLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(K4Styles::Colors::AccentAmber));
     centerLayout->addWidget(m_msgBankLabel);
 
     // RIT/XIT Box with border - constrained size
@@ -3503,8 +3550,10 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
             []() { qCritical() << "!!! PanadapterB renderFailed() emitted - QRhi could not be obtained !!!"; });
 
     // Update panadapter when frequency/mode changes
-    connect(m_radioState, &RadioState::frequencyChanged, this,
-            [this](quint64 freq) { m_panadapterA->setTunedFrequency(freq); });
+    connect(m_radioState, &RadioState::frequencyChanged, this, [this](quint64) {
+        updatePanadapterPassbands();
+        updateTxMarkers();
+    });
     connect(m_radioState, &RadioState::modeChanged, this,
             [this](RadioState::Mode mode) { m_panadapterA->setMode(RadioState::modeToString(mode)); });
     connect(m_radioState, &RadioState::filterBandwidthChanged, this,
@@ -3629,8 +3678,10 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
     });
 
     // VFO B connections
-    connect(m_radioState, &RadioState::frequencyBChanged, this,
-            [this](quint64 freq) { m_panadapterB->setTunedFrequency(freq); });
+    connect(m_radioState, &RadioState::frequencyBChanged, this, [this](quint64) {
+        updatePanadapterPassbands();
+        updateTxMarkers();
+    });
     connect(m_radioState, &RadioState::modeBChanged, this,
             [this](RadioState::Mode mode) { m_panadapterB->setMode(RadioState::modeToString(mode)); });
     connect(m_radioState, &RadioState::filterBandwidthBChanged, this,
@@ -3988,10 +4039,32 @@ void MainWindow::onCatResponse(const QString &response) {
 }
 
 void MainWindow::onFrequencyChanged(quint64 freq) {
+    // When transmitting with XIT (no split): show TX frequency (dial + XIT offset)
+    // When receiving with RIT: show RX frequency (dial + RIT offset)
+    if (m_radioState->isTransmitting() && m_radioState->xitEnabled() && !m_radioState->splitEnabled()) {
+        qint64 txFreq = static_cast<qint64>(freq) + m_radioState->ritXitOffset();
+        if (txFreq > 0)
+            freq = static_cast<quint64>(txFreq);
+    } else if (m_radioState->ritEnabled()) {
+        qint64 rxFreq = static_cast<qint64>(freq) + m_radioState->ritXitOffset();
+        if (rxFreq > 0)
+            freq = static_cast<quint64>(rxFreq);
+    }
     m_vfoA->setFrequency(formatFrequency(freq));
 }
 
 void MainWindow::onFrequencyBChanged(quint64 freq) {
+    // When transmitting with XIT (split): show TX frequency (dial + XIT offset)
+    // When receiving with RIT B: show RX frequency (dial + RIT B offset)
+    if (m_radioState->isTransmitting() && m_radioState->xitEnabled() && m_radioState->splitEnabled()) {
+        qint64 txFreq = static_cast<qint64>(freq) + m_radioState->ritXitOffsetB();
+        if (txFreq > 0)
+            freq = static_cast<quint64>(txFreq);
+    } else if (m_radioState->ritEnabledB()) {
+        qint64 rxFreq = static_cast<qint64>(freq) + m_radioState->ritXitOffsetB();
+        if (rxFreq > 0)
+            freq = static_cast<quint64>(rxFreq);
+    }
     m_vfoB->setFrequency(formatFrequency(freq));
 }
 
@@ -4126,7 +4199,7 @@ void MainWindow::updateConnectionState(TcpClient::ConnectionState state) {
 
         // Split
         m_splitLabel->setText("SPLIT OFF");
-        m_splitLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(K4Styles::Colors::AccentAmber));
+        m_splitLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(K4Styles::Colors::AccentAmber));
 
         // TX indicators (default: left triangle, amber)
         m_txTriangle->setText("◀");
@@ -4150,7 +4223,7 @@ void MainWindow::updateConnectionState(TcpClient::ConnectionState state) {
 
         // Message bank
         m_msgBankLabel->setText("MSG: I");
-        m_msgBankLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(K4Styles::Colors::TextGray));
+        m_msgBankLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(K4Styles::Colors::AccentAmber));
 
         // RIT/XIT (disabled state)
         m_ritLabel->setStyleSheet(
@@ -4313,18 +4386,19 @@ void MainWindow::onDisplayFpsChanged(int fps) {
 void MainWindow::onSplitChanged(bool enabled) {
     if (enabled) {
         m_splitLabel->setText("SPLIT ON");
-        m_splitLabel->setStyleSheet(
-            QString("color: %1; font-size: 11px; font-weight: bold;").arg(K4Styles::Colors::StatusGreen));
+        m_splitLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(K4Styles::Colors::AccentAmber));
         // When split is on, TX goes to VFO B - clear left triangle, show right triangle
         m_txTriangle->setText("");
         m_txTriangleB->setText("▶");
     } else {
         m_splitLabel->setText("SPLIT OFF");
-        m_splitLabel->setStyleSheet(QString("color: %1; font-size: 11px;").arg(K4Styles::Colors::AccentAmber));
+        m_splitLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(K4Styles::Colors::AccentAmber));
         // When split is off, TX stays on VFO A - show left triangle, clear right triangle
         m_txTriangle->setText("◀");
         m_txTriangleB->setText("");
     }
+    // Split changes which VFO transmits — update TX markers
+    updateTxMarkers();
 }
 
 void MainWindow::onAntennaChanged(int txAnt, int rxAntMain, int rxAntSub) {
@@ -4488,6 +4562,79 @@ void MainWindow::onRitXitChanged(bool ritEnabled, bool xitEnabled, int offset) {
     QString valueColor = (ritEnabled || xitEnabled) ? K4Styles::Colors::TextWhite : K4Styles::Colors::InactiveGray;
     m_ritXitValueLabel->setStyleSheet(
         QString("color: %1; font-size: 14px; font-weight: bold; border: none; padding: 0 11px;").arg(valueColor));
+
+    // Refresh frequency displays and panadapter passband — RIT offset affects receive frequency
+    onFrequencyChanged(m_radioState->vfoA());
+    onFrequencyBChanged(m_radioState->vfoB());
+
+    // Update panadapter passband positions (tuned frequency includes RIT offset when active)
+    // When BSET is on, panadapter A shows VFO B's passband position (matching the UI switch)
+    updatePanadapterPassbands();
+
+    // Update TX marker — shows where we'll transmit when RIT/XIT splits TX from RX
+    updateTxMarkers();
+}
+
+void MainWindow::updatePanadapterPassbands() {
+    // Panadapter A always shows VFO A's own passband (it's VFO A's spectrum)
+    quint64 rxA = m_radioState->vfoA();
+    if (m_radioState->ritEnabled()) {
+        qint64 adjusted = static_cast<qint64>(rxA) + m_radioState->ritXitOffset();
+        if (adjusted > 0)
+            rxA = static_cast<quint64>(adjusted);
+    }
+    m_panadapterA->setTunedFrequency(rxA);
+
+    // Panadapter B always shows VFO B's own passband
+    quint64 rxB = m_radioState->vfoB();
+    if (m_radioState->ritEnabledB()) {
+        qint64 adjusted = static_cast<qint64>(rxB) + m_radioState->ritXitOffsetB();
+        if (adjusted > 0)
+            rxB = static_cast<quint64>(adjusted);
+    }
+    m_panadapterB->setTunedFrequency(rxB);
+
+    // Update secondary VFO overlays with RIT-adjusted positions
+    // VFO B overlay on panadapter A (green passband showing where VFO B is listening)
+    m_panadapterA->setSecondaryVfo(rxB, m_radioState->filterBandwidthB(),
+                                   RadioState::modeToString(m_radioState->modeB()), m_radioState->ifShiftB(),
+                                   m_radioState->cwPitch());
+    // VFO A overlay on panadapter B
+    m_panadapterB->setSecondaryVfo(rxA, m_radioState->filterBandwidth(), RadioState::modeToString(m_radioState->mode()),
+                                   m_radioState->ifShift(), m_radioState->cwPitch());
+}
+
+void MainWindow::updateTxMarkers() {
+    // TX VFO depends on split mode: VFO A (no split) or VFO B (split)
+    // XIT offset shifts the TX frequency; RIT does not affect TX
+    bool split = m_radioState->splitEnabled();
+    bool bset = m_radioState->bSetEnabled();
+    bool xit = m_radioState->xitEnabled();
+    bool ritA = m_radioState->ritEnabled();
+    bool ritB = m_radioState->ritEnabledB();
+    // K4 routes XIT offset to the TX VFO's register:
+    //   No split: RO (VFO A) — TX on VFO A
+    //   Split:    RO$ (VFO B) — TX on VFO B
+    int xitOffset = xit ? (split ? m_radioState->ritXitOffsetB() : m_radioState->ritXitOffset()) : 0;
+
+    // TX dial frequency (before CW pitch — panadapter applies pitch offset internally)
+    qint64 txVfoDial = split ? static_cast<qint64>(m_radioState->vfoB()) : static_cast<qint64>(m_radioState->vfoA());
+    qint64 txFreq = txVfoDial + xitOffset;
+
+    // Panadapter A (VFO A spectrum):
+    //   SPLIT on: always show — TX from VFO B, different VFO than this spectrum
+    //   No split + BSET: real K4 shows no TX marker (user focused on VFO B)
+    //   No split: when RIT A or XIT shifts TX != RX
+    bool showTxOnA = split ? true : (bset ? false : (ritA || xit));
+    // Panadapter B (VFO B spectrum):
+    //   SPLIT + XIT: show TX marker (XIT shifts TX away from VFO B dial)
+    //   SPLIT + RIT B: show (RIT shifts RX away from TX)
+    //   No split + BSET: real K4 shows no TX marker (user focused on VFO B)
+    //   No split: show when RIT A or XIT — TX from VFO A, different VFO than this spectrum
+    bool showTxOnB = split ? (ritB || xit) : (bset ? false : (ritA || xit));
+
+    m_panadapterA->setTxMarker(txFreq, showTxOnA);
+    m_panadapterB->setTxMarker(txFreq, showTxOnB);
 }
 
 void MainWindow::onMessageBankChanged(int bank) {
@@ -4736,9 +4883,15 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
         }
     }
 
-    // RIT label click - toggle RIT on/off
+    // RIT label click - toggle RIT on/off (SW54 routes correctly when BSET targets VFO B)
     if (watched == m_ritLabel && event->type() == QEvent::MouseButtonPress) {
-        m_tcpClient->sendCAT("RT/;");
+        bool bSet = m_radioState->bSetEnabled();
+        m_tcpClient->sendCAT(bSet ? "SW54;" : "RT/;");
+        // K4 doesn't echo RT$/RO$ for SW54 — query VFO B RIT state
+        if (bSet) {
+            m_tcpClient->sendCAT("RT$;");
+            m_tcpClient->sendCAT("RO$;");
+        }
         return true;
     }
 
@@ -4748,16 +4901,24 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
         return true;
     }
 
+    // TX indicator click - toggle split on/off
+    if (watched == m_txIndicator && event->type() == QEvent::MouseButtonPress) {
+        m_tcpClient->sendCAT("SW145;");
+        return true;
+    }
+
     // Mouse wheel on RIT/XIT box (or its child widgets) - adjust offset using RU/RD commands
-    // B SET aware: use $ suffix when targeting Sub RX
+    // K4 routes RU;/RD; based on active mode: RIT → RO (VFO A), XIT → RO$ (VFO B)
+    // BSET + RIT: use RU$/RD$ to force VFO B's RIT offset
     if (event->type() == QEvent::Wheel &&
         (watched == m_ritXitBox || watched == m_ritLabel || watched == m_xitLabel || watched == m_ritXitValueLabel)) {
         auto *wheelEvent = static_cast<QWheelEvent *>(event);
         int steps = m_ritWheelAccumulator.accumulate(wheelEvent);
         if (steps != 0) {
             bool bSet = m_radioState->bSetEnabled();
-            QString upCmd = bSet ? "RU$;" : "RU;";
-            QString downCmd = bSet ? "RD$;" : "RD;";
+            bool adjustB = bSet && !m_radioState->xitEnabled();
+            QString upCmd = adjustB ? "RU$;" : "RU;";
+            QString downCmd = adjustB ? "RD$;" : "RD;";
             for (int i = 0; i < qAbs(steps); ++i)
                 m_tcpClient->sendCAT(steps > 0 ? upCmd : downCmd);
         }
@@ -5118,9 +5279,12 @@ void MainWindow::onKpodEncoderRotated(int ticks) {
     } break;
 
     case KpodDevice::RockerRight: // RIT/XIT
-        // Adjust RIT/XIT offset using RU/RD commands
+        // K4 routes RU;/RD; based on active mode: RIT → RO (VFO A), XIT → RO$ (VFO B)
+        // BSET + RIT: use RU$/RD$ to force VFO B's RIT offset
         {
-            QString cmd = (ticks > 0) ? "RU;" : "RD;";
+            bool bSet = m_radioState->bSetEnabled();
+            bool adjustB = bSet && !m_radioState->xitEnabled();
+            QString cmd = (ticks > 0) ? (adjustB ? "RU$;" : "RU;") : (adjustB ? "RD$;" : "RD;");
             int count = qAbs(ticks);
             for (int i = 0; i < count; i++) {
                 m_tcpClient->sendCAT(cmd);

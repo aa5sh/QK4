@@ -172,6 +172,8 @@ public:
     bool ritEnabled() const { return m_ritEnabled; }
     bool xitEnabled() const { return m_xitEnabled; }
     int ritXitOffset() const { return m_ritXitOffset; }
+    bool ritEnabledB() const { return m_ritEnabledB; }
+    int ritXitOffsetB() const { return m_ritXitOffsetB; }
 
     // Message bank
     int messageBank() const { return m_messageBank; }
@@ -576,6 +578,7 @@ signals:
     void antennaChanged(int txAnt, int rxAntMain, int rxAntSub);
     void antennaNameChanged(int index, const QString &name);
     void ritXitChanged(bool ritEnabled, bool xitEnabled, int offset);
+    void ritXitBChanged(bool ritEnabled, int offset);
     void messageBankChanged(int bank);
     void processingChanged();         // NB, NR, PA, RA, GT changes for Main RX
     void processingChangedB();        // NB, NR, PA, RA, GT changes for Sub RX
@@ -771,6 +774,8 @@ private:
     bool m_ritEnabled = false;
     bool m_xitEnabled = false;
     int m_ritXitOffset = 0;
+    bool m_ritEnabledB = false;
+    int m_ritXitOffsetB = 0;
 
     // Message bank
     int m_messageBank = -1;
@@ -1067,9 +1072,11 @@ private:
     void handleACT(const QString &cmd);   // TX Antenna Config
 
     // RIT/XIT commands
-    void handleRT(const QString &cmd); // RIT
-    void handleXT(const QString &cmd); // XIT
-    void handleRO(const QString &cmd); // RIT/XIT Offset
+    void handleRT(const QString &cmd);    // RIT
+    void handleXT(const QString &cmd);    // XIT
+    void handleRO(const QString &cmd);    // RIT/XIT Offset
+    void handleROSub(const QString &cmd); // RO$ — VFO B offset
+    void handleRTSub(const QString &cmd); // RT$ — VFO B RIT enable
 
     // Text decode commands
     void handleTD(const QString &cmd);    // Text Decode Main
