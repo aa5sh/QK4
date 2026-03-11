@@ -192,6 +192,12 @@ void RadioState::reset() {
     m_dataSubModeOptimisticTime = 0;
     m_dataSubModeBOptimisticTime = 0;
 
+    // Data rate
+    m_dataRate = -1;
+    m_dataRateB = -1;
+    m_dataRateOptimisticTime = 0;
+    m_dataRateBOptimisticTime = 0;
+
     // EQ bands
     std::fill(std::begin(m_rxEqBands), std::end(m_rxEqBands), 0);
     std::fill(std::begin(m_txEqBands), std::end(m_txEqBands), 0);
@@ -568,6 +574,24 @@ void RadioState::setDataSubModeB(int subMode) {
     }
 }
 
+void RadioState::setDataRate(int rate) {
+    rate = qBound(0, rate, 1);
+    if (m_dataRate != rate) {
+        m_dataRate = rate;
+        m_dataRateOptimisticTime = QDateTime::currentMSecsSinceEpoch();
+        emit dataRateChanged(rate);
+    }
+}
+
+void RadioState::setDataRateB(int rate) {
+    rate = qBound(0, rate, 1);
+    if (m_dataRateB != rate) {
+        m_dataRateB = rate;
+        m_dataRateBOptimisticTime = QDateTime::currentMSecsSinceEpoch();
+        emit dataRateBChanged(rate);
+    }
+}
+
 void RadioState::setMiniPanAEnabled(bool enabled) {
     if (m_miniPanAEnabled != enabled) {
         m_miniPanAEnabled = enabled;
@@ -927,6 +951,7 @@ void RadioState::registerCommandHandlers() {
     m_commandHandlers.append({"SIRC", [this](const QString &c) { handleSIRC(c); }});
     m_commandHandlers.append({"TD$", [this](const QString &c) { handleTDSub(c); }});
     m_commandHandlers.append({"TB$", [this](const QString &c) { handleTBSub(c); }});
+    m_commandHandlers.append({"DR$", [this](const QString &c) { handleDRSub(c); }});
     m_commandHandlers.append({"DT$", [this](const QString &c) { handleDTSub(c); }});
     m_commandHandlers.append({"MD$", [this](const QString &c) { handleMDSub(c); }});
     m_commandHandlers.append({"BW$", [this](const QString &c) { handleBWSub(c); }});
@@ -1004,6 +1029,7 @@ void RadioState::registerCommandHandlers() {
     m_commandHandlers.append({"SD", [this](const QString &c) { handleSD(c); }});
     m_commandHandlers.append({"SB", [this](const QString &c) { handleSB(c); }});
     m_commandHandlers.append({"DV", [this](const QString &c) { handleDV(c); }});
+    m_commandHandlers.append({"DR", [this](const QString &c) { handleDR(c); }});
     m_commandHandlers.append({"DT", [this](const QString &c) { handleDT(c); }});
     m_commandHandlers.append({"TS", [this](const QString &c) { handleTS(c); }});
     m_commandHandlers.append({"TB", [this](const QString &c) { handleTB(c); }});
@@ -2542,6 +2568,40 @@ void RadioState::handleDTSub(const QString &cmd) {
     if (subMode != m_dataSubModeB) {
         m_dataSubModeB = subMode;
         emit dataSubModeBChanged(m_dataSubModeB);
+    }
+}
+
+void RadioState::handleDR(const QString &cmd) {
+    // DR0; or DR1;
+    if (cmd.length() < 3)
+        return;
+    bool ok;
+    int rate = cmd.mid(2).toInt(&ok);
+    if (!ok || rate < 0 || rate > 1)
+        return;
+    qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (now - m_dataRateOptimisticTime < 500)
+        return;
+    if (rate != m_dataRate) {
+        m_dataRate = rate;
+        emit dataRateChanged(m_dataRate);
+    }
+}
+
+void RadioState::handleDRSub(const QString &cmd) {
+    // DR$0; or DR$1;
+    if (cmd.length() < 4)
+        return;
+    bool ok;
+    int rate = cmd.mid(3).toInt(&ok);
+    if (!ok || rate < 0 || rate > 1)
+        return;
+    qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (now - m_dataRateBOptimisticTime < 500)
+        return;
+    if (rate != m_dataRateB) {
+        m_dataRateB = rate;
+        emit dataRateBChanged(m_dataRateB);
     }
 }
 

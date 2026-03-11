@@ -161,11 +161,17 @@ void TextDecodeWindow::setupUi() {
         emit enabledChanged(m_decodeEnabled);
     });
 
-    // WPM cycle (0→1→2→0)
+    // Speed button click: CW cycles WPM range, DATA modes toggle data rate
     connect(m_wpmBtn, &QPushButton::clicked, this, [this]() {
-        m_wpmRange = (m_wpmRange + 1) % 3;
-        updateWpmButton();
-        emit wpmRangeChanged(m_wpmRange);
+        if (m_operatingMode == ModeCW) {
+            m_wpmRange = (m_wpmRange + 1) % 3;
+            updateSpeedButton();
+            emit wpmRangeChanged(m_wpmRange);
+        } else if (m_operatingMode == ModeAFSK || m_operatingMode == ModeFSK || m_operatingMode == ModePSK) {
+            m_dataRate = (m_dataRate == 0) ? 1 : 0;
+            updateSpeedButton();
+            emit dataRateChanged(m_dataRate);
+        }
     });
 
     // AUTO/MANUAL toggle
@@ -363,9 +369,23 @@ void TextDecodeWindow::updateButtonStates() {
     m_onOffBtn->setStyleSheet(controlButtonStyle(m_decodeEnabled));
 }
 
-void TextDecodeWindow::updateWpmButton() {
-    static const char *wpmLabels[] = {"8-45", "8-60", "8-90"};
-    m_wpmBtn->setText(wpmLabels[m_wpmRange]);
+void TextDecodeWindow::updateSpeedButton() {
+    switch (m_operatingMode) {
+    case ModeCW: {
+        static const char *wpmLabels[] = {"8-45", "8-60", "8-90"};
+        m_wpmBtn->setText(wpmLabels[m_wpmRange]);
+        break;
+    }
+    case ModeAFSK:
+    case ModeFSK:
+        m_wpmBtn->setText(m_dataRate == 0 ? "RTTY45" : "RTTY75");
+        break;
+    case ModePSK:
+        m_wpmBtn->setText(m_dataRate == 0 ? "PSK31" : "PSK63");
+        break;
+    default:
+        break;
+    }
 }
 
 void TextDecodeWindow::updateThresholdControls() {
@@ -380,14 +400,17 @@ void TextDecodeWindow::updateThresholdControls() {
 }
 
 void TextDecodeWindow::updateModeVisibility() {
-    // CW mode: show WPM and threshold controls
-    // DATA/SSB/other: hide them (only ON/OFF visible)
     bool isCW = (m_operatingMode == ModeCW);
-    m_wpmBtn->setVisible(isCW);
+    bool hasSpeed = isCW || m_operatingMode == ModeAFSK || m_operatingMode == ModeFSK || m_operatingMode == ModePSK;
+
+    m_wpmBtn->setVisible(hasSpeed);
     m_autoManualBtn->setVisible(isCW);
     m_thresholdMinusBtn->setVisible(isCW);
     m_thresholdValueLabel->setVisible(isCW);
     m_thresholdPlusBtn->setVisible(isCW);
+
+    if (hasSpeed)
+        updateSpeedButton();
 }
 
 void TextDecodeWindow::setDecodeEnabled(bool enabled) {
@@ -400,7 +423,7 @@ void TextDecodeWindow::setDecodeEnabled(bool enabled) {
 void TextDecodeWindow::setWpmRange(int range) {
     if (m_wpmRange != range && range >= 0 && range <= 2) {
         m_wpmRange = range;
-        updateWpmButton();
+        updateSpeedButton();
     }
 }
 
@@ -415,6 +438,13 @@ void TextDecodeWindow::setThreshold(int value) {
     if (m_threshold != value && value >= 1 && value <= 9) {
         m_threshold = value;
         m_thresholdValueLabel->setText(QString::number(m_threshold));
+    }
+}
+
+void TextDecodeWindow::setDataRate(int rate) {
+    if (m_dataRate != rate && rate >= 0 && rate <= 1) {
+        m_dataRate = rate;
+        updateSpeedButton();
     }
 }
 
