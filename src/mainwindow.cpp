@@ -3210,6 +3210,11 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     m_vfoRow = new VfoRowWidget(centerWidget);
     centerLayout->addWidget(m_vfoRow);
 
+    // Filter/RIT/XIT row — declared early so it can be added to layout here,
+    // populated later after the RIT/XIT box and filter widgets are constructed
+    auto *filterRitXitRow = new QHBoxLayout();
+    centerLayout->addLayout(filterRitXitRow);
+
     // Get pointers to VfoRowWidget children for signal connections
     m_vfoASquare = m_vfoRow->vfoASquare();
     m_vfoBSquare = m_vfoRow->vfoBSquare();
@@ -3230,31 +3235,10 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     m_modeALabel->installEventFilter(this);
     m_modeBLabel->installEventFilter(this);
 
-    // SPLIT indicator
-    m_splitLabel = new QLabel("SPLIT OFF", centerWidget);
-    m_splitLabel->setAlignment(Qt::AlignCenter);
-    m_splitLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(K4Styles::Colors::AccentAmber));
-    centerLayout->addWidget(m_splitLabel);
-
-    // B SET indicator (green rounded rect with black text, hidden by default)
-    m_bSetLabel = new QLabel("B SET", centerWidget);
-    m_bSetLabel->setAlignment(Qt::AlignCenter);
-    m_bSetLabel->setStyleSheet(QString("background-color: %1;"
-                                       "color: black;"
-                                       "font-size: %2px;"
-                                       "font-weight: bold;"
-                                       "border-radius: 4px;"
-                                       "padding: 2px 8px;")
-                                   .arg(K4Styles::Colors::StatusGreen)
-                                   .arg(K4Styles::Dimensions::FontSizeButton));
-    m_bSetLabel->setVisible(false);
-    centerLayout->addWidget(m_bSetLabel, 0, Qt::AlignHCenter);
-
-    // Message Bank indicator
-    m_msgBankLabel = new QLabel("MSG: I", centerWidget);
-    m_msgBankLabel->setAlignment(Qt::AlignCenter);
-    m_msgBankLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(K4Styles::Colors::AccentAmber));
-    centerLayout->addWidget(m_msgBankLabel);
+    // SPLIT, B SET, and MSG Bank labels live in VfoRowWidget (positioned under TX)
+    m_splitLabel = m_vfoRow->splitLabel();
+    m_bSetLabel = m_vfoRow->bSetLabel();
+    m_msgBankLabel = m_vfoRow->msgBankLabel();
 
     // RIT/XIT Box with border - constrained size
     // Supports mouse wheel to adjust RIT/XIT offset
@@ -3304,28 +3288,27 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     m_ritXitValueLabel->installEventFilter(this);
     ritXitLayout->addWidget(m_ritXitValueLabel);
 
-    // Create filter/RIT/XIT row - filter indicators flanking the RIT/XIT box
-    auto *filterRitXitRow = new QHBoxLayout();
+    // Populate filter/RIT/XIT row (layout was declared and added to centerLayout earlier)
     filterRitXitRow->setContentsMargins(0, 0, 0, 0);
     filterRitXitRow->setSpacing(0);
 
-    // VFO A filter indicator (left side, cyan #00BFFF to match VFO A square/slider)
+    // VFO A filter indicator (cyan #00BFFF to match VFO A square/slider)
     m_filterAWidget = new FilterIndicatorWidget(centerWidget);
     m_filterAWidget->setShapeColor(QColor(0x00, 0xBF, 0xFF), QColor(0x00, 0xBF, 0xFF)); // Cyan solid
-    filterRitXitRow->addWidget(m_filterAWidget);
-    filterRitXitRow->addStretch();
 
-    // RIT/XIT box (centered)
-    filterRitXitRow->addWidget(m_ritXitBox);
-
-    filterRitXitRow->addStretch();
-
-    // VFO B filter indicator (right side, green #00FF00 to match VFO B square/slider)
+    // VFO B filter indicator (green #00FF00 to match VFO B square/slider)
     m_filterBWidget = new FilterIndicatorWidget(centerWidget);
     m_filterBWidget->setShapeColor(QColor(0x00, 0xFF, 0x00), QColor(0x00, 0xFF, 0x00)); // Green solid
-    filterRitXitRow->addWidget(m_filterBWidget);
 
-    centerLayout->addLayout(filterRitXitRow);
+    // Layout: [stretch] [FIL_A] [spacer] [RIT/XIT] [spacer] [FIL_B] [stretch]
+    // Spacers push filters outward to align under VFO A/B squares above
+    filterRitXitRow->addStretch();
+    filterRitXitRow->addWidget(m_filterAWidget);
+    filterRitXitRow->addSpacing(18);
+    filterRitXitRow->addWidget(m_ritXitBox);
+    filterRitXitRow->addSpacing(18);
+    filterRitXitRow->addWidget(m_filterBWidget);
+    filterRitXitRow->addStretch();
 
     // VOX / ATU / QSK indicator row (fixed-height container so visibility toggles don't shift layout)
     auto *indicatorContainer = new QWidget(centerWidget);

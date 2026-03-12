@@ -195,6 +195,26 @@ void VfoRowWidget::setupWidgets() {
     subDivStack->addWidget(m_divLabel);
 
     m_subDivContainer->adjustSize();
+
+    // SPLIT indicator — centered under TX, aligned with mode labels
+    m_splitLabel = new QLabel("SPLIT OFF", this);
+    m_splitLabel->setAlignment(Qt::AlignCenter);
+    m_splitLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(K4Styles::Colors::AccentAmber));
+
+    // B SET indicator — replaces SPLIT when active
+    m_bSetLabel = new QLabel("B SET", this);
+    m_bSetLabel->setAlignment(Qt::AlignCenter);
+    m_bSetLabel->setStyleSheet(
+        QString("background-color: %1; color: black; font-size: %2px; font-weight: bold; border-radius: 4px; "
+                "padding: 2px 8px;")
+            .arg(K4Styles::Colors::StatusGreen)
+            .arg(K4Styles::Dimensions::FontSizeButton));
+    m_bSetLabel->setVisible(false);
+
+    // MSG Bank indicator — below SPLIT/BSET
+    m_msgBankLabel = new QLabel("MSG: I", this);
+    m_msgBankLabel->setAlignment(Qt::AlignCenter);
+    m_msgBankLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(K4Styles::Colors::AccentAmber));
 }
 
 void VfoRowWidget::resizeEvent(QResizeEvent *event) {
@@ -223,7 +243,7 @@ void VfoRowWidget::positionWidgets() {
     }
 
     // A container - left of TX with gap
-    int gap = 15;
+    int gap = 25;
     m_vfoAContainer->move(centerX - txWidth / 2 - gap - m_vfoAContainer->width(), y);
 
     // B container - right of TX with gap (symmetric with A)
@@ -231,4 +251,16 @@ void VfoRowWidget::positionWidgets() {
 
     // SUB/DIV - to right of B (doesn't affect centering), offset down to align
     m_subDivContainer->move(m_vfoBContainer->x() + m_vfoBContainer->width() + 10, txY);
+
+    // SPLIT label — centered under TX, same row as mode labels
+    m_splitLabel->adjustSize();
+    m_splitLabel->move((w - m_splitLabel->width()) / 2, 49);
+
+    // B SET label — same position as SPLIT (replaces it when visible)
+    m_bSetLabel->adjustSize();
+    m_bSetLabel->move((w - m_bSetLabel->width()) / 2, 46);
+
+    // MSG Bank label — below SPLIT/BSET row
+    m_msgBankLabel->adjustSize();
+    m_msgBankLabel->move((w - m_msgBankLabel->width()) / 2, 65);
 }
