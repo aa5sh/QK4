@@ -171,6 +171,15 @@ MainWindow::MainWindow(QWidget *parent)
             m_mouseQsyMode = item->currentValue;
             qDebug() << "Mouse L/R Button QSY: menuId=" << m_mouseQsyMenuId << "mode=" << m_mouseQsyMode;
         }
+        if (item && item->name == "FSK Mark-Tone") {
+            m_fskMarkToneMenuId = item->id;
+            int toneHz = item->options[item->currentValue].toInt();
+            qDebug() << "FSK Mark-Tone: menuId=" << m_fskMarkToneMenuId << "tone=" << toneHz << "Hz";
+            if (m_panadapterA)
+                m_panadapterA->setFskMarkTone(toneHz);
+            if (m_panadapterB)
+                m_panadapterB->setFskMarkTone(toneHz);
+        }
     });
 
     // Create band selection popup
@@ -5280,6 +5289,19 @@ void MainWindow::onMenuModelValueChanged(int menuId, int newValue) {
     if (menuId == m_mouseQsyMenuId) {
         m_mouseQsyMode = newValue;
         qDebug() << "Mouse L/R Button QSY changed to:" << m_mouseQsyMode;
+    }
+
+    // Track "FSK Mark-Tone" setting changes
+    if (menuId == m_fskMarkToneMenuId) {
+        auto *item = m_menuModel->getMenuItem(menuId);
+        if (item && newValue >= 0 && newValue < item->options.size()) {
+            int toneHz = item->options[newValue].toInt();
+            qDebug() << "FSK Mark-Tone changed to:" << toneHz << "Hz";
+            if (m_panadapterA)
+                m_panadapterA->setFskMarkTone(toneHz);
+            if (m_panadapterB)
+                m_panadapterB->setFskMarkTone(toneHz);
+        }
     }
 }
 

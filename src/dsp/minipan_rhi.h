@@ -106,6 +106,11 @@ private:
     std::unique_ptr<QRhiBuffer> m_notchUniformBuffer;
     std::unique_ptr<QRhiShaderResourceBindings> m_notchSrb;
 
+    // Dedicated RTTY space tone dashed line buffers
+    std::unique_ptr<QRhiBuffer> m_rttySpaceVbo;
+    std::unique_ptr<QRhiBuffer> m_rttySpaceUniformBuffer;
+    std::unique_ptr<QRhiShaderResourceBindings> m_rttySpaceSrb;
+
     QRhiRenderPassDescriptor *m_rpDesc = nullptr;
 
     bool m_rhiInitialized = false;

@@ -1,4 +1,5 @@
 #include "panadapter_rhi.h"
+#include "panadapter_constants.h"
 #include "rhi_utils.h"
 #include "ui/k4styles.h"
 #include <QFile>
@@ -580,6 +581,28 @@ void PanadapterRhiWidget::initialize(QRhiCommandBuffer *cb) {
     m_txMarkerUniformBuffer.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 32));
     m_txMarkerUniformBuffer->create();
 
+    // RTTY mark/space tone line buffers (primary VFO)
+    m_rttyMarkVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, 1200 * sizeof(float)));
+    m_rttyMarkVbo->create();
+    m_rttyMarkUniformBuffer.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 32));
+    m_rttyMarkUniformBuffer->create();
+
+    m_rttySpaceVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, 1200 * sizeof(float)));
+    m_rttySpaceVbo->create();
+    m_rttySpaceUniformBuffer.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 32));
+    m_rttySpaceUniformBuffer->create();
+
+    // RTTY mark/space tone line buffers (secondary VFO)
+    m_secRttyMarkVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, 1200 * sizeof(float)));
+    m_secRttyMarkVbo->create();
+    m_secRttyMarkUniformBuffer.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 32));
+    m_secRttyMarkUniformBuffer->create();
+
+    m_secRttySpaceVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, 1200 * sizeof(float)));
+    m_secRttySpaceVbo->create();
+    m_secRttySpaceUniformBuffer.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 32));
+    m_secRttySpaceUniformBuffer->create();
+
     cb->resourceUpdate(rub);
 
     m_rhiInitialized = true;
@@ -702,6 +725,32 @@ void PanadapterRhiWidget::createPipelines() {
             0, QRhiShaderResourceBinding::VertexStage | QRhiShaderResourceBinding::FragmentStage,
             m_txMarkerUniformBuffer.get())});
         m_txMarkerSrb->create();
+
+        // RTTY mark/space tone SRBs (primary VFO)
+        m_rttyMarkSrb.reset(m_rhi->newShaderResourceBindings());
+        m_rttyMarkSrb->setBindings({QRhiShaderResourceBinding::uniformBuffer(
+            0, QRhiShaderResourceBinding::VertexStage | QRhiShaderResourceBinding::FragmentStage,
+            m_rttyMarkUniformBuffer.get())});
+        m_rttyMarkSrb->create();
+
+        m_rttySpaceSrb.reset(m_rhi->newShaderResourceBindings());
+        m_rttySpaceSrb->setBindings({QRhiShaderResourceBinding::uniformBuffer(
+            0, QRhiShaderResourceBinding::VertexStage | QRhiShaderResourceBinding::FragmentStage,
+            m_rttySpaceUniformBuffer.get())});
+        m_rttySpaceSrb->create();
+
+        // RTTY mark/space tone SRBs (secondary VFO)
+        m_secRttyMarkSrb.reset(m_rhi->newShaderResourceBindings());
+        m_secRttyMarkSrb->setBindings({QRhiShaderResourceBinding::uniformBuffer(
+            0, QRhiShaderResourceBinding::VertexStage | QRhiShaderResourceBinding::FragmentStage,
+            m_secRttyMarkUniformBuffer.get())});
+        m_secRttyMarkSrb->create();
+
+        m_secRttySpaceSrb.reset(m_rhi->newShaderResourceBindings());
+        m_secRttySpaceSrb->setBindings({QRhiShaderResourceBinding::uniformBuffer(
+            0, QRhiShaderResourceBinding::VertexStage | QRhiShaderResourceBinding::FragmentStage,
+            m_secRttySpaceUniformBuffer.get())});
+        m_secRttySpaceSrb->create();
 
         m_overlayLinePipeline.reset(m_rhi->newGraphicsPipeline());
         m_overlayLinePipeline->setShaderStages(
@@ -1002,9 +1051,16 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
             if (secIsPskD) {
                 secLowFreq = m_secondaryTunedFreq - m_secondaryFilterBw / 2;
                 secHighFreq = m_secondaryTunedFreq + m_secondaryFilterBw / 2;
-            } else if (secIsFskD || secIsAfskA) {
-                secLowFreq = m_secondaryTunedFreq - 2 * m_secondaryFilterBw / 3;
-                secHighFreq = m_secondaryTunedFreq + m_secondaryFilterBw / 3;
+            } else if (secIsFskD) {
+                // FSK-D: dial IS the mark frequency
+                qint64 secCenter = m_secondaryTunedFreq - m_rttyShift / 2;
+                secLowFreq = secCenter - m_secondaryFilterBw / 2;
+                secHighFreq = secCenter + m_secondaryFilterBw / 2;
+            } else if (secIsAfskA) {
+                // AFSK-A: LSB mode — tones below dial, same geometry as FSK-D
+                qint64 secCenter = m_secondaryTunedFreq - m_rttyShift / 2;
+                secLowFreq = secCenter - m_secondaryFilterBw / 2;
+                secHighFreq = secCenter + m_secondaryFilterBw / 2;
             } else if (m_secondaryMode == "LSB") {
                 qint64 center = m_secondaryTunedFreq - secShiftOffsetHz;
                 secLowFreq = center - m_secondaryFilterBw / 2;
@@ -1070,7 +1126,7 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
             }
             float secMarkerX = freqToNormalized(secMarkerFreq) * w;
             if (secMarkerX >= 0 && secMarkerX <= w) {
-                float markerWidth = 2.0f;
+                float markerWidth = PanadapterConstants::MarkerLineWidth;
                 QVector<float> secMarkerVerts = {secMarkerX,
                                                  0.0f,
                                                  secMarkerX + markerWidth,
@@ -1111,6 +1167,61 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
                 cb->setVertexInput(0, 1, &secMkVbufBinding);
                 cb->draw(6);
             }
+
+            // Secondary VFO RTTY mark/space dashed lines
+            if ((secIsAfskA || secIsFskD) && m_fskMarkTone > 0) {
+                float dashLen = PanadapterConstants::DashLengthPx;
+                float gapLen = PanadapterConstants::DashGapPx;
+                float stride = dashLen + gapLen;
+                float lineWidth = PanadapterConstants::RttyDashLineWidth;
+
+                auto drawSecRttyLine = [&](qint64 toneFreq, QRhiBuffer *vbo, QRhiBuffer *ubo,
+                                           QRhiShaderResourceBindings *srb) {
+                    float toneX = freqToNormalized(toneFreq) * w;
+                    if (toneX < 0 || toneX > w)
+                        return;
+
+                    QVector<float> verts;
+                    for (float y = 0.0f; y < spectrumHeight; y += stride) {
+                        float yEnd = qMin(y + dashLen, spectrumHeight);
+                        verts << toneX << y << toneX + lineWidth << y << toneX + lineWidth << yEnd << toneX << y
+                              << toneX + lineWidth << yEnd << toneX << yEnd;
+                    }
+
+                    QRhiResourceUpdateBatch *rub = m_rhi->nextResourceUpdateBatch();
+                    rub->updateDynamicBuffer(vbo, 0, verts.size() * sizeof(float), verts.constData());
+
+                    struct {
+                        float viewportWidth, viewportHeight, pad0, pad1;
+                        float r, g, b, a;
+                    } uniforms = {w,
+                                  h,
+                                  0,
+                                  0,
+                                  static_cast<float>(m_secondaryRttyToneColor.redF()),
+                                  static_cast<float>(m_secondaryRttyToneColor.greenF()),
+                                  static_cast<float>(m_secondaryRttyToneColor.blueF()),
+                                  static_cast<float>(m_secondaryRttyToneColor.alphaF())};
+                    rub->updateDynamicBuffer(ubo, 0, sizeof(uniforms), &uniforms);
+
+                    cb->resourceUpdate(rub);
+                    cb->setGraphicsPipeline(m_overlayTrianglePipeline.get());
+                    cb->setShaderResources(srb);
+                    const QRhiCommandBuffer::VertexInput vbufBinding(vbo, 0);
+                    cb->setVertexInput(0, 1, &vbufBinding);
+                    cb->draw(verts.size() / 2);
+                };
+
+                qint64 secMarkFreq = m_secondaryTunedFreq;
+                qint64 secSpaceFreq = secMarkFreq - m_rttyShift;
+                // Skip mark line when it coincides with the solid secondary dial marker
+                if (secMarkFreq != m_secondaryTunedFreq) {
+                    drawSecRttyLine(secMarkFreq, m_secRttyMarkVbo.get(), m_secRttyMarkUniformBuffer.get(),
+                                    m_secRttyMarkSrb.get());
+                }
+                drawSecRttyLine(secSpaceFreq, m_secRttySpaceVbo.get(), m_secRttySpaceUniformBuffer.get(),
+                                m_secRttySpaceSrb.get());
+            }
         }
 
         // Draw passband overlay (uses separate buffers to avoid GPU conflicts)
@@ -1134,10 +1245,19 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
                 // PSK-D: passband centered on dial frequency
                 lowFreq = m_tunedFreq - m_filterBw / 2;
                 highFreq = m_tunedFreq + m_filterBw / 2;
-            } else if (isFskD || isAfskA) {
-                // FSK-D / AFSK-A: passband extends mostly left of dial (~2/3 left, ~1/3 right)
-                lowFreq = m_tunedFreq - 2 * m_filterBw / 3;
-                highFreq = m_tunedFreq + m_filterBw / 3;
+            } else if (isFskD) {
+                // FSK-D: dial = mark; space is 170 Hz below; box straddles left of dial
+                qint64 center = m_tunedFreq - m_rttyShift / 2;
+                qDebug() << "FSK-D passband: dial=" << m_tunedFreq << "center=" << center << "bw=" << m_filterBw
+                         << "shift=" << m_rttyShift << "low=" << (center - m_filterBw / 2)
+                         << "high=" << (center + m_filterBw / 2);
+                lowFreq = center - m_filterBw / 2;
+                highFreq = center + m_filterBw / 2;
+            } else if (isAfskA) {
+                // AFSK-A: LSB mode — tones below dial, same geometry as FSK-D
+                qint64 center = m_tunedFreq - m_rttyShift / 2;
+                lowFreq = center - m_filterBw / 2;
+                highFreq = center + m_filterBw / 2;
             } else if (m_mode == "LSB") {
                 // LSB: passband below dial, offset by IS
                 qint64 center = m_tunedFreq - shiftOffsetHz;
@@ -1201,6 +1321,62 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
                 cb->draw(6);
             }
 
+            // Draw primary VFO RTTY mark/space dashed lines
+            if ((isAfskA || isFskD) && m_fskMarkTone > 0) {
+                float dashLen = PanadapterConstants::DashLengthPx;
+                float gapLen = PanadapterConstants::DashGapPx;
+                float stride = dashLen + gapLen;
+                float lineWidth = PanadapterConstants::RttyDashLineWidth;
+
+                auto drawRttyLine = [&](qint64 toneFreq, QRhiBuffer *vbo, QRhiBuffer *ubo,
+                                        QRhiShaderResourceBindings *srb) {
+                    float toneX = freqToNormalized(toneFreq) * w;
+                    if (toneX < 0 || toneX > w)
+                        return;
+
+                    QVector<float> verts;
+                    for (float y = 0.0f; y < spectrumHeight; y += stride) {
+                        float yEnd = qMin(y + dashLen, spectrumHeight);
+                        verts << toneX << y << toneX + lineWidth << y << toneX + lineWidth << yEnd << toneX << y
+                              << toneX + lineWidth << yEnd << toneX << yEnd;
+                    }
+
+                    QRhiResourceUpdateBatch *rub = m_rhi->nextResourceUpdateBatch();
+                    rub->updateDynamicBuffer(vbo, 0, verts.size() * sizeof(float), verts.constData());
+
+                    struct {
+                        float viewportWidth, viewportHeight, pad0, pad1;
+                        float r, g, b, a;
+                    } uniforms = {w,
+                                  h,
+                                  0,
+                                  0,
+                                  static_cast<float>(m_rttyToneColor.redF()),
+                                  static_cast<float>(m_rttyToneColor.greenF()),
+                                  static_cast<float>(m_rttyToneColor.blueF()),
+                                  static_cast<float>(m_rttyToneColor.alphaF())};
+                    rub->updateDynamicBuffer(ubo, 0, sizeof(uniforms), &uniforms);
+
+                    cb->resourceUpdate(rub);
+                    cb->setGraphicsPipeline(m_overlayTrianglePipeline.get());
+                    cb->setShaderResources(srb);
+                    const QRhiCommandBuffer::VertexInput vbufBinding(vbo, 0);
+                    cb->setVertexInput(0, 1, &vbufBinding);
+                    cb->draw(verts.size() / 2);
+                };
+
+                // FSK-D and AFSK-A: dial IS mark, space is mark - shift (both LSB)
+                qint64 markFreq = m_tunedFreq;
+                qint64 spaceFreq = markFreq - m_rttyShift;
+                // Skip mark line when it coincides with the solid dial frequency marker
+                // (always true today since dial IS mark in FSK-D/AFSK-A, but guarded
+                // for forward-compatibility if FSK Mark-Tone routing changes)
+                if (markFreq != m_tunedFreq) {
+                    drawRttyLine(markFreq, m_rttyMarkVbo.get(), m_rttyMarkUniformBuffer.get(), m_rttyMarkSrb.get());
+                }
+                drawRttyLine(spaceFreq, m_rttySpaceVbo.get(), m_rttySpaceUniformBuffer.get(), m_rttySpaceSrb.get());
+            }
+
             // Draw frequency marker - use dedicated VBO, uniform buffer, and SRB
             // Use spectrumHeight not h - marker should only appear in spectrum area, not waterfall
             // For CW modes: marker at passband center (dial + IS offset)
@@ -1214,8 +1390,8 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
             // For USB/LSB/AM/FM: marker stays at dial frequency
             float markerX = freqToNormalized(markerFreq) * w;
             if (markerX >= 0 && markerX <= w) {
-                // Draw as filled rectangle (2px wide) instead of line for robust Metal rendering
-                float markerWidth = 2.0f;
+                // Draw as filled rectangle instead of line for robust Metal rendering
+                float markerWidth = PanadapterConstants::MarkerLineWidth;
                 QVector<float> markerVerts = {markerX,
                                               0.0f,
                                               markerX + markerWidth,
@@ -1267,7 +1443,7 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
                 }
                 float txX = freqToNormalized(txDisplayFreq) * w;
                 if (txX >= 0 && txX <= w) {
-                    float txWidth = 2.0f;
+                    float txWidth = PanadapterConstants::MarkerLineWidth;
                     QVector<float> txVerts = {txX, 0.0f, txX + txWidth, 0.0f,           txX + txWidth, spectrumHeight,
                                               txX, 0.0f, txX + txWidth, spectrumHeight, txX,           spectrumHeight};
 
@@ -1319,10 +1495,10 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
                 bool inBounds = (notchX >= 0 && notchX <= w);
 
                 if (inBounds) {
-                    // Draw as dotted line (2px wide segments with gaps)
-                    float notchWidth = 2.0f;
-                    float dashLen = 6.0f;
-                    float gapLen = 4.0f;
+                    // Draw as dotted line (dashed segments with gaps)
+                    float notchWidth = PanadapterConstants::MarkerLineWidth;
+                    float dashLen = PanadapterConstants::DashLengthPx;
+                    float gapLen = PanadapterConstants::DashGapPx;
                     float stride = dashLen + gapLen;
                     QVector<float> notchVerts;
                     for (float y = 0.0f; y < spectrumHeight; y += stride) {
@@ -1639,6 +1815,10 @@ void PanadapterRhiWidget::clear() {
     m_txFreq = 0;
     m_txMarkerVisible = false;
 
+    // FSK Mark-Tone (user-configurable from K4 front panel, default 915 Hz)
+    m_fskMarkTone = 915;
+    m_rttyShift = 170; // Fixed 170 Hz shift between Mark and Space
+
     // Hide frequency labels (paintEvent returns early when spanHz <= 0)
     if (m_freqScaleOverlay)
         m_freqScaleOverlay->setFrequencyRange(0, 0, 0, "");
@@ -1784,6 +1964,20 @@ void PanadapterRhiWidget::setTxMarker(qint64 freq, bool visible) {
     if (m_txFreq != freq || m_txMarkerVisible != visible) {
         m_txFreq = freq;
         m_txMarkerVisible = visible;
+        update();
+    }
+}
+
+void PanadapterRhiWidget::setFskMarkTone(int toneHz) {
+    if (m_fskMarkTone != toneHz) {
+        m_fskMarkTone = toneHz;
+        update();
+    }
+}
+
+void PanadapterRhiWidget::setRttyShift(int shiftHz) {
+    if (m_rttyShift != shiftHz) {
+        m_rttyShift = shiftHz;
         update();
     }
 }

@@ -38,6 +38,8 @@ public:
     void setDataSubMode(int subMode);
     void setIfShift(int shift);
     void setCwPitch(int pitchHz);
+    void setFskMarkTone(int toneHz);
+    void setRttyShift(int shiftHz);
     void clear();
 
     // Display settings
@@ -159,6 +161,20 @@ private:
     std::unique_ptr<QRhiBuffer> m_txMarkerVbo;
     std::unique_ptr<QRhiBuffer> m_txMarkerUniformBuffer;
     std::unique_ptr<QRhiShaderResourceBindings> m_txMarkerSrb;
+    // RTTY mark/space tone line buffers (primary VFO)
+    std::unique_ptr<QRhiBuffer> m_rttyMarkVbo;
+    std::unique_ptr<QRhiBuffer> m_rttyMarkUniformBuffer;
+    std::unique_ptr<QRhiShaderResourceBindings> m_rttyMarkSrb;
+    std::unique_ptr<QRhiBuffer> m_rttySpaceVbo;
+    std::unique_ptr<QRhiBuffer> m_rttySpaceUniformBuffer;
+    std::unique_ptr<QRhiShaderResourceBindings> m_rttySpaceSrb;
+    // RTTY mark/space tone line buffers (secondary VFO)
+    std::unique_ptr<QRhiBuffer> m_secRttyMarkVbo;
+    std::unique_ptr<QRhiBuffer> m_secRttyMarkUniformBuffer;
+    std::unique_ptr<QRhiShaderResourceBindings> m_secRttyMarkSrb;
+    std::unique_ptr<QRhiBuffer> m_secRttySpaceVbo;
+    std::unique_ptr<QRhiBuffer> m_secRttySpaceUniformBuffer;
+    std::unique_ptr<QRhiShaderResourceBindings> m_secRttySpaceSrb;
     QRhiRenderPassDescriptor *m_rpDesc = nullptr;
 
     bool m_rhiInitialized = false;
@@ -208,6 +224,8 @@ private:
     int m_dataSubMode = 0;
     int m_ifShift = 50;
     int m_cwPitch = 500;
+    int m_fskMarkTone = 915; // FSK Mark-Tone (user-configurable from K4 front panel)
+    int m_rttyShift = 170;   // Fixed 170 Hz shift between Mark and Space
 
     // Display settings
     float m_minDb = -138.0f;
@@ -251,6 +269,10 @@ private:
     QColor m_notchColor{255, 0, 0};                 // Red
     QColor m_bgCenterColor{56, 56, 56};             // Lighter gray at center
     QColor m_bgEdgeColor{20, 20, 20};               // Darker at edges
+
+    // RTTY tone overlay colors
+    QColor m_rttyToneColor{255, 200, 0, 200};        // Yellow-orange for primary VFO
+    QColor m_secondaryRttyToneColor{0, 255, 0, 160}; // Green for secondary VFO
 
     // TX marker state
     qint64 m_txFreq = 0;
