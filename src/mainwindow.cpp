@@ -1437,6 +1437,11 @@ MainWindow::MainWindow(QWidget *parent)
             [this](RadioState::Mode mode) { m_filterAWidget->setMode(RadioState::modeToString(mode)); });
     connect(m_radioState, &RadioState::modeBChanged, this,
             [this](RadioState::Mode mode) { m_filterBWidget->setMode(RadioState::modeToString(mode)); });
+    // DATA submode affects filter indicator shape (RTTY dual triangles)
+    connect(m_radioState, &RadioState::dataSubModeChanged, this,
+            [this](int subMode) { m_filterAWidget->setDataSubMode(subMode); });
+    connect(m_radioState, &RadioState::dataSubModeBChanged, this,
+            [this](int subMode) { m_filterBWidget->setDataSubMode(subMode); });
 
     // RadioState signals -> Processing state updates (AGC, PRE, ATT, NB, NR)
     connect(m_radioState, &RadioState::processingChanged, this, &MainWindow::onProcessingChanged);
@@ -4516,6 +4521,8 @@ void MainWindow::updateConnectionState(TcpClient::ConnectionState state) {
         m_filterBWidget->setShift(50);
         m_filterBWidget->setFilterPosition(1);
         m_filterBWidget->setMode("");
+        m_filterAWidget->setDataSubMode(0);
+        m_filterBWidget->setDataSubMode(0);
 
         // VFO mini-pan overlays (reset mode/filter state)
         m_vfoA->setMiniPanMode("USB");
