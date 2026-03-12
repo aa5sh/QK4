@@ -6,6 +6,7 @@
 #include <QPainterPath>
 #include <QMouseEvent>
 #include <QResizeEvent>
+#include <QTextBlockFormat>
 #include <QWheelEvent>
 
 namespace {
@@ -80,6 +81,13 @@ void TextDecodeWindow::setupUi() {
     m_thresholdPlusBtn->setCursor(Qt::PointingHandCursor);
     m_thresholdPlusBtn->setStyleSheet(controlButtonStyle(false));
 
+    // CLR button - clear text buffer (local only)
+    m_clearBtn = new QPushButton("CLR", titleBar);
+    m_clearBtn->setFixedHeight(ControlButtonHeight);
+    m_clearBtn->setMinimumWidth(36);
+    m_clearBtn->setCursor(Qt::PointingHandCursor);
+    m_clearBtn->setStyleSheet(controlButtonStyle(false));
+
     // Title label - smaller, right-aligned
     QString titleText = (m_receiver == MainRx) ? "MAIN RX" : "SUB RX";
     m_titleLabel = new QLabel(titleText, titleBar);
@@ -104,13 +112,14 @@ void TextDecodeWindow::setupUi() {
                                   .arg(K4Styles::Colors::DarkBackground)
                                   .arg(K4Styles::Dimensions::FontSizePopup));
 
-    // Layout: [ON][WPM][AUTO][-][5][+] <stretch> TITLE [X]
+    // Layout: [ON][WPM][AUTO][-][5][+][CLR] <stretch> TITLE [X]
     titleLayout->addWidget(m_onOffBtn);
     titleLayout->addWidget(m_wpmBtn);
     titleLayout->addWidget(m_autoManualBtn);
     titleLayout->addWidget(m_thresholdMinusBtn);
     titleLayout->addWidget(m_thresholdValueLabel);
     titleLayout->addWidget(m_thresholdPlusBtn);
+    titleLayout->addWidget(m_clearBtn);
     titleLayout->addStretch();
     titleLayout->addWidget(m_titleLabel);
     titleLayout->addWidget(m_closeBtn);
@@ -148,11 +157,22 @@ void TextDecodeWindow::setupUi() {
                                      .arg(K4Styles::Colors::BorderNormal)
                                      .arg(K4Styles::Fonts::Data));
 
+    // Set 1.5x line spacing
+    QTextCursor cursor = m_textDisplay->textCursor();
+    QTextBlockFormat blockFormat;
+    blockFormat.setLineHeight(150, QTextBlockFormat::ProportionalHeight);
+    cursor.select(QTextCursor::Document);
+    cursor.mergeBlockFormat(blockFormat);
+    m_textDisplay->setTextCursor(cursor);
+
     mainLayout->addWidget(titleBar);
     mainLayout->addWidget(m_textDisplay, 1);
 
     // Connect close button
     connect(m_closeBtn, &QPushButton::clicked, this, [this]() { emit closeRequested(); });
+
+    // CLR button - clear local text buffer
+    connect(m_clearBtn, &QPushButton::clicked, this, [this]() { clearText(); });
 
     // ON/OFF toggle
     connect(m_onOffBtn, &QPushButton::clicked, this, [this]() {
@@ -213,6 +233,12 @@ void TextDecodeWindow::appendText(const QString &text) {
 
 void TextDecodeWindow::clearText() {
     m_textDisplay->clear();
+    // Reapply line spacing after clear resets formatting
+    QTextCursor cursor = m_textDisplay->textCursor();
+    QTextBlockFormat blockFormat;
+    blockFormat.setLineHeight(150, QTextBlockFormat::ProportionalHeight);
+    cursor.mergeBlockFormat(blockFormat);
+    m_textDisplay->setTextCursor(cursor);
 }
 
 void TextDecodeWindow::setMaxLines(int lines) {

@@ -67,7 +67,7 @@ private:
 
     Receiver m_receiver;
     OperatingMode m_operatingMode = ModeCW;
-    int m_maxLines = 10;
+    int m_maxLines = 1;
 
     // Decode state
     bool m_decodeEnabled = false;
@@ -84,6 +84,7 @@ private:
     QPushButton *m_thresholdMinusBtn;
     QLabel *m_thresholdValueLabel;
     QPushButton *m_thresholdPlusBtn;
+    QPushButton *m_clearBtn;
     QPushButton *m_closeBtn;
     QPlainTextEdit *m_textDisplay;
 
