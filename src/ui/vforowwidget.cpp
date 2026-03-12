@@ -7,8 +7,8 @@
 
 VfoSquareWidget::VfoSquareWidget(const QString &text, const QColor &color, QWidget *parent)
     : QWidget(parent), m_text(text), m_color(color) {
-    // Size: 30 wide x 40 high (30 for square + 10 for arc space at top)
-    setFixedSize(30, 40);
+    // Size: 30 wide x 44 high (4 top pad + 10 arc space + 30 square)
+    setFixedSize(30, 44);
     setCursor(Qt::PointingHandCursor);
 }
 
@@ -23,12 +23,13 @@ void VfoSquareWidget::paintEvent(QPaintEvent *) {
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
 
+    const int topPad = 4;     // Extra space so arc stroke doesn't clip at y=0
     const int arcHeight = 10; // Space reserved for lock arc at top
     const int squareSize = 30;
     const int borderRadius = 4;
 
-    // Draw the rounded square (offset down by arcHeight)
-    QRectF squareRect(0, arcHeight, squareSize, squareSize);
+    // Draw the rounded square (offset down by topPad + arcHeight)
+    QRectF squareRect(0, topPad + arcHeight, squareSize, squareSize);
     p.setBrush(m_color);
     p.setPen(Qt::NoPen);
     p.drawRoundedRect(squareRect, borderRadius, borderRadius);
@@ -51,7 +52,7 @@ void VfoSquareWidget::paintEvent(QPaintEvent *) {
         // Arc should look like the top of a padlock
         int arcWidth = 18;
         int arcX = (squareSize - arcWidth) / 2;
-        QRectF arcRect(arcX, 0, arcWidth, arcHeight * 2);
+        QRectF arcRect(arcX, topPad, arcWidth, arcHeight * 2);
         // Draw top half of ellipse (180 degrees starting from 0)
         p.drawArc(arcRect, 0, 180 * 16);
     }
@@ -62,8 +63,8 @@ void VfoSquareWidget::paintEvent(QPaintEvent *) {
 VfoRowWidget::VfoRowWidget(QWidget *parent) : QWidget(parent) {
     setupWidgets();
     // Set fixed height to match content (A/B squares + mode labels)
-    // Increased from 55 to 65 to accommodate lock arc
-    setFixedHeight(65);
+    // Increased from 55 to 78 to accommodate lock arc padding + TEST label
+    setFixedHeight(78);
 }
 
 void VfoRowWidget::setLockA(bool locked) {
@@ -72,6 +73,11 @@ void VfoRowWidget::setLockA(bool locked) {
 
 void VfoRowWidget::setLockB(bool locked) {
     m_vfoBSquare->setLocked(locked);
+}
+
+void VfoRowWidget::setTestVisible(bool visible) {
+    m_testLabel->setVisible(visible);
+    positionWidgets();
 }
 
 void VfoRowWidget::setupWidgets() {
@@ -97,20 +103,19 @@ void VfoRowWidget::setupWidgets() {
                                     .arg(K4Styles::Dimensions::FontSizeLarge));
     vfoAColumn->addWidget(m_modeALabel, 0, Qt::AlignHCenter);
 
-    // === TX Container (TEST label + triangles + TX) ===
-    m_txContainer = new QWidget(this);
-    auto *txVLayout = new QVBoxLayout(m_txContainer);
-    txVLayout->setContentsMargins(0, 0, 0, 0);
-    txVLayout->setSpacing(0);
-
-    // TEST indicator - hidden by default
-    m_testLabel = new QLabel("TEST", m_txContainer);
+    // TEST indicator - independent label, positioned above TX container
+    m_testLabel = new QLabel("TEST", this);
     m_testLabel->setAlignment(Qt::AlignCenter);
     m_testLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
                                    .arg(K4Styles::Colors::TxRed)
                                    .arg(K4Styles::Dimensions::FontSizePopup));
     m_testLabel->setVisible(false);
-    txVLayout->addWidget(m_testLabel);
+
+    // === TX Container (triangles + TX) ===
+    m_txContainer = new QWidget(this);
+    auto *txVLayout = new QVBoxLayout(m_txContainer);
+    txVLayout->setContentsMargins(0, 0, 0, 0);
+    txVLayout->setSpacing(0);
 
     // TX row (triangles + TX label)
     auto *txIndicatorRow = new QHBoxLayout();
@@ -200,13 +205,22 @@ void VfoRowWidget::resizeEvent(QResizeEvent *event) {
 void VfoRowWidget::positionWidgets() {
     int w = width();
     int centerX = w / 2;
-    int y = 0; // Top of row
+    int y = 3; // Offset down to prevent lock arc clipping at top
 
-    // TX container - centered at widget center, offset down to align with squares
+    // TX container - centered at widget center, aligned with square faces
     m_txContainer->adjustSize();
     int txWidth = m_txContainer->width();
-    int txY = 10; // Offset to align TX with the square (below lock arc space)
+    // Align TX row with the square face top: y + topPad(4) + arcHeight(10) = y + 14
+    int txY = y + 14;
     m_txContainer->move(centerX - txWidth / 2, txY);
+
+    // TEST label - centered above the TX container
+    if (m_testLabel->isVisible()) {
+        m_testLabel->adjustSize();
+        int txCenterX = m_txContainer->x() + txWidth / 2;
+        int testY = txY - m_testLabel->height() - 1; // 1px gap above TX
+        m_testLabel->move(txCenterX - m_testLabel->width() / 2, qMax(0, testY));
+    }
 
     // A container - left of TX with gap
     int gap = 15;

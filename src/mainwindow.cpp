@@ -3202,7 +3202,7 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     centerWidget->setFixedWidth(330);
     centerWidget->setStyleSheet(QString("background-color: %1;").arg(K4Styles::Colors::Background));
     auto *centerLayout = new QVBoxLayout(centerWidget);
-    centerLayout->setContentsMargins(4, 4, 4, 4);
+    centerLayout->setContentsMargins(4, 1, 4, 4);
     centerLayout->setSpacing(3);
 
     // Row 1: VFO Row with absolute positioning for perfect TX centering
@@ -4473,7 +4473,7 @@ void MainWindow::updateConnectionState(TcpClient::ConnectionState state) {
             QString("color: %1; font-size: 11px; font-weight: bold;").arg(K4Styles::Colors::TextGray));
 
         // TEST (hidden)
-        m_testLabel->setVisible(false);
+        m_vfoRow->setTestVisible(false);
 
         // VFO indicators (AGC, PRE, ATT, NB, NR, Notch, APF, Tuning Rate)
         m_vfoA->setAGC("AGC");
@@ -4750,7 +4750,7 @@ void MainWindow::onQskEnabledChanged(bool enabled) {
 
 void MainWindow::onTestModeChanged(bool enabled) {
     // TEST indicator: visible in red when test mode is on
-    m_testLabel->setVisible(enabled);
+    m_vfoRow->setTestVisible(enabled);
 }
 
 void MainWindow::onAtuModeChanged(int mode) {

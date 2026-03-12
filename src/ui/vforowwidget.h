@@ -46,6 +46,7 @@ public:
     // Lock state setters
     void setLockA(bool locked);
     void setLockB(bool locked);
+    void setTestVisible(bool visible);
 
     // Accessors for MainWindow to connect signals and install event filters
     VfoSquareWidget *vfoASquare() const { return m_vfoASquare; }
