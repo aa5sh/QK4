@@ -5,7 +5,6 @@
 #include "../dsp/minipan_rhi.h"
 #include <QMouseEvent>
 #include <QKeyEvent>
-
 VFOWidget::VFOWidget(VFOType type, QWidget *parent)
     : QWidget(parent), m_type(type),
       m_primaryColor(type == VFO_A ? K4Styles::Colors::VfoACyan : K4Styles::Colors::VfoBGreen) {

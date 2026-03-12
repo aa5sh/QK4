@@ -236,6 +236,7 @@ constexpr const char *BorderLight = "#909090";
 
 // Dialog-specific colors
 constexpr const char *DialogBorder = "#333333"; // Dialog borders and separators
+constexpr const char *PanelBorder = "#444444";  // Subtle frame border for panadapter/VFO panels
 constexpr const char *ErrorRed = "#FF6666";     // Error/not connected status indicators
 } // namespace Colors
 

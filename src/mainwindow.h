@@ -53,6 +53,7 @@ class CatServer;
 class OptionsDialog;
 class NotificationWidget;
 class VfoRowWidget;
+class QFrame;
 class SidetoneGenerator;
 
 class MainWindow : public QMainWindow {
@@ -260,6 +261,7 @@ private:
     PanadapterRhiWidget *m_panadapterA; // VFO A (Main RX)
     PanadapterRhiWidget *m_panadapterB; // VFO B (Sub RX) - for future use
     QWidget *m_spectrumContainer;
+    QFrame *m_spectrumSeparator; // Vertical divider between A/B panadapters
 
     // Span control buttons (overlay on panadapter A)
     QPushButton *m_spanUpBtn;

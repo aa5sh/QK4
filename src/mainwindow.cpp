@@ -3584,13 +3584,16 @@ void MainWindow::setupVfoSection(QWidget *parent) {
 void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
     // Container for spectrum displays
     m_spectrumContainer = new QWidget(parent);
-    m_spectrumContainer->setStyleSheet(QString("background-color: %1;").arg(K4Styles::Colors::DarkBackground));
+    m_spectrumContainer->setStyleSheet(QString("background-color: %1; border: %2px solid %3;")
+                                           .arg(K4Styles::Colors::DarkBackground)
+                                           .arg(K4Styles::Dimensions::SeparatorHeight)
+                                           .arg(K4Styles::Colors::PanelBorder));
     m_spectrumContainer->setMinimumHeight(300);
 
     // Use QHBoxLayout for side-by-side panadapters (Main left, Sub right)
     auto *layout = new QHBoxLayout(m_spectrumContainer);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(2); // Small gap between panadapters
+    layout->setContentsMargins(1, 1, 1, 1);
+    layout->setSpacing(0);
 
     // Main panadapter for VFO A (left side) - QRhiWidget with Metal/DirectX/Vulkan
     m_panadapterA = new PanadapterRhiWidget(m_spectrumContainer);
@@ -3606,6 +3609,15 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
     m_panadapterA->setSecondaryMarkerColor(QColor(K4Styles::Colors::VfoBGreen));
     m_panadapterA->setSecondaryVisible(true);
     layout->addWidget(m_panadapterA);
+
+    // Vertical separator between A/B panadapters (visible only in Dual mode)
+    m_spectrumSeparator = new QFrame(m_spectrumContainer);
+    m_spectrumSeparator->setFrameShape(QFrame::VLine);
+    m_spectrumSeparator->setFrameShadow(QFrame::Plain);
+    m_spectrumSeparator->setStyleSheet(QString("color: %1;").arg(K4Styles::Colors::PanelBorder));
+    m_spectrumSeparator->setFixedWidth(K4Styles::Dimensions::SeparatorHeight);
+    m_spectrumSeparator->hide();
+    layout->addWidget(m_spectrumSeparator);
 
     // Sub panadapter for VFO B (right side) - QRhiWidget with Metal/DirectX/Vulkan
     m_panadapterB = new PanadapterRhiWidget(m_spectrumContainer);
@@ -5180,14 +5192,17 @@ void MainWindow::setPanadapterMode(PanadapterMode mode) {
     switch (mode) {
     case PanadapterMode::MainOnly:
         m_panadapterA->show();
+        m_spectrumSeparator->hide();
         m_panadapterB->hide();
         break;
     case PanadapterMode::Dual:
         m_panadapterA->show();
+        m_spectrumSeparator->show();
         m_panadapterB->show();
         break;
     case PanadapterMode::SubOnly:
         m_panadapterA->hide();
+        m_spectrumSeparator->hide();
         m_panadapterB->show();
         break;
     }
