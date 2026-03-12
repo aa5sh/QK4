@@ -172,6 +172,8 @@ public:
     bool ritEnabled() const { return m_ritEnabled; }
     bool xitEnabled() const { return m_xitEnabled; }
     int ritXitOffset() const { return m_ritXitOffset; }
+    bool ritEnabledB() const { return m_ritEnabledB; }
+    int ritXitOffsetB() const { return m_ritXitOffsetB; }
 
     // Message bank
     int messageBank() const { return m_messageBank; }
@@ -419,6 +421,10 @@ public:
     int dataSubMode() const { return m_dataSubMode; }
     int dataSubModeB() const { return m_dataSubModeB; }
 
+    // Data rate (DR command): 0=slower (RTTY45/PSK31), 1=faster (RTTY75/PSK63)
+    int dataRate() const { return m_dataRate; }
+    int dataRateB() const { return m_dataRateB; }
+
     // RX Graphic Equalizer (RE command) - 8 bands, -16 to +16 dB
     // Bands: 100, 200, 400, 800, 1200, 1600, 2400, 3200 Hz
     // Note: Main RX and Sub RX share the same EQ settings
@@ -538,6 +544,10 @@ public:
     void setDataSubMode(int subMode);
     void setDataSubModeB(int subMode);
 
+    // Optimistic setters for data rate
+    void setDataRate(int rate);
+    void setDataRateB(int rate);
+
     // Full mode string including data sub-mode (DATA-A, AFSK, FSK, PSK)
     QString modeStringFull() const;  // Main RX mode with sub-mode
     QString modeStringFullB() const; // Sub RX mode with sub-mode
@@ -576,6 +586,7 @@ signals:
     void antennaChanged(int txAnt, int rxAntMain, int rxAntSub);
     void antennaNameChanged(int index, const QString &name);
     void ritXitChanged(bool ritEnabled, bool xitEnabled, int offset);
+    void ritXitBChanged(bool ritEnabled, int offset);
     void messageBankChanged(int bank);
     void processingChanged();         // NB, NR, PA, RA, GT changes for Main RX
     void processingChangedB();        // NB, NR, PA, RA, GT changes for Sub RX
@@ -623,6 +634,8 @@ signals:
     void ddcNbLevelChanged(int level);           // #NBL$: 0-14
     void dataSubModeChanged(int subMode);        // DT: 0=DATA-A, 1=AFSK-A, 2=FSK-D, 3=PSK-D
     void dataSubModeBChanged(int subMode);       // DT$: Sub RX data sub-mode
+    void dataRateChanged(int rate);              // DR: 0=slower (RTTY45/PSK31), 1=faster (RTTY75/PSK63)
+    void dataRateBChanged(int rate);             // DR$: Sub RX data rate
 
     // Error/notification messages from K4 (ERxx: format)
     void errorNotificationReceived(int errorCode, const QString &message);
@@ -771,6 +784,8 @@ private:
     bool m_ritEnabled = false;
     bool m_xitEnabled = false;
     int m_ritXitOffset = 0;
+    bool m_ritEnabledB = false;
+    int m_ritXitOffsetB = 0;
 
     // Message bank
     int m_messageBank = -1;
@@ -875,9 +890,15 @@ private:
     int m_dataSubMode = -1;  // Main RX
     int m_dataSubModeB = -1; // Sub RX
 
+    // Data rate (DR command): 0=slower (RTTY45/PSK31), 1=faster (RTTY75/PSK63)
+    int m_dataRate = -1;  // Main RX
+    int m_dataRateB = -1; // Sub RX
+
     // Timestamps for optimistic update cooldown (ignore echoes briefly after sending)
     qint64 m_dataSubModeOptimisticTime = 0;
     qint64 m_dataSubModeBOptimisticTime = 0;
+    qint64 m_dataRateOptimisticTime = 0;
+    qint64 m_dataRateBOptimisticTime = 0;
 
     // RX Graphic Equalizer (8 bands: 100, 200, 400, 800, 1200, 1600, 2400, 3200 Hz)
     // Range: -16 to +16 dB, init to 0 (flat)
@@ -1067,9 +1088,11 @@ private:
     void handleACT(const QString &cmd);   // TX Antenna Config
 
     // RIT/XIT commands
-    void handleRT(const QString &cmd); // RIT
-    void handleXT(const QString &cmd); // XIT
-    void handleRO(const QString &cmd); // RIT/XIT Offset
+    void handleRT(const QString &cmd);    // RIT
+    void handleXT(const QString &cmd);    // XIT
+    void handleRO(const QString &cmd);    // RIT/XIT Offset
+    void handleROSub(const QString &cmd); // RO$ — VFO B offset
+    void handleRTSub(const QString &cmd); // RT$ — VFO B RIT enable
 
     // Text decode commands
     void handleTD(const QString &cmd);    // Text Decode Main
@@ -1080,6 +1103,8 @@ private:
     // Data mode commands
     void handleDT(const QString &cmd);    // Data Sub-Mode Main
     void handleDTSub(const QString &cmd); // Data Sub-Mode Sub (DT$)
+    void handleDR(const QString &cmd);    // Data Rate Main
+    void handleDRSub(const QString &cmd); // Data Rate Sub (DR$)
 
     // Equalizer commands
     void handleRE(const QString &cmd); // RX EQ

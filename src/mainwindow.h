@@ -53,6 +53,7 @@ class CatServer;
 class OptionsDialog;
 class NotificationWidget;
 class VfoRowWidget;
+class QFrame;
 class SidetoneGenerator;
 
 class MainWindow : public QMainWindow {
@@ -102,6 +103,9 @@ private slots:
     void onTestModeChanged(bool enabled);
     void onAtuModeChanged(int mode);
     void onRitXitChanged(bool ritEnabled, bool xitEnabled, int offset);
+    void updatePanadapterPassbands();
+    void updateTxMarkers();
+    qint64 adjustClickFreqForMode(qint64 freq, bool vfoB);
     void onMessageBankChanged(int bank);
     void onProcessingChanged();
     void onProcessingChangedB();
@@ -257,6 +261,7 @@ private:
     PanadapterRhiWidget *m_panadapterA; // VFO A (Main RX)
     PanadapterRhiWidget *m_panadapterB; // VFO B (Sub RX) - for future use
     QWidget *m_spectrumContainer;
+    QFrame *m_spectrumSeparator; // Vertical divider between A/B panadapters
 
     // Span control buttons (overlay on panadapter A)
     QPushButton *m_spanUpBtn;
@@ -341,8 +346,9 @@ private:
     QTimer *m_txEqDebounceTimer;
 
     // K4 "Mouse L/R Button QSY" menu setting
-    int m_mouseQsyMode = 0;      // 0=Left Only, 1=L=A R=B
-    int m_mouseQsyMenuId = -999; // Menu ID from MEDF (sentinel = not yet discovered)
+    int m_mouseQsyMode = 0;         // 0=Left Only, 1=L=A R=B
+    int m_mouseQsyMenuId = -999;    // Menu ID from MEDF (sentinel = not yet discovered)
+    int m_fskMarkToneMenuId = -999; // "FSK Mark-Tone" menu ID (sentinel = not yet discovered)
 
     WheelAccumulator m_ritWheelAccumulator;
 };

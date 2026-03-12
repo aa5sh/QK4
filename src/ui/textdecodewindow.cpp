@@ -6,6 +6,7 @@
 #include <QPainterPath>
 #include <QMouseEvent>
 #include <QResizeEvent>
+#include <QTextBlockFormat>
 #include <QWheelEvent>
 
 namespace {
@@ -80,6 +81,13 @@ void TextDecodeWindow::setupUi() {
     m_thresholdPlusBtn->setCursor(Qt::PointingHandCursor);
     m_thresholdPlusBtn->setStyleSheet(controlButtonStyle(false));
 
+    // CLR button - clear text buffer (local only)
+    m_clearBtn = new QPushButton("CLR", titleBar);
+    m_clearBtn->setFixedHeight(ControlButtonHeight);
+    m_clearBtn->setMinimumWidth(36);
+    m_clearBtn->setCursor(Qt::PointingHandCursor);
+    m_clearBtn->setStyleSheet(controlButtonStyle(false));
+
     // Title label - smaller, right-aligned
     QString titleText = (m_receiver == MainRx) ? "MAIN RX" : "SUB RX";
     m_titleLabel = new QLabel(titleText, titleBar);
@@ -104,13 +112,14 @@ void TextDecodeWindow::setupUi() {
                                   .arg(K4Styles::Colors::DarkBackground)
                                   .arg(K4Styles::Dimensions::FontSizePopup));
 
-    // Layout: [ON][WPM][AUTO][-][5][+] <stretch> TITLE [X]
+    // Layout: [ON][WPM][AUTO][-][5][+][CLR] <stretch> TITLE [X]
     titleLayout->addWidget(m_onOffBtn);
     titleLayout->addWidget(m_wpmBtn);
     titleLayout->addWidget(m_autoManualBtn);
     titleLayout->addWidget(m_thresholdMinusBtn);
     titleLayout->addWidget(m_thresholdValueLabel);
     titleLayout->addWidget(m_thresholdPlusBtn);
+    titleLayout->addWidget(m_clearBtn);
     titleLayout->addStretch();
     titleLayout->addWidget(m_titleLabel);
     titleLayout->addWidget(m_closeBtn);
@@ -148,11 +157,22 @@ void TextDecodeWindow::setupUi() {
                                      .arg(K4Styles::Colors::BorderNormal)
                                      .arg(K4Styles::Fonts::Data));
 
+    // Set 1.5x line spacing
+    QTextCursor cursor = m_textDisplay->textCursor();
+    QTextBlockFormat blockFormat;
+    blockFormat.setLineHeight(150, QTextBlockFormat::ProportionalHeight);
+    cursor.select(QTextCursor::Document);
+    cursor.mergeBlockFormat(blockFormat);
+    m_textDisplay->setTextCursor(cursor);
+
     mainLayout->addWidget(titleBar);
     mainLayout->addWidget(m_textDisplay, 1);
 
     // Connect close button
     connect(m_closeBtn, &QPushButton::clicked, this, [this]() { emit closeRequested(); });
+
+    // CLR button - clear local text buffer
+    connect(m_clearBtn, &QPushButton::clicked, this, [this]() { clearText(); });
 
     // ON/OFF toggle
     connect(m_onOffBtn, &QPushButton::clicked, this, [this]() {
@@ -161,11 +181,17 @@ void TextDecodeWindow::setupUi() {
         emit enabledChanged(m_decodeEnabled);
     });
 
-    // WPM cycle (0→1→2→0)
+    // Speed button click: CW cycles WPM range, DATA modes toggle data rate
     connect(m_wpmBtn, &QPushButton::clicked, this, [this]() {
-        m_wpmRange = (m_wpmRange + 1) % 3;
-        updateWpmButton();
-        emit wpmRangeChanged(m_wpmRange);
+        if (m_operatingMode == ModeCW) {
+            m_wpmRange = (m_wpmRange + 1) % 3;
+            updateSpeedButton();
+            emit wpmRangeChanged(m_wpmRange);
+        } else if (m_operatingMode == ModeAFSK || m_operatingMode == ModeFSK || m_operatingMode == ModePSK) {
+            m_dataRate = (m_dataRate == 0) ? 1 : 0;
+            updateSpeedButton();
+            emit dataRateChanged(m_dataRate);
+        }
     });
 
     // AUTO/MANUAL toggle
@@ -207,6 +233,12 @@ void TextDecodeWindow::appendText(const QString &text) {
 
 void TextDecodeWindow::clearText() {
     m_textDisplay->clear();
+    // Reapply line spacing after clear resets formatting
+    QTextCursor cursor = m_textDisplay->textCursor();
+    QTextBlockFormat blockFormat;
+    blockFormat.setLineHeight(150, QTextBlockFormat::ProportionalHeight);
+    cursor.mergeBlockFormat(blockFormat);
+    m_textDisplay->setTextCursor(cursor);
 }
 
 void TextDecodeWindow::setMaxLines(int lines) {
@@ -363,9 +395,23 @@ void TextDecodeWindow::updateButtonStates() {
     m_onOffBtn->setStyleSheet(controlButtonStyle(m_decodeEnabled));
 }
 
-void TextDecodeWindow::updateWpmButton() {
-    static const char *wpmLabels[] = {"8-45", "8-60", "8-90"};
-    m_wpmBtn->setText(wpmLabels[m_wpmRange]);
+void TextDecodeWindow::updateSpeedButton() {
+    switch (m_operatingMode) {
+    case ModeCW: {
+        static const char *wpmLabels[] = {"8-45", "8-60", "8-90"};
+        m_wpmBtn->setText(wpmLabels[m_wpmRange]);
+        break;
+    }
+    case ModeAFSK:
+    case ModeFSK:
+        m_wpmBtn->setText(m_dataRate == 0 ? "RTTY45" : "RTTY75");
+        break;
+    case ModePSK:
+        m_wpmBtn->setText(m_dataRate == 0 ? "PSK31" : "PSK63");
+        break;
+    default:
+        break;
+    }
 }
 
 void TextDecodeWindow::updateThresholdControls() {
@@ -380,14 +426,17 @@ void TextDecodeWindow::updateThresholdControls() {
 }
 
 void TextDecodeWindow::updateModeVisibility() {
-    // CW mode: show WPM and threshold controls
-    // DATA/SSB/other: hide them (only ON/OFF visible)
     bool isCW = (m_operatingMode == ModeCW);
-    m_wpmBtn->setVisible(isCW);
+    bool hasSpeed = isCW || m_operatingMode == ModeAFSK || m_operatingMode == ModeFSK || m_operatingMode == ModePSK;
+
+    m_wpmBtn->setVisible(hasSpeed);
     m_autoManualBtn->setVisible(isCW);
     m_thresholdMinusBtn->setVisible(isCW);
     m_thresholdValueLabel->setVisible(isCW);
     m_thresholdPlusBtn->setVisible(isCW);
+
+    if (hasSpeed)
+        updateSpeedButton();
 }
 
 void TextDecodeWindow::setDecodeEnabled(bool enabled) {
@@ -400,7 +449,7 @@ void TextDecodeWindow::setDecodeEnabled(bool enabled) {
 void TextDecodeWindow::setWpmRange(int range) {
     if (m_wpmRange != range && range >= 0 && range <= 2) {
         m_wpmRange = range;
-        updateWpmButton();
+        updateSpeedButton();
     }
 }
 
@@ -415,6 +464,13 @@ void TextDecodeWindow::setThreshold(int value) {
     if (m_threshold != value && value >= 1 && value <= 9) {
         m_threshold = value;
         m_thresholdValueLabel->setText(QString::number(m_threshold));
+    }
+}
+
+void TextDecodeWindow::setDataRate(int rate) {
+    if (m_dataRate != rate && rate >= 0 && rate <= 1) {
+        m_dataRate = rate;
+        updateSpeedButton();
     }
 }
 

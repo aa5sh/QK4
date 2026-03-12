@@ -7,8 +7,8 @@
 
 VfoSquareWidget::VfoSquareWidget(const QString &text, const QColor &color, QWidget *parent)
     : QWidget(parent), m_text(text), m_color(color) {
-    // Size: 30 wide x 40 high (30 for square + 10 for arc space at top)
-    setFixedSize(30, 40);
+    // Size: 30 wide x 44 high (4 top pad + 10 arc space + 30 square)
+    setFixedSize(30, 44);
     setCursor(Qt::PointingHandCursor);
 }
 
@@ -23,12 +23,13 @@ void VfoSquareWidget::paintEvent(QPaintEvent *) {
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
 
+    const int topPad = 4;     // Extra space so arc stroke doesn't clip at y=0
     const int arcHeight = 10; // Space reserved for lock arc at top
     const int squareSize = 30;
     const int borderRadius = 4;
 
-    // Draw the rounded square (offset down by arcHeight)
-    QRectF squareRect(0, arcHeight, squareSize, squareSize);
+    // Draw the rounded square (offset down by topPad + arcHeight)
+    QRectF squareRect(0, topPad + arcHeight, squareSize, squareSize);
     p.setBrush(m_color);
     p.setPen(Qt::NoPen);
     p.drawRoundedRect(squareRect, borderRadius, borderRadius);
@@ -51,7 +52,7 @@ void VfoSquareWidget::paintEvent(QPaintEvent *) {
         // Arc should look like the top of a padlock
         int arcWidth = 18;
         int arcX = (squareSize - arcWidth) / 2;
-        QRectF arcRect(arcX, 0, arcWidth, arcHeight * 2);
+        QRectF arcRect(arcX, topPad, arcWidth, arcHeight * 2);
         // Draw top half of ellipse (180 degrees starting from 0)
         p.drawArc(arcRect, 0, 180 * 16);
     }
@@ -62,8 +63,8 @@ void VfoSquareWidget::paintEvent(QPaintEvent *) {
 VfoRowWidget::VfoRowWidget(QWidget *parent) : QWidget(parent) {
     setupWidgets();
     // Set fixed height to match content (A/B squares + mode labels)
-    // Increased from 55 to 65 to accommodate lock arc
-    setFixedHeight(65);
+    // Increased from 55 to 78 to accommodate lock arc padding + TEST label
+    setFixedHeight(78);
 }
 
 void VfoRowWidget::setLockA(bool locked) {
@@ -72,6 +73,11 @@ void VfoRowWidget::setLockA(bool locked) {
 
 void VfoRowWidget::setLockB(bool locked) {
     m_vfoBSquare->setLocked(locked);
+}
+
+void VfoRowWidget::setTestVisible(bool visible) {
+    m_testLabel->setVisible(visible);
+    positionWidgets();
 }
 
 void VfoRowWidget::setupWidgets() {
@@ -97,20 +103,19 @@ void VfoRowWidget::setupWidgets() {
                                     .arg(K4Styles::Dimensions::FontSizeLarge));
     vfoAColumn->addWidget(m_modeALabel, 0, Qt::AlignHCenter);
 
-    // === TX Container (TEST label + triangles + TX) ===
-    m_txContainer = new QWidget(this);
-    auto *txVLayout = new QVBoxLayout(m_txContainer);
-    txVLayout->setContentsMargins(0, 0, 0, 0);
-    txVLayout->setSpacing(0);
-
-    // TEST indicator - hidden by default
-    m_testLabel = new QLabel("TEST", m_txContainer);
+    // TEST indicator - independent label, positioned above TX container
+    m_testLabel = new QLabel("TEST", this);
     m_testLabel->setAlignment(Qt::AlignCenter);
     m_testLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
                                    .arg(K4Styles::Colors::TxRed)
                                    .arg(K4Styles::Dimensions::FontSizePopup));
     m_testLabel->setVisible(false);
-    txVLayout->addWidget(m_testLabel);
+
+    // === TX Container (triangles + TX) ===
+    m_txContainer = new QWidget(this);
+    auto *txVLayout = new QVBoxLayout(m_txContainer);
+    txVLayout->setContentsMargins(0, 0, 0, 0);
+    txVLayout->setSpacing(0);
 
     // TX row (triangles + TX label)
     auto *txIndicatorRow = new QHBoxLayout();
@@ -190,6 +195,26 @@ void VfoRowWidget::setupWidgets() {
     subDivStack->addWidget(m_divLabel);
 
     m_subDivContainer->adjustSize();
+
+    // SPLIT indicator — centered under TX, aligned with mode labels
+    m_splitLabel = new QLabel("SPLIT OFF", this);
+    m_splitLabel->setAlignment(Qt::AlignCenter);
+    m_splitLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(K4Styles::Colors::AccentAmber));
+
+    // B SET indicator — replaces SPLIT when active
+    m_bSetLabel = new QLabel("B SET", this);
+    m_bSetLabel->setAlignment(Qt::AlignCenter);
+    m_bSetLabel->setStyleSheet(
+        QString("background-color: %1; color: black; font-size: %2px; font-weight: bold; border-radius: 4px; "
+                "padding: 2px 8px;")
+            .arg(K4Styles::Colors::StatusGreen)
+            .arg(K4Styles::Dimensions::FontSizeButton));
+    m_bSetLabel->setVisible(false);
+
+    // MSG Bank indicator — below SPLIT/BSET
+    m_msgBankLabel = new QLabel("MSG: I", this);
+    m_msgBankLabel->setAlignment(Qt::AlignCenter);
+    m_msgBankLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(K4Styles::Colors::AccentAmber));
 }
 
 void VfoRowWidget::resizeEvent(QResizeEvent *event) {
@@ -200,16 +225,25 @@ void VfoRowWidget::resizeEvent(QResizeEvent *event) {
 void VfoRowWidget::positionWidgets() {
     int w = width();
     int centerX = w / 2;
-    int y = 0; // Top of row
+    int y = 3; // Offset down to prevent lock arc clipping at top
 
-    // TX container - centered at widget center, offset down to align with squares
+    // TX container - centered at widget center, aligned with square faces
     m_txContainer->adjustSize();
     int txWidth = m_txContainer->width();
-    int txY = 10; // Offset to align TX with the square (below lock arc space)
+    // Align TX row with the square face top: y + topPad(4) + arcHeight(10) = y + 14
+    int txY = y + 14;
     m_txContainer->move(centerX - txWidth / 2, txY);
 
+    // TEST label - centered above the TX container
+    if (m_testLabel->isVisible()) {
+        m_testLabel->adjustSize();
+        int txCenterX = m_txContainer->x() + txWidth / 2;
+        int testY = txY - m_testLabel->height() - 1; // 1px gap above TX
+        m_testLabel->move(txCenterX - m_testLabel->width() / 2, qMax(0, testY));
+    }
+
     // A container - left of TX with gap
-    int gap = 15;
+    int gap = 25;
     m_vfoAContainer->move(centerX - txWidth / 2 - gap - m_vfoAContainer->width(), y);
 
     // B container - right of TX with gap (symmetric with A)
@@ -217,4 +251,16 @@ void VfoRowWidget::positionWidgets() {
 
     // SUB/DIV - to right of B (doesn't affect centering), offset down to align
     m_subDivContainer->move(m_vfoBContainer->x() + m_vfoBContainer->width() + 10, txY);
+
+    // SPLIT label — centered under TX, same row as mode labels
+    m_splitLabel->adjustSize();
+    m_splitLabel->move((w - m_splitLabel->width()) / 2, 49);
+
+    // B SET label — same position as SPLIT (replaces it when visible)
+    m_bSetLabel->adjustSize();
+    m_bSetLabel->move((w - m_bSetLabel->width()) / 2, 46);
+
+    // MSG Bank label — below SPLIT/BSET row
+    m_msgBankLabel->adjustSize();
+    m_msgBankLabel->move((w - m_msgBankLabel->width()) / 2, 65);
 }

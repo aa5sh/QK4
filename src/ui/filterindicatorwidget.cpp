@@ -39,6 +39,13 @@ void FilterIndicatorWidget::setMode(const QString &mode) {
     }
 }
 
+void FilterIndicatorWidget::setDataSubMode(int subMode) {
+    if (subMode != m_dataSubMode) {
+        m_dataSubMode = subMode;
+        update();
+    }
+}
+
 void FilterIndicatorWidget::setBandwidthRange(int minHz, int maxHz) {
     m_minBandwidthHz = minHz;
     m_maxBandwidthHz = maxHz;
@@ -162,6 +169,57 @@ void FilterIndicatorWidget::drawBandwidthShape(QPainter &painter, int lineY, int
     painter.drawPolygon(shape);
 }
 
+void FilterIndicatorWidget::drawRttyToneTriangles(QPainter &painter, int lineY, int lineWidth) {
+    const float shapeHeight = 16.0f;
+    const float gapAboveLine = 4.0f;
+    const float triangleBaseWidth = 12.0f;
+
+    // Place mark and space triangles so their bases just touch
+    // Separation between centers = base width, so inner edges meet
+    float separationPx = triangleBaseWidth;
+
+    float centerX = width() / 2.0f;
+    float bottomY = lineY - gapAboveLine;
+    float topY = bottomY - shapeHeight;
+
+    // Space triangle (left) and Mark triangle (right), symmetric around center
+    float spaceCenterX = centerX - separationPx / 2.0f;
+    float markCenterX = centerX + separationPx / 2.0f;
+
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(m_shapeColor);
+
+    // Space triangle (left)
+    QPolygonF space;
+    space << QPointF(spaceCenterX, topY) << QPointF(spaceCenterX + triangleBaseWidth / 2.0f, bottomY)
+          << QPointF(spaceCenterX - triangleBaseWidth / 2.0f, bottomY);
+    painter.drawPolygon(space);
+
+    // Mark triangle (right)
+    QPolygonF mark;
+    mark << QPointF(markCenterX, topY) << QPointF(markCenterX + triangleBaseWidth / 2.0f, bottomY)
+         << QPointF(markCenterX - triangleBaseWidth / 2.0f, bottomY);
+    painter.drawPolygon(mark);
+}
+
+void FilterIndicatorWidget::drawPskToneTriangle(QPainter &painter, int lineY, int /* lineWidth */) {
+    const float shapeHeight = 16.0f;
+    const float gapAboveLine = 4.0f;
+    const float triangleBaseWidth = 12.0f;
+
+    float centerX = width() / 2.0f;
+    float bottomY = lineY - gapAboveLine;
+    float topY = bottomY - shapeHeight;
+
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(m_shapeColor);
+
+    QPolygonF triangle;
+    triangle << QPointF(centerX, topY) << QPointF(centerX + triangleBaseWidth / 2.0f, bottomY)
+             << QPointF(centerX - triangleBaseWidth / 2.0f, bottomY);
+    painter.drawPolygon(triangle);
+}
+
 void FilterIndicatorWidget::paintEvent(QPaintEvent *) {
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
@@ -176,7 +234,16 @@ void FilterIndicatorWidget::paintEvent(QPaintEvent *) {
     int lineX = (w - lineWidth) / 2;
 
     // Draw bandwidth shape above the line
-    drawBandwidthShape(painter, lineY, lineWidth);
+    bool isDataMode = (m_mode == "DATA" || m_mode == "DATA-R");
+    bool isRtty = isDataMode && (m_dataSubMode == 1 || m_dataSubMode == 2);
+    bool isPskD = isDataMode && m_dataSubMode == 3;
+    if (isRtty) {
+        drawRttyToneTriangles(painter, lineY, lineWidth);
+    } else if (isPskD) {
+        drawPskToneTriangle(painter, lineY, lineWidth);
+    } else {
+        drawBandwidthShape(painter, lineY, lineWidth);
+    }
 
     // Draw horizontal line
     QRectF lineRect(lineX, lineY, lineWidth, lineHeight);
