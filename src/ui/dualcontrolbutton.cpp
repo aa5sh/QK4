@@ -172,7 +172,6 @@ void DualControlButton::mousePressEvent(QMouseEvent *event) {
             swapFunctions();
             emit swapped();
         }
-        emit clicked();
         event->accept();
     } else {
         QWidget::mousePressEvent(event);

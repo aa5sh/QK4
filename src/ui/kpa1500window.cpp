@@ -61,10 +61,7 @@ void KPA1500Window::setupUi() {
                                   .arg(K4Styles::Dimensions::FontSizePopup));
     m_closeBtn->setText(QString::fromUtf8("\u00D7")); // × symbol
 
-    connect(m_closeBtn, &QPushButton::clicked, this, [this]() {
-        hide();
-        emit closeRequested();
-    });
+    connect(m_closeBtn, &QPushButton::clicked, this, [this]() { hide(); });
 
     titleLayout->addWidget(titleLabel);
     titleLayout->addStretch();

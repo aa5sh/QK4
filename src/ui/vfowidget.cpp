@@ -252,13 +252,6 @@ void VFOWidget::showMiniPan() {
         m_stackedWidget->addWidget(m_miniPan); // Index 1
 
         // Apply pending configuration
-        if (m_pendingSpectrumColor.isValid()) {
-            m_miniPan->setSpectrumColor(m_pendingSpectrumColor);
-        } else {
-            // Default color based on VFO type
-            m_miniPan->setSpectrumColor(
-                QColor(m_type == VFO_A ? K4Styles::Colors::VfoACyan : K4Styles::Colors::VfoBGreen));
-        }
         if (m_pendingPassbandColor.isValid()) {
             m_miniPan->setPassbandColor(m_pendingPassbandColor);
         }
@@ -272,6 +265,7 @@ void VFOWidget::showMiniPan() {
         m_miniPan->setNotchFilter(m_pendingNotchEnabled, m_pendingNotchPitchHz);
         if (m_pendingWaterfallHeight >= 0)
             m_miniPan->setWaterfallHeight(m_pendingWaterfallHeight);
+        m_miniPan->setAveraging(m_pendingAveraging);
 
         // Connect mini-pan click to show normal view and emit signal
         connect(m_miniPan, &MiniPanRhiWidget::clicked, this, [this]() {
@@ -320,12 +314,6 @@ void VFOWidget::setMiniPanNotchFilter(bool enabled, int pitchHz) {
         m_miniPan->setNotchFilter(enabled, pitchHz);
 }
 
-void VFOWidget::setMiniPanSpectrumColor(const QColor &color) {
-    m_pendingSpectrumColor = color;
-    if (m_miniPan)
-        m_miniPan->setSpectrumColor(color);
-}
-
 void VFOWidget::setMiniPanPassbandColor(const QColor &color) {
     m_pendingPassbandColor = color;
     if (m_miniPan)
@@ -336,6 +324,12 @@ void VFOWidget::setMiniPanWaterfallHeight(int percent) {
     m_pendingWaterfallHeight = percent;
     if (m_miniPan)
         m_miniPan->setWaterfallHeight(percent);
+}
+
+void VFOWidget::setMiniPanAveraging(int level) {
+    m_pendingAveraging = level;
+    if (m_miniPan)
+        m_miniPan->setAveraging(level);
 }
 
 void VFOWidget::showNormal() {

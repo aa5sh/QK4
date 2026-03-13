@@ -89,7 +89,6 @@ signals:
     void voxClicked();     // VOX - SW50;
     void qskClicked();     // QSK - SW134;
     void antClicked();     // ANT - SW60;
-    void remAntClicked();  // REM ANT - TBD
     void rxAntClicked();   // RX ANT - SW70;
     void subAntClicked();  // SUB ANT - SW157;
 

@@ -605,14 +605,132 @@ QFont dataFont(int pixelSize, QFont::Weight weight) {
     font.setHintingPreference(QFont::PreferFullHinting);
     font.setStyleStrategy(QFont::PreferAntialias);
     // Enable tabular figures for consistent digit widths
-    // This is handled via stylesheet for CSS-based styling
+    // Tabular figures are set via QFont API (not stylesheet — Qt CSS doesn't support font-feature-settings)
     return font;
 }
 
-QString dataFontStylesheet() {
-    return QString("font-family: '%1'; font-feature-settings: 'tnum';").arg(Data);
+} // namespace Fonts
+
+namespace Dialog {
+
+const QString &pageBackground() {
+    static const QString s = QString("background-color: %1;").arg(Colors::Background);
+    return s;
 }
 
-} // namespace Fonts
+const QString &separator() {
+    static const QString s = QString("background-color: %1;").arg(Colors::DialogBorder);
+    return s;
+}
+
+const QString &titleLabel() {
+    static const QString s = QString("color: %1; font-size: %2px; font-weight: bold;")
+                                 .arg(Colors::AccentAmber)
+                                 .arg(Dimensions::FontSizeTitle);
+    return s;
+}
+
+const QString &formLabel() {
+    static const QString s =
+        QString("color: %1; font-size: %2px;").arg(Colors::TextGray).arg(Dimensions::FontSizePopup);
+    return s;
+}
+
+const QString &formValue() {
+    static const QString s =
+        QString("color: %1; font-size: %2px; font-weight: bold;").arg(Colors::TextWhite).arg(Dimensions::FontSizePopup);
+    return s;
+}
+
+const QString &helpText() {
+    static const QString s =
+        QString("color: %1; font-size: %2px; font-style: italic;").arg(Colors::TextGray).arg(Dimensions::FontSizeLarge);
+    return s;
+}
+
+const QString &sectionHeader() {
+    static const QString s =
+        QString("color: %1; font-size: %2px; font-weight: bold;").arg(Colors::TextWhite).arg(Dimensions::FontSizePopup);
+    return s;
+}
+
+const QString &statusLabel(const QString &color) {
+    // Not cached — color is dynamic
+    static thread_local QString s;
+    s = QString("color: %1; font-size: %2px; font-weight: bold;").arg(color).arg(Dimensions::FontSizePopup);
+    return s;
+}
+
+const QString &comboBox() {
+    static const QString s =
+        QString("QComboBox { background-color: %1; color: %2; border: 1px solid %3; "
+                "           padding: %6px; font-size: %5px; border-radius: %7px; }"
+                "QComboBox:focus { border-color: %4; }"
+                "QComboBox::drop-down { border: none; width: 20px; }"
+                "QComboBox::down-arrow { image: none; border-left: 5px solid transparent; "
+                "           border-right: 5px solid transparent; border-top: 5px solid %2; }"
+                "QComboBox QAbstractItemView { background-color: %1; color: %2; selection-background-color: %4; }")
+            .arg(Colors::DarkBackground, Colors::TextWhite, Colors::DialogBorder, Colors::AccentAmber)
+            .arg(Dimensions::FontSizePopup)
+            .arg(Dimensions::PaddingSmall)
+            .arg(Dimensions::SliderBorderRadius);
+    return s;
+}
+
+const QString &lineEdit() {
+    static const QString s =
+        QString("QLineEdit { background-color: %1; color: %2; border: 1px solid %3; "
+                "           padding: %6px; font-size: %5px; border-radius: %7px; }"
+                "QLineEdit:focus { border-color: %4; }")
+            .arg(Colors::DarkBackground, Colors::TextWhite, Colors::DialogBorder, Colors::AccentAmber)
+            .arg(Dimensions::FontSizePopup)
+            .arg(Dimensions::PaddingSmall)
+            .arg(Dimensions::SliderBorderRadius);
+    return s;
+}
+
+const QString &checkBox() {
+    static const QString s = QString("QCheckBox { color: %1; font-size: %2px; spacing: %3px; }"
+                                     "QCheckBox::indicator { width: %4px; height: %4px; }")
+                                 .arg(Colors::TextWhite)
+                                 .arg(Dimensions::FontSizePopup)
+                                 .arg(Dimensions::BorderRadiusLarge)
+                                 .arg(Dimensions::CheckboxSize);
+    return s;
+}
+
+const QString &checkBoxDisabled() {
+    static const QString s = QString("QCheckBox { color: %1; font-size: %2px; spacing: %3px; }"
+                                     "QCheckBox::indicator { width: %4px; height: %4px; }")
+                                 .arg(Colors::TextGray)
+                                 .arg(Dimensions::FontSizePopup)
+                                 .arg(Dimensions::BorderRadiusLarge)
+                                 .arg(Dimensions::CheckboxSize);
+    return s;
+}
+
+const QString &actionButton() {
+    static const QString s = QString("QPushButton { background-color: %1; color: %2; border: 1px solid %3; "
+                                     "             padding: 10px 20px; font-size: %4px; border-radius: 4px; }"
+                                     "QPushButton:hover { background-color: %5; }")
+                                 .arg(Colors::DarkBackground, Colors::TextWhite, Colors::DialogBorder)
+                                 .arg(Dimensions::FontSizePopup)
+                                 .arg(Colors::GradientBottom);
+    return s;
+}
+
+const QString &actionButtonSmall() {
+    static const QString s = QString("QPushButton { background-color: %1; color: %2; border: 1px solid %3; "
+                                     "             padding: %6px 12px; font-size: %4px; border-radius: %7px; }"
+                                     "QPushButton:hover { background-color: %5; }")
+                                 .arg(Colors::DarkBackground, Colors::TextWhite, Colors::DialogBorder)
+                                 .arg(Dimensions::FontSizePopup)
+                                 .arg(Colors::GradientBottom)
+                                 .arg(Dimensions::PaddingSmall)
+                                 .arg(Dimensions::SliderBorderRadius);
+    return s;
+}
+
+} // namespace Dialog
 
 } // namespace K4Styles

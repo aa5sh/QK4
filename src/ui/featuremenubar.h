@@ -31,11 +31,9 @@ signals:
     void incrementRequested();
     void decrementRequested();
     void extraButtonClicked();
-    void closed(); // Emitted when popup is hidden
 
 protected:
     void paintEvent(QPaintEvent *event) override;
-    void hideEvent(QHideEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
 

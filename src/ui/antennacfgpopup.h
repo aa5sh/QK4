@@ -85,11 +85,6 @@ signals:
      */
     void configChanged(bool displayAll, QVector<bool> mask);
 
-    /**
-     * @brief Emitted when close button is clicked.
-     */
-    void closeRequested();
-
 protected:
     QSize contentSize() const override;
 

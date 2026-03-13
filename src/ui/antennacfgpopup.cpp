@@ -208,7 +208,6 @@ void AntennaCfgPopupWidget::onCheckboxToggled(int index) {
 }
 
 void AntennaCfgPopupWidget::onCloseClicked() {
-    emit closeRequested();
     hidePopup();
 }
 

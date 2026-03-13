@@ -25,9 +25,6 @@ public:
 
     KPA1500Panel *panel() const { return m_panel; }
 
-signals:
-    void closeRequested();
-
 protected:
     void paintEvent(QPaintEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;

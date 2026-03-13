@@ -24,9 +24,6 @@ public:
     void updateSpectrum(const QByteArray &bins);
     void clear();
 
-    // Spectrum line color (default amber for VFO A)
-    void setSpectrumColor(const QColor &color);
-
     // Passband color (default blue)
     void setPassbandColor(const QColor &color);
 
@@ -42,6 +39,7 @@ public:
     void setFilterBandwidth(int bwHz);
     void setIfShift(int shift);
     void setCwPitch(int pitchHz);
+    void setAveraging(int level); // 1-20: K4 #AVG display averaging
 
 signals:
     void clicked(); // Emitted when user clicks to toggle back to normal view
@@ -147,7 +145,7 @@ private:
     float m_spectrumRatio = 0.40f; // 40% spectrum, 60% waterfall
 
     // Spectrum line color
-    QColor m_spectrumColor{255, 176, 0}; // Amber #FFB000
+    QColor m_spectrumColor{0, 191, 255}; // Cyan #00BFFF
 
     // Passband color
     QColor m_passbandColor{0, 128, 255, 64}; // Blue with 25% alpha
@@ -158,6 +156,11 @@ private:
     QString m_mode = "USB";
     int m_dataSubMode = 0;
     int m_bandwidthHz = 10000; // Mode-dependent span: CW=3kHz, Voice/Data=10kHz
+
+    // Display averaging (K4 #AVG control, 1-20)
+    int m_averagingLevel = 1;
+    float m_attackAlpha = 0.52f;
+    float m_decayAlpha = 0.34f;
 
     // Filter passband visualization
     int m_filterBw = 2400;

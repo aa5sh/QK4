@@ -2,7 +2,6 @@
 #include "k4styles.h"
 #include <QApplication>
 #include <QHBoxLayout>
-#include <QHideEvent>
 #include <QKeyEvent>
 #include <QPainter>
 #include <QScreen>
@@ -151,11 +150,6 @@ void KeyingWeightPopupWidget::showAboveWidget(QWidget *referenceWidget) {
 
 void KeyingWeightPopupWidget::hidePopup() {
     hide();
-}
-
-void KeyingWeightPopupWidget::hideEvent(QHideEvent *event) {
-    QWidget::hideEvent(event);
-    emit closed();
 }
 
 void KeyingWeightPopupWidget::keyPressEvent(QKeyEvent *event) {

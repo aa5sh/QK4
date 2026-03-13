@@ -27,6 +27,7 @@ __pycache__/
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
+compile_commands.json
 Makefile
 
 # Qt Creator / IDE
@@ -37,6 +38,8 @@ Makefile
 # IDE
 .vscode/
 .idea/
+.cache/
+CMakePresets.json
 *.swp
 *~
 

@@ -58,9 +58,6 @@ signals:
     // digits is the frequency as plain digits (e.g., "7024980")
     void frequencyEntered(const QString &digits);
 
-    // Emitted when editing is cancelled (Escape or click outside)
-    void editingCancelled();
-
     // Emitted when user scrolls mouse wheel over frequency (not in edit mode)
     void frequencyScrolled(int steps);
 

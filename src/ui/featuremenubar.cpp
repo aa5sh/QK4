@@ -4,7 +4,6 @@
 #include <QPainter>
 #include <QApplication>
 #include <QScreen>
-#include <QHideEvent>
 #include <QKeyEvent>
 #include <QWheelEvent>
 
@@ -165,12 +164,6 @@ void FeatureMenuBar::showAboveWidget(QWidget *referenceWidget) {
 
 void FeatureMenuBar::hideMenu() {
     hide();
-    // closed() signal is emitted by hideEvent()
-}
-
-void FeatureMenuBar::hideEvent(QHideEvent *event) {
-    QWidget::hideEvent(event);
-    emit closed();
 }
 
 void FeatureMenuBar::keyPressEvent(QKeyEvent *event) {

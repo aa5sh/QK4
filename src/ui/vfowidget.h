@@ -50,9 +50,9 @@ public:
     void setMiniPanIfShift(int shift);
     void setMiniPanCwPitch(int pitch);
     void setMiniPanNotchFilter(bool enabled, int pitchHz);
-    void setMiniPanSpectrumColor(const QColor &color);
     void setMiniPanPassbandColor(const QColor &color);
     void setMiniPanWaterfallHeight(int percent);
+    void setMiniPanAveraging(int level);
 
     // Access to mini-pan (may return nullptr if not yet created)
     MiniPanRhiWidget *miniPan() const { return m_miniPan; }
@@ -110,9 +110,9 @@ private:
     int m_pendingCwPitch = 600;
     bool m_pendingNotchEnabled = false;
     int m_pendingNotchPitchHz = 0;
-    QColor m_pendingSpectrumColor;
     QColor m_pendingPassbandColor;
     int m_pendingWaterfallHeight = -1; // -1 = unset, use MiniPan default
+    int m_pendingAveraging = 1;
 };
 
 #endif // VFOWIDGET_H

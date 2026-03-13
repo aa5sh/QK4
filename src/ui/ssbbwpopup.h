@@ -22,11 +22,9 @@ public:
 
 signals:
     void bandwidthChanged(int bw);
-    void closed();
 
 protected:
     void paintEvent(QPaintEvent *event) override;
-    void hideEvent(QHideEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
 

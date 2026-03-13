@@ -487,24 +487,18 @@ void DisplayPopupWidget::setupTopRow() {
         m_extEnabled = false;
         m_lcdExtGroup->setLeftSelected(true);
         m_lcdExtGroup->setRightSelected(false);
-        emit lcdToggled(true);
-        emit extToggled(false);
     });
     connect(m_lcdExtGroup, &ToggleGroupWidget::rightClicked, this, [this]() {
         m_lcdEnabled = false;
         m_extEnabled = true;
         m_lcdExtGroup->setLeftSelected(false);
         m_lcdExtGroup->setRightSelected(true);
-        emit lcdToggled(false);
-        emit extToggled(true);
     });
     connect(m_lcdExtGroup, &ToggleGroupWidget::bothClicked, this, [this]() {
         m_lcdEnabled = true;
         m_extEnabled = true;
         m_lcdExtGroup->setLeftSelected(true);
         m_lcdExtGroup->setRightSelected(true);
-        emit lcdToggled(true);
-        emit extToggled(true);
     });
     topRow->addWidget(m_lcdExtGroup);
 
@@ -520,8 +514,6 @@ void DisplayPopupWidget::setupTopRow() {
         m_vfoAbGroup->setRightSelected(false);
         updateRefLevelControlGroup(); // Sync ref level display
         updateSpanControlGroup();     // Sync span display
-        emit vfoAToggled(true);
-        emit vfoBToggled(false);
     });
     connect(m_vfoAbGroup, &ToggleGroupWidget::rightClicked, this, [this]() {
         if (m_vfoBAvailable) {
@@ -531,8 +523,6 @@ void DisplayPopupWidget::setupTopRow() {
             m_vfoAbGroup->setRightSelected(true);
             updateRefLevelControlGroup(); // Sync ref level display
             updateSpanControlGroup();     // Sync span display
-            emit vfoAToggled(false);
-            emit vfoBToggled(true);
         }
     });
     connect(m_vfoAbGroup, &ToggleGroupWidget::bothClicked, this, [this]() {
@@ -543,8 +533,6 @@ void DisplayPopupWidget::setupTopRow() {
             m_vfoAbGroup->setRightSelected(true);
             updateRefLevelControlGroup(); // Sync ref level display
             updateSpanControlGroup();     // Sync span display
-            emit vfoAToggled(true);
-            emit vfoBToggled(true);
         }
     });
     topRow->addWidget(m_vfoAbGroup);
@@ -619,7 +607,6 @@ QWidget *DisplayPopupWidget::createRefLevelControlPage() {
         // Optimistic local update
         m_autoRef = !m_autoRef;
         updateRefLevelControlGroup();
-        emit autoRefLevelToggled(m_autoRef);
     });
     layout->addWidget(m_refLevelControlGroup);
 
@@ -921,8 +908,6 @@ void DisplayPopupWidget::onMenuItemClicked(MenuItem item) {
     default:
         break;
     }
-
-    emit menuItemSelected(item);
 }
 
 void DisplayPopupWidget::onMenuItemRightClicked(MenuItem item) {
@@ -969,8 +954,6 @@ void DisplayPopupWidget::onMenuItemRightClicked(MenuItem item) {
     default:
         break;
     }
-
-    emit alternateItemClicked(item);
 }
 
 void DisplayPopupWidget::updateToggleStyles() {

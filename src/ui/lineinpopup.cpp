@@ -2,7 +2,6 @@
 #include "k4styles.h"
 #include <QApplication>
 #include <QHBoxLayout>
-#include <QHideEvent>
 #include <QKeyEvent>
 #include <QPainter>
 #include <QScreen>
@@ -238,11 +237,6 @@ void LineInPopupWidget::showAboveWidget(QWidget *referenceWidget) {
 
 void LineInPopupWidget::hidePopup() {
     hide();
-}
-
-void LineInPopupWidget::hideEvent(QHideEvent *event) {
-    QWidget::hideEvent(event);
-    emit closed();
 }
 
 void LineInPopupWidget::keyPressEvent(QKeyEvent *event) {

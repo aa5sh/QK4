@@ -393,7 +393,6 @@ void RxEqPopupWidget::onFlatClicked() {
 }
 
 void RxEqPopupWidget::onCloseClicked() {
-    emit closeRequested();
     hidePopup();
 }
 

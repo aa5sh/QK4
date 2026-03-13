@@ -57,19 +57,17 @@ MacroItemWidget::MacroItemWidget(const QString &functionId, const QString &displ
 
     // Column 3: CAT Command (editable) - 33.3% width
     m_commandDisplay = new QLabel("", this);
-    m_commandDisplay->setStyleSheet(
-        QString("color: %1; font-size: %2px; font-family: '%3'; font-feature-settings: 'tnum';")
-            .arg(K4Styles::Colors::TextFaded)
-            .arg(K4Styles::Dimensions::FontSizePopup)
-            .arg(K4Styles::Fonts::Data));
+    m_commandDisplay->setStyleSheet(QString("color: %1; font-size: %2px; font-family: '%3';")
+                                        .arg(K4Styles::Colors::TextFaded)
+                                        .arg(K4Styles::Dimensions::FontSizePopup)
+                                        .arg(K4Styles::Fonts::Data));
     m_commandDisplay->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     layout->addWidget(m_commandDisplay, 1); // stretch factor 1
 
     m_commandEdit = new QLineEdit(this);
     m_commandEdit->setMaxLength(64);
     m_commandEdit->setStyleSheet(QString("QLineEdit { background: %1; color: %2; border: 1px solid %3; "
-                                         "border-radius: 3px; padding: 2px 5px; font-size: %4px; font-family: '%5'; "
-                                         "font-feature-settings: 'tnum'; }")
+                                         "border-radius: 3px; padding: 2px 5px; font-size: %4px; font-family: '%5'; }")
                                      .arg(K4Styles::Colors::GradientMid1)
                                      .arg(K4Styles::Colors::TextWhite)
                                      .arg(K4Styles::Colors::InactiveGray)
@@ -135,11 +133,10 @@ void MacroItemWidget::setSelected(bool selected) {
         m_labelDisplay->setStyleSheet(QString("color: %1; font-size: %2px;")
                                           .arg(K4Styles::Colors::TextWhite)
                                           .arg(K4Styles::Dimensions::FontSizePopup));
-        m_commandDisplay->setStyleSheet(
-            QString("color: %1; font-size: %2px; font-family: '%3'; font-feature-settings: 'tnum';")
-                .arg(K4Styles::Colors::TextWhite)
-                .arg(K4Styles::Dimensions::FontSizePopup)
-                .arg(K4Styles::Fonts::Data));
+        m_commandDisplay->setStyleSheet(QString("color: %1; font-size: %2px; font-family: '%3';")
+                                            .arg(K4Styles::Colors::TextWhite)
+                                            .arg(K4Styles::Dimensions::FontSizePopup)
+                                            .arg(K4Styles::Fonts::Data));
     } else {
         // Grey text on dark background
         m_functionLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
@@ -539,7 +536,6 @@ void MacroDialog::hide() {
         widget->finishEditing();
     }
     QWidget::hide();
-    emit closed();
 }
 
 void MacroDialog::paintEvent(QPaintEvent *event) {

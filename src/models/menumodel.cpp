@@ -119,7 +119,6 @@ QStringList MenuModel::getCategories() const {
 
 void MenuModel::clear() {
     m_items.clear();
-    emit modelCleared();
 }
 
 QString MenuModel::urlDecode(const QString &str) {

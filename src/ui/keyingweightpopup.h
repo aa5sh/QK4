@@ -19,11 +19,9 @@ public:
 
 signals:
     void weightChanged(int weight); // Raw 090-125 value
-    void closed();
 
 protected:
     void paintEvent(QPaintEvent *event) override;
-    void hideEvent(QHideEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
 

@@ -4,7 +4,6 @@
 #include <QPainter>
 #include <QApplication>
 #include <QScreen>
-#include <QHideEvent>
 #include <QKeyEvent>
 #include <QWheelEvent>
 
@@ -244,11 +243,6 @@ void LineOutPopupWidget::showAboveWidget(QWidget *referenceWidget) {
 
 void LineOutPopupWidget::hidePopup() {
     hide();
-}
-
-void LineOutPopupWidget::hideEvent(QHideEvent *event) {
-    QWidget::hideEvent(event);
-    emit closed();
 }
 
 void LineOutPopupWidget::keyPressEvent(QKeyEvent *event) {

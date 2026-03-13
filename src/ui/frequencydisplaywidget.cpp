@@ -220,7 +220,6 @@ void FrequencyDisplayWidget::exitEditMode(bool send) {
     } else {
         // Restore original frequency
         m_digits = m_originalDigits;
-        emit editingCancelled();
     }
 
     m_cursorPosition = -1;

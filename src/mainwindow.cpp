@@ -1588,6 +1588,12 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_radioState, &RadioState::displayModeExtChanged, m_displayPopup, &DisplayPopupWidget::setDisplayModeExt);
     connect(m_radioState, &RadioState::waterfallColorChanged, m_displayPopup, &DisplayPopupWidget::setWaterfallColor);
     connect(m_radioState, &RadioState::averagingChanged, m_displayPopup, &DisplayPopupWidget::setAveraging);
+    connect(m_radioState, &RadioState::averagingChanged, m_panadapterA, &PanadapterRhiWidget::setAveraging);
+    connect(m_radioState, &RadioState::averagingChanged, m_panadapterB, &PanadapterRhiWidget::setAveraging);
+    connect(m_radioState, &RadioState::averagingChanged, this, [this](int level) {
+        m_vfoA->setMiniPanAveraging(level);
+        m_vfoB->setMiniPanAveraging(level);
+    });
     connect(m_radioState, &RadioState::peakModeChanged, m_displayPopup, &DisplayPopupWidget::setPeakMode);
     connect(m_radioState, &RadioState::fixedTuneChanged, m_displayPopup, &DisplayPopupWidget::setFixedTuneMode);
     connect(m_radioState, &RadioState::freezeChanged, m_displayPopup, &DisplayPopupWidget::setFreeze);
@@ -1616,18 +1622,16 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_radioState, &RadioState::refLevelChanged, m_displayPopup, &DisplayPopupWidget::setRefLevelValueA);
     connect(m_radioState, &RadioState::refLevelBChanged, m_displayPopup, &DisplayPopupWidget::setRefLevelValueB);
 
-    // Averaging control +/- -> CAT commands (range 1-20, step by 1)
+    // Averaging control +/- -> local only (not sent to K4 — our smoothing differs from K4's)
     connect(m_displayPopup, &DisplayPopupWidget::averagingIncrementRequested, this, [this]() {
         int current = m_radioState->averaging();
         int next = qMin(current + 1, 20);
-        m_radioState->setAveraging(next); // Optimistic update
-        m_tcpClient->sendCAT(QString("#AVG%1;").arg(next, 2, 10, QChar('0')));
+        m_radioState->setAveraging(next);
     });
     connect(m_displayPopup, &DisplayPopupWidget::averagingDecrementRequested, this, [this]() {
         int current = m_radioState->averaging();
         int next = qMax(current - 1, 1);
-        m_radioState->setAveraging(next); // Optimistic update
-        m_tcpClient->sendCAT(QString("#AVG%1;").arg(next, 2, 10, QChar('0')));
+        m_radioState->setAveraging(next);
     });
 
     // DDC NB level control +/- -> CAT commands
@@ -1686,12 +1690,11 @@ MainWindow::MainWindow(QWidget *parent)
     });
 
     // Span control from display popup -> CAT commands (respects A/B selection)
-    // Inverted controls: + zooms in (decrease span), - zooms out (increase span)
     connect(m_displayPopup, &DisplayPopupWidget::spanIncrementRequested, this, [this]() {
         bool vfoA = m_displayPopup->isVfoAEnabled();
         bool vfoB = m_displayPopup->isVfoBEnabled();
         int currentSpan = (vfoB && !vfoA) ? m_radioState->spanHzB() : m_radioState->spanHz();
-        int newSpan = getNextSpanDown(currentSpan); // + zooms in
+        int newSpan = getNextSpanUp(currentSpan); // + increases span
         if (newSpan != currentSpan) {
             if (vfoA) {
                 m_radioState->setSpanHz(newSpan);
@@ -1707,7 +1710,7 @@ MainWindow::MainWindow(QWidget *parent)
         bool vfoA = m_displayPopup->isVfoAEnabled();
         bool vfoB = m_displayPopup->isVfoBEnabled();
         int currentSpan = (vfoB && !vfoA) ? m_radioState->spanHzB() : m_radioState->spanHz();
-        int newSpan = getNextSpanUp(currentSpan); // - zooms out
+        int newSpan = getNextSpanDown(currentSpan); // - decreases span
         if (newSpan != currentSpan) {
             if (vfoA) {
                 m_radioState->setSpanHz(newSpan);
@@ -2821,7 +2824,6 @@ void MainWindow::setupUi() {
     connect(m_sideControlPanel, &SideControlPanel::voxClicked, this, [this]() { m_tcpClient->sendCAT("SW50;"); });
     connect(m_sideControlPanel, &SideControlPanel::qskClicked, this, [this]() { m_tcpClient->sendCAT("SW134;"); });
     connect(m_sideControlPanel, &SideControlPanel::antClicked, this, [this]() { m_tcpClient->sendCAT("SW60;"); });
-    // remAntClicked - not yet implemented (TBD)
     connect(m_sideControlPanel, &SideControlPanel::rxAntClicked, this, [this]() { m_tcpClient->sendCAT("SW70;"); });
     connect(m_sideControlPanel, &SideControlPanel::subAntClicked, this, [this]() { m_tcpClient->sendCAT("SW157;"); });
 
@@ -3189,8 +3191,7 @@ void MainWindow::setupVfoSection(QWidget *parent) {
         }
     });
 
-    // Set Mini-Pan A colors to cyan (matching VFO A theme)
-    m_vfoA->setMiniPanSpectrumColor(QColor(K4Styles::Colors::VfoACyan));
+    // Set Mini-Pan A passband color to cyan (matching VFO A theme)
     QColor vfoAPassband(K4Styles::Colors::VfoACyan);
     vfoAPassband.setAlpha(64);
     m_vfoA->setMiniPanPassbandColor(vfoAPassband);
@@ -3473,8 +3474,7 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     // ===== VFO B (Right - Cyan) - Using VFOWidget =====
     m_vfoB = new VFOWidget(VFOWidget::VFO_B, parent);
 
-    // Set Mini-Pan B colors to green (matching VFO B theme)
-    m_vfoB->setMiniPanSpectrumColor(QColor(K4Styles::Colors::VfoBGreen));
+    // Set Mini-Pan B passband color to green (matching VFO B theme)
     QColor vfoBPassband(K4Styles::Colors::VfoBGreen);
     vfoBPassband.setAlpha(64);
     m_vfoB->setMiniPanPassbandColor(vfoBPassband);
@@ -3580,7 +3580,6 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
 
     // Main panadapter for VFO A (left side) - QRhiWidget with Metal/DirectX/Vulkan
     m_panadapterA = new PanadapterRhiWidget(m_spectrumContainer);
-    m_panadapterA->setSpectrumLineColor(QColor(K4Styles::Colors::VfoACyan));
     // dB range set via setScale()/setRefLevel() from radio's #SCL/#REF values
     m_panadapterA->setSpectrumRatio(0.35f);
     m_panadapterA->setGridEnabled(true);
@@ -3604,7 +3603,6 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
 
     // Sub panadapter for VFO B (right side) - QRhiWidget with Metal/DirectX/Vulkan
     m_panadapterB = new PanadapterRhiWidget(m_spectrumContainer);
-    m_panadapterB->setSpectrumLineColor(QColor(K4Styles::Colors::VfoBGreen));
     // dB range set via setScale()/setRefLevel() from radio's #SCL/#REF$ values
     m_panadapterB->setSpectrumRatio(0.35f);
     m_panadapterB->setGridEnabled(true);
@@ -3689,11 +3687,10 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
     m_vfoIndicatorA->move(0, m_panadapterA->height() - 30);
     m_vfoIndicatorB->move(0, m_panadapterB->height() - 30);
 
-    // Span adjustment for Main: K4 span steps, inverted controls
-    // - button = zoom out (increase span), + button = zoom in (decrease span)
+    // Span adjustment for Main: K4 span steps
     connect(m_spanDownBtn, &QPushButton::clicked, this, [this]() {
         int currentSpan = m_radioState->spanHz();
-        int newSpan = getNextSpanUp(currentSpan); // - zooms out
+        int newSpan = getNextSpanDown(currentSpan); // - decreases span
         if (newSpan != currentSpan) {
             m_radioState->setSpanHz(newSpan);
             m_tcpClient->sendCAT(QString("#SPN%1;").arg(newSpan));
@@ -3702,7 +3699,7 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
 
     connect(m_spanUpBtn, &QPushButton::clicked, this, [this]() {
         int currentSpan = m_radioState->spanHz();
-        int newSpan = getNextSpanDown(currentSpan); // + zooms in
+        int newSpan = getNextSpanUp(currentSpan); // + increases span
         if (newSpan != currentSpan) {
             m_radioState->setSpanHz(newSpan);
             m_tcpClient->sendCAT(QString("#SPN%1;").arg(newSpan));
@@ -3714,7 +3711,7 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
     // Span adjustment for Sub: uses $ suffix for Sub RX commands
     connect(m_spanDownBtnB, &QPushButton::clicked, this, [this]() {
         int currentSpan = m_radioState->spanHzB();
-        int newSpan = getNextSpanUp(currentSpan); // - zooms out
+        int newSpan = getNextSpanDown(currentSpan); // - decreases span
         if (newSpan != currentSpan) {
             m_radioState->setSpanHzB(newSpan);
             m_tcpClient->sendCAT(QString("#SPN$%1;").arg(newSpan));
@@ -3723,7 +3720,7 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
 
     connect(m_spanUpBtnB, &QPushButton::clicked, this, [this]() {
         int currentSpan = m_radioState->spanHzB();
-        int newSpan = getNextSpanDown(currentSpan); // + zooms in
+        int newSpan = getNextSpanUp(currentSpan); // + increases span
         if (newSpan != currentSpan) {
             m_radioState->setSpanHzB(newSpan);
             m_tcpClient->sendCAT(QString("#SPN$%1;").arg(newSpan));
@@ -3919,25 +3916,23 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
     auto updatePanadapterASecondary = [this]() {
         m_panadapterA->setSecondaryVfo(m_radioState->vfoB(), m_radioState->filterBandwidthB(),
                                        RadioState::modeToString(m_radioState->modeB()), m_radioState->ifShiftB(),
-                                       m_radioState->cwPitch(), m_radioState->dataSubModeB());
+                                       m_radioState->dataSubModeB());
     };
     connect(m_radioState, &RadioState::frequencyBChanged, this, updatePanadapterASecondary);
     connect(m_radioState, &RadioState::modeBChanged, this, updatePanadapterASecondary);
     connect(m_radioState, &RadioState::filterBandwidthBChanged, this, updatePanadapterASecondary);
     connect(m_radioState, &RadioState::ifShiftBChanged, this, updatePanadapterASecondary);
-    connect(m_radioState, &RadioState::cwPitchChanged, this, updatePanadapterASecondary);
 
     // Secondary VFO passband display: VFO A state → PanadapterB's secondary
     auto updatePanadapterBSecondary = [this]() {
         m_panadapterB->setSecondaryVfo(m_radioState->vfoA(), m_radioState->filterBandwidth(),
                                        RadioState::modeToString(m_radioState->mode()), m_radioState->ifShift(),
-                                       m_radioState->cwPitch(), m_radioState->dataSubMode());
+                                       m_radioState->dataSubMode());
     };
     connect(m_radioState, &RadioState::frequencyChanged, this, updatePanadapterBSecondary);
     connect(m_radioState, &RadioState::modeChanged, this, updatePanadapterBSecondary);
     connect(m_radioState, &RadioState::filterBandwidthChanged, this, updatePanadapterBSecondary);
     connect(m_radioState, &RadioState::ifShiftChanged, this, updatePanadapterBSecondary);
-    connect(m_radioState, &RadioState::cwPitchChanged, this, updatePanadapterBSecondary);
 
     // Mouse control for VFO B: click to tune
     connect(m_panadapterB, &PanadapterRhiWidget::frequencyClicked, this, [this](qint64 freq) {
@@ -4789,9 +4784,15 @@ void MainWindow::onRitXitChanged(bool ritEnabled, bool xitEnabled, int offset) {
 }
 
 qint64 MainWindow::adjustClickFreqForMode(qint64 freq, bool vfoB) {
-    // Placeholder for mode-specific click-to-tune adjustments.
-    // Currently all DATA submodes use the same click behavior as USB.
-    Q_UNUSED(vfoB);
+    // In CW mode, the dial frequency is offset from the RF frequency by cwPitch.
+    // To hear a signal at RF frequency S, the dial must be set to S - cwPitch (CW)
+    // or S + cwPitch (CW-R). xToFreq returns the actual RF frequency at the clicked
+    // pixel, so we apply the offset here to get the correct dial frequency.
+    RadioState::Mode mode = vfoB ? m_radioState->modeB() : m_radioState->mode();
+    if (mode == RadioState::CW)
+        return freq - m_radioState->cwPitch();
+    if (mode == RadioState::CW_R)
+        return freq + m_radioState->cwPitch();
     return freq;
 }
 
@@ -4818,10 +4819,10 @@ void MainWindow::updatePanadapterPassbands() {
     // VFO B overlay on panadapter A (green passband showing where VFO B is listening)
     m_panadapterA->setSecondaryVfo(rxB, m_radioState->filterBandwidthB(),
                                    RadioState::modeToString(m_radioState->modeB()), m_radioState->ifShiftB(),
-                                   m_radioState->cwPitch(), m_radioState->dataSubModeB());
+                                   m_radioState->dataSubModeB());
     // VFO A overlay on panadapter B
     m_panadapterB->setSecondaryVfo(rxA, m_radioState->filterBandwidth(), RadioState::modeToString(m_radioState->mode()),
-                                   m_radioState->ifShift(), m_radioState->cwPitch(), m_radioState->dataSubMode());
+                                   m_radioState->ifShift(), m_radioState->dataSubMode());
 }
 
 void MainWindow::updateTxMarkers() {
