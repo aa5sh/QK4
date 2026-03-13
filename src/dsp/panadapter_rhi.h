@@ -39,13 +39,12 @@ public:
     void setIfShift(int shift);
     void setCwPitch(int pitchHz);
     void setFskMarkTone(int toneHz);
-    void setRttyShift(int shiftHz);
     void clear();
 
     // Display settings
     void setGridEnabled(bool enabled);
     void setRefLevel(int level);
-    void setScale(int scale); // 25-150, affects display gain/range
+    void setScale(int scale); // 10-150, affects display gain/range
     void setSpan(int spanHz);
     void setWaterfallHeight(int percent); // 0-100: percentage of display for waterfall
     int span() const { return m_spanHz; }
@@ -60,10 +59,8 @@ public:
     void setSecondaryMarkerColor(const QColor &color);
 
     // Color configuration
-    void setGridColor(const QColor &color);
     void setPassbandColor(const QColor &color);
     void setFrequencyMarkerColor(const QColor &color);
-    void setNotchColor(const QColor &color);
 
     // TX frequency marker (shows TX position when RIT/XIT splits TX from RX)
     void setTxMarker(qint64 freq, bool visible);
@@ -131,11 +128,11 @@ private:
     std::unique_ptr<QRhiGraphicsPipeline> m_overlayLinePipeline;
     std::unique_ptr<QRhiGraphicsPipeline> m_overlayTrianglePipeline;
     std::unique_ptr<QRhiBuffer> m_fullscreenQuadVbo; // Shared fullscreen quad for fragment-shader styles
-    // Spectrum amplitude style resources (LUT-based colors)
-    std::unique_ptr<QRhiGraphicsPipeline> m_spectrumBlueAmpPipeline;
-    std::unique_ptr<QRhiShaderResourceBindings> m_spectrumBlueAmpSrb;
-    std::unique_ptr<QRhiBuffer> m_spectrumBlueAmpUniformBuffer;
-    std::unique_ptr<QRhiTexture> m_spectrumColorLutTexture; // 256-entry color LUT
+    // Spectrum fill resources (LUT-based colors)
+    std::unique_ptr<QRhiGraphicsPipeline> m_spectrumFillPipeline;
+    std::unique_ptr<QRhiShaderResourceBindings> m_spectrumFillSrb;
+    std::unique_ptr<QRhiBuffer> m_spectrumFillUniformBuffer;
+    std::unique_ptr<QRhiTexture> m_spectrumFillLutTexture; // 256-entry color LUT for spectrum fill
     std::unique_ptr<QRhiShaderResourceBindings> m_waterfallSrb;
     std::unique_ptr<QRhiShaderResourceBindings> m_overlaySrb;
     std::unique_ptr<QRhiShaderResourceBindings> m_passbandSrb;
@@ -171,8 +168,8 @@ private:
     bool m_rhiInitialized = false;
     bool m_pipelinesCreated = false;
     // Shader stages (loaded from .qsb files)
-    QShader m_spectrumBlueVert;
-    QShader m_spectrumBlueAmpFrag;
+    QShader m_spectrumFillVert;
+    QShader m_spectrumFillFrag;
     QShader m_waterfallVert;
     QShader m_waterfallFrag;
     QShader m_overlayVert;
@@ -189,8 +186,8 @@ private:
     // Memory: 4096 × 1024 × 1 byte = 4 MB (trivial for modern GPUs)
     static constexpr int BASE_WATERFALL_HISTORY = 1024;
     static constexpr int BASE_TEXTURE_WIDTH = 4096;
-    int m_textureWidth = BASE_TEXTURE_WIDTH;         // Scaled by devicePixelRatio
-    int m_waterfallHistory = BASE_WATERFALL_HISTORY; // Scaled by devicePixelRatio
+    int m_textureWidth = BASE_TEXTURE_WIDTH;
+    int m_waterfallHistory = BASE_WATERFALL_HISTORY;
     int m_waterfallWriteRow = 0;
     QVector<quint8> m_waterfallData;
     bool m_waterfallNeedsUpdate = false;
@@ -198,7 +195,7 @@ private:
 
     // Color LUT (256 RGBA entries) - for waterfall
     QVector<quint8> m_colorLUT;
-    // Spectrum color LUT (256 RGBA entries) - for BlueAmplitude style
+    // Spectrum color LUT (256 RGBA entries) for amplitude-based fill
     QVector<quint8> m_spectrumLUT;
 
     // Frequency info

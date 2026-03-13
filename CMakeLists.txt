@@ -293,8 +293,8 @@ qt6_add_shaders(${PROJECT_NAME} "panadapter_shaders"
     FILES
         src/dsp/shaders/spectrum.vert
         src/dsp/shaders/spectrum.frag
-        src/dsp/shaders/spectrum_blue.vert
-        src/dsp/shaders/spectrum_blue_amp.frag
+        src/dsp/shaders/spectrum_fill.vert
+        src/dsp/shaders/spectrum_fill.frag
         src/dsp/shaders/waterfall.vert
         src/dsp/shaders/waterfall.frag
         src/dsp/shaders/overlay.vert

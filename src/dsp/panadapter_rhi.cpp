@@ -246,7 +246,7 @@ PanadapterRhiWidget::PanadapterRhiWidget(QWidget *parent) : QRhiWidget(parent) {
 
     // Initialize color LUTs
     initColorLUT();    // Waterfall LUT
-    initSpectrumLUT(); // Spectrum LUT (for BlueAmplitude style)
+    initSpectrumLUT(); // Spectrum fill LUT
 
     // Note: Waterfall data buffer is allocated in initialize() after devicePixelRatio is known
 
@@ -356,7 +356,7 @@ void PanadapterRhiWidget::initColorLUT() {
 }
 
 void PanadapterRhiWidget::initSpectrumLUT() {
-    // Create 256-entry RGBA color LUT for SPECTRUM (BlueAmplitude style)
+    // Create 256-entry RGBA color LUT for spectrum fill
     // 8-stage: Royal Blue -> Cyan -> Green -> Yellow -> Orange -> Red -> White
     // Noise floor starts at royal blue (more visible color earlier)
     m_spectrumLUT.resize(256 * 4);
@@ -429,8 +429,8 @@ void PanadapterRhiWidget::initialize(QRhiCommandBuffer *cb) {
     m_waterfallData.fill(0);
 
     // Load shaders from compiled .qsb resources
-    m_spectrumBlueVert = RhiUtils::loadShader(":/shaders/src/dsp/shaders/spectrum_blue.vert.qsb");
-    m_spectrumBlueAmpFrag = RhiUtils::loadShader(":/shaders/src/dsp/shaders/spectrum_blue_amp.frag.qsb");
+    m_spectrumFillVert = RhiUtils::loadShader(":/shaders/src/dsp/shaders/spectrum_fill.vert.qsb");
+    m_spectrumFillFrag = RhiUtils::loadShader(":/shaders/src/dsp/shaders/spectrum_fill.frag.qsb");
     m_waterfallVert = RhiUtils::loadShader(":/shaders/src/dsp/shaders/waterfall.vert.qsb");
     m_waterfallFrag = RhiUtils::loadShader(":/shaders/src/dsp/shaders/waterfall.frag.qsb");
     m_overlayVert = RhiUtils::loadShader(":/shaders/src/dsp/shaders/overlay.vert.qsb");
@@ -449,18 +449,18 @@ void PanadapterRhiWidget::initialize(QRhiCommandBuffer *cb) {
     m_spectrumDataTexture.reset(m_rhi->newTexture(QRhiTexture::R32F, QSize(m_textureWidth, 1)));
     m_spectrumDataTexture->create();
 
-    // Create spectrum color LUT texture (256x1 RGBA) - for BlueAmplitude style
-    m_spectrumColorLutTexture.reset(m_rhi->newTexture(QRhiTexture::RGBA8, QSize(256, 1)));
-    m_spectrumColorLutTexture->create();
+    // Create spectrum fill color LUT texture (256x1 RGBA)
+    m_spectrumFillLutTexture.reset(m_rhi->newTexture(QRhiTexture::RGBA8, QSize(256, 1)));
+    m_spectrumFillLutTexture->create();
 
     // Upload color LUT data (separate LUTs for waterfall and spectrum)
     QRhiResourceUpdateBatch *rub = m_rhi->nextResourceUpdateBatch();
     // Upload waterfall color LUT
     QRhiTextureSubresourceUploadDescription waterfallLutUpload(m_colorLUT.constData(), m_colorLUT.size());
     rub->uploadTexture(m_colorLutTexture.get(), QRhiTextureUploadEntry(0, 0, waterfallLutUpload));
-    // Upload spectrum color LUT (for BlueAmplitude style)
+    // Upload spectrum fill color LUT
     QRhiTextureSubresourceUploadDescription spectrumLutUpload(m_spectrumLUT.constData(), m_spectrumLUT.size());
-    rub->uploadTexture(m_spectrumColorLutTexture.get(), QRhiTextureUploadEntry(0, 0, spectrumLutUpload));
+    rub->uploadTexture(m_spectrumFillLutTexture.get(), QRhiTextureUploadEntry(0, 0, spectrumLutUpload));
 
     // Upload initial zeroed waterfall data (prevents uninitialized texture garbage)
     QRhiTextureSubresourceUploadDescription waterfallUpload(m_waterfallData.constData(), m_waterfallData.size());
@@ -514,8 +514,8 @@ void PanadapterRhiWidget::initialize(QRhiCommandBuffer *cb) {
 
     // Spectrum amplitude style uniform buffer: 80 bytes (std140 layout)
     // fillBaseColor(16) + fillPeakColor(16) + glowColor(16) + params(16) + viewport(16)
-    m_spectrumBlueAmpUniformBuffer.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 80));
-    m_spectrumBlueAmpUniformBuffer->create();
+    m_spectrumFillUniformBuffer.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 80));
+    m_spectrumFillUniformBuffer->create();
 
     // Separate buffers for passband to avoid GPU buffer conflicts
     m_passbandVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, 256 * sizeof(float)));
@@ -589,43 +589,43 @@ void PanadapterRhiWidget::createPipelines() {
     if (m_pipelinesCreated)
         return;
 
-    if (!m_spectrumBlueVert.isValid() || !m_spectrumBlueAmpFrag.isValid())
+    if (!m_spectrumFillVert.isValid() || !m_spectrumFillFrag.isValid())
         return;
 
     m_rpDesc = renderTarget()->renderPassDescriptor();
 
-    // Spectrum amplitude pipeline (LUT-based colors with amplitude brightness)
+    // Spectrum fill pipeline (LUT-based colors with amplitude brightness)
     {
-        m_spectrumBlueAmpSrb.reset(m_rhi->newShaderResourceBindings());
-        m_spectrumBlueAmpSrb->setBindings(
+        m_spectrumFillSrb.reset(m_rhi->newShaderResourceBindings());
+        m_spectrumFillSrb->setBindings(
             {QRhiShaderResourceBinding::uniformBuffer(0, QRhiShaderResourceBinding::FragmentStage,
-                                                      m_spectrumBlueAmpUniformBuffer.get()),
+                                                      m_spectrumFillUniformBuffer.get()),
              QRhiShaderResourceBinding::sampledTexture(1, QRhiShaderResourceBinding::FragmentStage,
                                                        m_spectrumDataTexture.get(), m_sampler.get()),
              QRhiShaderResourceBinding::sampledTexture(2, QRhiShaderResourceBinding::FragmentStage,
-                                                       m_spectrumColorLutTexture.get(), m_sampler.get())});
-        m_spectrumBlueAmpSrb->create();
+                                                       m_spectrumFillLutTexture.get(), m_sampler.get())});
+        m_spectrumFillSrb->create();
 
-        m_spectrumBlueAmpPipeline.reset(m_rhi->newGraphicsPipeline());
-        m_spectrumBlueAmpPipeline->setShaderStages(
-            {{QRhiShaderStage::Vertex, m_spectrumBlueVert}, {QRhiShaderStage::Fragment, m_spectrumBlueAmpFrag}});
+        m_spectrumFillPipeline.reset(m_rhi->newGraphicsPipeline());
+        m_spectrumFillPipeline->setShaderStages(
+            {{QRhiShaderStage::Vertex, m_spectrumFillVert}, {QRhiShaderStage::Fragment, m_spectrumFillFrag}});
 
         QRhiVertexInputLayout inputLayout;
         inputLayout.setBindings({{4 * sizeof(float)}});                         // position(2) + texcoord(2)
         inputLayout.setAttributes({{0, 0, QRhiVertexInputAttribute::Float2, 0}, // position
                                    {0, 1, QRhiVertexInputAttribute::Float2, 2 * sizeof(float)}}); // texcoord
-        m_spectrumBlueAmpPipeline->setVertexInputLayout(inputLayout);
-        m_spectrumBlueAmpPipeline->setTopology(QRhiGraphicsPipeline::Triangles);
-        m_spectrumBlueAmpPipeline->setShaderResourceBindings(m_spectrumBlueAmpSrb.get());
-        m_spectrumBlueAmpPipeline->setRenderPassDescriptor(m_rpDesc);
+        m_spectrumFillPipeline->setVertexInputLayout(inputLayout);
+        m_spectrumFillPipeline->setTopology(QRhiGraphicsPipeline::Triangles);
+        m_spectrumFillPipeline->setShaderResourceBindings(m_spectrumFillSrb.get());
+        m_spectrumFillPipeline->setRenderPassDescriptor(m_rpDesc);
 
         QRhiGraphicsPipeline::TargetBlend blend;
         blend.enable = true;
         blend.srcColor = QRhiGraphicsPipeline::SrcAlpha;
         blend.dstColor = QRhiGraphicsPipeline::OneMinusSrcAlpha;
-        m_spectrumBlueAmpPipeline->setTargetBlends({blend});
+        m_spectrumFillPipeline->setTargetBlends({blend});
 
-        m_spectrumBlueAmpPipeline->create();
+        m_spectrumFillPipeline->create();
     }
 
     // Waterfall pipeline
@@ -850,7 +850,7 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
         specDataUpload.setSourceSize(QSize(m_textureWidth, 1));
         rub->uploadTexture(m_spectrumDataTexture.get(), QRhiTextureUploadEntry(0, 0, specDataUpload));
 
-        // Update blue spectrum uniform buffer (80 bytes, std140 layout)
+        // Update spectrum fill uniform buffer (80 bytes, std140 layout)
         float specBinCount =
             static_cast<float>(m_currentSpectrum.isEmpty() ? m_textureWidth : m_currentSpectrum.size());
         struct {
@@ -864,7 +864,7 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
             float viewportSize[2];  // offset 64
             float textureWidth;     // offset 72: for bin centering
             float padding;          // offset 76
-        } specBlueUniforms = {
+        } specFillUniforms = {
             {0.0f, 0.08f, 0.16f, 0.85f},        // fillBaseColor: dark navy
             {0.0f, 0.63f, 1.0f, 0.85f},         // fillPeakColor: electric blue
             {0.0f, 0.83f, 1.0f, 1.0f},          // glowColor: cyan
@@ -876,7 +876,7 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
             static_cast<float>(m_textureWidth), // textureWidth for bin centering
             0.0f                                // padding
         };
-        rub->updateDynamicBuffer(m_spectrumBlueAmpUniformBuffer.get(), 0, sizeof(specBlueUniforms), &specBlueUniforms);
+        rub->updateDynamicBuffer(m_spectrumFillUniformBuffer.get(), 0, sizeof(specFillUniforms), &specFillUniforms);
     }
 
     cb->resourceUpdate(rub);
@@ -939,10 +939,10 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
     }
 
     // Draw spectrum fill ON TOP of grid (shader-based fullscreen quad)
-    if (!m_currentSpectrum.isEmpty() && m_spectrumBlueAmpPipeline) {
+    if (!m_currentSpectrum.isEmpty() && m_spectrumFillPipeline) {
         cb->setViewport({0, waterfallHeight, w, spectrumHeight});
-        cb->setGraphicsPipeline(m_spectrumBlueAmpPipeline.get());
-        cb->setShaderResources(m_spectrumBlueAmpSrb.get());
+        cb->setGraphicsPipeline(m_spectrumFillPipeline.get());
+        cb->setShaderResources(m_spectrumFillSrb.get());
 
         const QRhiCommandBuffer::VertexInput quadVbufBinding(m_fullscreenQuadVbo.get(), 0);
         cb->setVertexInput(0, 1, &quadVbufBinding);
@@ -1843,11 +1843,6 @@ void PanadapterRhiWidget::setSecondaryMarkerColor(const QColor &color) {
     update();
 }
 
-void PanadapterRhiWidget::setGridColor(const QColor &color) {
-    m_gridColor = color;
-    update();
-}
-
 void PanadapterRhiWidget::setPassbandColor(const QColor &color) {
     m_passbandColor = color;
     update();
@@ -1871,18 +1866,6 @@ void PanadapterRhiWidget::setFskMarkTone(int toneHz) {
         m_fskMarkTone = toneHz;
         update();
     }
-}
-
-void PanadapterRhiWidget::setRttyShift(int shiftHz) {
-    if (m_rttyShift != shiftHz) {
-        m_rttyShift = shiftHz;
-        update();
-    }
-}
-
-void PanadapterRhiWidget::setNotchColor(const QColor &color) {
-    m_notchColor = color;
-    update();
 }
 
 // Mouse events
