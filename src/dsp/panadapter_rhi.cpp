@@ -250,29 +250,6 @@ PanadapterRhiWidget::PanadapterRhiWidget(QWidget *parent) : QRhiWidget(parent) {
 
     // Note: Waterfall data buffer is allocated in initialize() after devicePixelRatio is known
 
-    // Peak hold decay timer
-    m_peakDecayTimer = new QTimer(this);
-    connect(m_peakDecayTimer, &QTimer::timeout, this, [this]() {
-        if (!m_peakHold.isEmpty()) {
-            for (int i = 0; i < m_peakHold.size(); ++i) {
-                m_peakHold[i] -= PEAK_DECAY_RATE;
-                if (m_peakHold[i] < m_currentSpectrum.value(i, m_minDb)) {
-                    m_peakHold[i] = m_currentSpectrum.value(i, m_minDb);
-                }
-            }
-            update();
-        }
-    });
-    m_peakDecayTimer->start(50);
-
-    // Waterfall marker timer
-    m_waterfallMarkerTimer = new QTimer(this);
-    m_waterfallMarkerTimer->setSingleShot(true);
-    connect(m_waterfallMarkerTimer, &QTimer::timeout, this, [this]() {
-        m_showWaterfallMarker = false;
-        update();
-    });
-
     // Create dBm scale overlay (child widget)
     m_dbmScaleOverlay = new DbmScaleOverlay(this);
     m_dbmScaleOverlay->setDbRange(m_minDb, m_maxDb);
@@ -1578,19 +1555,6 @@ void PanadapterRhiWidget::updateSpectrum(const QByteArray &bins, qint64 centerFr
         }
     }
 
-    // Update peak hold
-    if (m_peakHoldEnabled) {
-        if (m_peakHold.size() != m_currentSpectrum.size()) {
-            m_peakHold = m_currentSpectrum;
-        } else {
-            for (int i = 0; i < m_currentSpectrum.size(); ++i) {
-                if (m_currentSpectrum[i] > m_peakHold[i]) {
-                    m_peakHold[i] = m_currentSpectrum[i];
-                }
-            }
-        }
-    }
-
     m_waterfallNeedsUpdate = true;
     updateFreqScaleOverlay(); // Update frequency labels when center freq changes
     update();
@@ -1684,41 +1648,6 @@ qint64 PanadapterRhiWidget::xToFreq(int x, int w) {
     return startFreq + static_cast<qint64>(normalized * m_spanHz);
 }
 
-QColor PanadapterRhiWidget::interpolateColor(const QColor &a, const QColor &b, float t) {
-    t = qBound(0.0f, t, 1.0f);
-    return QColor::fromRgbF(a.redF() + (b.redF() - a.redF()) * t, a.greenF() + (b.greenF() - a.greenF()) * t,
-                            a.blueF() + (b.blueF() - a.blueF()) * t, a.alphaF() + (b.alphaF() - a.alphaF()) * t);
-}
-
-QColor PanadapterRhiWidget::spectrumGradientColor(float t) {
-    // 5-stop gradient: visible dark lime → lime green → bright lime → light lime → white
-    // Creates a lime green spectrum fill with visible base color
-    struct GradientStop {
-        float pos;
-        int r, g, b, a;
-    };
-    static const GradientStop stops[] = {
-        {0.00f, 20, 60, 20, 128},    // Visible dark lime (50% alpha)
-        {0.15f, 40, 120, 30, 180},   // Translucent lime green
-        {0.50f, 80, 200, 60, 220},   // Bright lime green
-        {0.75f, 160, 255, 120, 245}, // Light lime with yellow hint
-        {1.00f, 255, 255, 255, 255}  // Pure white peak
-    };
-
-    t = qBound(0.0f, t, 1.0f);
-
-    // Find surrounding stops and interpolate
-    for (int i = 0; i < 4; ++i) {
-        if (t <= stops[i + 1].pos) {
-            float localT = (t - stops[i].pos) / (stops[i + 1].pos - stops[i].pos);
-            QColor c1(stops[i].r, stops[i].g, stops[i].b, stops[i].a);
-            QColor c2(stops[i + 1].r, stops[i + 1].g, stops[i + 1].b, stops[i + 1].a);
-            return interpolateColor(c1, c2, localT);
-        }
-    }
-    return QColor(255, 255, 255, 255); // Clamp to white
-}
-
 // Configuration setters
 void PanadapterRhiWidget::setDbRange(float minDb, float maxDb) {
     m_minDb = minDb;
@@ -1747,8 +1676,6 @@ void PanadapterRhiWidget::setWaterfallHeight(int percent) {
 void PanadapterRhiWidget::setTunedFrequency(qint64 freq) {
     if (m_tunedFreq != freq) {
         m_tunedFreq = freq;
-        m_showWaterfallMarker = true;
-        m_waterfallMarkerTimer->start(500);
         update();
     }
 }
@@ -1789,7 +1716,6 @@ void PanadapterRhiWidget::setCwPitch(int pitchHz) {
 void PanadapterRhiWidget::clear() {
     m_currentSpectrum.clear();
     m_rawSpectrum.clear();
-    m_peakHold.clear();
     m_waterfallWriteRow = 0;
     m_waterfallData.fill(0);
     m_waterfallNeedsFullClear = true;
@@ -1828,13 +1754,6 @@ void PanadapterRhiWidget::clear() {
 
 void PanadapterRhiWidget::setGridEnabled(bool enabled) {
     m_gridEnabled = enabled;
-    update();
-}
-
-void PanadapterRhiWidget::setPeakHoldEnabled(bool enabled) {
-    m_peakHoldEnabled = enabled;
-    if (!enabled)
-        m_peakHold.clear();
     update();
 }
 
@@ -1924,29 +1843,8 @@ void PanadapterRhiWidget::setSecondaryMarkerColor(const QColor &color) {
     update();
 }
 
-// Color setters
-void PanadapterRhiWidget::setSpectrumBaseColor(const QColor &color) {
-    m_spectrumBaseColor = color;
-    update();
-}
-
-void PanadapterRhiWidget::setSpectrumPeakColor(const QColor &color) {
-    m_spectrumPeakColor = color;
-    update();
-}
-
-void PanadapterRhiWidget::setSpectrumLineColor(const QColor &color) {
-    m_spectrumLineColor = color;
-    update();
-}
-
 void PanadapterRhiWidget::setGridColor(const QColor &color) {
     m_gridColor = color;
-    update();
-}
-
-void PanadapterRhiWidget::setPeakHoldColor(const QColor &color) {
-    m_peakHoldColor = color;
     update();
 }
 
@@ -1984,12 +1882,6 @@ void PanadapterRhiWidget::setRttyShift(int shiftHz) {
 
 void PanadapterRhiWidget::setNotchColor(const QColor &color) {
     m_notchColor = color;
-    update();
-}
-
-void PanadapterRhiWidget::setBackgroundGradient(const QColor &center, const QColor &edge) {
-    m_bgCenterColor = center;
-    m_bgEdgeColor = edge;
     update();
 }
 

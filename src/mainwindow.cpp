@@ -3580,7 +3580,6 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
 
     // Main panadapter for VFO A (left side) - QRhiWidget with Metal/DirectX/Vulkan
     m_panadapterA = new PanadapterRhiWidget(m_spectrumContainer);
-    m_panadapterA->setSpectrumLineColor(QColor(K4Styles::Colors::VfoACyan));
     // dB range set via setScale()/setRefLevel() from radio's #SCL/#REF values
     m_panadapterA->setSpectrumRatio(0.35f);
     m_panadapterA->setGridEnabled(true);
@@ -3604,7 +3603,6 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
 
     // Sub panadapter for VFO B (right side) - QRhiWidget with Metal/DirectX/Vulkan
     m_panadapterB = new PanadapterRhiWidget(m_spectrumContainer);
-    m_panadapterB->setSpectrumLineColor(QColor(K4Styles::Colors::VfoBGreen));
     // dB range set via setScale()/setRefLevel() from radio's #SCL/#REF$ values
     m_panadapterB->setSpectrumRatio(0.35f);
     m_panadapterB->setGridEnabled(true);

@@ -44,7 +44,6 @@ public:
 
     // Display settings
     void setGridEnabled(bool enabled);
-    void setPeakHoldEnabled(bool enabled);
     void setRefLevel(int level);
     void setScale(int scale); // 25-150, affects display gain/range
     void setSpan(int spanHz);
@@ -60,16 +59,11 @@ public:
     void setSecondaryPassbandColor(const QColor &color);
     void setSecondaryMarkerColor(const QColor &color);
 
-    // Color configuration (NEW: all colors configurable)
-    void setSpectrumBaseColor(const QColor &color);
-    void setSpectrumPeakColor(const QColor &color);
-    void setSpectrumLineColor(const QColor &color);
+    // Color configuration
     void setGridColor(const QColor &color);
-    void setPeakHoldColor(const QColor &color);
     void setPassbandColor(const QColor &color);
     void setFrequencyMarkerColor(const QColor &color);
     void setNotchColor(const QColor &color);
-    void setBackgroundGradient(const QColor &center, const QColor &edge);
 
     // TX frequency marker (shows TX position when RIT/XIT splits TX from RX)
     void setTxMarker(qint64 freq, bool visible);
@@ -117,9 +111,6 @@ private:
     float normalizeDb(float db);
     float freqToNormalized(qint64 freq);
     qint64 xToFreq(int x, int w);
-    QColor interpolateColor(const QColor &a, const QColor &b, float t);
-    QColor spectrumGradientColor(float t); // 5-stop teal-to-white gradient
-
     // RHI resources
     QRhi *m_rhi = nullptr;
     std::unique_ptr<QRhiBuffer> m_waterfallVbo;
@@ -179,8 +170,6 @@ private:
 
     bool m_rhiInitialized = false;
     bool m_pipelinesCreated = false;
-    bool m_firstFrameRendered = false;
-
     // Shader stages (loaded from .qsb files)
     QShader m_spectrumBlueVert;
     QShader m_spectrumBlueAmpFrag;
@@ -192,8 +181,6 @@ private:
     // Spectrum data
     QVector<float> m_currentSpectrum;
     QVector<float> m_rawSpectrum;
-    QVector<float> m_peakHold;
-
     // K4 spectrum calibration: dBm = raw_byte - K4_DBM_OFFSET
     // Calibrated by comparing peak signals with K4 display
     static constexpr float K4_DBM_OFFSET = 146.0f;
@@ -233,7 +220,6 @@ private:
     float m_spectrumRatio = 0.30f;
     float m_smoothedBaseline = 0.0f;
     bool m_gridEnabled = true;
-    bool m_peakHoldEnabled = true;
     int m_refLevel = -110;
     int m_scale = 75; // 10-150, default 75 (neutral)
     int m_spanHz = 10000;
@@ -257,18 +243,11 @@ private:
     QColor m_secondaryPassbandColor{0, 255, 0, 64}; // Green 25% alpha
     QColor m_secondaryMarkerColor{0, 255, 0, 255};  // Green 100% alpha
 
-    // Colors (all configurable)
-    // Spectrum gradient uses spectrumGradientColor() for 5-stop lime-to-white
-    QColor m_spectrumBaseColor{20, 60, 20, 128};    // Visible dark lime (gradient stop 0.0)
-    QColor m_spectrumPeakColor{255, 255, 255, 255}; // Pure white peak (gradient stop 1.0)
-    QColor m_spectrumLineColor{50, 255, 50};        // Lime green line on top
-    QColor m_gridColor{160, 160, 160, 77};          // Light gray with 30% alpha
-    QColor m_peakHoldColor{255, 255, 255, 102};     // White with 40% alpha
-    QColor m_passbandColor{0, 191, 255, 64};        // Cyan with 25% alpha (VFO A default)
-    QColor m_frequencyMarkerColor{0, 140, 200};     // Darker cyan (VFO A default)
-    QColor m_notchColor{255, 0, 0};                 // Red
-    QColor m_bgCenterColor{56, 56, 56};             // Lighter gray at center
-    QColor m_bgEdgeColor{20, 20, 20};               // Darker at edges
+    // Colors
+    QColor m_gridColor{160, 160, 160, 77};      // Light gray with 30% alpha
+    QColor m_passbandColor{0, 191, 255, 64};    // Cyan with 25% alpha (VFO A default)
+    QColor m_frequencyMarkerColor{0, 140, 200}; // Darker cyan (VFO A default)
+    QColor m_notchColor{255, 0, 0};             // Red
 
     // RTTY tone overlay colors
     QColor m_rttyToneColor{255, 200, 0, 200};        // Yellow-orange for primary VFO
@@ -278,14 +257,6 @@ private:
     qint64 m_txFreq = 0;
     bool m_txMarkerVisible = false;
     QColor m_txMarkerColor{255, 60, 60, 160}; // Translucent red
-
-    // Peak hold decay
-    QTimer *m_peakDecayTimer = nullptr;
-    static constexpr float PEAK_DECAY_RATE = 0.5f;
-
-    // Waterfall marker
-    QTimer *m_waterfallMarkerTimer = nullptr;
-    bool m_showWaterfallMarker = false;
 
     WheelAccumulator m_wheelAccumulator;
 
