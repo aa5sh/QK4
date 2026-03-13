@@ -108,6 +108,7 @@ private:
     float normalizeDb(float db);
     float freqToNormalized(qint64 freq);
     qint64 xToFreq(int x, int w);
+    int calculateGridInterval(int spanHz) const;
     // RHI resources
     QRhi *m_rhi = nullptr;
     std::unique_ptr<QRhiBuffer> m_waterfallVbo;

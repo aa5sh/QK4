@@ -109,10 +109,10 @@ public:
         setAttribute(Qt::WA_TranslucentBackground);
     }
 
-    void setFrequencyRange(qint64 centerFreq, int spanHz, int cwPitch, const QString &mode) {
+    void setFrequencyRange(qint64 centerFreq, int spanHz, int ifShift, const QString &mode) {
         m_centerFreq = centerFreq;
         m_spanHz = spanHz;
-        m_cwPitch = cwPitch;
+        m_ifShift = ifShift;
         m_mode = mode;
         update();
     }
@@ -135,38 +135,47 @@ protected:
         const int w = width();
         const int h = height();
 
-        // Calculate effective center frequency (CW mode applies pitch offset)
+        // In CW mode, offset the display center by IF shift so the VFO marker appears centered.
+        // Labels show dial-equivalent frequencies (round kHz values) positioned via the
+        // shifted RF coordinate system so CW operators can read tuning positions directly.
         qint64 effectiveCenter = m_centerFreq;
+        qint64 cwOffset = 0;
         if (m_mode == "CW") {
-            effectiveCenter = m_centerFreq + m_cwPitch;
+            cwOffset = static_cast<qint64>(m_ifShift) * 10;
+            effectiveCenter = m_centerFreq + cwOffset;
         } else if (m_mode == "CW-R") {
-            effectiveCenter = m_centerFreq - m_cwPitch;
+            cwOffset = -static_cast<qint64>(m_ifShift) * 10;
+            effectiveCenter = m_centerFreq + cwOffset;
         }
 
         qint64 startFreq = effectiveCenter - m_spanHz / 2;
-        qint64 endFreq = effectiveCenter + m_spanHz / 2;
 
-        // Get appropriate interval for this span (targets ~20-30 labels)
+        // Compute dial-equivalent frequency range for label iteration
+        qint64 dialStart = startFreq - cwOffset;
+        qint64 dialEnd = dialStart + m_spanHz;
+
         int interval = calculateLabelInterval(m_spanHz);
 
-        // Find first label frequency (round up to next interval boundary)
-        qint64 firstLabel = (startFreq / interval) * interval;
-        if (firstLabel < startFreq)
-            firstLabel += interval;
+        // Find first label at a round dial frequency boundary
+        qint64 firstDialLabel = (dialStart / interval) * interval;
+        if (firstDialLabel < dialStart)
+            firstDialLabel += interval;
 
         // Measure sample label width for spacing check
-        QString sampleLabel = formatFrequency(firstLabel);
+        QString sampleLabel = formatFrequency(firstDialLabel);
         int labelWidth = fm.horizontalAdvance(sampleLabel);
         int minSpacing = labelWidth + 12; // Minimum gap between labels
 
-        // Draw labels at each interval
+        // Draw labels at each interval (round dial frequencies)
         int lastDrawnX = -1000; // Track last drawn position for overlap prevention
-        for (qint64 freq = firstLabel; freq <= endFreq; freq += interval) {
-            // Convert frequency to X pixel position
-            float normalized = static_cast<float>(freq - startFreq) / static_cast<float>(m_spanHz);
+        for (qint64 dialFreq = firstDialLabel; dialFreq <= dialEnd; dialFreq += interval) {
+            // Position using RF coordinate system (add CW offset back)
+            qint64 rfFreq = dialFreq + cwOffset;
+            float normalized = static_cast<float>(rfFreq - startFreq) / static_cast<float>(m_spanHz);
             int x = static_cast<int>(normalized * w);
 
-            QString label = formatFrequency(freq);
+            // Label text shows the dial frequency
+            QString label = formatFrequency(dialFreq);
             int textWidth = fm.horizontalAdvance(label);
 
             // Center text horizontally on the frequency position
@@ -186,33 +195,18 @@ protected:
     }
 
 private:
-    // Calculate frequency intervals to get ~20-30 labels across the span
+    // Calculate frequency intervals to get ~10 labels across the span
+    // Uses the same nice-interval table and target count as the grid lines
+    // so that every label sits exactly on a grid line.
     int calculateLabelInterval(int spanHz) const {
-        // Target approximately 25 labels
-        int targetLabels = 25;
-        int rawInterval = spanHz / targetLabels;
+        int targetLabels = 10;
 
-        // Round to "nice" intervals (multiples that look clean on display)
-        // Use intervals that result in clean MHz decimal values
         static const int niceIntervals[] = {
-            100,    // 0.0001 MHz - for very narrow spans
-            200,    // 0.0002 MHz
-            500,    // 0.0005 MHz
-            1000,   // 0.001 MHz (1 kHz)
-            2000,   // 0.002 MHz (2 kHz)
-            5000,   // 0.005 MHz (5 kHz)
-            6000,   // 0.006 MHz (6 kHz) - common on K4
-            10000,  // 0.010 MHz (10 kHz)
-            12000,  // 0.012 MHz (12 kHz)
-            20000,  // 0.020 MHz (20 kHz)
-            25000,  // 0.025 MHz (25 kHz)
-            50000,  // 0.050 MHz (50 kHz)
-            100000, // 0.100 MHz (100 kHz)
+            100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000,
         };
 
-        // Find the smallest nice interval that gives <= targetLabels
         for (int nice : niceIntervals) {
-            if (spanHz / nice <= targetLabels + 5) {
+            if (spanHz / nice <= targetLabels + 2) {
                 return nice;
             }
         }
@@ -230,7 +224,7 @@ private:
 
     qint64 m_centerFreq = 0;
     int m_spanHz = 10000;
-    int m_cwPitch = 500;
+    int m_ifShift = 50;
     QString m_mode = "USB";
 };
 
@@ -257,7 +251,7 @@ PanadapterRhiWidget::PanadapterRhiWidget(QWidget *parent) : QRhiWidget(parent) {
 
     // Create frequency scale overlay (child widget at spectrum/waterfall boundary)
     m_freqScaleOverlay = new FrequencyScaleOverlay(this);
-    m_freqScaleOverlay->setFrequencyRange(m_centerFreq, m_spanHz, m_cwPitch, m_mode);
+    m_freqScaleOverlay->setFrequencyRange(m_centerFreq, m_spanHz, m_ifShift, m_mode);
     m_freqScaleOverlay->show();
 }
 
@@ -299,7 +293,7 @@ void PanadapterRhiWidget::updateFreqScaleOverlay() {
     const int overlayY = spectrumHeight - overlayHeight / 2;
 
     m_freqScaleOverlay->setGeometry(0, overlayY, w, overlayHeight);
-    m_freqScaleOverlay->setFrequencyRange(m_centerFreq, m_spanHz, m_cwPitch, m_mode);
+    m_freqScaleOverlay->setFrequencyRange(m_centerFreq, m_spanHz, m_ifShift, m_mode);
     m_freqScaleOverlay->raise(); // Ensure it renders on top
 }
 
@@ -906,10 +900,30 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
             gridVerts << 0.0f << y << w << y;
         }
 
-        // Vertical lines (frequency) - 10 divisions in spectrum area
-        for (int i = 1; i < 10; ++i) {
-            float x = w * i / 10.0f;
-            gridVerts << x << 0.0f << x << spectrumHeight;
+        // Vertical lines at frequency-aligned positions (matching label intervals)
+        // Grid lines are placed at round dial-frequency boundaries, same as labels.
+        {
+            qint64 effectiveCenter = m_centerFreq;
+            qint64 cwOffset = 0;
+            if (m_mode == "CW") {
+                cwOffset = static_cast<qint64>(m_ifShift) * 10;
+                effectiveCenter = m_centerFreq + cwOffset;
+            } else if (m_mode == "CW-R") {
+                cwOffset = -static_cast<qint64>(m_ifShift) * 10;
+                effectiveCenter = m_centerFreq + cwOffset;
+            }
+            qint64 startFreq = effectiveCenter - m_spanHz / 2;
+            qint64 dialStart = startFreq - cwOffset;
+            qint64 dialEnd = dialStart + m_spanHz;
+            int interval = calculateGridInterval(m_spanHz);
+            qint64 firstDialLine = (dialStart / interval) * interval;
+            if (firstDialLine < dialStart)
+                firstDialLine += interval;
+            for (qint64 dialFreq = firstDialLine; dialFreq < dialEnd; dialFreq += interval) {
+                qint64 rfFreq = dialFreq + cwOffset;
+                float x = static_cast<float>(rfFreq - startFreq) / static_cast<float>(m_spanHz) * w;
+                gridVerts << x << 0.0f << x << spectrumHeight;
+            }
         }
 
         QRhiResourceUpdateBatch *gridRub = m_rhi->nextResourceUpdateBatch();
@@ -1616,36 +1630,50 @@ float PanadapterRhiWidget::normalizeDb(float db) {
 }
 
 float PanadapterRhiWidget::freqToNormalized(qint64 freq) {
-    // Map frequency to normalized range [0.0, 1.0] where:
-    // - 0.0 = left edge (startFreq)
-    // - 1.0 = right edge (startFreq + spanHz)
+    // Map frequency to normalized range [0.0, 1.0] for drawing markers and passbands.
     //
-    // IMPORTANT: In CW mode, the K4 centers the spectrum on (dial + cwPitch), not the dial frequency.
-    // This is because the IF center is offset by the CW sidetone pitch.
+    // In CW mode, offset the display center by IF shift to match the K4's display convention:
+    // the VFO marker (at dial + IS*10) appears centered, and labels show dial-equivalent
+    // frequencies so CW operators can read tuning positions directly from the waterfall.
+    // The K4 auto-adjusts IS to track CW pitch, keeping the display in sync.
     qint64 effectiveCenter = m_centerFreq;
     if (m_mode == "CW") {
-        effectiveCenter = m_centerFreq + m_cwPitch;
+        effectiveCenter = m_centerFreq + m_ifShift * 10;
     } else if (m_mode == "CW-R") {
-        effectiveCenter = m_centerFreq - m_cwPitch;
+        effectiveCenter = m_centerFreq - m_ifShift * 10;
     }
     qint64 startFreq = effectiveCenter - m_spanHz / 2;
     return static_cast<float>(freq - startFreq) / static_cast<float>(m_spanHz);
 }
 
 qint64 PanadapterRhiWidget::xToFreq(int x, int w) {
-    // Map pixel position to frequency for click-to-tune
-    // Use floating point for precision
-    //
-    // NOTE: Do NOT apply CW pitch offset here. The user clicks on a signal at a certain
-    // visual position. That signal's frequency is what we want to tune to.
-    // The spectrum display already shows frequencies correctly; we just need to map
-    // the click position back to frequency using the centerFreq from the K4.
+    // Map pixel position to frequency for click-to-tune.
+    // Must use the same shifted coordinate system (effectiveCenter) as the display
+    // so the click lands where the user sees it on the frequency labels.
     if (w <= 0)
         return m_centerFreq;
-    qint64 startFreq = m_centerFreq - m_spanHz / 2;
+    qint64 effectiveCenter = m_centerFreq;
+    if (m_mode == "CW") {
+        effectiveCenter = m_centerFreq + m_ifShift * 10;
+    } else if (m_mode == "CW-R") {
+        effectiveCenter = m_centerFreq - m_ifShift * 10;
+    }
+    qint64 startFreq = effectiveCenter - m_spanHz / 2;
     // Clamp to [0, 1] to prevent runaway acceleration when dragging past edges
     double normalized = qBound(0.0, static_cast<double>(x) / static_cast<double>(w), 1.0);
     return startFreq + static_cast<qint64>(normalized * m_spanHz);
+}
+
+int PanadapterRhiWidget::calculateGridInterval(int spanHz) const {
+    int targetLines = 10;
+    static const int niceIntervals[] = {
+        100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000,
+    };
+    for (int nice : niceIntervals) {
+        if (spanHz / nice <= targetLines + 2)
+            return nice;
+    }
+    return 100000;
 }
 
 // Configuration setters
@@ -1701,6 +1729,7 @@ void PanadapterRhiWidget::setDataSubMode(int subMode) {
 void PanadapterRhiWidget::setIfShift(int shift) {
     if (m_ifShift != shift) {
         m_ifShift = shift;
+        updateFreqScaleOverlay();
         update();
     }
 }
@@ -1708,7 +1737,6 @@ void PanadapterRhiWidget::setIfShift(int shift) {
 void PanadapterRhiWidget::setCwPitch(int pitchHz) {
     if (m_cwPitch != pitchHz) {
         m_cwPitch = pitchHz;
-        updateFreqScaleOverlay();
         update();
     }
 }
