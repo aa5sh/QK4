@@ -24,9 +24,6 @@ public:
     void updateSpectrum(const QByteArray &bins);
     void clear();
 
-    // Spectrum line color (default amber for VFO A)
-    void setSpectrumColor(const QColor &color);
-
     // Passband color (default blue)
     void setPassbandColor(const QColor &color);
 
@@ -147,7 +144,7 @@ private:
     float m_spectrumRatio = 0.40f; // 40% spectrum, 60% waterfall
 
     // Spectrum line color
-    QColor m_spectrumColor{255, 176, 0}; // Amber #FFB000
+    QColor m_spectrumColor{0, 191, 255}; // Cyan #00BFFF
 
     // Passband color
     QColor m_passbandColor{0, 128, 255, 64}; // Blue with 25% alpha

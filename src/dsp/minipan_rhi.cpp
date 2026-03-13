@@ -779,9 +779,8 @@ void MiniPanRhiWidget::render(QRhiCommandBuffer *cb) {
                 QRhiResourceUpdateBatch *rtRub = m_rhi->nextResourceUpdateBatch();
                 rtRub->updateDynamicBuffer(m_rttySpaceVbo.get(), 0, verts.size() * sizeof(float), verts.constData());
 
-                // Use passband color at moderate alpha for the tone marker
-                QColor toneColor = m_passbandColor;
-                toneColor.setAlpha(200);
+                // Yellow-orange tone marker, matches main panadapter
+                static const QColor toneColor(255, 200, 0, 200);
 
                 struct {
                     float viewportWidth;
@@ -946,13 +945,6 @@ int MiniPanRhiWidget::bandwidthForMode(const QString &mode) const {
         return PanadapterConstants::SpanNarrowHz; // FSK-D / AFSK-A: narrow span like CW
     }
     return PanadapterConstants::SpanWideHz;
-}
-
-void MiniPanRhiWidget::setSpectrumColor(const QColor &color) {
-    if (m_spectrumColor != color) {
-        m_spectrumColor = color;
-        update();
-    }
 }
 
 void MiniPanRhiWidget::setPassbandColor(const QColor &color) {

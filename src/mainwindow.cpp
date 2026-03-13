@@ -3188,8 +3188,7 @@ void MainWindow::setupVfoSection(QWidget *parent) {
         }
     });
 
-    // Set Mini-Pan A colors to cyan (matching VFO A theme)
-    m_vfoA->setMiniPanSpectrumColor(QColor(K4Styles::Colors::VfoACyan));
+    // Set Mini-Pan A passband color to cyan (matching VFO A theme)
     QColor vfoAPassband(K4Styles::Colors::VfoACyan);
     vfoAPassband.setAlpha(64);
     m_vfoA->setMiniPanPassbandColor(vfoAPassband);
@@ -3472,8 +3471,7 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     // ===== VFO B (Right - Cyan) - Using VFOWidget =====
     m_vfoB = new VFOWidget(VFOWidget::VFO_B, parent);
 
-    // Set Mini-Pan B colors to green (matching VFO B theme)
-    m_vfoB->setMiniPanSpectrumColor(QColor(K4Styles::Colors::VfoBGreen));
+    // Set Mini-Pan B passband color to green (matching VFO B theme)
     QColor vfoBPassband(K4Styles::Colors::VfoBGreen);
     vfoBPassband.setAlpha(64);
     m_vfoB->setMiniPanPassbandColor(vfoBPassband);
