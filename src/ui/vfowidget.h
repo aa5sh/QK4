@@ -45,6 +45,7 @@ public:
 
     // Mini-pan configuration (applied when miniPan is created, or immediately if it exists)
     void setMiniPanMode(const QString &mode);
+    void setMiniPanDataSubMode(int subMode);
     void setMiniPanFilterBandwidth(int bw);
     void setMiniPanIfShift(int shift);
     void setMiniPanCwPitch(int pitch);
@@ -103,6 +104,7 @@ private:
 
     // Pending mini-pan configuration (applied when created)
     QString m_pendingMode;
+    int m_pendingDataSubMode = 0;
     int m_pendingFilterBw = 2400;
     int m_pendingIfShift = 50;
     int m_pendingCwPitch = 600;

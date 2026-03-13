@@ -29,6 +29,9 @@ public:
     void setMode(const QString &mode);
     QString mode() const { return m_mode; }
 
+    // DATA submode (0=DATA-A, 1=AFSK-A, 2=FSK-D, 3=PSK-D)
+    void setDataSubMode(int subMode);
+
     // Bandwidth range for normalization
     void setBandwidthRange(int minHz, int maxHz);
 
@@ -40,11 +43,14 @@ protected:
 
 private:
     void drawBandwidthShape(QPainter &painter, int lineY, int lineWidth);
+    void drawRttyToneTriangles(QPainter &painter, int lineY, int lineWidth);
+    void drawPskToneTriangle(QPainter &painter, int lineY, int lineWidth);
 
     int m_filterPosition = 2;
     int m_bandwidthHz = 2400;    // Current bandwidth in Hz
     int m_shift = 135;           // Shift in decahertz
     QString m_mode = "USB";      // Mode for shift center calculation
+    int m_dataSubMode = 0;       // DATA submode (0=DATA-A, 1=AFSK-A, 2=FSK-D, 3=PSK-D)
     int m_minBandwidthHz = 50;   // Minimum bandwidth (triangle)
     int m_maxBandwidthHz = 5000; // Maximum bandwidth (full trapezoid)
 

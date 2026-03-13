@@ -46,6 +46,7 @@ public:
     // Lock state setters
     void setLockA(bool locked);
     void setLockB(bool locked);
+    void setTestVisible(bool visible);
 
     // Accessors for MainWindow to connect signals and install event filters
     VfoSquareWidget *vfoASquare() const { return m_vfoASquare; }
@@ -58,6 +59,9 @@ public:
     QLabel *testLabel() const { return m_testLabel; }
     QLabel *subLabel() const { return m_subLabel; }
     QLabel *divLabel() const { return m_divLabel; }
+    QLabel *splitLabel() const { return m_splitLabel; }
+    QLabel *bSetLabel() const { return m_bSetLabel; }
+    QLabel *msgBankLabel() const { return m_msgBankLabel; }
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
@@ -84,6 +88,9 @@ private:
     QLabel *m_testLabel;
     QLabel *m_subLabel;
     QLabel *m_divLabel;
+    QLabel *m_splitLabel;
+    QLabel *m_bSetLabel;
+    QLabel *m_msgBankLabel;
 };
 
 #endif // VFOROWWIDGET_H

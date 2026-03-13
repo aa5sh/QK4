@@ -12,7 +12,7 @@ class TextDecodeWindow : public QWidget {
 
 public:
     enum Receiver { MainRx, SubRx };
-    enum OperatingMode { ModeCW, ModeData, ModeSSB, ModeOther };
+    enum OperatingMode { ModeCW, ModeAFSK, ModeFSK, ModePSK, ModeData, ModeSSB, ModeOther };
 
     explicit TextDecodeWindow(Receiver rx, QWidget *parent = nullptr);
 
@@ -27,6 +27,7 @@ public:
     int wpmRange() const { return m_wpmRange; }
     bool autoThreshold() const { return m_autoThreshold; }
     int threshold() const { return m_threshold; }
+    int dataRate() const { return m_dataRate; }
     OperatingMode operatingMode() const { return m_operatingMode; }
 
     // Decode state setters (for syncing from radio)
@@ -34,6 +35,7 @@ public:
     void setWpmRange(int range);
     void setAutoThreshold(bool isAuto);
     void setThreshold(int value);
+    void setDataRate(int rate);
     void setOperatingMode(OperatingMode mode);
 
 signals:
@@ -42,6 +44,7 @@ signals:
     void wpmRangeChanged(int range);
     void thresholdModeChanged(bool isAuto);
     void thresholdChanged(int value);
+    void dataRateChanged(int rate);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -57,20 +60,21 @@ private:
     QRect titleBarRect() const;
     QRect resizeGripRect() const;
     void updateButtonStates();
-    void updateWpmButton();
+    void updateSpeedButton();
     void updateThresholdControls();
     void updateModeVisibility();
     QString controlButtonStyle(bool selected = false) const;
 
     Receiver m_receiver;
     OperatingMode m_operatingMode = ModeCW;
-    int m_maxLines = 10;
+    int m_maxLines = 1;
 
     // Decode state
     bool m_decodeEnabled = false;
     int m_wpmRange = 0; // 0=8-45, 1=8-60, 2=8-90
     bool m_autoThreshold = true;
     int m_threshold = 5; // 1-9
+    int m_dataRate = 0;  // 0=slower (RTTY45/PSK31), 1=faster (RTTY75/PSK63)
 
     // Title bar controls
     QLabel *m_titleLabel;
@@ -80,6 +84,7 @@ private:
     QPushButton *m_thresholdMinusBtn;
     QLabel *m_thresholdValueLabel;
     QPushButton *m_thresholdPlusBtn;
+    QPushButton *m_clearBtn;
     QPushButton *m_closeBtn;
     QPlainTextEdit *m_textDisplay;
 

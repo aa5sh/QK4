@@ -35,8 +35,11 @@ public:
     void setTunedFrequency(qint64 freq);
     void setFilterBandwidth(int bwHz);
     void setMode(const QString &mode);
+    void setDataSubMode(int subMode);
     void setIfShift(int shift);
     void setCwPitch(int pitchHz);
+    void setFskMarkTone(int toneHz);
+    void setRttyShift(int shiftHz);
     void clear();
 
     // Display settings
@@ -53,7 +56,7 @@ public:
     void setAveraging(int n); // 1..15 (1 = no averaging)
 
     // Secondary VFO (other receiver's passband)
-    void setSecondaryVfo(qint64 freq, int bwHz, const QString &mode, int ifShift, int cwPitch);
+    void setSecondaryVfo(qint64 freq, int bwHz, const QString &mode, int ifShift, int cwPitch, int dataSubMode = 0);
     void setSecondaryVisible(bool visible);
     void setSecondaryPassbandColor(const QColor &color);
     void setSecondaryMarkerColor(const QColor &color);
@@ -68,6 +71,9 @@ public:
     void setFrequencyMarkerColor(const QColor &color);
     void setNotchColor(const QColor &color);
     void setBackgroundGradient(const QColor &center, const QColor &edge);
+
+    // TX frequency marker (shows TX position when RIT/XIT splits TX from RX)
+    void setTxMarker(qint64 freq, bool visible);
 
 signals:
     void frequencyClicked(qint64 freq);
@@ -152,6 +158,24 @@ private:
     std::unique_ptr<QRhiBuffer> m_secondaryMarkerVbo;
     std::unique_ptr<QRhiBuffer> m_secondaryMarkerUniformBuffer;
     std::unique_ptr<QRhiShaderResourceBindings> m_secondaryMarkerSrb;
+    // TX marker buffers (shows TX position when RIT/XIT active)
+    std::unique_ptr<QRhiBuffer> m_txMarkerVbo;
+    std::unique_ptr<QRhiBuffer> m_txMarkerUniformBuffer;
+    std::unique_ptr<QRhiShaderResourceBindings> m_txMarkerSrb;
+    // RTTY mark/space tone line buffers (primary VFO)
+    std::unique_ptr<QRhiBuffer> m_rttyMarkVbo;
+    std::unique_ptr<QRhiBuffer> m_rttyMarkUniformBuffer;
+    std::unique_ptr<QRhiShaderResourceBindings> m_rttyMarkSrb;
+    std::unique_ptr<QRhiBuffer> m_rttySpaceVbo;
+    std::unique_ptr<QRhiBuffer> m_rttySpaceUniformBuffer;
+    std::unique_ptr<QRhiShaderResourceBindings> m_rttySpaceSrb;
+    // RTTY mark/space tone line buffers (secondary VFO)
+    std::unique_ptr<QRhiBuffer> m_secRttyMarkVbo;
+    std::unique_ptr<QRhiBuffer> m_secRttyMarkUniformBuffer;
+    std::unique_ptr<QRhiShaderResourceBindings> m_secRttyMarkSrb;
+    std::unique_ptr<QRhiBuffer> m_secRttySpaceVbo;
+    std::unique_ptr<QRhiBuffer> m_secRttySpaceUniformBuffer;
+    std::unique_ptr<QRhiShaderResourceBindings> m_secRttySpaceSrb;
     QRhiRenderPassDescriptor *m_rpDesc = nullptr;
 
     bool m_rhiInitialized = false;
@@ -210,8 +234,11 @@ private:
     qint64 m_tunedFreq = 0;
     int m_filterBw = 2400;
     QString m_mode = "USB";
+    int m_dataSubMode = 0;
     int m_ifShift = 50;
     int m_cwPitch = 500;
+    int m_fskMarkTone = 915; // FSK Mark-Tone (user-configurable from K4 front panel)
+    int m_rttyShift = 170;   // Fixed 170 Hz shift between Mark and Space
 
     // Display settings
     float m_minDb = -138.0f;
@@ -236,6 +263,7 @@ private:
     qint64 m_secondaryTunedFreq = 0;
     int m_secondaryFilterBw = 0;
     QString m_secondaryMode = "";
+    int m_secondaryDataSubMode = 0;
     int m_secondaryIfShift = 50;
     int m_secondaryCwPitch = 500;
     bool m_secondaryVisible = false;
@@ -254,6 +282,15 @@ private:
     QColor m_notchColor{255, 0, 0};                 // Red
     QColor m_bgCenterColor{56, 56, 56};             // Lighter gray at center
     QColor m_bgEdgeColor{20, 20, 20};               // Darker at edges
+
+    // RTTY tone overlay colors
+    QColor m_rttyToneColor{255, 200, 0, 200};        // Yellow-orange for primary VFO
+    QColor m_secondaryRttyToneColor{0, 255, 0, 160}; // Green for secondary VFO
+
+    // TX marker state
+    qint64 m_txFreq = 0;
+    bool m_txMarkerVisible = false;
+    QColor m_txMarkerColor{255, 60, 60, 160}; // Translucent red
 
     // Peak hold decay
     QTimer *m_peakDecayTimer = nullptr;
