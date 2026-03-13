@@ -1223,8 +1223,12 @@ void RadioState::handleFPSub(const QString &cmd) {
 void RadioState::handleRG(const QString &cmd) {
     if (cmd.length() <= 2)
         return;
+    // K4 format: RG-xx; where dash is syntax, value is 0-60 attenuation
+    QString val = cmd.mid(2);
+    if (val.startsWith('-'))
+        val = val.mid(1);
     bool ok;
-    int rg = cmd.mid(2).toInt(&ok);
+    int rg = val.toInt(&ok);
     if (ok && m_rfGain != rg) {
         m_rfGain = rg;
         emit rfGainChanged(m_rfGain);
@@ -1234,8 +1238,12 @@ void RadioState::handleRG(const QString &cmd) {
 void RadioState::handleRGSub(const QString &cmd) {
     if (cmd.length() <= 3)
         return;
+    // K4 format: RG$-xx; where dash is syntax, value is 0-60 attenuation
+    QString val = cmd.mid(3);
+    if (val.startsWith('-'))
+        val = val.mid(1);
     bool ok;
-    int rg = cmd.mid(3).toInt(&ok);
+    int rg = val.toInt(&ok);
     if (ok && m_rfGainB != rg) {
         m_rfGainB = rg;
         emit rfGainBChanged(m_rfGainB);
