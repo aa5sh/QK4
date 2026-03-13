@@ -429,6 +429,55 @@ QColor borderColorSelected();
  */
 QLinearGradient meterGradient(qreal x1, qreal y1, qreal x2, qreal y2);
 
+// =============================================================================
+// Dialog/Options Stylesheet Helpers (cached static const QString)
+// =============================================================================
+namespace Dialog {
+
+/// Page background-color
+const QString &pageBackground();
+
+/// Horizontal/vertical separator line
+const QString &separator();
+
+/// Amber bold title label (AccentAmber, FontSizeTitle)
+const QString &titleLabel();
+
+/// Gray form label (TextGray, FontSizePopup)
+const QString &formLabel();
+
+/// White bold value label (TextWhite, FontSizePopup)
+const QString &formValue();
+
+/// Gray italic help text (TextGray, FontSizeLarge)
+const QString &helpText();
+
+/// White bold section header (TextWhite, FontSizePopup)
+const QString &sectionHeader();
+
+/// Dynamic-color status label (bold, FontSizePopup)
+const QString &statusLabel(const QString &color);
+
+/// Full combo box styling (dark bg, arrow, item view)
+const QString &comboBox();
+
+/// Full line edit styling (dark bg, focus border)
+const QString &lineEdit();
+
+/// Checkbox with indicator sizing (enabled)
+const QString &checkBox();
+
+/// Checkbox with indicator sizing (disabled/gray text)
+const QString &checkBoxDisabled();
+
+/// Dialog action button (dark bg, padding 10px 20px)
+const QString &actionButton();
+
+/// Small action button (padding 6px 12px)
+const QString &actionButtonSmall();
+
+} // namespace Dialog
+
 } // namespace K4Styles
 
 #endif // K4STYLES_H

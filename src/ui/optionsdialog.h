@@ -12,6 +12,7 @@
 #include <QPushButton>
 #include <QShowEvent>
 #include <QHideEvent>
+#include <QMediaDevices>
 
 class RadioState;
 class AudioEngine;
@@ -46,7 +47,7 @@ private slots:
 
 private:
     void setupUi();
-    void refreshCurrentPage();
+    void ensurePageCreated(int index);
     void refreshPage(int index);
     void refreshAboutPage();
     QWidget *createAboutPage();
@@ -67,6 +68,7 @@ private:
     HalikeyDevice *m_halikeyDevice;
     QListWidget *m_tabList;
     QStackedWidget *m_pageStack;
+    QMediaDevices *m_mediaDevices;
     bool m_pageCreated[PageCount] = {};
 
     // About page elements (for live refresh on connect)
