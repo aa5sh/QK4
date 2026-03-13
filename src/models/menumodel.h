@@ -76,7 +76,6 @@ public:
 signals:
     void menuItemAdded(int menuId);
     void menuValueChanged(int menuId, int newValue);
-    void modelCleared();
 
 private:
     QMap<int, MenuItem> m_items; // menuId -> MenuItem

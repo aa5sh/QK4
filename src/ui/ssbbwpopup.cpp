@@ -2,7 +2,6 @@
 #include "k4styles.h"
 #include <QApplication>
 #include <QHBoxLayout>
-#include <QHideEvent>
 #include <QKeyEvent>
 #include <QPainter>
 #include <QScreen>
@@ -173,11 +172,6 @@ void SsbBwPopupWidget::showAboveWidget(QWidget *referenceWidget) {
 
 void SsbBwPopupWidget::hidePopup() {
     hide();
-}
-
-void SsbBwPopupWidget::hideEvent(QHideEvent *event) {
-    QWidget::hideEvent(event);
-    emit closed();
 }
 
 void SsbBwPopupWidget::keyPressEvent(QKeyEvent *event) {

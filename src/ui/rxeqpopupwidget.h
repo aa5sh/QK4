@@ -132,11 +132,6 @@ signals:
     void flatRequested();
 
     /**
-     * @brief Emitted when close button is clicked.
-     */
-    void closeRequested();
-
-    /**
      * @brief Emitted when a preset is clicked for loading.
      * @param index Preset index 0-3
      */

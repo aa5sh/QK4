@@ -37,23 +37,10 @@ public:
      */
     Context context() const { return m_context; }
 
-signals:
-    /**
-     * @brief Emitted when mouse wheel is scrolled over the overlay.
-     * @param delta Scroll delta (positive = up, negative = down)
-     */
-    void valueScrolled(int delta);
-
-    /**
-     * @brief Emitted when the overlay is closed/hidden.
-     */
-    void closed();
-
 protected:
     void paintEvent(QPaintEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
-    void hideEvent(QHideEvent *event) override;
 
     /**
      * @brief Get the color for the indicator bar based on context.

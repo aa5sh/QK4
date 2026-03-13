@@ -29,11 +29,9 @@ public:
 signals:
     void valueChanged(int value);
     void voxToggled(bool enabled);
-    void closed();
 
 protected:
     void paintEvent(QPaintEvent *event) override;
-    void hideEvent(QHideEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
 

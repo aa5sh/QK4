@@ -31,11 +31,9 @@ signals:
     void biasChanged(int bias);
     void preampChanged(int preamp);
     void buttonsChanged(int buttons);
-    void closed();
 
 protected:
     void paintEvent(QPaintEvent *event) override;
-    void hideEvent(QHideEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
 
 private:

@@ -26,11 +26,9 @@ signals:
     void soundCardLevelChanged(int level);
     void lineInJackLevelChanged(int level);
     void sourceChanged(int source);
-    void closed();
 
 protected:
     void paintEvent(QPaintEvent *event) override;
-    void hideEvent(QHideEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
 

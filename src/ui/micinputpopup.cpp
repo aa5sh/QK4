@@ -2,7 +2,6 @@
 #include "k4styles.h"
 #include <QApplication>
 #include <QHBoxLayout>
-#include <QHideEvent>
 #include <QKeyEvent>
 #include <QPainter>
 #include <QScreen>
@@ -204,11 +203,6 @@ void MicInputPopupWidget::showAboveWidget(QWidget *referenceWidget) {
 
 void MicInputPopupWidget::hidePopup() {
     hide();
-}
-
-void MicInputPopupWidget::hideEvent(QHideEvent *event) {
-    QWidget::hideEvent(event);
-    emit closed();
 }
 
 void MicInputPopupWidget::keyPressEvent(QKeyEvent *event) {

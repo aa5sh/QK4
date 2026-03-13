@@ -536,7 +536,6 @@ void MacroDialog::hide() {
         widget->finishEditing();
     }
     QWidget::hide();
-    emit closed();
 }
 
 void MacroDialog::paintEvent(QPaintEvent *event) {

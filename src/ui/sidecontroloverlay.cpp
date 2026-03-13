@@ -51,9 +51,7 @@ void SideControlOverlay::paintEvent(QPaintEvent *) {
 }
 
 void SideControlOverlay::wheelEvent(QWheelEvent *event) {
-    int steps = m_wheelAccumulator.accumulate(event);
-    if (steps != 0)
-        emit valueScrolled(steps);
+    m_wheelAccumulator.accumulate(event);
     event->accept();
 }
 
@@ -62,11 +60,6 @@ void SideControlOverlay::mousePressEvent(QMouseEvent *event) {
     // Subclasses can override for different behavior
     Q_UNUSED(event)
     hide();
-}
-
-void SideControlOverlay::hideEvent(QHideEvent *event) {
-    QWidget::hideEvent(event);
-    emit closed();
 }
 
 QColor SideControlOverlay::indicatorColor() const {

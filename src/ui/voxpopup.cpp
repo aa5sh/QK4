@@ -2,7 +2,6 @@
 #include "k4styles.h"
 #include <QApplication>
 #include <QHBoxLayout>
-#include <QHideEvent>
 #include <QKeyEvent>
 #include <QPainter>
 #include <QScreen>
@@ -222,11 +221,6 @@ void VoxPopupWidget::showAboveWidget(QWidget *referenceWidget) {
 
 void VoxPopupWidget::hidePopup() {
     hide();
-}
-
-void VoxPopupWidget::hideEvent(QHideEvent *event) {
-    QWidget::hideEvent(event);
-    emit closed();
 }
 
 void VoxPopupWidget::keyPressEvent(QKeyEvent *event) {
