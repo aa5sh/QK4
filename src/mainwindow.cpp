@@ -3915,25 +3915,23 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
     auto updatePanadapterASecondary = [this]() {
         m_panadapterA->setSecondaryVfo(m_radioState->vfoB(), m_radioState->filterBandwidthB(),
                                        RadioState::modeToString(m_radioState->modeB()), m_radioState->ifShiftB(),
-                                       m_radioState->cwPitch(), m_radioState->dataSubModeB());
+                                       m_radioState->dataSubModeB());
     };
     connect(m_radioState, &RadioState::frequencyBChanged, this, updatePanadapterASecondary);
     connect(m_radioState, &RadioState::modeBChanged, this, updatePanadapterASecondary);
     connect(m_radioState, &RadioState::filterBandwidthBChanged, this, updatePanadapterASecondary);
     connect(m_radioState, &RadioState::ifShiftBChanged, this, updatePanadapterASecondary);
-    connect(m_radioState, &RadioState::cwPitchChanged, this, updatePanadapterASecondary);
 
     // Secondary VFO passband display: VFO A state → PanadapterB's secondary
     auto updatePanadapterBSecondary = [this]() {
         m_panadapterB->setSecondaryVfo(m_radioState->vfoA(), m_radioState->filterBandwidth(),
                                        RadioState::modeToString(m_radioState->mode()), m_radioState->ifShift(),
-                                       m_radioState->cwPitch(), m_radioState->dataSubMode());
+                                       m_radioState->dataSubMode());
     };
     connect(m_radioState, &RadioState::frequencyChanged, this, updatePanadapterBSecondary);
     connect(m_radioState, &RadioState::modeChanged, this, updatePanadapterBSecondary);
     connect(m_radioState, &RadioState::filterBandwidthChanged, this, updatePanadapterBSecondary);
     connect(m_radioState, &RadioState::ifShiftChanged, this, updatePanadapterBSecondary);
-    connect(m_radioState, &RadioState::cwPitchChanged, this, updatePanadapterBSecondary);
 
     // Mouse control for VFO B: click to tune
     connect(m_panadapterB, &PanadapterRhiWidget::frequencyClicked, this, [this](qint64 freq) {
@@ -4820,10 +4818,10 @@ void MainWindow::updatePanadapterPassbands() {
     // VFO B overlay on panadapter A (green passband showing where VFO B is listening)
     m_panadapterA->setSecondaryVfo(rxB, m_radioState->filterBandwidthB(),
                                    RadioState::modeToString(m_radioState->modeB()), m_radioState->ifShiftB(),
-                                   m_radioState->cwPitch(), m_radioState->dataSubModeB());
+                                   m_radioState->dataSubModeB());
     // VFO A overlay on panadapter B
     m_panadapterB->setSecondaryVfo(rxA, m_radioState->filterBandwidth(), RadioState::modeToString(m_radioState->mode()),
-                                   m_radioState->ifShift(), m_radioState->cwPitch(), m_radioState->dataSubMode());
+                                   m_radioState->ifShift(), m_radioState->dataSubMode());
 }
 
 void MainWindow::updateTxMarkers() {

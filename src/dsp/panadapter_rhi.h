@@ -53,7 +53,7 @@ public:
     void setAmplitudeUnits(bool useSUnits); // false=dBm, true=S-units
 
     // Secondary VFO (other receiver's passband)
-    void setSecondaryVfo(qint64 freq, int bwHz, const QString &mode, int ifShift, int cwPitch, int dataSubMode = 0);
+    void setSecondaryVfo(qint64 freq, int bwHz, const QString &mode, int ifShift, int dataSubMode = 0);
     void setSecondaryVisible(bool visible);
     void setSecondaryPassbandColor(const QColor &color);
     void setSecondaryMarkerColor(const QColor &color);
@@ -179,10 +179,6 @@ private:
     // Spectrum data
     QVector<float> m_currentSpectrum;
     QVector<float> m_rawSpectrum;
-    // K4 spectrum calibration: dBm = raw_byte - K4_DBM_OFFSET
-    // Calibrated by comparing peak signals with K4 display
-    static constexpr float K4_DBM_OFFSET = 146.0f;
-
     // Waterfall data - sized for 4K/HiDPI displays
     // Memory: 4096 × 1024 × 1 byte = 4 MB (trivial for modern GPUs)
     static constexpr int BASE_WATERFALL_HISTORY = 1024;
@@ -236,7 +232,6 @@ private:
     QString m_secondaryMode = "";
     int m_secondaryDataSubMode = 0;
     int m_secondaryIfShift = 50;
-    int m_secondaryCwPitch = 500;
     bool m_secondaryVisible = false;
     QColor m_secondaryPassbandColor{0, 255, 0, 64}; // Green 25% alpha
     QColor m_secondaryMarkerColor{0, 255, 0, 255};  // Green 100% alpha

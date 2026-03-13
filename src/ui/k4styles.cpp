@@ -605,12 +605,8 @@ QFont dataFont(int pixelSize, QFont::Weight weight) {
     font.setHintingPreference(QFont::PreferFullHinting);
     font.setStyleStrategy(QFont::PreferAntialias);
     // Enable tabular figures for consistent digit widths
-    // This is handled via stylesheet for CSS-based styling
+    // Tabular figures are set via QFont API (not stylesheet — Qt CSS doesn't support font-feature-settings)
     return font;
-}
-
-QString dataFontStylesheet() {
-    return QString("font-family: '%1'; font-feature-settings: 'tnum';").arg(Data);
 }
 
 } // namespace Fonts

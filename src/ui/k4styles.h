@@ -366,15 +366,6 @@ QFont paintFont(int pixelSize, QFont::Weight weight = QFont::Bold);
  */
 QFont dataFont(int pixelSize, QFont::Weight weight = QFont::Bold);
 
-/**
- * @brief Get CSS font-family string for data displays in stylesheets.
- *
- * Returns a font-family declaration with tabular figures enabled.
- * Use in stylesheets for numeric/data displays.
- *
- * @return QString like "font-family: 'Inter'; font-feature-settings: 'tnum';"
- */
-QString dataFontStylesheet();
 } // namespace Fonts
 
 // =============================================================================

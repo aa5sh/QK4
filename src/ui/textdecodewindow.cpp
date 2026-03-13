@@ -133,7 +133,6 @@ void TextDecodeWindow::setupUi() {
                                          "  color: %2;"
                                          "  border: none;"
                                          "  font-family: '%6';"
-                                         "  font-feature-settings: 'tnum';"
                                          "  font-size: %3px;"
                                          "  padding: 8px;"
                                          "}"
