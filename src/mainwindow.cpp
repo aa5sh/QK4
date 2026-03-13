@@ -1588,6 +1588,12 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_radioState, &RadioState::displayModeExtChanged, m_displayPopup, &DisplayPopupWidget::setDisplayModeExt);
     connect(m_radioState, &RadioState::waterfallColorChanged, m_displayPopup, &DisplayPopupWidget::setWaterfallColor);
     connect(m_radioState, &RadioState::averagingChanged, m_displayPopup, &DisplayPopupWidget::setAveraging);
+    connect(m_radioState, &RadioState::averagingChanged, m_panadapterA, &PanadapterRhiWidget::setAveraging);
+    connect(m_radioState, &RadioState::averagingChanged, m_panadapterB, &PanadapterRhiWidget::setAveraging);
+    connect(m_radioState, &RadioState::averagingChanged, this, [this](int level) {
+        m_vfoA->setMiniPanAveraging(level);
+        m_vfoB->setMiniPanAveraging(level);
+    });
     connect(m_radioState, &RadioState::peakModeChanged, m_displayPopup, &DisplayPopupWidget::setPeakMode);
     connect(m_radioState, &RadioState::fixedTuneChanged, m_displayPopup, &DisplayPopupWidget::setFixedTuneMode);
     connect(m_radioState, &RadioState::freezeChanged, m_displayPopup, &DisplayPopupWidget::setFreeze);

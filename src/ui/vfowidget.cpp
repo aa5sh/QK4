@@ -265,6 +265,7 @@ void VFOWidget::showMiniPan() {
         m_miniPan->setNotchFilter(m_pendingNotchEnabled, m_pendingNotchPitchHz);
         if (m_pendingWaterfallHeight >= 0)
             m_miniPan->setWaterfallHeight(m_pendingWaterfallHeight);
+        m_miniPan->setAveraging(m_pendingAveraging);
 
         // Connect mini-pan click to show normal view and emit signal
         connect(m_miniPan, &MiniPanRhiWidget::clicked, this, [this]() {
@@ -323,6 +324,12 @@ void VFOWidget::setMiniPanWaterfallHeight(int percent) {
     m_pendingWaterfallHeight = percent;
     if (m_miniPan)
         m_miniPan->setWaterfallHeight(percent);
+}
+
+void VFOWidget::setMiniPanAveraging(int level) {
+    m_pendingAveraging = level;
+    if (m_miniPan)
+        m_miniPan->setAveraging(level);
 }
 
 void VFOWidget::showNormal() {

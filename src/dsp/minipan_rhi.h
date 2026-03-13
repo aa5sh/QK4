@@ -39,6 +39,7 @@ public:
     void setFilterBandwidth(int bwHz);
     void setIfShift(int shift);
     void setCwPitch(int pitchHz);
+    void setAveraging(int level); // 1-20: K4 #AVG display averaging
 
 signals:
     void clicked(); // Emitted when user clicks to toggle back to normal view
@@ -155,6 +156,11 @@ private:
     QString m_mode = "USB";
     int m_dataSubMode = 0;
     int m_bandwidthHz = 10000; // Mode-dependent span: CW=3kHz, Voice/Data=10kHz
+
+    // Display averaging (K4 #AVG control, 1-20)
+    int m_averagingLevel = 1;
+    float m_attackAlpha = 0.52f;
+    float m_decayAlpha = 0.34f;
 
     // Filter passband visualization
     int m_filterBw = 2400;

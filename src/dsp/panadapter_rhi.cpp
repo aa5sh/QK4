@@ -1479,9 +1479,9 @@ void PanadapterRhiWidget::updateSpectrum(const QByteArray &bins, qint64 centerFr
     // Decompress bins to dB values
     decompressBins(binsToUse, m_rawSpectrum);
 
-    // Apply exponential smoothing for gradual decay (attack fast, decay slow)
-    constexpr float attackAlpha = 0.85f; // Fast attack (new peaks appear quickly)
-    constexpr float decayAlpha = 0.45f;  // Moderate decay for crisp waterfall
+    // Apply asymmetric EMA smoothing (attack fast, decay slow)
+    const float attackAlpha = m_attackAlpha;
+    const float decayAlpha = m_decayAlpha;
 
     if (m_currentSpectrum.size() != m_rawSpectrum.size()) {
         m_currentSpectrum = m_rawSpectrum;
@@ -1503,9 +1503,9 @@ void PanadapterRhiWidget::updateMiniSpectrum(const QByteArray &bins) {
         m_rawSpectrum[i] = static_cast<quint8>(bins[i]) * 10.0f - 160.0f;
     }
 
-    // Apply exponential smoothing for gradual decay (attack fast, decay slow)
-    constexpr float attackAlpha = 0.85f; // Fast attack
-    constexpr float decayAlpha = 0.38f;  // Slower decay (visible glow effect)
+    // Apply asymmetric EMA smoothing (attack fast, decay slow)
+    const float attackAlpha = m_attackAlpha;
+    const float decayAlpha = m_decayAlpha;
 
     if (m_currentSpectrum.size() != m_rawSpectrum.size()) {
         m_currentSpectrum = m_rawSpectrum;
@@ -1759,6 +1759,16 @@ void PanadapterRhiWidget::setAmplitudeUnits(bool useSUnits) {
     if (m_dbmScaleOverlay) {
         m_dbmScaleOverlay->setUseSUnits(useSUnits);
     }
+}
+
+void PanadapterRhiWidget::setAveraging(int level) {
+    level = qBound(1, level, 20);
+    if (m_averagingLevel == level)
+        return;
+    m_averagingLevel = level;
+    float t = (level - 1) / 19.0f;
+    m_attackAlpha = 0.52f - t * 0.22f; // 0.52 → 0.30
+    m_decayAlpha = 0.34f - t * 0.24f;  // 0.34 → 0.10
 }
 
 // Secondary VFO setters

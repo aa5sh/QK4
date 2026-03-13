@@ -51,6 +51,7 @@ public:
     void setNotchFilter(bool enabled, int pitchHz);
     void setCursorVisible(bool visible);
     void setAmplitudeUnits(bool useSUnits); // false=dBm, true=S-units
+    void setAveraging(int level);           // 1-20: K4 #AVG display averaging
 
     // Secondary VFO (other receiver's passband)
     void setSecondaryVfo(qint64 freq, int bwHz, const QString &mode, int ifShift, int dataSubMode = 0);
@@ -250,6 +251,11 @@ private:
     qint64 m_txFreq = 0;
     bool m_txMarkerVisible = false;
     QColor m_txMarkerColor{255, 60, 60, 160}; // Translucent red
+
+    // Display averaging (K4 #AVG control, 1-20)
+    int m_averagingLevel = 1;
+    float m_attackAlpha = 0.52f;
+    float m_decayAlpha = 0.34f;
 
     WheelAccumulator m_wheelAccumulator;
 
