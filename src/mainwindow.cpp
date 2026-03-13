@@ -1622,18 +1622,16 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_radioState, &RadioState::refLevelChanged, m_displayPopup, &DisplayPopupWidget::setRefLevelValueA);
     connect(m_radioState, &RadioState::refLevelBChanged, m_displayPopup, &DisplayPopupWidget::setRefLevelValueB);
 
-    // Averaging control +/- -> CAT commands (range 1-20, step by 1)
+    // Averaging control +/- -> local only (not sent to K4 — our smoothing differs from K4's)
     connect(m_displayPopup, &DisplayPopupWidget::averagingIncrementRequested, this, [this]() {
         int current = m_radioState->averaging();
         int next = qMin(current + 1, 20);
-        m_radioState->setAveraging(next); // Optimistic update
-        m_tcpClient->sendCAT(QString("#AVG%1;").arg(next, 2, 10, QChar('0')));
+        m_radioState->setAveraging(next);
     });
     connect(m_displayPopup, &DisplayPopupWidget::averagingDecrementRequested, this, [this]() {
         int current = m_radioState->averaging();
         int next = qMax(current - 1, 1);
-        m_radioState->setAveraging(next); // Optimistic update
-        m_tcpClient->sendCAT(QString("#AVG%1;").arg(next, 2, 10, QChar('0')));
+        m_radioState->setAveraging(next);
     });
 
     // DDC NB level control +/- -> CAT commands
