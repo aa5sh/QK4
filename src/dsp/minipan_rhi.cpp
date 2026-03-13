@@ -34,43 +34,48 @@ MiniPanRhiWidget::~MiniPanRhiWidget() {
 }
 
 void MiniPanRhiWidget::initColorLUT() {
-    // Create 256-entry RGBA color LUT for waterfall
+    // Create 256-entry RGBA color LUT for waterfall (matches main panadapter)
+    // 8-stage: Black -> Dark Blue -> Royal Blue -> Cyan -> Green -> Yellow -> Red
     m_colorLUT.resize(256 * 4);
 
     for (int i = 0; i < 256; ++i) {
-        float t = i / 255.0f;
+        float value = i / 255.0f;
         int r, g, b;
 
-        if (t < 0.2f) {
-            // Black to dark blue
-            float s = t / 0.2f;
+        if (value < 0.10f) {
             r = 0;
             g = 0;
-            b = static_cast<int>(60 * s);
-        } else if (t < 0.4f) {
-            // Dark blue to cyan
-            float s = (t - 0.2f) / 0.2f;
+            b = 0;
+        } else if (value < 0.25f) {
+            float t = (value - 0.10f) / 0.15f;
             r = 0;
-            g = static_cast<int>(180 * s);
-            b = 60 + static_cast<int>(140 * s);
-        } else if (t < 0.6f) {
-            // Cyan to yellow
-            float s = (t - 0.4f) / 0.2f;
-            r = static_cast<int>(255 * s);
-            g = 180 + static_cast<int>(75 * s);
-            b = 200 - static_cast<int>(200 * s);
-        } else if (t < 0.8f) {
-            // Yellow to orange/red
-            float s = (t - 0.6f) / 0.2f;
-            r = 255;
-            g = 255 - static_cast<int>(155 * s);
+            g = 0;
+            b = static_cast<int>(t * 51);
+        } else if (value < 0.40f) {
+            float t = (value - 0.25f) / 0.15f;
+            r = 0;
+            g = 0;
+            b = static_cast<int>(51 + t * 102);
+        } else if (value < 0.55f) {
+            float t = (value - 0.40f) / 0.15f;
+            r = 0;
+            g = static_cast<int>(t * 128);
+            b = static_cast<int>(153 + t * 102);
+        } else if (value < 0.70f) {
+            float t = (value - 0.55f) / 0.15f;
+            r = 0;
+            g = static_cast<int>(128 + t * 127);
+            b = static_cast<int>(255 * (1.0f - t));
+        } else if (value < 0.85f) {
+            float t = (value - 0.70f) / 0.15f;
+            r = static_cast<int>(t * 255);
+            g = 255;
             b = 0;
         } else {
-            // Orange/red to white
-            float s = (t - 0.8f) / 0.2f;
+            float t = (value - 0.85f) / 0.15f;
             r = 255;
-            g = 100 + static_cast<int>(155 * s);
-            b = static_cast<int>(255 * s);
+            g = static_cast<int>(255 * (1.0f - t));
+            b = 0;
         }
 
         m_colorLUT[i * 4 + 0] = static_cast<quint8>(qBound(0, r, 255));
