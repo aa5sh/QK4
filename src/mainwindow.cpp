@@ -1686,12 +1686,11 @@ MainWindow::MainWindow(QWidget *parent)
     });
 
     // Span control from display popup -> CAT commands (respects A/B selection)
-    // Inverted controls: + zooms in (decrease span), - zooms out (increase span)
     connect(m_displayPopup, &DisplayPopupWidget::spanIncrementRequested, this, [this]() {
         bool vfoA = m_displayPopup->isVfoAEnabled();
         bool vfoB = m_displayPopup->isVfoBEnabled();
         int currentSpan = (vfoB && !vfoA) ? m_radioState->spanHzB() : m_radioState->spanHz();
-        int newSpan = getNextSpanDown(currentSpan); // + zooms in
+        int newSpan = getNextSpanUp(currentSpan); // + increases span
         if (newSpan != currentSpan) {
             if (vfoA) {
                 m_radioState->setSpanHz(newSpan);
@@ -1707,7 +1706,7 @@ MainWindow::MainWindow(QWidget *parent)
         bool vfoA = m_displayPopup->isVfoAEnabled();
         bool vfoB = m_displayPopup->isVfoBEnabled();
         int currentSpan = (vfoB && !vfoA) ? m_radioState->spanHzB() : m_radioState->spanHz();
-        int newSpan = getNextSpanUp(currentSpan); // - zooms out
+        int newSpan = getNextSpanDown(currentSpan); // - decreases span
         if (newSpan != currentSpan) {
             if (vfoA) {
                 m_radioState->setSpanHz(newSpan);
@@ -3687,11 +3686,10 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
     m_vfoIndicatorA->move(0, m_panadapterA->height() - 30);
     m_vfoIndicatorB->move(0, m_panadapterB->height() - 30);
 
-    // Span adjustment for Main: K4 span steps, inverted controls
-    // - button = zoom out (increase span), + button = zoom in (decrease span)
+    // Span adjustment for Main: K4 span steps
     connect(m_spanDownBtn, &QPushButton::clicked, this, [this]() {
         int currentSpan = m_radioState->spanHz();
-        int newSpan = getNextSpanUp(currentSpan); // - zooms out
+        int newSpan = getNextSpanDown(currentSpan); // - decreases span
         if (newSpan != currentSpan) {
             m_radioState->setSpanHz(newSpan);
             m_tcpClient->sendCAT(QString("#SPN%1;").arg(newSpan));
@@ -3700,7 +3698,7 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
 
     connect(m_spanUpBtn, &QPushButton::clicked, this, [this]() {
         int currentSpan = m_radioState->spanHz();
-        int newSpan = getNextSpanDown(currentSpan); // + zooms in
+        int newSpan = getNextSpanUp(currentSpan); // + increases span
         if (newSpan != currentSpan) {
             m_radioState->setSpanHz(newSpan);
             m_tcpClient->sendCAT(QString("#SPN%1;").arg(newSpan));
@@ -3712,7 +3710,7 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
     // Span adjustment for Sub: uses $ suffix for Sub RX commands
     connect(m_spanDownBtnB, &QPushButton::clicked, this, [this]() {
         int currentSpan = m_radioState->spanHzB();
-        int newSpan = getNextSpanUp(currentSpan); // - zooms out
+        int newSpan = getNextSpanDown(currentSpan); // - decreases span
         if (newSpan != currentSpan) {
             m_radioState->setSpanHzB(newSpan);
             m_tcpClient->sendCAT(QString("#SPN$%1;").arg(newSpan));
@@ -3721,7 +3719,7 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
 
     connect(m_spanUpBtnB, &QPushButton::clicked, this, [this]() {
         int currentSpan = m_radioState->spanHzB();
-        int newSpan = getNextSpanDown(currentSpan); // + zooms in
+        int newSpan = getNextSpanUp(currentSpan); // + increases span
         if (newSpan != currentSpan) {
             m_radioState->setSpanHzB(newSpan);
             m_tcpClient->sendCAT(QString("#SPN$%1;").arg(newSpan));
