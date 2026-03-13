@@ -4785,9 +4785,15 @@ void MainWindow::onRitXitChanged(bool ritEnabled, bool xitEnabled, int offset) {
 }
 
 qint64 MainWindow::adjustClickFreqForMode(qint64 freq, bool vfoB) {
-    // Placeholder for mode-specific click-to-tune adjustments.
-    // Currently all DATA submodes use the same click behavior as USB.
-    Q_UNUSED(vfoB);
+    // In CW mode, the dial frequency is offset from the RF frequency by cwPitch.
+    // To hear a signal at RF frequency S, the dial must be set to S - cwPitch (CW)
+    // or S + cwPitch (CW-R). xToFreq returns the actual RF frequency at the clicked
+    // pixel, so we apply the offset here to get the correct dial frequency.
+    RadioState::Mode mode = vfoB ? m_radioState->modeB() : m_radioState->mode();
+    if (mode == RadioState::CW)
+        return freq - m_radioState->cwPitch();
+    if (mode == RadioState::CW_R)
+        return freq + m_radioState->cwPitch();
     return freq;
 }
 
