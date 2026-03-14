@@ -1697,16 +1697,10 @@ MainWindow::MainWindow(QWidget *parent)
         int newSpan = getNextSpanUp(currentSpan); // + increases span
         if (newSpan != currentSpan) {
             if (vfoA) {
-#ifdef QK4_PAN_DEBUG
-                qDebug("[SPAN] rx=A old=%d new=%d sent=#SPN%d;", currentSpan, newSpan, newSpan);
-#endif
                 m_radioState->setSpanHz(newSpan);
                 m_tcpClient->sendCAT(QString("#SPN%1;").arg(newSpan));
             }
             if (vfoB) {
-#ifdef QK4_PAN_DEBUG
-                qDebug("[SPAN] rx=B old=%d new=%d sent=#SPN$%d;", currentSpan, newSpan, newSpan);
-#endif
                 m_radioState->setSpanHzB(newSpan);
                 m_tcpClient->sendCAT(QString("#SPN$%1;").arg(newSpan));
             }
@@ -1719,16 +1713,10 @@ MainWindow::MainWindow(QWidget *parent)
         int newSpan = getNextSpanDown(currentSpan); // - decreases span
         if (newSpan != currentSpan) {
             if (vfoA) {
-#ifdef QK4_PAN_DEBUG
-                qDebug("[SPAN] rx=A old=%d new=%d sent=#SPN%d;", currentSpan, newSpan, newSpan);
-#endif
                 m_radioState->setSpanHz(newSpan);
                 m_tcpClient->sendCAT(QString("#SPN%1;").arg(newSpan));
             }
             if (vfoB) {
-#ifdef QK4_PAN_DEBUG
-                qDebug("[SPAN] rx=B old=%d new=%d sent=#SPN$%d;", currentSpan, newSpan, newSpan);
-#endif
                 m_radioState->setSpanHzB(newSpan);
                 m_tcpClient->sendCAT(QString("#SPN$%1;").arg(newSpan));
             }
@@ -3706,9 +3694,6 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
         int currentSpan = m_radioState->spanHz();
         int newSpan = getNextSpanDown(currentSpan); // - decreases span
         if (newSpan != currentSpan) {
-#ifdef QK4_PAN_DEBUG
-            qDebug("[SPAN] rx=A old=%d new=%d sent=#SPN%d;", currentSpan, newSpan, newSpan);
-#endif
             m_radioState->setSpanHz(newSpan);
             m_tcpClient->sendCAT(QString("#SPN%1;").arg(newSpan));
         }
@@ -3718,9 +3703,6 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
         int currentSpan = m_radioState->spanHz();
         int newSpan = getNextSpanUp(currentSpan); // + increases span
         if (newSpan != currentSpan) {
-#ifdef QK4_PAN_DEBUG
-            qDebug("[SPAN] rx=A old=%d new=%d sent=#SPN%d;", currentSpan, newSpan, newSpan);
-#endif
             m_radioState->setSpanHz(newSpan);
             m_tcpClient->sendCAT(QString("#SPN%1;").arg(newSpan));
         }
@@ -3733,9 +3715,6 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
         int currentSpan = m_radioState->spanHzB();
         int newSpan = getNextSpanDown(currentSpan); // - decreases span
         if (newSpan != currentSpan) {
-#ifdef QK4_PAN_DEBUG
-            qDebug("[SPAN] rx=B old=%d new=%d sent=#SPN$%d;", currentSpan, newSpan, newSpan);
-#endif
             m_radioState->setSpanHzB(newSpan);
             m_tcpClient->sendCAT(QString("#SPN$%1;").arg(newSpan));
         }
@@ -3745,9 +3724,6 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
         int currentSpan = m_radioState->spanHzB();
         int newSpan = getNextSpanUp(currentSpan); // + increases span
         if (newSpan != currentSpan) {
-#ifdef QK4_PAN_DEBUG
-            qDebug("[SPAN] rx=B old=%d new=%d sent=#SPN$%d;", currentSpan, newSpan, newSpan);
-#endif
             m_radioState->setSpanHzB(newSpan);
             m_tcpClient->sendCAT(QString("#SPN$%1;").arg(newSpan));
         }

@@ -1472,46 +1472,6 @@ void PanadapterRhiWidget::updateSpectrum(const QByteArray &bins, qint64 centerFr
     qint32 tierSpanHz = sampleRate * 1000;
     int totalBins = bins.size();
 
-#ifdef QK4_PAN_DEBUG
-    // Log on tier transitions and every 100th packet
-    bool tierChanged = (sampleRate != m_lastLoggedSampleRate);
-    bool throttledLog = (m_packetCount % 100 == 0);
-    if (tierChanged || throttledLog) {
-        QString rxName = objectName().isEmpty() ? "?" : objectName();
-        // First 8 and last 8 raw bin values
-        QString edgeL, edgeR;
-        int edgeN = qMin(8, totalBins);
-        for (int i = 0; i < edgeN; ++i) {
-            if (i > 0)
-                edgeL += ",";
-            edgeL += QString::number(static_cast<quint8>(bins[i]));
-        }
-        for (int i = qMax(0, totalBins - edgeN); i < totalBins; ++i) {
-            if (i > totalBins - edgeN)
-                edgeR += ",";
-            edgeR += QString::number(static_cast<quint8>(bins[i]));
-        }
-
-        int requestedBinsDbg = 0;
-        int centerStartDbg = 0;
-        if (tierSpanHz > m_spanHz && totalBins > 100 && m_spanHz > 0) {
-            requestedBinsDbg = (static_cast<qint64>(m_spanHz) * totalBins) / tierSpanHz;
-            requestedBinsDbg = qBound(50, requestedBinsDbg, totalBins);
-            centerStartDbg = (totalBins - requestedBinsDbg) / 2;
-        }
-
-        qDebug("[PAN] rx=%s sampleRate=%d bins=%d center=%lld span=%d tierSpan=%d noise=%.1f%s", qPrintable(rxName),
-               sampleRate, totalBins, centerFreq, m_spanHz, tierSpanHz, noiseFloor,
-               tierChanged ? " [TIER CHANGE]" : "");
-        qDebug("      edgeL=[%s] edgeR=[%s]", qPrintable(edgeL), qPrintable(edgeR));
-        if (requestedBinsDbg > 0) {
-            qDebug("      requestedBins=%d centerStart=%d", requestedBinsDbg, centerStartDbg);
-        }
-        m_lastLoggedSampleRate = sampleRate;
-    }
-    m_packetCount++;
-#endif
-
     const float attackAlpha = m_attackAlpha;
     const float decayAlpha = m_decayAlpha;
 

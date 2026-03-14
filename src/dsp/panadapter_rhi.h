@@ -263,10 +263,6 @@ private:
     float m_attackAlpha = 0.52f;
     float m_decayAlpha = 0.34f;
 
-    // Debug: tier transition logging (compile-gate with QK4_PAN_DEBUG)
-    qint32 m_lastLoggedSampleRate = 0;
-    int m_packetCount = 0;
-
     WheelAccumulator m_wheelAccumulator;
 
     // dBm scale overlay (child widget for text rendering)
