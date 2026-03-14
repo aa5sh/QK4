@@ -238,6 +238,12 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
     QK4_VERSION="${QK4_VERSION_FULL}"
 )
 
+# Debug: enable PAN/waterfall tier diagnostics (set ON to log tier data)
+option(QK4_PAN_DEBUG "Enable PAN packet diagnostic logging" OFF)
+if(QK4_PAN_DEBUG)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE QK4_PAN_DEBUG)
+endif()
+
 # Add Qt private headers for QRhi access
 get_target_property(QT_GUI_INCLUDE_DIRS Qt6::Gui INTERFACE_INCLUDE_DIRECTORIES)
 foreach(dir ${QT_GUI_INCLUDE_DIRS})

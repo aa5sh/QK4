@@ -1697,10 +1697,16 @@ MainWindow::MainWindow(QWidget *parent)
         int newSpan = getNextSpanUp(currentSpan); // + increases span
         if (newSpan != currentSpan) {
             if (vfoA) {
+#ifdef QK4_PAN_DEBUG
+                qDebug("[SPAN] rx=A old=%d new=%d sent=#SPN%d;", currentSpan, newSpan, newSpan);
+#endif
                 m_radioState->setSpanHz(newSpan);
                 m_tcpClient->sendCAT(QString("#SPN%1;").arg(newSpan));
             }
             if (vfoB) {
+#ifdef QK4_PAN_DEBUG
+                qDebug("[SPAN] rx=B old=%d new=%d sent=#SPN$%d;", currentSpan, newSpan, newSpan);
+#endif
                 m_radioState->setSpanHzB(newSpan);
                 m_tcpClient->sendCAT(QString("#SPN$%1;").arg(newSpan));
             }
@@ -1713,10 +1719,16 @@ MainWindow::MainWindow(QWidget *parent)
         int newSpan = getNextSpanDown(currentSpan); // - decreases span
         if (newSpan != currentSpan) {
             if (vfoA) {
+#ifdef QK4_PAN_DEBUG
+                qDebug("[SPAN] rx=A old=%d new=%d sent=#SPN%d;", currentSpan, newSpan, newSpan);
+#endif
                 m_radioState->setSpanHz(newSpan);
                 m_tcpClient->sendCAT(QString("#SPN%1;").arg(newSpan));
             }
             if (vfoB) {
+#ifdef QK4_PAN_DEBUG
+                qDebug("[SPAN] rx=B old=%d new=%d sent=#SPN$%d;", currentSpan, newSpan, newSpan);
+#endif
                 m_radioState->setSpanHzB(newSpan);
                 m_tcpClient->sendCAT(QString("#SPN$%1;").arg(newSpan));
             }
@@ -3580,6 +3592,7 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
 
     // Main panadapter for VFO A (left side) - QRhiWidget with Metal/DirectX/Vulkan
     m_panadapterA = new PanadapterRhiWidget(m_spectrumContainer);
+    m_panadapterA->setObjectName("A");
     // dB range set via setScale()/setRefLevel() from radio's #SCL/#REF values
     m_panadapterA->setSpectrumRatio(0.35f);
     m_panadapterA->setGridEnabled(true);
@@ -3603,6 +3616,7 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
 
     // Sub panadapter for VFO B (right side) - QRhiWidget with Metal/DirectX/Vulkan
     m_panadapterB = new PanadapterRhiWidget(m_spectrumContainer);
+    m_panadapterB->setObjectName("B");
     // dB range set via setScale()/setRefLevel() from radio's #SCL/#REF$ values
     m_panadapterB->setSpectrumRatio(0.35f);
     m_panadapterB->setGridEnabled(true);
@@ -3692,6 +3706,9 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
         int currentSpan = m_radioState->spanHz();
         int newSpan = getNextSpanDown(currentSpan); // - decreases span
         if (newSpan != currentSpan) {
+#ifdef QK4_PAN_DEBUG
+            qDebug("[SPAN] rx=A old=%d new=%d sent=#SPN%d;", currentSpan, newSpan, newSpan);
+#endif
             m_radioState->setSpanHz(newSpan);
             m_tcpClient->sendCAT(QString("#SPN%1;").arg(newSpan));
         }
@@ -3701,6 +3718,9 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
         int currentSpan = m_radioState->spanHz();
         int newSpan = getNextSpanUp(currentSpan); // + increases span
         if (newSpan != currentSpan) {
+#ifdef QK4_PAN_DEBUG
+            qDebug("[SPAN] rx=A old=%d new=%d sent=#SPN%d;", currentSpan, newSpan, newSpan);
+#endif
             m_radioState->setSpanHz(newSpan);
             m_tcpClient->sendCAT(QString("#SPN%1;").arg(newSpan));
         }
@@ -3713,6 +3733,9 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
         int currentSpan = m_radioState->spanHzB();
         int newSpan = getNextSpanDown(currentSpan); // - decreases span
         if (newSpan != currentSpan) {
+#ifdef QK4_PAN_DEBUG
+            qDebug("[SPAN] rx=B old=%d new=%d sent=#SPN$%d;", currentSpan, newSpan, newSpan);
+#endif
             m_radioState->setSpanHzB(newSpan);
             m_tcpClient->sendCAT(QString("#SPN$%1;").arg(newSpan));
         }
@@ -3722,6 +3745,9 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
         int currentSpan = m_radioState->spanHzB();
         int newSpan = getNextSpanUp(currentSpan); // + increases span
         if (newSpan != currentSpan) {
+#ifdef QK4_PAN_DEBUG
+            qDebug("[SPAN] rx=B old=%d new=%d sent=#SPN$%d;", currentSpan, newSpan, newSpan);
+#endif
             m_radioState->setSpanHzB(newSpan);
             m_tcpClient->sendCAT(QString("#SPN$%1;").arg(newSpan));
         }

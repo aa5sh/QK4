@@ -2792,6 +2792,9 @@ void RadioState::handleDisplaySPN(const QString &cmd) {
     bool ok;
     int span = cmd.mid(4).toInt(&ok);
     if (ok && span > 0 && span != m_spanHz) {
+#ifdef QK4_PAN_DEBUG
+        qDebug("[SPAN-RX] rx=A old=%d new=%d delta=%+d", m_spanHz, span, span - m_spanHz);
+#endif
         m_spanHz = span;
         emit spanChanged(m_spanHz);
     }
@@ -2803,6 +2806,9 @@ void RadioState::handleDisplaySPNSub(const QString &cmd) {
     bool ok;
     int span = cmd.mid(5).toInt(&ok);
     if (ok && span > 0 && span != m_spanHzB) {
+#ifdef QK4_PAN_DEBUG
+        qDebug("[SPAN-RX] rx=B old=%d new=%d delta=%+d", m_spanHzB, span, span - m_spanHzB);
+#endif
         m_spanHzB = span;
         emit spanBChanged(m_spanHzB);
     }
