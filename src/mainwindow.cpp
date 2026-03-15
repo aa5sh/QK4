@@ -4215,6 +4215,10 @@ void MainWindow::onCatResponse(const QString &response) {
     // Parse CAT commands (may contain multiple commands separated by ;)
     QStringList commands = response.split(';', Qt::SkipEmptyParts);
     for (const QString &cmd : commands) {
+        // PONG is handled by TcpClient for latency measurement — skip
+        if (cmd.startsWith("PONG"))
+            continue;
+
         m_radioState->parseCATCommand(cmd + ";");
 
         // Parse MEDF (menu definitions) from RDY response
