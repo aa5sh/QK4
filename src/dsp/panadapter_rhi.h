@@ -177,9 +177,15 @@ private:
     QShader m_overlayVert;
     QShader m_overlayFrag;
 
-    // Spectrum data
+    // Spectrum data (cropped to display span for live trace)
     QVector<float> m_currentSpectrum;
     QVector<float> m_rawSpectrum;
+    // Full-tier spectrum data (all 1024 bins for waterfall storage)
+    QVector<float> m_tierSpectrum;
+    QVector<float> m_tierRawSpectrum;
+    qint32 m_lastTierSampleRate = 0; // Detect tier transitions to reset EMA
+    int m_waterfallTierBinCount = 0; // Bin count written to current waterfall row
+    float m_waterfallTierSpanHz = 0; // Tier span for current waterfall data
     // Waterfall data - sized for 4K/HiDPI displays
     // Memory: 4096 × 1024 × 1 byte = 4 MB (trivial for modern GPUs)
     static constexpr int BASE_WATERFALL_HISTORY = 1024;

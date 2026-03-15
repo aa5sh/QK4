@@ -468,7 +468,7 @@ void PanadapterRhiWidget::initialize(QRhiCommandBuffer *cb) {
     m_overlayVbo->create();
 
     // Create uniform buffers
-    m_waterfallUniformBuffer.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 16));
+    m_waterfallUniformBuffer.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 32));
     m_waterfallUniformBuffer->create();
 
     m_overlayUniformBuffer.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 32));
@@ -789,13 +789,20 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
 
     // Update waterfall uniform buffer with bin parameters
     float scrollOffset = static_cast<float>(m_waterfallWriteRow) / m_waterfallHistory;
-    float binCount = static_cast<float>(m_currentSpectrum.isEmpty() ? m_textureWidth : m_currentSpectrum.size());
+    // Use full tier bin count for waterfall (matches what updateWaterfallData writes)
+    float binCount = m_waterfallTierBinCount > 0   ? static_cast<float>(m_waterfallTierBinCount)
+                     : m_currentSpectrum.isEmpty() ? static_cast<float>(m_textureWidth)
+                                                   : static_cast<float>(m_currentSpectrum.size());
+    float tierSpanHz = m_waterfallTierSpanHz > 0 ? m_waterfallTierSpanHz : static_cast<float>(m_spanHz);
+    float spanHz = static_cast<float>(m_spanHz);
     struct {
         float scrollOffset;
         float binCount;
         float textureWidth;
-        float padding;
-    } waterfallUniforms = {scrollOffset, binCount, static_cast<float>(m_textureWidth), 0.0f};
+        float tierSpanHz;
+        float spanHz;
+        float padding[3];
+    } waterfallUniforms = {scrollOffset, binCount, static_cast<float>(m_textureWidth), tierSpanHz, spanHz, {0, 0, 0}};
     rub->updateDynamicBuffer(m_waterfallUniformBuffer.get(), 0, sizeof(waterfallUniforms), &waterfallUniforms);
 
     // Calculate smoothed baseline for spectrum normalization
@@ -1465,23 +1472,39 @@ void PanadapterRhiWidget::updateSpectrum(const QByteArray &bins, qint64 centerFr
     qint32 tierSpanHz = sampleRate * 1000;
     int totalBins = bins.size();
 
-    // Extract center bins if tier span > commanded span
+    const float attackAlpha = m_attackAlpha;
+    const float decayAlpha = m_decayAlpha;
+
+    // === Full-tier path (all bins → waterfall storage) ===
+    decompressBins(bins, m_tierRawSpectrum);
+
+    // Reset tier EMA on tier transition to avoid cross-tier blending
+    if (sampleRate != m_lastTierSampleRate) {
+        m_tierSpectrum = m_tierRawSpectrum;
+        m_lastTierSampleRate = sampleRate;
+    } else if (m_tierSpectrum.size() != m_tierRawSpectrum.size()) {
+        m_tierSpectrum = m_tierRawSpectrum;
+    } else {
+        for (int i = 0; i < m_tierRawSpectrum.size(); ++i) {
+            float alpha = (m_tierRawSpectrum[i] > m_tierSpectrum[i]) ? attackAlpha : decayAlpha;
+            m_tierSpectrum[i] = alpha * m_tierRawSpectrum[i] + (1.0f - alpha) * m_tierSpectrum[i];
+        }
+    }
+    m_waterfallTierBinCount = totalBins;
+    m_waterfallTierSpanHz = static_cast<float>(tierSpanHz);
+
+    // === Cropped path (center bins → live spectrum trace) ===
     QByteArray binsToUse;
     if (tierSpanHz > m_spanHz && totalBins > 100 && m_spanHz > 0) {
         int requestedBins = (static_cast<qint64>(m_spanHz) * totalBins) / tierSpanHz;
         requestedBins = qBound(50, requestedBins, totalBins);
-        int centerStart = (totalBins - requestedBins) / 2; // Center extraction
+        int centerStart = (totalBins - requestedBins) / 2;
         binsToUse = bins.mid(centerStart, requestedBins);
     } else {
         binsToUse = bins;
     }
 
-    // Decompress bins to dB values
     decompressBins(binsToUse, m_rawSpectrum);
-
-    // Apply asymmetric EMA smoothing (attack fast, decay slow)
-    const float attackAlpha = m_attackAlpha;
-    const float decayAlpha = m_decayAlpha;
 
     if (m_currentSpectrum.size() != m_rawSpectrum.size()) {
         m_currentSpectrum = m_rawSpectrum;
@@ -1529,12 +1552,14 @@ void PanadapterRhiWidget::decompressBins(const QByteArray &bins, QVector<float> 
 }
 
 void PanadapterRhiWidget::updateWaterfallData() {
-    if (m_currentSpectrum.isEmpty())
+    // Use full-tier data for waterfall (eliminates black bars on span change)
+    const QVector<float> &source = m_tierSpectrum.isEmpty() ? m_currentSpectrum : m_tierSpectrum;
+    if (source.isEmpty())
         return;
 
     // Upload raw bins centered in texture for shader sampling
     int row = m_waterfallWriteRow;
-    int specSize = m_currentSpectrum.size();
+    int specSize = source.size();
     int offset = (m_textureWidth - specSize) / 2;
 
     // Clear row (zeros outside bin region = no signal)
@@ -1542,7 +1567,7 @@ void PanadapterRhiWidget::updateWaterfallData() {
 
     // Copy raw bins (no interpolation - GPU handles it)
     for (int i = 0; i < specSize; ++i) {
-        float normalized = normalizeDb(m_currentSpectrum[i]);
+        float normalized = normalizeDb(source[i]);
         m_waterfallData[row * m_textureWidth + offset + i] =
             static_cast<quint8>(qBound(0, static_cast<int>(normalized * 255), 255));
     }

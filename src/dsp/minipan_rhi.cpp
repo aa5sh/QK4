@@ -173,7 +173,7 @@ void MiniPanRhiWidget::initialize(QRhiCommandBuffer *cb) {
     m_spectrumUniformBuffer.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 16));
     m_spectrumUniformBuffer->create();
 
-    m_waterfallUniformBuffer.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 16));
+    m_waterfallUniformBuffer.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 32));
     m_waterfallUniformBuffer->create();
 
     m_overlayUniformBuffer.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 32));
@@ -436,10 +436,17 @@ void MiniPanRhiWidget::render(QRhiCommandBuffer *cb) {
     float scrollOffset = static_cast<float>(m_waterfallWriteRow) / WATERFALL_HISTORY;
     struct {
         float scrollOffset;
-        float binCount; // Texture is pre-filled, so binCount = textureWidth
+        float binCount;
         float textureWidth;
-        float padding;
-    } waterfallUniforms = {scrollOffset, static_cast<float>(TEXTURE_WIDTH), static_cast<float>(TEXTURE_WIDTH), 0.0f};
+        float tierSpanHz; // Mini pan: tierSpan == span (no cropping, 1:1 mapping)
+        float spanHz;
+        float padding[3];
+    } waterfallUniforms = {scrollOffset,
+                           static_cast<float>(TEXTURE_WIDTH),
+                           static_cast<float>(TEXTURE_WIDTH),
+                           static_cast<float>(TEXTURE_WIDTH),
+                           static_cast<float>(TEXTURE_WIDTH),
+                           {0, 0, 0}};
     rub->updateDynamicBuffer(m_waterfallUniformBuffer.get(), 0, sizeof(waterfallUniforms), &waterfallUniforms);
 
     // Build spectrum vertices with peak-hold downsampling
