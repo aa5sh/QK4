@@ -1,7 +1,5 @@
 #include "hardware/iambickeyer.h"
 
-#include <algorithm>
-
 IambicKeyer::IambicKeyer(QObject *parent) : QObject(parent) {
     m_elementTimer = new QTimer(this);
     m_elementTimer->setSingleShot(true);
@@ -14,10 +12,7 @@ void IambicKeyer::setMode(Mode mode) {
 }
 
 void IambicKeyer::setReversed(bool reversed) {
-    if (m_reversed != reversed) {
-        m_reversed = reversed;
-        std::swap(m_ditPaddle, m_dahPaddle);
-    }
+    m_reversed = reversed;
 }
 
 void IambicKeyer::setSpeed(int wpm) {
