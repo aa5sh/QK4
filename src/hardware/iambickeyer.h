@@ -1,6 +1,7 @@
 #ifndef IAMBICKEYER_H
 #define IAMBICKEYER_H
 
+#include <QElapsedTimer>
 #include <QObject>
 #include <QTimer>
 
@@ -28,6 +29,8 @@ public:
 
 signals:
     void elementStarted(bool isDit);
+    void characterSpace();
+    void restartAfterPause(int ms);
     void keyingFinished();
 
 private:
@@ -46,6 +49,7 @@ private:
     bool m_dahPaddle = false; // logical (post-reversal)
     bool m_squeezed = false;  // both paddles held during current element
     int m_ditMs = 60;         // 1200 / WPM
+    QElapsedTimer m_idleSince;
 };
 
 #endif // IAMBICKEYER_H

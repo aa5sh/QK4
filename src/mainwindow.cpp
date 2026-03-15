@@ -1893,6 +1893,9 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_radioState, &RadioState::keyerSpeedChanged, this, [this](int wpm) {
         m_sidetoneGenerator->setKeyerSpeed(wpm);
         m_iambicKeyer->setSpeed(wpm);
+        // Sync element length with K4 server
+        int ditMs = 1200 / wpm;
+        m_tcpClient->sendCAT(QString("KZL%1;").arg(ditMs, 2, 10, QChar('0')));
     });
 
     // Update keyer mode/reversal when KP settings change
@@ -1910,6 +1913,13 @@ MainWindow::MainWindow(QWidget *parent)
     // Keyer finished — stop local sidetone (K4 unkeys itself after each KZ element)
     connect(m_iambicKeyer, &IambicKeyer::keyingFinished, this,
             [this]() { QMetaObject::invokeMethod(m_sidetoneGenerator, "stopElement", Qt::QueuedConnection); });
+
+    // Character boundary — keyer went idle between elements
+    connect(m_iambicKeyer, &IambicKeyer::characterSpace, this, [this]() { m_tcpClient->sendCAT("KZ ;"); });
+
+    // Restart after pause — send KZP with elapsed ms before next element
+    connect(m_iambicKeyer, &IambicKeyer::restartAfterPause, this,
+            [this](int ms) { m_tcpClient->sendCAT(QString("KZP%1;").arg(ms, 4, 10, QChar('0'))); });
 
     // Connect HaliKey paddle signals to iambic keyer (guarded by connection state)
     connect(m_halikeyDevice, &HalikeyDevice::ditStateChanged, this, [this](bool pressed) {
@@ -4192,6 +4202,12 @@ void MainWindow::onAuthenticated() {
     m_tcpClient->sendCAT("#SCL;");  // Panadapter scale - not in RDY, needed for dB range
     m_tcpClient->sendCAT("SIRC1;"); // Enable 1-second client stats updates
     // Note: ML and KP commands come in RDY; dump - no need to query
+
+    // Sync element length with K4 server (sent in RDY dump as KZLnn)
+    if (m_radioState->keyerSpeed() > 0) {
+        int ditMs = 1200 / m_radioState->keyerSpeed();
+        m_tcpClient->sendCAT(QString("KZL%1;").arg(ditMs, 2, 10, QChar('0')));
+    }
 
     // Create synthetic "Display FPS" menu item with stored preference
     m_menuModel->addSyntheticDisplayFpsItem(m_currentRadio.displayFps);

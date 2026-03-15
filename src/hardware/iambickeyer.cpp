@@ -54,6 +54,11 @@ void IambicKeyer::handlePaddleChange() {
 }
 
 void IambicKeyer::enterElement(bool isDit) {
+    // Transitioning from idle — emit pause duration before the element
+    if (m_state == Idle && m_idleSince.isValid()) {
+        emit restartAfterPause(static_cast<int>(m_idleSince.elapsed()));
+    }
+
     m_state = isDit ? PlayingDit : PlayingDah;
     m_squeezed = false;
 
@@ -98,6 +103,8 @@ void IambicKeyer::goIdle() {
     m_state = Idle;
     m_elementTimer->stop();
     m_squeezed = false;
+    m_idleSince.start();
+    emit characterSpace();
     emit keyingFinished();
 }
 
