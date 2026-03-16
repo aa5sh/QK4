@@ -43,6 +43,7 @@
 #include "ui/kpa1500panel.h"
 #include "network/catserver.h"
 #include "network/networkmetrics.h"
+#include "ui/nethealthwidget.h"
 #include "settings/radiosettings.h"
 #include <QVBoxLayout>
 #include <QInputDialog>
@@ -129,6 +130,9 @@ MainWindow::MainWindow(QWidget *parent)
     m_ioThread->setObjectName("I/O");
     m_tcpClient->moveToThread(m_ioThread);
     m_ioThread->start();
+
+    // NetworkMetrics must be created before setupUi() — NetHealthWidget connects to it
+    m_networkMetrics = new NetworkMetrics(this);
 
     // IMPORTANT: setupUi() MUST be called BEFORE setupMenuBar()!
     // Qt 6.10.1 bug on macOS Tahoe: calling menuBar() before creating QRhiWidget
@@ -1807,8 +1811,7 @@ MainWindow::MainWindow(QWidget *parent)
                 }
             });
 
-    // Network health metrics (main thread — aggregates from I/O + audio threads)
-    m_networkMetrics = new NetworkMetrics(this);
+    // Network health metrics signal connections (m_networkMetrics created before setupUi)
     connect(m_tcpClient, &TcpClient::latencyChanged, m_networkMetrics, &NetworkMetrics::onLatencyChanged);
     connect(m_tcpClient->protocol(), &Protocol::audioSequenceReceived, m_networkMetrics,
             &NetworkMetrics::onAudioSequence);
@@ -3220,10 +3223,15 @@ void MainWindow::setupTopStatusBar(QWidget *parent) {
     m_kpa1500StatusLabel->hide(); // Hidden when not enabled
     layout->addWidget(m_kpa1500StatusLabel);
 
+    // Network health bar
     // K4 Connection status
     m_connectionStatusLabel = new QLabel("K4", statusBar);
     m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: 12px;").arg(K4Styles::Colors::InactiveGray));
     layout->addWidget(m_connectionStatusLabel);
+
+    // Network health signal bars
+    m_netHealthWidget = new NetHealthWidget(m_networkMetrics, statusBar);
+    layout->addWidget(m_netHealthWidget);
 }
 
 void MainWindow::setupVfoSection(QWidget *parent) {

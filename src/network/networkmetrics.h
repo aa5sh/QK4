@@ -21,6 +21,7 @@ public:
     int bufferMaxBytes() const { return m_bufferMaxBytes; }
     int underrunsTotal() const { return m_underrunsTotal; }
     int lostPacketsTotal() const { return m_lostPacketsTotal; }
+    int packetRate() const { return m_totalPacketsInterval; }
 
 public slots:
     void onLatencyChanged(int ms);

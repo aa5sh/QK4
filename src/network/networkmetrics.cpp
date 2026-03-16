@@ -100,10 +100,12 @@ void NetworkMetrics::onConnectionStateChanged(bool connected) {
         m_audioWasActive = false;
         m_stalePingCount = 0;
         m_tier = Green;
+        emit healthTierChanged(m_tier);
     } else {
         qDebug("[NET %10.3f] DISCONNECTED", cwChainMs());
         m_summaryTimer->stop();
         m_audioActive = false;
+        m_rttCurrent = -1;
         m_tier = Red;
         emit healthTierChanged(m_tier);
     }

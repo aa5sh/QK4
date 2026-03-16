@@ -18,6 +18,7 @@
 
 class PanadapterRhiWidget;
 class AudioEngine;
+class NetHealthWidget;
 class NetworkMetrics;
 class OpusDecoder;
 class OpusEncoder;
@@ -207,6 +208,7 @@ private:
     QLabel *m_voltageLabel;
     QLabel *m_currentLabel;
     QLabel *m_connectionStatusLabel;
+    NetHealthWidget *m_netHealthWidget;
     QLabel *m_kpa1500StatusLabel;
     KPA1500Window *m_kpa1500Window;
 

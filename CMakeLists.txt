@@ -103,6 +103,7 @@ set(SOURCES
     src/ui/featuremenubar.cpp
     src/ui/modepopupwidget.cpp
     src/ui/txmeterwidget.cpp
+    src/ui/nethealthwidget.cpp
     src/ui/fnpopupwidget.cpp
     src/ui/rxeqpopupwidget.cpp
     src/ui/antennacfgpopup.cpp
@@ -167,6 +168,7 @@ set(HEADERS
     src/ui/featuremenubar.h
     src/ui/modepopupwidget.h
     src/ui/txmeterwidget.h
+    src/ui/nethealthwidget.h
     src/ui/fnpopupwidget.h
     src/ui/rxeqpopupwidget.h
     src/ui/antennacfgpopup.h
