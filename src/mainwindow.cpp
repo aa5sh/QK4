@@ -1857,6 +1857,19 @@ MainWindow::MainWindow(QWidget *parent)
     m_sidetoneThread->start();
     QMetaObject::invokeMethod(m_sidetoneGenerator, "start", Qt::QueuedConnection);
 
+    // Set sidetone to same output device as AudioEngine
+    QString savedSidetoneDevice = RadioSettings::instance()->speakerDevice();
+    if (!savedSidetoneDevice.isEmpty()) {
+        QMetaObject::invokeMethod(m_sidetoneGenerator, "setOutputDevice", Qt::QueuedConnection,
+                                  Q_ARG(QString, savedSidetoneDevice));
+    }
+
+    // Follow speaker device changes at runtime
+    connect(RadioSettings::instance(), &RadioSettings::speakerDeviceChanged, this, [this](const QString &deviceId) {
+        QMetaObject::invokeMethod(m_sidetoneGenerator, "setOutputDevice", Qt::QueuedConnection,
+                                  Q_ARG(QString, deviceId));
+    });
+
     // Set initial sidetone frequency from radio state if available
     if (m_radioState->cwPitch() > 0) {
         m_sidetoneGenerator->setFrequency(m_radioState->cwPitch());
@@ -1968,8 +1981,10 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Stop keyer when HaliKey disconnects (prevents runaway keying
     // if paddle was held when disconnected — Note Off never arrives)
-    connect(m_halikeyDevice, &HalikeyDevice::disconnected, this,
-            [this]() { QMetaObject::invokeMethod(m_iambicKeyer, "stop", Qt::QueuedConnection); });
+    connect(m_halikeyDevice, &HalikeyDevice::disconnected, this, [this]() {
+        QMetaObject::invokeMethod(m_sidetoneGenerator, "stopElement", Qt::QueuedConnection);
+        QMetaObject::invokeMethod(m_iambicKeyer, "stop", Qt::QueuedConnection);
+    });
 
     // KPA1500 amplifier client
     m_kpa1500Client = new KPA1500Client(this);
