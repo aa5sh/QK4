@@ -61,6 +61,7 @@
 #include <QRegularExpression>
 #include <QMouseEvent>
 #include <QShowEvent>
+#include <QMoveEvent>
 
 // K4 Span range: 5 kHz to 368 kHz
 // UP (zoom out): +1 kHz until 144, then +4 kHz until 368
@@ -5223,6 +5224,11 @@ void MainWindow::changeEvent(QEvent *event) {
     QMainWindow::changeEvent(event);
 }
 
+void MainWindow::moveEvent(QMoveEvent *event) {
+    QMainWindow::moveEvent(event);
+    closeAllPopups();
+}
+
 void MainWindow::keyPressEvent(QKeyEvent *event) {
     // Handle F1-F12 for keyboard macros
     if (event->key() >= Qt::Key_F1 && event->key() <= Qt::Key_F12) {
@@ -5441,6 +5447,20 @@ void MainWindow::closeAllPopups() {
             m_bottomMenuBar->setTxActive(false);
         }
     }
+
+    // Close secondary popups (opened from RX/TX button rows)
+    if (m_rxEqPopup && m_rxEqPopup->isVisible())
+        m_rxEqPopup->hidePopup();
+    if (m_txEqPopup && m_txEqPopup->isVisible())
+        m_txEqPopup->hidePopup();
+    if (m_mainRxAntCfgPopup && m_mainRxAntCfgPopup->isVisible())
+        m_mainRxAntCfgPopup->hidePopup();
+    if (m_subRxAntCfgPopup && m_subRxAntCfgPopup->isVisible())
+        m_subRxAntCfgPopup->hidePopup();
+    if (m_txAntCfgPopup && m_txAntCfgPopup->isVisible())
+        m_txAntCfgPopup->hidePopup();
+    if (m_modePopup && m_modePopup->isVisible())
+        m_modePopup->hidePopup();
 }
 
 void MainWindow::toggleBandPopup() {
