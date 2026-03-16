@@ -330,7 +330,7 @@ void TxMeterWidget::drawMeterRow(QPainter &painter, int y, int rowHeight, const 
             // Standard meter gradient: green → yellow → orange → red
             gradient = K4Styles::meterGradient(barStartX, 0, barStartX + barWidth, 0);
         } else {
-            // Red style for Id meter (PA drain current)
+            // Green style for Id meter (PA drain current)
             gradient.setColorAt(0.0, QColor(K4Styles::Colors::MeterIdDark));
             gradient.setColorAt(0.7, QColor(K4Styles::Colors::MeterIdDark));
             gradient.setColorAt(1.0, QColor(K4Styles::Colors::MeterIdLight));

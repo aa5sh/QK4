@@ -16,7 +16,7 @@
  *
  * Appears below S-meter on the TX VFO side (follows split state).
  * Uses S-meter gradient (green→red) for Po, ALC, COMP, SWR.
- * Id remains red.
+ * Id uses a subtle green theme.
  */
 class TxMeterWidget : public QWidget {
     Q_OBJECT
