@@ -42,6 +42,7 @@
 #include "ui/kpa1500window.h"
 #include "ui/kpa1500panel.h"
 #include "network/catserver.h"
+#include "network/networkmetrics.h"
 #include "settings/radiosettings.h"
 #include <QVBoxLayout>
 #include <QInputDialog>
@@ -1805,6 +1806,17 @@ MainWindow::MainWindow(QWidget *parent)
                     m_audioEngine->enqueueAudio(pcmData);
                 }
             });
+
+    // Network health metrics (main thread — aggregates from I/O + audio threads)
+    m_networkMetrics = new NetworkMetrics(this);
+    connect(m_tcpClient, &TcpClient::latencyChanged, m_networkMetrics, &NetworkMetrics::onLatencyChanged);
+    connect(m_tcpClient->protocol(), &Protocol::audioSequenceReceived, m_networkMetrics,
+            &NetworkMetrics::onAudioSequence);
+    connect(m_audioEngine, &AudioEngine::bufferStatus, m_networkMetrics, &NetworkMetrics::onBufferStatus);
+    connect(m_tcpClient, &TcpClient::connected, m_networkMetrics,
+            [this]() { m_networkMetrics->onConnectionStateChanged(true); });
+    connect(m_tcpClient, &TcpClient::disconnected, m_networkMetrics,
+            [this]() { m_networkMetrics->onConnectionStateChanged(false); });
 
     // Clock timer for date/time display
     connect(m_clockTimer, &QTimer::timeout, this, &MainWindow::updateDateTime);

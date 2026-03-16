@@ -73,6 +73,7 @@ set(SOURCES
     src/mainwindow.cpp
     src/network/tcpclient.cpp
     src/network/protocol.cpp
+    src/network/networkmetrics.cpp
     src/network/kpa1500client.cpp
     src/network/catserver.cpp
     src/audio/audioengine.cpp
@@ -136,6 +137,7 @@ set(HEADERS
     src/mainwindow.h
     src/network/tcpclient.h
     src/network/protocol.h
+    src/network/networkmetrics.h
     src/network/kpa1500client.h
     src/network/catserver.h
     src/audio/audioengine.h

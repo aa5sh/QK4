@@ -18,6 +18,7 @@
 
 class PanadapterRhiWidget;
 class AudioEngine;
+class NetworkMetrics;
 class OpusDecoder;
 class OpusEncoder;
 class SideControlPanel;
@@ -181,6 +182,7 @@ private:
     void checkAndHideMiniPanB();
 
     TcpClient *m_tcpClient;
+    NetworkMetrics *m_networkMetrics;
     RadioState *m_radioState;
     QTimer *m_clockTimer;
 
