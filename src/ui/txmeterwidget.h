@@ -30,6 +30,7 @@ public:
     void setCompression(int dB);  // 0-30
     void setSwr(double ratio);    // 1.0-3.0+
     void setCurrent(double amps); // 0-25
+    void setQrp(bool isQrp);
 
     // Set all TX meters at once (from txMeterChanged signal)
     void setTxMeters(int alc, int compDb, double fwdPower, double swr);

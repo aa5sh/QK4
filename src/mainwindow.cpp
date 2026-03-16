@@ -4623,10 +4623,9 @@ void MainWindow::updateConnectionState(TcpClient::ConnectionState state) {
 
 void MainWindow::onRfPowerChanged(double watts, bool isQrp) {
     Q_UNUSED(watts)
-    Q_UNUSED(isQrp)
-    // NOTE: This is the power SETTING (PC command), not actual TX power.
-    // The power display is updated from txMeterChanged signal during TX.
-    // We don't update the display here - it should show 0 when not transmitting.
+    // Propagate QRP mode to TX meter widgets so they use the correct scale
+    m_vfoA->setTxMeterQrp(isQrp);
+    m_vfoB->setTxMeterQrp(isQrp);
 }
 
 void MainWindow::onSupplyVoltageChanged(double volts) {

@@ -88,6 +88,13 @@ void TxMeterWidget::setCurrent(double amps) {
     update();
 }
 
+void TxMeterWidget::setQrp(bool isQrp) {
+    if (m_isQrp != isQrp) {
+        m_isQrp = isQrp;
+        update();
+    }
+}
+
 void TxMeterWidget::setTxMeters(int alc, int compDb, double fwdPower, double swr) {
     // Power - use appropriate max based on mode
     double maxPower = m_isQrp ? 10.0 : 110.0; // K4 goes to 110W (or 10W QRP)
