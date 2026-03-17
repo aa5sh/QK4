@@ -1945,37 +1945,21 @@ MainWindow::MainWindow(QWidget *parent)
     // Keyer element started — send KZ command to I/O thread + sidetone to sidetone thread.
     // Using target objects as receiver context routes signals directly to their threads,
     // bypassing the main thread to eliminate UI-induced jitter on CW timing.
-    connect(m_iambicKeyer, &IambicKeyer::elementStarted, m_tcpClient, [tc = m_tcpClient](bool isDit) {
-        qDebug("[CW %10.3f] IO-SEND %s (thread=%s)", cwChainMs(), isDit ? "KZ." : "KZ-",
-               QThread::currentThread()->objectName().toLatin1().constData());
-        tc->sendCAT(isDit ? "KZ.;" : "KZ-;");
-    });
-    connect(m_iambicKeyer, &IambicKeyer::elementStarted, m_sidetoneGenerator, [sg = m_sidetoneGenerator](bool isDit) {
-        qDebug("[CW %10.3f] SIDETONE %s (thread=%s)", cwChainMs(), isDit ? "dit" : "dah",
-               QThread::currentThread()->objectName().toLatin1().constData());
-        isDit ? sg->playSingleDit() : sg->playSingleDah();
-    });
+    connect(m_iambicKeyer, &IambicKeyer::elementStarted, m_tcpClient,
+            [tc = m_tcpClient](bool isDit) { tc->sendCAT(isDit ? "KZ.;" : "KZ-;"); });
+    connect(m_iambicKeyer, &IambicKeyer::elementStarted, m_sidetoneGenerator,
+            [sg = m_sidetoneGenerator](bool isDit) { isDit ? sg->playSingleDit() : sg->playSingleDah(); });
 
     // Keyer finished — stop local sidetone (K4 unkeys itself after each KZ element)
-    connect(m_iambicKeyer, &IambicKeyer::keyingFinished, m_sidetoneGenerator, [sg = m_sidetoneGenerator]() {
-        qDebug("[CW %10.3f] SIDETONE stop (thread=%s)", cwChainMs(),
-               QThread::currentThread()->objectName().toLatin1().constData());
-        sg->stopElement();
-    });
+    connect(m_iambicKeyer, &IambicKeyer::keyingFinished, m_sidetoneGenerator,
+            [sg = m_sidetoneGenerator]() { sg->stopElement(); });
 
     // Character boundary — keyer went idle between elements
-    connect(m_iambicKeyer, &IambicKeyer::characterSpace, m_tcpClient, [tc = m_tcpClient]() {
-        qDebug("[CW %10.3f] IO-SEND KZ_space (thread=%s)", cwChainMs(),
-               QThread::currentThread()->objectName().toLatin1().constData());
-        tc->sendCAT("KZ ;");
-    });
+    connect(m_iambicKeyer, &IambicKeyer::characterSpace, m_tcpClient, [tc = m_tcpClient]() { tc->sendCAT("KZ ;"); });
 
     // Restart after pause — send KZP with elapsed ms before next element
-    connect(m_iambicKeyer, &IambicKeyer::restartAfterPause, m_tcpClient, [tc = m_tcpClient](int ms) {
-        qDebug("[CW %10.3f] IO-SEND KZP%04d (thread=%s)", cwChainMs(), ms,
-               QThread::currentThread()->objectName().toLatin1().constData());
-        tc->sendCAT(QString("KZP%1;").arg(ms, 4, 10, QChar('0')));
-    });
+    connect(m_iambicKeyer, &IambicKeyer::restartAfterPause, m_tcpClient,
+            [tc = m_tcpClient](int ms) { tc->sendCAT(QString("KZP%1;").arg(ms, 4, 10, QChar('0'))); });
 
     // Connect HaliKey paddle signals directly to keyer via DirectConnection.
     // setDitPaddle/setDahPaddle write atomic bools immediately on the calling thread,
