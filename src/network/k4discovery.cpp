@@ -113,7 +113,7 @@ void K4Discovery::sendDiscoveryMessage(const QNetworkInterface& netInterface) {
         }
 
         ::setsockopt(sendSocket.socketDescriptor(), SOL_SOCKET, SO_BROADCAST,
-                     &broadcastEnable, sizeof(broadcastEnable));
+                     reinterpret_cast<const char*>(&broadcastEnable), sizeof(broadcastEnable));
 
         quint16 localPort = sendSocket.localPort();
         QByteArray message(DISCOVERY_MESSAGE);
