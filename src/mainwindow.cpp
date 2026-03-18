@@ -4218,6 +4218,19 @@ void MainWindow::connectToRadio(const RadioEntry &radio) {
     m_currentRadio = radio;
     m_titleLabel->setText("Elecraft K4 - " + radio.name);
 
+    // Load startup macro so TcpClient can send it before RDY (state dump reflects changes)
+    {
+        MacroEntry startupMacro = RadioSettings::instance()->macro(MacroIds::Startup);
+        if (!startupMacro.command.isEmpty()) {
+            QString forbidden = MacroIds::checkForbiddenStartupCommand(startupMacro.command);
+            if (!forbidden.isEmpty()) {
+                qWarning() << "Startup macro blocked: contains forbidden command" << forbidden;
+            } else {
+                m_tcpClient->setStartupMacro(startupMacro.command);
+            }
+        }
+    }
+
     qDebug() << "Connecting to" << radio.host << ":" << radio.port << (radio.useTls ? "(TLS/PSK)" : "(unencrypted)")
              << "encodeMode:" << radio.encodeMode << "streamingLatency:" << radio.streamingLatency;
     QMetaObject::invokeMethod(m_tcpClient, "connectToHost", Qt::QueuedConnection, Q_ARG(QString, radio.host),
@@ -4277,33 +4290,7 @@ void MainWindow::onAuthenticated() {
     // Create synthetic "Display FPS" menu item with stored preference
     m_menuModel->addSyntheticDisplayFpsItem(m_currentRadio.displayFps);
 
-    // Execute Startup macro if defined (delay to let radio process initial queries)
-    {
-        MacroEntry startupMacro = RadioSettings::instance()->macro(MacroIds::Startup);
-        if (!startupMacro.command.isEmpty()) {
-            QString forbidden = MacroIds::checkForbiddenStartupCommand(startupMacro.command);
-            if (!forbidden.isEmpty()) {
-                qWarning() << "Startup macro blocked: contains forbidden command" << forbidden;
-            } else {
-                QString command = startupMacro.command;
-                QTimer::singleShot(1000, this, [this, command]() {
-                    qDebug() << "Executing Startup macro:" << command;
-                    if (m_tcpClient && m_tcpClient->isConnected()) {
-                        // Split macro into individual commands and insert DE005; delay before each
-                        // to give the radio time to process each command
-                        const QStringList parts = command.split(';', Qt::SkipEmptyParts);
-                        QString paced;
-                        for (const QString &part : parts) {
-                            paced += QStringLiteral("DE005;") + part + ';';
-                        }
-                        m_tcpClient->sendCAT(paced);
-                    } else {
-                        qWarning() << "Startup macro: radio not connected, skipping";
-                    }
-                });
-            }
-        }
-    }
+    // Startup macro is sent pre-RDY by TcpClient so the state dump reflects changes.
 
     // Connect KPA1500 if enabled and configured
     if (RadioSettings::instance()->kpa1500Enabled() && !RadioSettings::instance()->kpa1500Host().isEmpty()) {

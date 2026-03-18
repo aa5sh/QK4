@@ -356,6 +356,7 @@ private:
     int m_mouseQsyMenuId = -999;    // Menu ID from MEDF (sentinel = not yet discovered)
     int m_fskMarkToneMenuId = -999; // "FSK Mark-Tone" menu ID (sentinel = not yet discovered)
 
+
     WheelAccumulator m_ritWheelAccumulator;
 };
 

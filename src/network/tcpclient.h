@@ -29,6 +29,9 @@ public:
     Q_INVOKABLE void sendCAT(const QString &command);
     Q_INVOKABLE void sendRaw(const QByteArray &data);
 
+    // Pre-RDY command string sent before the state dump on connect
+    void setStartupMacro(const QString &macro) { m_startupMacro = macro; }
+
     Protocol *protocol() { return m_protocol; }
 
     int latencyMs() const { return m_latencyMs; }
@@ -83,6 +86,7 @@ private:
 
     QElapsedTimer m_pingElapsed;
     int m_latencyMs = -1;
+    QString m_startupMacro; // Sent before RDY so state dump reflects macro changes
 };
 
 #endif // TCPCLIENT_H

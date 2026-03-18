@@ -71,6 +71,13 @@ TcpClient::TcpClient(QObject *parent)
             emit authenticated();
             startPingTimer();
 
+            // Send startup macro BEFORE RDY so the state dump reflects the macro changes
+            if (!m_startupMacro.isEmpty()) {
+                qDebug() << "Sending startup macro (pre-RDY):" << m_startupMacro;
+                sendCAT(m_startupMacro);
+                m_startupMacro.clear();
+            }
+
             // Send initialization sequence
             // RDY triggers comprehensive state dump containing all radio state:
             // FA, FB, MD, MD$, BW, BW$, IS, IS$, CW, KS, PC, SD (per mode), SQ, RG, SQ$, RG$,
