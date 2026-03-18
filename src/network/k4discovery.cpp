@@ -11,7 +11,11 @@
 #include "k4discovery.h"
 #include <QNetworkDatagram>
 #include <QLoggingCategory>
+#ifdef Q_OS_WIN
+#include <winsock2.h>
+#else
 #include <sys/socket.h>
+#endif
 
 Q_LOGGING_CATEGORY(k4discovery, "K4Discovery")
 
