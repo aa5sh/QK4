@@ -210,13 +210,17 @@ TcpClient::ConnectionState TcpClient::connectionState() const {
 
 void TcpClient::sendCAT(const QString &command) {
     if (QThread::currentThread() != thread()) {
+        qDebug() << "[CAT TX] cross-thread marshal:" << command;
         QMetaObject::invokeMethod(this, "sendCAT", Qt::QueuedConnection, Q_ARG(QString, command));
         return;
     }
     if (m_state == Connected) {
         QByteArray packet = Protocol::buildCATPacket(command);
         m_socket->write(packet);
-        m_socket->flush(); // Ensure immediate send
+        m_socket->flush();
+        qDebug() << "[CAT TX] sent:" << command << "(" << packet.size() << "bytes)";
+    } else {
+        qWarning() << "[CAT TX] DROPPED (state=" << m_state << "):" << command;
     }
 }
 

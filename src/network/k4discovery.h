@@ -1,0 +1,68 @@
+/*
+    K4Discovery - Network discovery for Elecraft K4 radios
+    Originally from TR4QT by Thomas M. Schaefer NY4I
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+*/
+
+#ifndef K4DISCOVERY_H
+#define K4DISCOVERY_H
+
+#include <QObject>
+#include <QUdpSocket>
+#include <QNetworkInterface>
+#include <QTimer>
+#include <QList>
+
+struct K4RadioInfo {
+    QString rigType;      // "k4" or "k4z"
+    int rigIndex;         // Radio index (typically 0)
+    QString ipAddress;    // IP address (e.g., "192.168.1.100")
+    QString serialNumber; // Serial number (e.g., "278")
+
+    QString hostname() const {
+        QString prefix = (rigType.toLower() == "k4z") ? "K4Z" : "K4";
+        return QString("%1-SN%2.local").arg(prefix).arg(serialNumber.rightJustified(5, '0'));
+    }
+
+    bool isK4Zero() const { return rigType.toLower() == "k4z"; }
+};
+
+class K4Discovery : public QObject {
+    Q_OBJECT
+
+public:
+    explicit K4Discovery(QObject* parent = nullptr);
+    ~K4Discovery() override;
+
+    void startDiscovery();
+    QList<K4RadioInfo> discoveredRadios() const { return m_discoveredRadios; }
+
+signals:
+    void radioFound(const K4RadioInfo& radio);
+    void discoveryFinished(int count);
+    void error(const QString& errorMessage);
+
+private slots:
+    void onReadyRead();
+    void onDiscoveryTimeout();
+
+private:
+    void sendDiscoveryMessage(const QNetworkInterface& netInterface);
+    bool parseK4Response(const QByteArray& data, K4RadioInfo& radioInfo);
+
+    static constexpr int UDP_PORT = 9100;
+    static constexpr int TIMEOUT_MS = 10000;
+    static const char* DISCOVERY_MESSAGE;
+    static const char* K4_RESPONSE_PREFIX;
+
+    QList<QUdpSocket*> m_sockets;
+    QTimer* m_timeoutTimer;
+    QList<K4RadioInfo> m_discoveredRadios;
+    bool m_discoveryActive;
+};
+
+#endif // K4DISCOVERY_H

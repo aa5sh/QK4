@@ -83,6 +83,7 @@ void Protocol::processPacket(const QByteArray &payload) {
         // CAT response: [0x00][0x00][0x00][ASCII data]
         if (payload.size() > 3) {
             QString response = QString::fromLatin1(payload.mid(3));
+            qDebug() << "[CAT RX]" << response;
             emit catResponseReceived(response);
         }
         break;

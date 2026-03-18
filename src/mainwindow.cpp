@@ -4277,6 +4277,34 @@ void MainWindow::onAuthenticated() {
     // Create synthetic "Display FPS" menu item with stored preference
     m_menuModel->addSyntheticDisplayFpsItem(m_currentRadio.displayFps);
 
+    // Execute Startup macro if defined (delay to let radio process initial queries)
+    {
+        MacroEntry startupMacro = RadioSettings::instance()->macro(MacroIds::Startup);
+        if (!startupMacro.command.isEmpty()) {
+            QString forbidden = MacroIds::checkForbiddenStartupCommand(startupMacro.command);
+            if (!forbidden.isEmpty()) {
+                qWarning() << "Startup macro blocked: contains forbidden command" << forbidden;
+            } else {
+                QString command = startupMacro.command;
+                QTimer::singleShot(1000, this, [this, command]() {
+                    qDebug() << "Executing Startup macro:" << command;
+                    if (m_tcpClient && m_tcpClient->isConnected()) {
+                        // Split macro into individual commands and insert DE005; delay before each
+                        // to give the radio time to process each command
+                        const QStringList parts = command.split(';', Qt::SkipEmptyParts);
+                        QString paced;
+                        for (const QString &part : parts) {
+                            paced += QStringLiteral("DE005;") + part + ';';
+                        }
+                        m_tcpClient->sendCAT(paced);
+                    } else {
+                        qWarning() << "Startup macro: radio not connected, skipping";
+                    }
+                });
+            }
+        }
+    }
+
     // Connect KPA1500 if enabled and configured
     if (RadioSettings::instance()->kpa1500Enabled() && !RadioSettings::instance()->kpa1500Host().isEmpty()) {
         m_kpa1500Client->connectToHost(RadioSettings::instance()->kpa1500Host(),
