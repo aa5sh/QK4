@@ -433,7 +433,7 @@ void RadioManagerDialog::onSelectionChanged() {
             const K4RadioInfo &radio = *foundRadio;
             m_currentIndex = -1;                              // Not a saved entry
             m_nameEdit->setText(radio.hostname().chopped(6)); // Strip ".local"
-            m_hostEdit->setText(radio.hostname());
+            m_hostEdit->setText(radio.ipAddress);
             m_portEdit->setText(QString::number(K4Protocol::TLS_PORT));
             m_passwordEdit->clear();
             m_tlsCheckbox->setChecked(true);
