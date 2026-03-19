@@ -1,15 +1,37 @@
 #include "tcpclient.h"
 #include <QDateTime>
 #include <QDebug>
+#include <QFile>
 #include <QSslCipher>
 #include <QSslConfiguration>
 #include <QSslPreSharedKeyAuthenticator>
 #include <QSslSocket>
+#include <QStandardPaths>
+#include <QTextStream>
+
+// Temporary connection debug log — writes to ~/Desktop/qk4_conn.log
+static QElapsedTimer s_appTimer;
+static bool s_appTimerStarted = false;
+
+static void connLog(const QString &msg) {
+    if (!s_appTimerStarted) {
+        s_appTimer.start();
+        s_appTimerStarted = true;
+    }
+    static QString logPath = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation) + "/qk4_conn.log";
+    QFile f(logPath);
+    if (f.open(QIODevice::Append | QIODevice::Text)) {
+        QTextStream s(&f);
+        s << QDateTime::currentDateTime().toString("hh:mm:ss.zzz") << " [+" << s_appTimer.elapsed() << "ms] " << msg
+          << "\n";
+    }
+}
 
 TcpClient::TcpClient(QObject *parent)
     : QObject(parent), m_socket(new QSslSocket(this)), m_protocol(new Protocol(this)), m_authTimer(new QTimer(this)),
-      m_connectTimer(new QTimer(this)), m_pingTimer(new QTimer(this)), m_port(K4Protocol::DEFAULT_PORT),
-      m_useTls(false), m_encodeMode(3), m_streamingLatency(3), m_state(Disconnected), m_authResponseReceived(false) {
+      m_connectTimer(new QTimer(this)), m_pingTimer(new QTimer(this)), m_retryTimer(new QTimer(this)),
+      m_port(K4Protocol::DEFAULT_PORT), m_useTls(false), m_encodeMode(3), m_streamingLatency(3), m_state(Disconnected),
+      m_authResponseReceived(false) {
     // Socket signals
     connect(m_socket, &QSslSocket::connected, this, &TcpClient::onSocketConnected);
     connect(m_socket, &QSslSocket::encrypted, this, &TcpClient::onSocketEncrypted);
@@ -33,6 +55,10 @@ TcpClient::TcpClient(QObject *parent)
     // Ping timer for keep-alive
     m_pingTimer->setInterval(K4Protocol::PING_INTERVAL_MS);
     connect(m_pingTimer, &QTimer::timeout, this, &TcpClient::onPingTimer);
+
+    // Retry timer — single-shot, fires attemptConnection() after transient network errors
+    m_retryTimer->setSingleShot(true);
+    connect(m_retryTimer, &QTimer::timeout, this, &TcpClient::attemptConnection);
 
     // Protocol signals - any packet means auth succeeded
     connect(m_protocol, &Protocol::packetReceived, this, [this](quint8 type, const QByteArray &payload) {
@@ -66,6 +92,7 @@ TcpClient::TcpClient(QObject *parent)
 
 TcpClient::~TcpClient() {
     m_connectTimer->stop();
+    m_retryTimer->stop();
     stopPingTimer();
     if (m_socket->state() != QAbstractSocket::UnconnectedState) {
         m_socket->abort();
@@ -74,8 +101,11 @@ TcpClient::~TcpClient() {
 
 void TcpClient::connectToHost(const QString &host, quint16 port, const QString &password, bool useTls,
                               const QString &identity, int encodeMode, int streamingLatency) {
+    connLog(QString("connectToHost called, state=%1 socket=%2").arg(m_state).arg(m_socket->state()));
     if (m_state != Disconnected) {
+        connLog("Not disconnected, calling disconnectFromHost first");
         disconnectFromHost();
+        connLog(QString("After disconnect: state=%1 socket=%2").arg(m_state).arg(m_socket->state()));
     }
 
     m_host = host;
@@ -87,14 +117,27 @@ void TcpClient::connectToHost(const QString &host, quint16 port, const QString &
     m_streamingLatency = streamingLatency; // Remote streaming audio latency (0-7)
     m_authResponseReceived = false;
 
+    m_retryCount = 0;
     setState(Connecting);
+    attemptConnection();
+}
+
+void TcpClient::attemptConnection() {
+    connLog(QString("attemptConnection host=%1 port=%2 tls=%3 socketState=%4 thread=%5")
+                .arg(m_host)
+                .arg(m_port)
+                .arg(m_useTls)
+                .arg(m_socket->state())
+                .arg(reinterpret_cast<quintptr>(QThread::currentThread()), 0, 16));
 
     if (m_useTls) {
-        // Log OpenSSL version Qt is using
-        qDebug() << "=== SSL Library Info ===";
-        qDebug() << "  Build version:" << QSslSocket::sslLibraryBuildVersionString();
-        qDebug() << "  Runtime version:" << QSslSocket::sslLibraryVersionString();
-        qDebug() << "  Supports SSL:" << QSslSocket::supportsSsl();
+        // Log OpenSSL version Qt is using (first attempt only)
+        if (m_retryCount == 0) {
+            qDebug() << "=== SSL Library Info ===";
+            qDebug() << "  Build version:" << QSslSocket::sslLibraryBuildVersionString();
+            qDebug() << "  Runtime version:" << QSslSocket::sslLibraryVersionString();
+            qDebug() << "  Supports SSL:" << QSslSocket::supportsSsl();
+        }
 
         // Configure TLS for PSK authentication - require TLS 1.2 minimum
         QSslConfiguration sslConfig = QSslConfiguration::defaultConfiguration();
@@ -103,19 +146,25 @@ void TcpClient::connectToHost(const QString &host, quint16 port, const QString &
 
         // Filter to only TLS 1.2+ PSK ciphers
         QList<QSslCipher> tls12PskCiphers;
-        qDebug() << "=== Available PSK Ciphers ===";
+        if (m_retryCount == 0) {
+            qDebug() << "=== Available PSK Ciphers ===";
+        }
         for (const QSslCipher &cipher : QSslConfiguration::supportedCiphers()) {
             if (cipher.name().contains("PSK")) {
-                qDebug() << "  " << cipher.name() << "(" << cipher.protocolString() << ")";
+                if (m_retryCount == 0) {
+                    qDebug() << "  " << cipher.name() << "(" << cipher.protocolString() << ")";
+                }
                 // Only include TLS 1.2+ ciphers
                 if (cipher.protocol() == QSsl::TlsV1_2 || cipher.protocol() == QSsl::TlsV1_3) {
                     tls12PskCiphers.append(cipher);
                 }
             }
         }
-        qDebug() << "=== Offering" << tls12PskCiphers.size() << "TLS 1.2+ PSK ciphers ===";
-        for (const QSslCipher &cipher : tls12PskCiphers) {
-            qDebug() << "  " << cipher.name();
+        if (m_retryCount == 0) {
+            qDebug() << "=== Offering" << tls12PskCiphers.size() << "TLS 1.2+ PSK ciphers ===";
+            for (const QSslCipher &cipher : tls12PskCiphers) {
+                qDebug() << "  " << cipher.name();
+            }
         }
         if (!tls12PskCiphers.isEmpty()) {
             sslConfig.setCiphers(tls12PskCiphers);
@@ -123,18 +172,20 @@ void TcpClient::connectToHost(const QString &host, quint16 port, const QString &
 
         m_socket->setSslConfiguration(sslConfig);
 
-        qDebug() << "Connecting with TLS/PSK to" << host << ":" << port;
-        m_socket->connectToHostEncrypted(host, port);
+        qDebug() << "Connecting with TLS/PSK to" << m_host << ":" << m_port;
+        m_socket->connectToHostEncrypted(m_host, m_port);
     } else {
-        qDebug() << "Connecting (unencrypted) to" << host << ":" << port;
-        m_socket->connectToHost(host, port);
+        qDebug() << "Connecting (unencrypted) to" << m_host << ":" << m_port;
+        m_socket->connectToHost(m_host, m_port);
     }
 
     m_connectTimer->start(K4Protocol::CONNECTION_TIMEOUT_MS);
 }
 
 void TcpClient::disconnectFromHost() {
+    connLog(QString("disconnectFromHost called, state=%1 socket=%2").arg(m_state).arg(m_socket->state()));
     m_connectTimer->stop();
+    m_retryTimer->stop();
     stopPingTimer();
     m_authTimer->stop();
 
@@ -181,6 +232,8 @@ void TcpClient::sendRaw(const QByteArray &data) {
 
 void TcpClient::setState(ConnectionState state) {
     if (m_state != state) {
+        static const char *names[] = {"Disconnected", "Connecting", "Authenticating", "Connected"};
+        connLog(QString("State: %1 -> %2").arg(names[m_state], names[state]));
         m_state = state;
         m_connected.store(state == Connected, std::memory_order_relaxed);
         emit stateChanged(state);
@@ -225,7 +278,7 @@ void TcpClient::onSocketEncrypted() {
 }
 
 void TcpClient::onSocketDisconnected() {
-    qDebug() << "Socket disconnected";
+    connLog(QString("Socket disconnected (was state=%1, authReceived=%2)").arg(m_state).arg(m_authResponseReceived));
     stopPingTimer();
     m_authTimer->stop();
 
@@ -243,13 +296,32 @@ void TcpClient::onReadyRead() {
 }
 
 void TcpClient::onSocketError(QAbstractSocket::SocketError error) {
-    Q_UNUSED(error)
     m_connectTimer->stop();
     stopPingTimer();
     m_authTimer->stop();
 
     QString errorMsg = m_socket->errorString();
-    qDebug() << "Socket error:" << errorMsg;
+    connLog(QString("Socket error: %1 '%2' (state=%3 socket=%4 retry=%5)")
+                .arg(error)
+                .arg(errorMsg)
+                .arg(m_state)
+                .arg(m_socket->state())
+                .arg(m_retryCount));
+
+    // On local subnets, macOS returns EHOSTUNREACH immediately when the ARP cache
+    // is cold (no MAC address entry for the destination IP). This happens consistently
+    // on first connect after a fresh app launch via Finder/open — the kernel's connect()
+    // syscall fails synchronously instead of waiting for ARP resolution. The ARP request
+    // IS sent, so a brief retry after 500ms succeeds once the ARP reply populates the cache.
+    // This is not a workaround — it's correct handling of a real network transient.
+    bool arpTransient = (error == QAbstractSocket::NetworkError && m_state == Connecting && m_retryCount < 2);
+    if (arpTransient) {
+        m_retryCount++;
+        connLog(QString("ARP-cold retry %1 in 500ms").arg(m_retryCount));
+        m_socket->abort();
+        m_retryTimer->start(500);
+        return;
+    }
 
     if (m_state == Authenticating) {
         emit authenticationFailed();

@@ -60,12 +60,15 @@ private:
     void sendAuthentication();
     void startPingTimer();
     void stopPingTimer();
+    void attemptConnection();
 
     QSslSocket *m_socket;
     Protocol *m_protocol;
     QTimer *m_authTimer;
     QTimer *m_connectTimer;
     QTimer *m_pingTimer;
+    QTimer *m_retryTimer;
+    int m_retryCount = 0;
 
     QString m_host;
     quint16 m_port;
