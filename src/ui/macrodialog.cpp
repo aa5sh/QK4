@@ -667,9 +667,11 @@ void MacroDialog::onCommandChanged(const QString &functionId, const QString &com
                 }
             }
             // Notify user
-            auto *notification = new QLabel(QString("Forbidden command in Startup macro: %1").arg(forbidden), this);
-            notification->setStyleSheet("QLabel { color: #ff4444; background: #331111; padding: 8px; "
-                                        "border-radius: 4px; font-size: 13px; }");
+            auto *notification = new QLabel(
+                QString("Forbidden command in Startup macro: %1").arg(forbidden), this);
+            notification->setStyleSheet(
+                "QLabel { color: #ff4444; background: #331111; padding: 8px; "
+                "border-radius: 4px; font-size: 13px; }");
             notification->setAlignment(Qt::AlignCenter);
             notification->move((width() - 350) / 2, 50);
             notification->setFixedWidth(350);
