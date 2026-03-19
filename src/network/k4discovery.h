@@ -27,7 +27,7 @@ class K4Discovery : public QObject {
     Q_OBJECT
 
 public:
-    explicit K4Discovery(QObject* parent = nullptr);
+    explicit K4Discovery(QObject *parent = nullptr);
     ~K4Discovery() override;
 
     void startDiscovery();
@@ -35,24 +35,24 @@ public:
     static constexpr int TIMEOUT_MS = 5000;
 
 signals:
-    void radioFound(const K4RadioInfo& radio);
+    void radioFound(const K4RadioInfo &radio);
     void discoveryFinished(int count);
-    void error(const QString& errorMessage);
+    void error(const QString &errorMessage);
 
 private slots:
     void onReadyRead();
     void onDiscoveryTimeout();
 
 private:
-    void sendDiscoveryMessage(const QNetworkInterface& netInterface);
-    bool parseK4Response(const QByteArray& data, K4RadioInfo& radioInfo);
+    void sendDiscoveryMessage(const QNetworkInterface &netInterface);
+    bool parseK4Response(const QByteArray &data, K4RadioInfo &radioInfo);
 
     static constexpr int UDP_PORT = 9100;
-    static const char* DISCOVERY_MESSAGE;
-    static const char* K4_RESPONSE_PREFIX;
+    static const char *DISCOVERY_MESSAGE;
+    static const char *K4_RESPONSE_PREFIX;
 
-    QList<QUdpSocket*> m_sockets;
-    QTimer* m_timeoutTimer;
+    QList<QUdpSocket *> m_sockets;
+    QTimer *m_timeoutTimer;
     QList<K4RadioInfo> m_discoveredRadios;
     bool m_discoveryActive;
 };
