@@ -3911,9 +3911,9 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
         m_radioState->setScale(newScale);
     });
 
-    // Ctrl+Wheel: Adjust reference level for Main RX
+    // Ctrl+Wheel: Adjust reference level for Main RX (blocked when auto-ref is active)
     connect(m_panadapterA, &PanadapterRhiWidget::refLevelScrolled, this, [this](int steps) {
-        if (!m_tcpClient->isConnected())
+        if (!m_tcpClient->isConnected() || m_radioState->autoRefLevel())
             return;
         int currentRef = m_radioState->refLevel();
         if (currentRef < -200)
@@ -4069,9 +4069,9 @@ void MainWindow::setupSpectrumPlaceholder(QWidget *parent) {
         m_radioState->setScale(newScale);
     });
 
-    // Ctrl+Wheel on panadapter B: Adjust reference level for Sub RX
+    // Ctrl+Wheel on panadapter B: Adjust reference level for Sub RX (blocked when auto-ref is active)
     connect(m_panadapterB, &PanadapterRhiWidget::refLevelScrolled, this, [this](int steps) {
-        if (!m_tcpClient->isConnected())
+        if (!m_tcpClient->isConnected() || m_radioState->autoRefLevel())
             return;
         int currentRef = m_radioState->refLevelB();
         if (currentRef < -200)
@@ -4209,6 +4209,8 @@ void MainWindow::showRadioManager() {
 }
 
 void MainWindow::connectToRadio(const RadioEntry &radio) {
+    qDebug() << "connectToRadio: isConnected=" << m_tcpClient->isConnected()
+             << "connectionState=" << m_tcpClient->connectionState();
     if (m_tcpClient->isConnected()) {
         QMetaObject::invokeMethod(m_tcpClient, "disconnectFromHost", Qt::QueuedConnection);
     }
