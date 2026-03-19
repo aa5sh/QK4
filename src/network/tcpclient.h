@@ -29,8 +29,10 @@ public:
     Q_INVOKABLE void sendCAT(const QString &command);
     Q_INVOKABLE void sendRaw(const QByteArray &data);
 
-    // Pre-RDY command string sent before the state dump on connect
-    void setStartupMacro(const QString &macro) { m_startupMacro = macro; }
+    // Pre-RDY command string sent before the state dump on connect.
+    // Must be called before connectToHost() — both are queued to the IO thread,
+    // so ordering is guaranteed as long as the caller doesn't interleave.
+    Q_INVOKABLE void setStartupMacro(const QString &macro) { m_startupMacro = macro; }
 
     Protocol *protocol() { return m_protocol; }
 

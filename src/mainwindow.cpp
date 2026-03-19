@@ -4226,7 +4226,8 @@ void MainWindow::connectToRadio(const RadioEntry &radio) {
             if (!forbidden.isEmpty()) {
                 qWarning() << "Startup macro blocked: contains forbidden command" << forbidden;
             } else {
-                m_tcpClient->setStartupMacro(startupMacro.command);
+                QMetaObject::invokeMethod(m_tcpClient, "setStartupMacro", Qt::QueuedConnection,
+                                          Q_ARG(QString, startupMacro.command));
             }
         }
     }

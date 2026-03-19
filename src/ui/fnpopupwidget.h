@@ -64,11 +64,18 @@ const QString KbdF10 = "Keyboard-F10";
 const QString KbdF11 = "Keyboard-F11";
 const QString KbdF12 = "Keyboard-F12";
 
-// CAT command patterns forbidden in Startup macro
-// Each entry is a regex pattern matched against uppercase command text
+// CAT command patterns forbidden in Startup macro.
+// Each entry is a regex pattern matched against uppercase command text.
+// Only truly destructive or init-conflicting commands are blocked;
+// the user is trusted for everything else.
 inline const QStringList ForbiddenStartupPatterns = {
-    "PS\\d*;",  // PS0; PS1; etc — power state commands
-    "EE;",      // EEPROM write
+    "PS\\d*;",   // PS0; PS1; etc — power state commands
+    "EE\\d*;",   // EE; EE0; — EEPROM write/reset
+    "RDY;",      // Would cause a double state dump
+    "EM\\d;",    // Audio encode mode — conflicts with init sequence
+    "SL\\d;",    // Streaming latency — conflicts with init sequence
+    "K4[01];",   // Protocol mode — conflicts with init sequence
+    "AI\\d*;",   // Auto-info mode — conflicts with server-managed state
 };
 
 // Returns the first forbidden pattern found in command, or empty string if clean

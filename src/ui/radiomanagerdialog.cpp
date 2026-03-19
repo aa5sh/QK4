@@ -548,10 +548,6 @@ bool RadioManagerDialog::isAlreadyConfigured(const K4RadioInfo &radio) const {
 }
 
 void RadioManagerDialog::onRadioFound(const K4RadioInfo &radio) {
-    // Skip K4/0 (K4Z) radios
-    if (radio.isK4Zero())
-        return;
-
     // Skip if already in the configured server list
     if (isAlreadyConfigured(radio))
         return;

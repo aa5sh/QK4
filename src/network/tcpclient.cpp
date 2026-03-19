@@ -2,6 +2,7 @@
 #include <QDateTime>
 #include <QDebug>
 #include <QFile>
+#include <QLoggingCategory>
 #include <QSslCipher>
 #include <QSslConfiguration>
 #include <QSslPreSharedKeyAuthenticator>
@@ -26,6 +27,8 @@ static void connLog(const QString &msg) {
           << "\n";
     }
 }
+
+Q_LOGGING_CATEGORY(catTx, "CAT.TX")
 
 TcpClient::TcpClient(QObject *parent)
     : QObject(parent), m_socket(new QSslSocket(this)), m_protocol(new Protocol(this)), m_authTimer(new QTimer(this)),
@@ -217,7 +220,7 @@ TcpClient::ConnectionState TcpClient::connectionState() const {
 
 void TcpClient::sendCAT(const QString &command) {
     if (QThread::currentThread() != thread()) {
-        qDebug() << "[CAT TX] cross-thread marshal:" << command;
+        qCDebug(catTx) << "cross-thread marshal:" << command;
         QMetaObject::invokeMethod(this, "sendCAT", Qt::QueuedConnection, Q_ARG(QString, command));
         return;
     }
@@ -225,7 +228,7 @@ void TcpClient::sendCAT(const QString &command) {
         QByteArray packet = Protocol::buildCATPacket(command);
         m_socket->write(packet);
         m_socket->flush();
-        qDebug() << "[CAT TX] sent:" << command << "(" << packet.size() << "bytes)";
+        qCDebug(catTx) << "sent:" << command << "(" << packet.size() << "bytes)";
     } else {
         qWarning() << "[CAT TX] DROPPED (state=" << m_state << "):" << command;
     }

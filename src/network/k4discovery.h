@@ -1,12 +1,4 @@
-/*
-    K4Discovery - Network discovery for Elecraft K4 radios
-    Originally from TR4QT by Thomas M. Schaefer NY4I
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-*/
+// K4Discovery - Network discovery for Elecraft K4 radios
 
 #ifndef K4DISCOVERY_H
 #define K4DISCOVERY_H

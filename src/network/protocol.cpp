@@ -2,6 +2,9 @@
 #include <QCryptographicHash>
 #include <QtEndian>
 #include <QDebug>
+#include <QLoggingCategory>
+
+Q_LOGGING_CATEGORY(catRx, "CAT.RX")
 
 Protocol::Protocol(QObject *parent) : QObject(parent) {}
 
@@ -83,7 +86,7 @@ void Protocol::processPacket(const QByteArray &payload) {
         // CAT response: [0x00][0x00][0x00][ASCII data]
         if (payload.size() > 3) {
             QString response = QString::fromLatin1(payload.mid(3));
-            qDebug() << "[CAT RX]" << response;
+            qCDebug(catRx) << response;
             emit catResponseReceived(response);
         }
         break;
