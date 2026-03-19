@@ -6,8 +6,7 @@
 #include <QGridLayout>
 #include <QLabel>
 
-RadioManagerDialog::RadioManagerDialog(QWidget *parent)
-    : QDialog(parent), m_currentIndex(-1), m_discovery(nullptr) {
+RadioManagerDialog::RadioManagerDialog(QWidget *parent) : QDialog(parent), m_currentIndex(-1), m_discovery(nullptr) {
     setupUi();
     refreshList();
     updateButtonStates();
@@ -425,11 +424,14 @@ void RadioManagerDialog::onSelectionChanged() {
         QString ip = item->data(Qt::UserRole + 1).toString();
         const K4RadioInfo *foundRadio = nullptr;
         for (const auto &r : m_discoveredRadios) {
-            if (r.ipAddress == ip) { foundRadio = &r; break; }
+            if (r.ipAddress == ip) {
+                foundRadio = &r;
+                break;
+            }
         }
         if (foundRadio) {
             const K4RadioInfo &radio = *foundRadio;
-            m_currentIndex = -1; // Not a saved entry
+            m_currentIndex = -1;                              // Not a saved entry
             m_nameEdit->setText(radio.hostname().chopped(6)); // Strip ".local"
             m_hostEdit->setText(radio.hostname());
             m_portEdit->setText(QString::number(K4Protocol::TLS_PORT));
@@ -439,7 +441,7 @@ void RadioManagerDialog::onSelectionChanged() {
             m_identityLabel->setVisible(true);
             m_identityEdit->setVisible(true);
             m_encodeModeCombo->setCurrentIndex(0);       // EM3 default
-            m_streamingLatencyCombo->setCurrentIndex(3);  // SL3 default
+            m_streamingLatencyCombo->setCurrentIndex(3); // SL3 default
         }
     } else {
         m_currentIndex = row;
