@@ -2,6 +2,7 @@
 #include <QDateTime>
 #include <QDebug>
 #include <QFile>
+#include <QHostInfo>
 #include <QLoggingCategory>
 #include <QSslCipher>
 #include <QSslConfiguration>
@@ -129,6 +130,42 @@ void TcpClient::connectToHost(const QString &host, quint16 port, const QString &
 
     m_retryCount = 0;
     setState(Connecting);
+
+    // Resolve .local (mDNS) hostnames before connecting — Qt's SSL socket
+    // may not go through the system mDNS resolver, causing connection timeouts.
+    // K4, K4D, and K4Z radios only listen on IPv4, so prefer IPv4 results.
+    // The context-object overload of lookupHost() cancels if `this` is destroyed.
+    if (m_host.endsWith(QStringLiteral(".local"), Qt::CaseInsensitive)) {
+        qDebug() << "Resolving mDNS hostname:" << m_host;
+        QHostInfo::lookupHost(m_host, this, [this](const QHostInfo &info) {
+            // Guard: user may have disconnected while resolution was in flight
+            if (m_state != Connecting)
+                return;
+
+            if (info.error() != QHostInfo::NoError || info.addresses().isEmpty()) {
+                qWarning() << "mDNS resolution failed for" << m_host << ":" << info.errorString();
+                emit errorOccurred(QString("Could not resolve %1: %2").arg(m_host, info.errorString()));
+                setState(Disconnected);
+                return;
+            }
+            // Prefer IPv4 — K4, K4D, and K4Z radios only listen on IPv4
+            QString resolved;
+            for (const auto &addr : info.addresses()) {
+                if (addr.protocol() == QAbstractSocket::IPv4Protocol) {
+                    resolved = addr.toString();
+                    break;
+                }
+            }
+            if (resolved.isEmpty()) {
+                resolved = info.addresses().first().toString();
+            }
+            qDebug() << "Resolved" << m_host << "to" << resolved;
+            m_host = resolved;
+            attemptConnection();
+        });
+        return;
+    }
+
     attemptConnection();
 }
 
