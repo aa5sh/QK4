@@ -4218,6 +4218,20 @@ void MainWindow::connectToRadio(const RadioEntry &radio) {
     m_currentRadio = radio;
     m_titleLabel->setText("Elecraft K4 - " + radio.name);
 
+    // Load startup macro so TcpClient can send it before RDY (state dump reflects changes)
+    {
+        MacroEntry startupMacro = RadioSettings::instance()->macro(MacroIds::Startup);
+        if (!startupMacro.command.isEmpty()) {
+            QString forbidden = MacroIds::checkForbiddenStartupCommand(startupMacro.command);
+            if (!forbidden.isEmpty()) {
+                qWarning() << "Startup macro blocked: contains forbidden command" << forbidden;
+            } else {
+                QMetaObject::invokeMethod(m_tcpClient, "setStartupMacro", Qt::QueuedConnection,
+                                          Q_ARG(QString, startupMacro.command));
+            }
+        }
+    }
+
     qDebug() << "Connecting to" << radio.host << ":" << radio.port << (radio.useTls ? "(TLS/PSK)" : "(unencrypted)")
              << "encodeMode:" << radio.encodeMode << "streamingLatency:" << radio.streamingLatency;
     QMetaObject::invokeMethod(m_tcpClient, "connectToHost", Qt::QueuedConnection, Q_ARG(QString, radio.host),
@@ -4276,6 +4290,8 @@ void MainWindow::onAuthenticated() {
 
     // Create synthetic "Display FPS" menu item with stored preference
     m_menuModel->addSyntheticDisplayFpsItem(m_currentRadio.displayFps);
+
+    // Startup macro is sent pre-RDY by TcpClient so the state dump reflects changes.
 
     // Connect KPA1500 if enabled and configured
     if (RadioSettings::instance()->kpa1500Enabled() && !RadioSettings::instance()->kpa1500Host().isEmpty()) {

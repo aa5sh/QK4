@@ -2,6 +2,7 @@
 #include <QDateTime>
 #include <QDebug>
 #include <QFile>
+#include <QLoggingCategory>
 #include <QSslCipher>
 #include <QSslConfiguration>
 #include <QSslPreSharedKeyAuthenticator>
@@ -26,6 +27,8 @@ static void connLog(const QString &msg) {
           << "\n";
     }
 }
+
+Q_LOGGING_CATEGORY(catTx, "CAT.TX")
 
 TcpClient::TcpClient(QObject *parent)
     : QObject(parent), m_socket(new QSslSocket(this)), m_protocol(new Protocol(this)), m_authTimer(new QTimer(this)),
@@ -70,6 +73,13 @@ TcpClient::TcpClient(QObject *parent)
             setState(Connected);
             emit authenticated();
             startPingTimer();
+
+            // Send startup macro BEFORE RDY so the state dump reflects the macro changes
+            if (!m_startupMacro.isEmpty()) {
+                qDebug() << "Sending startup macro (pre-RDY):" << m_startupMacro;
+                sendCAT(m_startupMacro);
+                m_startupMacro.clear();
+            }
 
             // Send initialization sequence
             // RDY triggers comprehensive state dump containing all radio state:
@@ -210,13 +220,17 @@ TcpClient::ConnectionState TcpClient::connectionState() const {
 
 void TcpClient::sendCAT(const QString &command) {
     if (QThread::currentThread() != thread()) {
+        qCDebug(catTx) << "cross-thread marshal:" << command;
         QMetaObject::invokeMethod(this, "sendCAT", Qt::QueuedConnection, Q_ARG(QString, command));
         return;
     }
     if (m_state == Connected) {
         QByteArray packet = Protocol::buildCATPacket(command);
         m_socket->write(packet);
-        m_socket->flush(); // Ensure immediate send
+        m_socket->flush();
+        qCDebug(catTx) << "sent:" << command << "(" << packet.size() << "bytes)";
+    } else {
+        qWarning() << "[CAT TX] DROPPED (state=" << m_state << "):" << command;
     }
 }
 
