@@ -242,6 +242,12 @@ void RadioManagerDialog::setupUi() {
     m_deleteButton->setStyleSheet(K4Styles::dialogButton());
     buttonLayout->addWidget(m_deleteButton);
 
+    m_scanButton = new QPushButton("Scan", this);
+    m_scanButton->setStyleSheet(K4Styles::dialogButton());
+    m_scanButton->setToolTip("Scan LAN for K4 radios");
+    connect(m_scanButton, &QPushButton::clicked, this, &RadioManagerDialog::startDiscovery);
+    buttonLayout->addWidget(m_scanButton);
+
     // Back button - smaller with curved arrow
     m_backButton = new QPushButton(QString::fromUtf8("\xE2\x86\xA9"), this); // ↩ Curved arrow
     m_backButton->setStyleSheet(K4Styles::dialogButton());
@@ -283,6 +289,7 @@ void RadioManagerDialog::refreshList() {
             font.setItalic(true);
             item->setFont(font);
             item->setData(Qt::UserRole, QStringLiteral("discovered"));
+            item->setData(Qt::UserRole + 1, radio.ipAddress);
             m_radioList->addItem(item);
         }
     }
@@ -414,10 +421,14 @@ void RadioManagerDialog::onSelectionChanged() {
 
     QListWidgetItem *item = m_radioList->item(row);
     if (item && item->data(Qt::UserRole).toString() == QStringLiteral("discovered")) {
-        // Discovered but unconfigured entry — populate form with discovery defaults
-        int discoveredIndex = row - RadioSettings::instance()->radios().size();
-        if (discoveredIndex >= 0 && discoveredIndex < m_discoveredRadios.size()) {
-            const K4RadioInfo &radio = m_discoveredRadios.at(discoveredIndex);
+        // Discovered but unconfigured entry — look up by IP stored in the item
+        QString ip = item->data(Qt::UserRole + 1).toString();
+        const K4RadioInfo *foundRadio = nullptr;
+        for (const auto &r : m_discoveredRadios) {
+            if (r.ipAddress == ip) { foundRadio = &r; break; }
+        }
+        if (foundRadio) {
+            const K4RadioInfo &radio = *foundRadio;
             m_currentIndex = -1; // Not a saved entry
             m_nameEdit->setText(radio.hostname().chopped(6)); // Strip ".local"
             m_hostEdit->setText(radio.hostname());
@@ -531,9 +542,29 @@ void RadioManagerDialog::setConnectedHost(const QString &host) {
 }
 
 void RadioManagerDialog::startDiscovery() {
+    if (m_discovery)
+        return; // Already scanning
     m_discovery = new K4Discovery(this);
     connect(m_discovery, &K4Discovery::radioFound, this, &RadioManagerDialog::onRadioFound);
     connect(m_discovery, &K4Discovery::discoveryFinished, this, &RadioManagerDialog::onDiscoveryFinished);
+    m_scanButton->setEnabled(false);
+
+    // Start countdown display on the button
+    m_scanSecondsLeft = K4Discovery::TIMEOUT_MS / 1000;
+    m_scanButton->setText(QString("Scanning (%1s)").arg(m_scanSecondsLeft));
+    if (!m_scanCountdown) {
+        m_scanCountdown = new QTimer(this);
+        m_scanCountdown->setInterval(1000);
+        connect(m_scanCountdown, &QTimer::timeout, this, [this]() {
+            if (--m_scanSecondsLeft > 0) {
+                m_scanButton->setText(QString("Scanning (%1s)").arg(m_scanSecondsLeft));
+            } else {
+                m_scanCountdown->stop();
+            }
+        });
+    }
+    m_scanCountdown->start();
+
     m_discovery->startDiscovery();
 }
 
@@ -566,6 +597,7 @@ void RadioManagerDialog::onRadioFound(const K4RadioInfo &radio) {
     font.setItalic(true);
     item->setFont(font);
     item->setData(Qt::UserRole, QStringLiteral("discovered"));
+    item->setData(Qt::UserRole + 1, radio.ipAddress);
     m_radioList->addItem(item);
 }
 
@@ -573,4 +605,8 @@ void RadioManagerDialog::onDiscoveryFinished(int count) {
     Q_UNUSED(count)
     m_discovery->deleteLater();
     m_discovery = nullptr;
+    if (m_scanCountdown)
+        m_scanCountdown->stop();
+    m_scanButton->setEnabled(true);
+    m_scanButton->setText("Scan");
 }

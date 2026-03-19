@@ -32,6 +32,7 @@ public:
 
     void startDiscovery();
     QList<K4RadioInfo> discoveredRadios() const { return m_discoveredRadios; }
+    static constexpr int TIMEOUT_MS = 5000;
 
 signals:
     void radioFound(const K4RadioInfo& radio);
@@ -47,7 +48,6 @@ private:
     bool parseK4Response(const QByteArray& data, K4RadioInfo& radioInfo);
 
     static constexpr int UDP_PORT = 9100;
-    static constexpr int TIMEOUT_MS = 10000;
     static const char* DISCOVERY_MESSAGE;
     static const char* K4_RESPONSE_PREFIX;
 

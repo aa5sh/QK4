@@ -65,6 +65,9 @@ private:
     QPushButton *m_saveButton;
     QPushButton *m_deleteButton;
     QPushButton *m_backButton;
+    QPushButton *m_scanButton;
+    QTimer *m_scanCountdown = nullptr;
+    int m_scanSecondsLeft = 0;
 
     int m_currentIndex;
     QString m_connectedHost; // Host of currently connected radio (empty if disconnected)
