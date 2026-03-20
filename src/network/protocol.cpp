@@ -1,7 +1,6 @@
 #include "protocol.h"
 #include <QCryptographicHash>
 #include <QtEndian>
-#include <QDebug>
 #include <QLoggingCategory>
 
 Q_LOGGING_CATEGORY(catRx, "CAT.RX")
@@ -129,7 +128,7 @@ void Protocol::processPacket(const QByteArray &payload) {
         break;
     }
     default:
-        qDebug() << "Unknown K4 packet type:" << type;
+        qCDebug(catRx) << "Unknown K4 packet type:" << type;
         break;
     }
 }

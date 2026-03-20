@@ -2,14 +2,16 @@
 #include "k4styles.h"
 #include "../settings/radiosettings.h"
 #include "fnpopupwidget.h"
-#include <QDebug>
 #include <QKeyEvent>
+#include <QLoggingCategory>
 #include <QLabel>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPushButton>
 #include <QScrollBar>
 #include <QTimer>
+
+Q_LOGGING_CATEGORY(uiMacro, "ui.macro")
 
 namespace {
 // Layout constants
@@ -648,7 +650,7 @@ void MacroDialog::onLabelChanged(const QString &functionId, const QString &label
     auto settings = RadioSettings::instance();
     MacroEntry macro = settings->macro(functionId);
     settings->setMacro(functionId, label, macro.command);
-    qDebug() << "Macro label updated:" << functionId << "->" << label;
+    qCDebug(uiMacro) << "Macro label updated:" << functionId << "->" << label;
 }
 
 void MacroDialog::onCommandChanged(const QString &functionId, const QString &command) {
@@ -682,7 +684,7 @@ void MacroDialog::onCommandChanged(const QString &functionId, const QString &com
     auto settings = RadioSettings::instance();
     MacroEntry macro = settings->macro(functionId);
     settings->setMacro(functionId, macro.label, command);
-    qDebug() << "Macro command updated:" << functionId << "->" << command;
+    qCDebug(uiMacro) << "Macro command updated:" << functionId << "->" << command;
 }
 
 void MacroDialog::updateSelection() {
