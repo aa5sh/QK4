@@ -4685,15 +4685,8 @@ void MainWindow::onSwrChanged(double swr) {
 }
 
 void MainWindow::onDisplayFpsChanged(int fps) {
-    // Update synthetic menu item value
+    // Update synthetic menu item value with whatever the radio reports
     m_menuModel->updateValue(MenuModel::SYNTHETIC_DISPLAY_FPS_ID, fps);
-
-    // Compare to stored preference and send if different
-    if (m_tcpClient->isConnected() && m_currentRadio.displayFps != fps) {
-        qCDebug(qk4Main) << "Display FPS mismatch: stored=" << m_currentRadio.displayFps << "radio=" << fps
-                         << "-> sending #FPS" << m_currentRadio.displayFps;
-        m_tcpClient->sendCAT(QString("#FPS%1;").arg(m_currentRadio.displayFps));
-    }
 }
 
 void MainWindow::onSplitChanged(bool enabled) {
