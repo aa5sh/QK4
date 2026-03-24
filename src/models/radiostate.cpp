@@ -1069,7 +1069,7 @@ void RadioState::handleFA(const QString &cmd) {
         return;
     bool ok;
     quint64 freq = cmd.mid(2).toULongLong(&ok);
-    if (ok) {
+    if (ok && m_vfoA != freq) {
         m_vfoA = freq;
         m_frequency = freq;
         emit frequencyChanged(freq);
@@ -1541,7 +1541,7 @@ void RadioState::handlePO(const QString &cmd) {
         return;
     bool ok;
     int po = cmd.mid(2).toInt(&ok);
-    if (ok) {
+    if (ok && m_powerMeter != po) {
         m_powerMeter = po;
         emit powerMeterChanged(m_powerMeter);
     }
@@ -2271,8 +2271,11 @@ void RadioState::handleSB(const QString &cmd) {
     // SB - Sub Receiver: SB0=off, SB1=on, SB3=on (diversity)
     if (cmd.length() <= 2)
         return;
-    m_subReceiverEnabled = (cmd.mid(2) != "0");
-    emit subRxEnabledChanged(m_subReceiverEnabled);
+    bool newState = (cmd.mid(2) != "0");
+    if (newState != m_subReceiverEnabled) {
+        m_subReceiverEnabled = newState;
+        emit subRxEnabledChanged(m_subReceiverEnabled);
+    }
 }
 
 void RadioState::handleDV(const QString &cmd) {
