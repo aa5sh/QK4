@@ -79,13 +79,15 @@ private:
     static constexpr float PEAK_DECAY_RATE = 0.04f;
 
     // Layout constants
-    static constexpr int HEADER_HEIGHT = 14;
+    static constexpr int TOP_PAD = 16;
+    static constexpr int HEADER_HEIGHT = 16;
     static constexpr int BAR_HEIGHT = 8;
-    static constexpr int METER_SPACING = 16;
-    static constexpr int LABEL_WIDTH = 24;
-    static constexpr int VALUE_WIDTH = 32;
+    static constexpr int METER_SPACING = 18;
+    static constexpr int LABEL_WIDTH = 22;
+    static constexpr int VALUE_WIDTH = 28;
     static constexpr int MARGIN = 2;
-    static constexpr int METER_START_Y = 18;
+    static constexpr int METER_START_Y = TOP_PAD + HEADER_HEIGHT + 4;
+    static constexpr int ATU_LABEL_HEIGHT = 14;
 };
 
 #endif // KPA1500MINIPANEL_H

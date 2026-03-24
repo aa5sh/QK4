@@ -5,47 +5,36 @@
 #include <QVBoxLayout>
 
 Kpa1500MiniPanel::Kpa1500MiniPanel(QWidget *parent) : QWidget(parent) {
-    // Main layout: meters (painted) + buttons
+    // Main layout: top margin reserves space for painted meters + status/ATU lines, buttons below
+    int metersHeight = METER_START_Y + (METER_SPACING * 4) + ATU_LABEL_HEIGHT + 6;
     auto *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(0, 4, 0, 0);
+    layout->setContentsMargins(0, metersHeight, 0, 0);
     layout->setSpacing(4);
-
-    // Reserve space for painted meters (header + 4 bars)
-    int metersHeight = METER_START_Y + (METER_SPACING * 4) + 4;
-    auto *meterArea = new QWidget(this);
-    meterArea->setFixedHeight(metersHeight);
-    layout->addWidget(meterArea);
 
     // 2x2 button grid
     auto *btnGrid = new QGridLayout();
-    btnGrid->setContentsMargins(0, 0, 0, 0);
+    btnGrid->setContentsMargins(0, 6, 0, 0);
     btnGrid->setHorizontalSpacing(4);
-    btnGrid->setVerticalSpacing(4);
+    btnGrid->setVerticalSpacing(8);
 
-    m_modeBtn = new QPushButton("STBY", this);
-    m_modeBtn->setFixedHeight(K4Styles::Dimensions::ButtonHeightSmall);
-    m_modeBtn->setCursor(Qt::PointingHandCursor);
-    m_modeBtn->setStyleSheet(K4Styles::sidePanelButton());
+    // Helper to create button in container (matches createFunctionButton pattern)
+    auto makeBtn = [this](const QString &text, QPushButton *&btnOut) -> QWidget * {
+        auto *container = new QWidget(this);
+        auto *vbox = new QVBoxLayout(container);
+        vbox->setContentsMargins(0, 2, 0, 2);
+        vbox->setSpacing(0);
+        btnOut = new QPushButton(text, container);
+        btnOut->setFixedHeight(K4Styles::Dimensions::ButtonHeightSmall);
+        btnOut->setCursor(Qt::PointingHandCursor);
+        btnOut->setStyleSheet(K4Styles::sidePanelButton());
+        vbox->addWidget(btnOut);
+        return container;
+    };
 
-    m_atuBtn = new QPushButton("ATU", this);
-    m_atuBtn->setFixedHeight(K4Styles::Dimensions::ButtonHeightSmall);
-    m_atuBtn->setCursor(Qt::PointingHandCursor);
-    m_atuBtn->setStyleSheet(K4Styles::sidePanelButton());
-
-    m_antBtn = new QPushButton("ANT1", this);
-    m_antBtn->setFixedHeight(K4Styles::Dimensions::ButtonHeightSmall);
-    m_antBtn->setCursor(Qt::PointingHandCursor);
-    m_antBtn->setStyleSheet(K4Styles::sidePanelButton());
-
-    m_tuneBtn = new QPushButton("TUNE", this);
-    m_tuneBtn->setFixedHeight(K4Styles::Dimensions::ButtonHeightSmall);
-    m_tuneBtn->setCursor(Qt::PointingHandCursor);
-    m_tuneBtn->setStyleSheet(K4Styles::sidePanelButton());
-
-    btnGrid->addWidget(m_modeBtn, 0, 0);
-    btnGrid->addWidget(m_atuBtn, 0, 1);
-    btnGrid->addWidget(m_antBtn, 1, 0);
-    btnGrid->addWidget(m_tuneBtn, 1, 1);
+    btnGrid->addWidget(makeBtn("STBY", m_modeBtn), 0, 0);
+    btnGrid->addWidget(makeBtn("ATU", m_atuBtn), 0, 1);
+    btnGrid->addWidget(makeBtn("ANT1", m_antBtn), 1, 0);
+    btnGrid->addWidget(makeBtn("TUNE", m_tuneBtn), 1, 1);
 
     layout->addLayout(btnGrid);
 
@@ -193,27 +182,17 @@ void Kpa1500MiniPanel::paintEvent(QPaintEvent *) {
 
     int w = width();
 
-    // --- Header ---
-    QFont headerFont = K4Styles::Fonts::paintFont(K4Styles::Dimensions::FontSizeTiny, QFont::Bold);
+    // --- Header: centered title ---
+    QFont headerFont = K4Styles::Fonts::paintFont(K4Styles::Dimensions::FontSizeMedium, QFont::Bold);
     p.setFont(headerFont);
 
-    // Title
     p.setPen(QColor(K4Styles::Colors::AccentAmber));
-    p.drawText(MARGIN, 0, w / 2, HEADER_HEIGHT, Qt::AlignLeft | Qt::AlignVCenter, "KPA1500");
-
-    // Status (OPER/STBY/FAULT)
-    if (m_fault) {
-        p.setPen(QColor(K4Styles::Colors::TxRed));
-        p.drawText(w / 2, 0, w / 2 - MARGIN, HEADER_HEIGHT, Qt::AlignRight | Qt::AlignVCenter, "FAULT");
-    } else if (m_connected) {
-        p.setPen(QColor(m_operate ? K4Styles::Colors::StatusGreen : K4Styles::Colors::InactiveGray));
-        p.drawText(w / 2, 0, w / 2 - MARGIN, HEADER_HEIGHT, Qt::AlignRight | Qt::AlignVCenter,
-                   m_operate ? "OPER" : "STBY");
-    }
+    p.drawText(MARGIN, TOP_PAD, w - MARGIN * 2, HEADER_HEIGHT, Qt::AlignCenter, "KPA1500");
 
     // Separator
+    int sepY = TOP_PAD + HEADER_HEIGHT + 1;
     p.setPen(QColor(K4Styles::Colors::InactiveGray));
-    p.drawLine(MARGIN, HEADER_HEIGHT + 1, w - MARGIN, HEADER_HEIGHT + 1);
+    p.drawLine(MARGIN, sepY, w - MARGIN, sepY);
 
     // --- Meters ---
     struct MeterDef {
@@ -234,8 +213,8 @@ void Kpa1500MiniPanel::paintEvent(QPaintEvent *) {
         {"TMP", m_displayTemp, 100.0f, 0.0f, false},
     };
 
-    QFont labelFont = K4Styles::Fonts::paintFont(K4Styles::Dimensions::FontSizeTiny);
-    QFont valueFont = K4Styles::Fonts::paintFont(K4Styles::Dimensions::FontSizeSmall);
+    QFont labelFont = K4Styles::Fonts::paintFont(K4Styles::Dimensions::FontSizeSmall);
+    QFont valueFont = K4Styles::Fonts::paintFont(K4Styles::Dimensions::FontSizeNormal, QFont::Bold);
 
     int barX = MARGIN + LABEL_WIDTH;
     int barW = w - barX - VALUE_WIDTH - MARGIN;
@@ -288,5 +267,26 @@ void Kpa1500MiniPanel::paintEvent(QPaintEvent *) {
 
         int valX = barX + barW + 2;
         p.drawText(valX, y, VALUE_WIDTH, BAR_HEIGHT, Qt::AlignRight | Qt::AlignVCenter, valStr);
+    }
+
+    // --- Status: OPER + ATU on one line, side by side ---
+    if (m_connected) {
+        int statusY = METER_START_Y + (METER_SPACING * 4) + 2;
+        QFont statusFont = K4Styles::Fonts::paintFont(K4Styles::Dimensions::FontSizeSmall, QFont::Bold);
+        p.setFont(statusFont);
+        int halfW = (w - MARGIN * 2) / 2;
+
+        // OPER/FAULT on left half
+        if (m_fault) {
+            p.setPen(QColor(K4Styles::Colors::TxRed));
+            p.drawText(MARGIN, statusY, halfW, ATU_LABEL_HEIGHT, Qt::AlignCenter, "FAULT");
+        } else {
+            p.setPen(QColor(m_operate ? K4Styles::Colors::StatusGreen : K4Styles::Colors::InactiveGray));
+            p.drawText(MARGIN, statusY, halfW, ATU_LABEL_HEIGHT, Qt::AlignCenter, "OPER");
+        }
+
+        // ATU on right half
+        p.setPen(QColor(m_atuIn ? K4Styles::Colors::StatusGreen : K4Styles::Colors::InactiveGray));
+        p.drawText(MARGIN + halfW, statusY, halfW, ATU_LABEL_HEIGHT, Qt::AlignCenter, "ATU");
     }
 }
