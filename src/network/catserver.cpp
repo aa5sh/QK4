@@ -79,13 +79,15 @@ void CatServer::onClientData() {
     if (!client)
         return;
 
-    m_clientBuffers[client].append(client->readAll());
+    QByteArray &buffer = m_clientBuffers[client];
+    buffer.append(client->readAll());
 
-    // K4 CAT commands are semicolon-terminated
-    while (m_clientBuffers[client].contains(';')) {
-        int idx = m_clientBuffers[client].indexOf(';');
-        QString command = QString::fromUtf8(m_clientBuffers[client].left(idx + 1)).trimmed();
-        m_clientBuffers[client].remove(0, idx + 1);
+    // K4 CAT commands are semicolon-terminated — single-pass offset parsing
+    int offset = 0;
+    int idx;
+    while ((idx = buffer.indexOf(';', offset)) != -1) {
+        QString command = QString::fromUtf8(buffer.constData() + offset, idx - offset + 1).trimmed();
+        offset = idx + 1;
 
         if (!command.isEmpty()) {
             QString response = handleCommand(command);
@@ -93,6 +95,10 @@ void CatServer::onClientData() {
                 client->write(response.toUtf8());
             }
         }
+    }
+    // Keep only unprocessed remainder
+    if (offset > 0) {
+        buffer.remove(0, offset);
     }
 }
 
