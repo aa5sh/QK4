@@ -20,15 +20,26 @@ class MicMeterWidget;
 class KpodDevice;
 class CatServer;
 class HalikeyDevice;
+class KPA1500Client;
 
 class OptionsDialog : public QDialog {
     Q_OBJECT
 
 public:
-    enum Page { PageAbout = 0, PageAudioInput, PageAudioOutput, PageRigControl, PageCwKeyer, PageKpod, PageCount };
+    enum Page {
+        PageAbout = 0,
+        PageAudioInput,
+        PageAudioOutput,
+        PageRigControl,
+        PageCwKeyer,
+        PageKpod,
+        PageKpa1500,
+        PageCount
+    };
 
     explicit OptionsDialog(RadioState *radioState, AudioEngine *audioEngine, KpodDevice *kpodDevice,
-                           CatServer *catServer, HalikeyDevice *halikeyDevice, QWidget *parent = nullptr);
+                           CatServer *catServer, HalikeyDevice *halikeyDevice, KPA1500Client *kpa1500Client,
+                           QWidget *parent = nullptr);
     ~OptionsDialog();
 
 protected:
@@ -41,6 +52,7 @@ private slots:
     void onMicDeviceChanged(int index);
     void onMicGainChanged(int value);
     void updateKpodStatus();
+    void updateKpa1500Status();
     void updateCwKeyerStatus();
     void onCwKeyerConnectClicked();
     void onCwKeyerRefreshClicked();
@@ -52,6 +64,7 @@ private:
     void refreshAboutPage();
     QWidget *createAboutPage();
     QWidget *createKpodPage();
+    QWidget *createKpa1500Page();
     QWidget *createAudioInputPage();
     QWidget *createAudioOutputPage();
     QWidget *createRigControlPage();
@@ -66,6 +79,7 @@ private:
     KpodDevice *m_kpodDevice;
     CatServer *m_catServer;
     HalikeyDevice *m_halikeyDevice;
+    KPA1500Client *m_kpa1500Client;
     QListWidget *m_tabList;
     QStackedWidget *m_pageStack;
     QMediaDevices *m_mediaDevices;
@@ -118,6 +132,18 @@ private:
     QSlider *m_sidetoneVolumeSlider = nullptr;
     QLabel *m_sidetoneVolumeValueLabel = nullptr;
     void updateCwKeyerDescription();
+
+    // KPA1500 page elements
+    QCheckBox *m_kpa1500EnableCheckbox = nullptr;
+    QLineEdit *m_kpa1500HostEdit = nullptr;
+    QLineEdit *m_kpa1500PortEdit = nullptr;
+    QComboBox *m_kpa1500ProtocolCombo = nullptr;
+    QLabel *m_kpa1500StatusLabel = nullptr;
+    QPushButton *m_kpa1500ConnectBtn = nullptr;
+    QLabel *m_kpa1500BandLabel = nullptr;
+    QLabel *m_kpa1500FirmwareLabel = nullptr;
+    QLabel *m_kpa1500SerialLabel = nullptr;
+    QLabel *m_kpa1500PollLabel = nullptr;
 };
 
 #endif // OPTIONSDIALOG_H

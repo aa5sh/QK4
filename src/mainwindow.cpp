@@ -2163,8 +2163,8 @@ void MainWindow::setupMenuBar() {
     optionsAction->setMenuRole(QAction::PreferencesRole); // macOS: moves to app menu as Preferences
     connect(optionsAction, &QAction::triggered, this, [this]() {
         if (!m_optionsDialog) {
-            m_optionsDialog =
-                new OptionsDialog(m_radioState, m_audioEngine, m_kpodDevice, m_catServer, m_halikeyDevice, this);
+            m_optionsDialog = new OptionsDialog(m_radioState, m_audioEngine, m_kpodDevice, m_catServer, m_halikeyDevice,
+                                                m_kpa1500Client, this);
         }
         m_optionsDialog->show();
         m_optionsDialog->raise();

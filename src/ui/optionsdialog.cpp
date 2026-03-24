@@ -6,6 +6,7 @@
 #include "../hardware/halikeydevice.h"
 #include "../settings/radiosettings.h"
 #include "../network/catserver.h"
+#include "../network/kpa1500client.h"
 #include "../audio/audioengine.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -22,9 +23,10 @@
 // Use K4Styles::Colors::DialogBorder for dialog-specific borders
 
 OptionsDialog::OptionsDialog(RadioState *radioState, AudioEngine *audioEngine, KpodDevice *kpodDevice,
-                             CatServer *catServer, HalikeyDevice *halikeyDevice, QWidget *parent)
+                             CatServer *catServer, HalikeyDevice *halikeyDevice, KPA1500Client *kpa1500Client,
+                             QWidget *parent)
     : QDialog(parent), m_radioState(radioState), m_audioEngine(audioEngine), m_kpodDevice(kpodDevice),
-      m_catServer(catServer), m_halikeyDevice(halikeyDevice) {
+      m_catServer(catServer), m_halikeyDevice(halikeyDevice), m_kpa1500Client(kpa1500Client) {
     setWindowModality(Qt::ApplicationModal);
     setupUi();
 
@@ -46,6 +48,12 @@ OptionsDialog::OptionsDialog(RadioState *radioState, AudioEngine *audioEngine, K
     if (m_halikeyDevice) {
         connect(m_halikeyDevice, &HalikeyDevice::connected, this, &OptionsDialog::updateCwKeyerStatus);
         connect(m_halikeyDevice, &HalikeyDevice::disconnected, this, &OptionsDialog::updateCwKeyerStatus);
+    }
+
+    // Connect to KPA1500 signals for real-time status updates
+    if (m_kpa1500Client) {
+        connect(m_kpa1500Client, &KPA1500Client::connected, this, &OptionsDialog::updateKpa1500Status);
+        connect(m_kpa1500Client, &KPA1500Client::disconnected, this, &OptionsDialog::updateKpa1500Status);
     }
 }
 
@@ -88,6 +96,7 @@ void OptionsDialog::setupUi() {
     m_tabList->addItem("Rig Control");
     m_tabList->addItem("CW Keyer");
     m_tabList->addItem("K-Pod");
+    m_tabList->addItem("KPA1500");
     m_tabList->setCurrentRow(0);
 
     // Right side: stacked pages — lazy creation (only About page created eagerly)
@@ -155,6 +164,9 @@ void OptionsDialog::ensurePageCreated(int index) {
     case PageKpod:
         page = createKpodPage();
         break;
+    case PageKpa1500:
+        page = createKpa1500Page();
+        break;
     default:
         return;
     }
@@ -180,6 +192,9 @@ void OptionsDialog::refreshPage(int index) {
         break;
     case PageKpod:
         updateKpodStatus();
+        break;
+    case PageKpa1500:
+        updateKpa1500Status();
         break;
     case PageAbout:
         refreshAboutPage();
@@ -1262,4 +1277,226 @@ void OptionsDialog::updateCwKeyerStatus() {
         m_cwKeyerStatusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::ErrorRed));
         m_cwKeyerConnectBtn->setText("Connect");
     }
+}
+
+// ============== KPA1500 Page ==============
+
+QWidget *OptionsDialog::createKpa1500Page() {
+    auto *page = new QWidget(this);
+    page->setStyleSheet(K4Styles::Dialog::pageBackground());
+
+    auto *layout = new QVBoxLayout(page);
+    layout->setContentsMargins(K4Styles::Dimensions::DialogMargin, K4Styles::Dimensions::DialogMargin,
+                               K4Styles::Dimensions::DialogMargin, K4Styles::Dimensions::DialogMargin);
+    layout->setSpacing(K4Styles::Dimensions::PaddingLarge);
+
+    // === Status row ===
+    auto *statusLayout = new QHBoxLayout();
+    auto *statusLabel = new QLabel("Status:", page);
+    statusLabel->setStyleSheet(K4Styles::Dialog::formLabel());
+    statusLabel->setFixedWidth(K4Styles::Dimensions::FormLabelWidth);
+    m_kpa1500StatusLabel = new QLabel("Not Connected", page);
+    m_kpa1500StatusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::ErrorRed));
+    statusLayout->addWidget(statusLabel);
+    statusLayout->addWidget(m_kpa1500StatusLabel);
+    statusLayout->addStretch();
+    layout->addLayout(statusLayout);
+
+    // === Separator ===
+    auto *line1 = new QFrame(page);
+    line1->setFrameShape(QFrame::HLine);
+    line1->setStyleSheet(K4Styles::Dialog::separator());
+    line1->setFixedHeight(K4Styles::Dimensions::SeparatorHeight);
+    layout->addWidget(line1);
+
+    // === Connection Settings section ===
+    auto *sectionLabel = new QLabel("Connection Settings", page);
+    sectionLabel->setStyleSheet(K4Styles::Dialog::sectionHeader());
+    layout->addWidget(sectionLabel);
+
+    // Enable checkbox
+    m_kpa1500EnableCheckbox = new QCheckBox("Enable KPA1500", page);
+    m_kpa1500EnableCheckbox->setStyleSheet(K4Styles::Dialog::checkBox());
+    m_kpa1500EnableCheckbox->setChecked(RadioSettings::instance()->kpa1500Enabled());
+    connect(m_kpa1500EnableCheckbox, &QCheckBox::toggled, this,
+            [](bool checked) { RadioSettings::instance()->setKpa1500Enabled(checked); });
+    layout->addWidget(m_kpa1500EnableCheckbox);
+
+    // Host row
+    auto *hostLayout = new QHBoxLayout();
+    auto *hostLabel = new QLabel("Host:", page);
+    hostLabel->setStyleSheet(K4Styles::Dialog::formLabel());
+    hostLabel->setFixedWidth(K4Styles::Dimensions::FormLabelWidth);
+    m_kpa1500HostEdit = new QLineEdit(page);
+    m_kpa1500HostEdit->setStyleSheet(K4Styles::Dialog::lineEdit());
+    m_kpa1500HostEdit->setPlaceholderText("IP address or hostname");
+    m_kpa1500HostEdit->setText(RadioSettings::instance()->kpa1500Host());
+    connect(m_kpa1500HostEdit, &QLineEdit::editingFinished, this,
+            [this]() { RadioSettings::instance()->setKpa1500Host(m_kpa1500HostEdit->text().trimmed()); });
+    hostLayout->addWidget(hostLabel);
+    hostLayout->addWidget(m_kpa1500HostEdit, 1);
+    layout->addLayout(hostLayout);
+
+    // Port row
+    auto *portLayout = new QHBoxLayout();
+    auto *portLabel = new QLabel("Port:", page);
+    portLabel->setStyleSheet(K4Styles::Dialog::formLabel());
+    portLabel->setFixedWidth(K4Styles::Dimensions::FormLabelWidth);
+    m_kpa1500PortEdit = new QLineEdit(page);
+    m_kpa1500PortEdit->setStyleSheet(K4Styles::Dialog::lineEdit());
+    m_kpa1500PortEdit->setFixedWidth(K4Styles::Dimensions::InputFieldWidthSmall);
+    m_kpa1500PortEdit->setText(QString::number(RadioSettings::instance()->kpa1500Port()));
+    connect(m_kpa1500PortEdit, &QLineEdit::editingFinished, this, [this]() {
+        bool ok;
+        quint16 port = m_kpa1500PortEdit->text().toUShort(&ok);
+        if (ok && port >= 1024) {
+            RadioSettings::instance()->setKpa1500Port(port);
+        } else {
+            m_kpa1500PortEdit->setText(QString::number(RadioSettings::instance()->kpa1500Port()));
+        }
+    });
+    portLayout->addWidget(portLabel);
+    portLayout->addWidget(m_kpa1500PortEdit);
+    portLayout->addStretch();
+    layout->addLayout(portLayout);
+
+    // Protocol row
+    auto *protoLayout = new QHBoxLayout();
+    auto *protoLabel = new QLabel("Protocol:", page);
+    protoLabel->setStyleSheet(K4Styles::Dialog::formLabel());
+    protoLabel->setFixedWidth(K4Styles::Dimensions::FormLabelWidth);
+    m_kpa1500ProtocolCombo = new QComboBox(page);
+    m_kpa1500ProtocolCombo->setStyleSheet(K4Styles::Dialog::comboBox());
+    m_kpa1500ProtocolCombo->addItem("TCP", 0);
+    m_kpa1500ProtocolCombo->addItem("UDP", 1);
+    m_kpa1500ProtocolCombo->setCurrentIndex(0); // TCP default (protocol setting added in next commit)
+    protoLayout->addWidget(protoLabel);
+    protoLayout->addWidget(m_kpa1500ProtocolCombo);
+    protoLayout->addStretch();
+    layout->addLayout(protoLayout);
+
+    // Poll interval row
+    auto *pollLayout = new QHBoxLayout();
+    auto *pollLabel = new QLabel("Poll:", page);
+    pollLabel->setStyleSheet(K4Styles::Dialog::formLabel());
+    pollLabel->setFixedWidth(K4Styles::Dimensions::FormLabelWidth);
+    m_kpa1500PollLabel = new QLabel(QString("%1 ms").arg(RadioSettings::instance()->kpa1500PollInterval()), page);
+    m_kpa1500PollLabel->setStyleSheet(K4Styles::Dialog::formValue());
+    auto *pollSlider = new QSlider(Qt::Horizontal, page);
+    pollSlider->setRange(100, 2000);
+    pollSlider->setSingleStep(100);
+    pollSlider->setValue(RadioSettings::instance()->kpa1500PollInterval());
+    pollSlider->setStyleSheet(
+        K4Styles::sliderHorizontal(K4Styles::Colors::DarkBackground, K4Styles::Colors::AccentAmber));
+    connect(pollSlider, &QSlider::valueChanged, this, [this](int value) {
+        RadioSettings::instance()->setKpa1500PollInterval(value);
+        if (m_kpa1500PollLabel)
+            m_kpa1500PollLabel->setText(QString("%1 ms").arg(value));
+    });
+    pollLayout->addWidget(pollLabel);
+    pollLayout->addWidget(pollSlider, 1);
+    pollLayout->addWidget(m_kpa1500PollLabel);
+    layout->addLayout(pollLayout);
+
+    // Connect/Disconnect button
+    m_kpa1500ConnectBtn = new QPushButton("Connect", page);
+    m_kpa1500ConnectBtn->setStyleSheet(K4Styles::Dialog::actionButtonSmall());
+    m_kpa1500ConnectBtn->setCursor(Qt::PointingHandCursor);
+    connect(m_kpa1500ConnectBtn, &QPushButton::clicked, this, [this]() {
+        if (!m_kpa1500Client)
+            return;
+        if (m_kpa1500Client->isConnected()) {
+            m_kpa1500Client->disconnectFromHost();
+        } else {
+            QString host = m_kpa1500HostEdit->text().trimmed();
+            quint16 port = m_kpa1500PortEdit->text().toUShort();
+            if (!host.isEmpty() && port >= 1024) {
+                m_kpa1500Client->connectToHost(host, port);
+            }
+        }
+    });
+    layout->addWidget(m_kpa1500ConnectBtn);
+
+    // === Separator ===
+    auto *line2 = new QFrame(page);
+    line2->setFrameShape(QFrame::HLine);
+    line2->setStyleSheet(K4Styles::Dialog::separator());
+    line2->setFixedHeight(K4Styles::Dimensions::SeparatorHeight);
+    layout->addWidget(line2);
+
+    // === Amplifier Info section ===
+    auto *infoLabel = new QLabel("Amplifier Info", page);
+    infoLabel->setStyleSheet(K4Styles::Dialog::sectionHeader());
+    layout->addWidget(infoLabel);
+
+    auto *infoWidget = new QWidget(page);
+    auto *infoGrid = new QGridLayout(infoWidget);
+    infoGrid->setContentsMargins(0, 0, 0, 0);
+    infoGrid->setHorizontalSpacing(K4Styles::Dimensions::DialogMargin);
+    infoGrid->setVerticalSpacing(K4Styles::Dimensions::PopupButtonSpacing);
+
+    auto addInfoRow = [&](int row, const QString &label, QLabel *&valueLabel) {
+        auto *lbl = new QLabel(label, infoWidget);
+        lbl->setStyleSheet(K4Styles::Dialog::formLabel());
+        valueLabel = new QLabel("--", infoWidget);
+        valueLabel->setStyleSheet(K4Styles::Dialog::formValue());
+        infoGrid->addWidget(lbl, row, 0, Qt::AlignLeft);
+        infoGrid->addWidget(valueLabel, row, 1, Qt::AlignLeft);
+    };
+
+    addInfoRow(0, "Band:", m_kpa1500BandLabel);
+    addInfoRow(1, "Firmware:", m_kpa1500FirmwareLabel);
+    addInfoRow(2, "Serial:", m_kpa1500SerialLabel);
+    infoGrid->setColumnStretch(1, 1);
+    layout->addWidget(infoWidget);
+
+    // === Help text ===
+    auto *helpLabel = new QLabel("When enabled, QK4 polls the KPA1500 for power, SWR, and status data.", page);
+    helpLabel->setStyleSheet(K4Styles::Dialog::helpText());
+    helpLabel->setWordWrap(true);
+    layout->addWidget(helpLabel);
+
+    layout->addStretch();
+
+    // Initialize status display
+    updateKpa1500Status();
+
+    return page;
+}
+
+void OptionsDialog::updateKpa1500Status() {
+    if (!m_kpa1500StatusLabel)
+        return;
+
+    bool connected = m_kpa1500Client && m_kpa1500Client->isConnected();
+
+    if (connected) {
+        QString fw = m_kpa1500Client->firmwareVersion();
+        QString sn = m_kpa1500Client->serialNumber();
+        QString statusText = "Connected";
+        if (!fw.isEmpty() || !sn.isEmpty())
+            statusText += QString(" (FW %1, SN %2)").arg(fw.isEmpty() ? "--" : fw, sn.isEmpty() ? "--" : sn);
+        m_kpa1500StatusLabel->setText(statusText);
+        m_kpa1500StatusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::StatusGreen));
+        m_kpa1500ConnectBtn->setText("Disconnect");
+    } else {
+        m_kpa1500StatusLabel->setText("Not Connected");
+        m_kpa1500StatusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::ErrorRed));
+        if (m_kpa1500ConnectBtn)
+            m_kpa1500ConnectBtn->setText("Connect");
+    }
+
+    // Update amplifier info labels
+    if (m_kpa1500BandLabel)
+        m_kpa1500BandLabel->setText(connected ? m_kpa1500Client->bandName() : "--");
+    if (m_kpa1500FirmwareLabel)
+        m_kpa1500FirmwareLabel->setText(connected ? m_kpa1500Client->firmwareVersion() : "--");
+    if (m_kpa1500SerialLabel)
+        m_kpa1500SerialLabel->setText(connected ? m_kpa1500Client->serialNumber() : "--");
+
+    // Disable host/port editing while connected
+    if (m_kpa1500HostEdit)
+        m_kpa1500HostEdit->setEnabled(!connected);
+    if (m_kpa1500PortEdit)
+        m_kpa1500PortEdit->setEnabled(!connected);
 }
