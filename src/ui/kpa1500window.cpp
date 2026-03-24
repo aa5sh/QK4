@@ -38,8 +38,9 @@ void KPA1500Window::setupUi() {
 
     // Title label
     auto *titleLabel = new QLabel("KPA1500", titleBar);
-    titleLabel->setStyleSheet(
-        QString("QLabel { color: %1; font-size: 11px; font-weight: bold; }").arg(K4Styles::Colors::AccentAmber));
+    titleLabel->setStyleSheet(QString("QLabel { color: %1; font-size: %2px; font-weight: bold; }")
+                                  .arg(K4Styles::Colors::AccentAmber)
+                                  .arg(K4Styles::Dimensions::FontSizeLarge));
 
     // Close button
     m_closeBtn = new QPushButton(titleBar);

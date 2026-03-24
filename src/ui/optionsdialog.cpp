@@ -448,8 +448,9 @@ QWidget *OptionsDialog::createKpodPage() {
     tableLayout->setVerticalSpacing(K4Styles::Dimensions::PopupButtonSpacing);
 
     // Table styling
-    QString headerStyle =
-        QString("color: %1; font-size: 12px; font-weight: bold; padding: 5px;").arg(K4Styles::Colors::TextGray);
+    QString headerStyle = QString("color: %1; font-size: %2px; font-weight: bold; padding: 5px;")
+                              .arg(K4Styles::Colors::TextGray)
+                              .arg(K4Styles::Dimensions::FontSizeButton);
 
     // Create labels with property names
     QStringList properties = {"Product Name", "Manufacturer",     "Vendor ID", "Product ID",
