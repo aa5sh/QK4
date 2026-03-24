@@ -27,9 +27,6 @@ public:
     void updateSpectrum(const QByteArray &payload, int binsOffset, int binCount, qint64 centerFreq, qint32 sampleRate,
                         float noiseFloor);
 
-    // Update from MiniPAN packet (simpler format)
-    void updateMiniSpectrum(const QByteArray &bins);
-
     // Configuration
     void setDbRange(float minDb, float maxDb);
     void setSpectrumRatio(float ratio);

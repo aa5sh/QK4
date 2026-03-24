@@ -1087,13 +1087,8 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
                     cb->draw(verts.size() / 2);
                 };
 
-                qint64 secMarkFreq = m_secondaryTunedFreq;
-                qint64 secSpaceFreq = secMarkFreq - m_rttyShift;
-                // Skip mark line when it coincides with the solid secondary dial marker
-                if (secMarkFreq != m_secondaryTunedFreq) {
-                    drawSecRttyLine(secMarkFreq, m_secRttyMarkVbo.get(), m_secRttyMarkUniformBuffer.get(),
-                                    m_secRttyMarkSrb.get());
-                }
+                // Mark line coincides with the solid secondary dial marker — only draw space
+                qint64 secSpaceFreq = m_secondaryTunedFreq - m_rttyShift;
                 drawSecRttyLine(secSpaceFreq, m_secRttySpaceVbo.get(), m_secRttySpaceUniformBuffer.get(),
                                 m_secRttySpaceSrb.get());
             }
@@ -1238,14 +1233,8 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
                 };
 
                 // FSK-D and AFSK-A: dial IS mark, space is mark - shift (both LSB)
-                qint64 markFreq = m_tunedFreq;
-                qint64 spaceFreq = markFreq - m_rttyShift;
-                // Skip mark line when it coincides with the solid dial frequency marker
-                // (always true today since dial IS mark in FSK-D/AFSK-A, but guarded
-                // for forward-compatibility if FSK Mark-Tone routing changes)
-                if (markFreq != m_tunedFreq) {
-                    drawRttyLine(markFreq, m_rttyMarkVbo.get(), m_rttyMarkUniformBuffer.get(), m_rttyMarkSrb.get());
-                }
+                // Mark line coincides with the solid dial frequency marker — only draw space
+                qint64 spaceFreq = m_tunedFreq - m_rttyShift;
                 drawRttyLine(spaceFreq, m_rttySpaceVbo.get(), m_rttySpaceUniformBuffer.get(), m_rttySpaceSrb.get());
             }
 
@@ -1474,29 +1463,6 @@ void PanadapterRhiWidget::updateSpectrum(const QByteArray &payload, int binsOffs
 
     m_waterfallNeedsUpdate = true;
     updateFreqScaleOverlay(); // Update frequency labels when center freq changes
-    update();
-}
-
-void PanadapterRhiWidget::updateMiniSpectrum(const QByteArray &bins) {
-    m_rawSpectrum.resize(bins.size());
-    for (int i = 0; i < bins.size(); ++i) {
-        m_rawSpectrum[i] = static_cast<quint8>(bins[i]) * 10.0f - 160.0f;
-    }
-
-    // Apply asymmetric EMA smoothing (attack fast, decay slow)
-    const float attackAlpha = m_attackAlpha;
-    const float decayAlpha = m_decayAlpha;
-
-    if (m_currentSpectrum.size() != m_rawSpectrum.size()) {
-        m_currentSpectrum = m_rawSpectrum;
-    } else {
-        for (int i = 0; i < m_rawSpectrum.size(); ++i) {
-            float alpha = (m_rawSpectrum[i] > m_currentSpectrum[i]) ? attackAlpha : decayAlpha;
-            m_currentSpectrum[i] = alpha * m_rawSpectrum[i] + (1.0f - alpha) * m_currentSpectrum[i];
-        }
-    }
-
-    m_waterfallNeedsUpdate = true;
     update();
 }
 
