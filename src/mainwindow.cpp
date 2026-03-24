@@ -4277,12 +4277,13 @@ void MainWindow::onAuthenticated() {
 
     // Most state is already included in the RDY; response from TcpClient.
     // Only query commands NOT included in RDY dump:
-    m_tcpClient->sendCAT("#DSM;");  // Display mode (LCD) - not in RDY
-    m_tcpClient->sendCAT("#HDSM;"); // Display mode (EXT) - not in RDY
-    m_tcpClient->sendCAT("#FRZ;");  // Freeze - not in RDY
-    m_tcpClient->sendCAT("#FPS;");  // Display FPS - not in RDY
-    m_tcpClient->sendCAT("#SCL;");  // Panadapter scale - not in RDY, needed for dB range
-    m_tcpClient->sendCAT("SIRC1;"); // Enable 1-second client stats updates
+    m_tcpClient->sendCAT("#DSM;");   // Display mode (LCD) - not in RDY
+    m_tcpClient->sendCAT("#HDSM;");  // Display mode (EXT) - not in RDY
+    m_tcpClient->sendCAT("#FRZ;");   // Freeze - not in RDY
+    m_tcpClient->sendCAT("#FPS15;"); // Set display FPS to 15 on connect (12 default is too slow for large monitors)
+    m_tcpClient->sendCAT("#FPS;");   // Query back to confirm and update menu
+    m_tcpClient->sendCAT("#SCL;");   // Panadapter scale - not in RDY, needed for dB range
+    m_tcpClient->sendCAT("SIRC1;");  // Enable 1-second client stats updates
     // Note: ML and KP commands come in RDY; dump - no need to query
 
     // Sync element length with K4 server (sent in RDY dump as KZLnn)
@@ -4291,8 +4292,8 @@ void MainWindow::onAuthenticated() {
         m_tcpClient->sendCAT(QString("KZL%1;").arg(ditMs, 2, 10, QChar('0')));
     }
 
-    // Create synthetic "Display FPS" menu item with stored preference
-    m_menuModel->addSyntheticDisplayFpsItem(m_currentRadio.displayFps);
+    // Create synthetic "Display FPS" menu item (will update from radio echo)
+    m_menuModel->addSyntheticDisplayFpsItem(15);
 
     // Startup macro is sent pre-RDY by TcpClient so the state dump reflects changes.
 

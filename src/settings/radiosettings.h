@@ -40,7 +40,7 @@ struct RadioEntry {
     QString identity;         // TLS-PSK identity (optional, empty = default)
     int encodeMode = 3;       // Audio encode mode: 0=RAW32, 1=RAW16, 2=Opus Int, 3=Opus Float (default)
     int streamingLatency = 3; // Remote streaming audio latency: 0-7 (default 3)
-    int displayFps = 30;      // Display FPS: 12-30 (default 30)
+    int displayFps = 15;      // Display FPS: 12-30 (default 15, good balance for large monitors)
 
     bool operator==(const RadioEntry &other) const {
         return name == other.name && host == other.host && port == other.port;

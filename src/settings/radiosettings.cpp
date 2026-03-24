@@ -380,7 +380,7 @@ void RadioSettings::load() {
         entry.identity = m_settings.value("identity").toString();
         entry.encodeMode = m_settings.value("encodeMode", 3).toInt();             // Default EM3 (Opus Float)
         entry.streamingLatency = m_settings.value("streamingLatency", 3).toInt(); // Default SL3
-        entry.displayFps = m_settings.value("displayFps", 30).toInt();            // Default 30 FPS
+        entry.displayFps = m_settings.value("displayFps", 15).toInt();            // Default 15 FPS
         m_radios.append(entry);
     }
     m_settings.endArray();
