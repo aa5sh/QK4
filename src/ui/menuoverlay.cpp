@@ -4,7 +4,6 @@
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QScrollBar>
-#include <QDebug>
 
 // ============== MenuItemWidget ==============
 

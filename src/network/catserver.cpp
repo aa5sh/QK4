@@ -1,7 +1,6 @@
 #include "catserver.h"
 #include "models/radiostate.h"
 #include "tcpclient.h"
-#include <QDebug>
 
 CatServer::CatServer(RadioState *state, QObject *parent)
     : QObject(parent), m_server(new QTcpServer(this)), m_radioState(state) {

@@ -2,7 +2,6 @@
 #include "panadapter_constants.h"
 #include "rhi_utils.h"
 #include "ui/k4styles.h"
-#include <QFile>
 #include <QMouseEvent>
 #include <QResizeEvent>
 #include <QtMath>
