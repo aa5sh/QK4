@@ -354,24 +354,6 @@ QString RadioState::modeStringFullB() const {
     return modeToString(m_modeB);
 }
 
-QString RadioState::sMeterString() const {
-    if (m_sMeter <= 9.0) {
-        return QString("S%1").arg(static_cast<int>(m_sMeter));
-    } else {
-        int dbOver = static_cast<int>((m_sMeter - 9.0) * 10);
-        return QString("S9+%1").arg(dbOver);
-    }
-}
-
-QString RadioState::sMeterStringB() const {
-    if (m_sMeterB <= 9.0) {
-        return QString("S%1").arg(static_cast<int>(m_sMeterB));
-    } else {
-        int dbOver = static_cast<int>((m_sMeterB - 9.0) * 10);
-        return QString("S9+%1").arg(dbOver);
-    }
-}
-
 // Optimistic setters for scroll wheel updates (radio doesn't echo these commands)
 void RadioState::setKeyerSpeed(int wpm) {
     if (m_keyerSpeed != wpm) {

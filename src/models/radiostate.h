@@ -55,7 +55,6 @@ public:
     // Power and levels
     double rfPower() const { return m_rfPower; }
     bool isQrpMode() const { return m_isQrpMode; }
-    QString rfPowerString() const;
     int micGain() const { return m_micGain; }
     int compression() const { return m_compression; }
     int rfGain() const { return m_rfGain; }
@@ -94,8 +93,6 @@ public:
     // Meters
     double sMeter() const { return m_sMeter; }
     double sMeterB() const { return m_sMeterB; }
-    QString sMeterString() const;
-    QString sMeterStringB() const;
     int powerMeter() const { return m_powerMeter; }
     double swrMeter() const { return m_swrMeter; }
 
