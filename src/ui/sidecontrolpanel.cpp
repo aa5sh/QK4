@@ -618,7 +618,7 @@ void SideControlPanel::setCurrent(double amps) {
 
 QPushButton *SideControlPanel::createIconButton(const QString &text) {
     auto *btn = new QPushButton(text, this);
-    btn->setFixedSize(32, 32); // Small square buttons
+    btn->setFixedSize(K4Styles::Dimensions::CompactButtonSize, K4Styles::Dimensions::CompactButtonSize);
     btn->setCursor(Qt::PointingHandCursor);
     btn->setStyleSheet(K4Styles::sidePanelButton());
     return btn;

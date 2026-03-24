@@ -349,7 +349,7 @@ void KPA1500Panel::drawMeter(QPainter &painter, int y, const QString &label, con
     // Meter track
     QRect trackRect(barX, barY, barWidth, barHeight);
     painter.fillRect(trackRect, QColor(K4Styles::Colors::DarkBackground));
-    painter.setPen(QColor("#2a2a2a"));
+    painter.setPen(QColor(K4Styles::Colors::GradientBottom));
     painter.drawRect(trackRect);
 
     // Filled bar

@@ -5,7 +5,7 @@
 #include <QVBoxLayout>
 
 NetHealthWidget::NetHealthWidget(NetworkMetrics *metrics, QWidget *parent) : QWidget(parent), m_metrics(metrics) {
-    setFixedSize(20, 16);
+    setFixedSize(K4Styles::Dimensions::SmallIconSize, 16);
     connect(m_metrics, &NetworkMetrics::healthTierChanged, this, &NetHealthWidget::onHealthTierChanged);
 }
 
