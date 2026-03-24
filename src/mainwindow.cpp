@@ -2,6 +2,7 @@
 #include "ui/radiomanagerdialog.h"
 #include "ui/sidecontrolpanel.h"
 #include "ui/rightsidepanel.h"
+#include "ui/kpa1500minipanel.h"
 #include "ui/bottommenubar.h"
 #include "ui/featuremenubar.h"
 #include "ui/modepopupwidget.h"
@@ -2021,6 +2022,44 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_kpa1500Window->panel(), &KPA1500Panel::atuModeToggled, this,
             [this](bool in) { m_kpa1500Client->sendCommand(in ? "^AI1;" : "^AI0;"); });
     connect(m_kpa1500Window->panel(), &KPA1500Panel::antennaChanged, this,
+            [this](int ant) { m_kpa1500Client->sendCommand(QString("^AN%1;").arg(ant)); });
+
+    // Wire KPA1500 data signals to embedded mini panel in right side panel
+    auto *kpaMini = m_rightSidePanel->kpa1500Mini();
+    connect(m_kpa1500Client, &KPA1500Client::powerChanged, this, [kpaMini](double fwd, double ref, double) {
+        kpaMini->setForwardPower(static_cast<float>(fwd));
+        kpaMini->setReflectedPower(static_cast<float>(ref));
+    });
+    connect(m_kpa1500Client, &KPA1500Client::swrChanged, this,
+            [kpaMini](double swr) { kpaMini->setSWR(static_cast<float>(swr)); });
+    connect(m_kpa1500Client, &KPA1500Client::paTemperatureChanged, this,
+            [kpaMini](double tempC) { kpaMini->setTemperature(static_cast<float>(tempC)); });
+    connect(m_kpa1500Client, &KPA1500Client::operatingStateChanged, this,
+            [kpaMini](KPA1500Client::OperatingState state) { kpaMini->setMode(state == KPA1500Client::StateOperate); });
+    connect(m_kpa1500Client, &KPA1500Client::atuInlineChanged, this,
+            [kpaMini](bool inline_) { kpaMini->setAtuMode(inline_); });
+    connect(m_kpa1500Client, &KPA1500Client::antennaChanged, this,
+            [kpaMini](int antenna) { kpaMini->setAntenna(antenna); });
+    connect(m_kpa1500Client, &KPA1500Client::faultStatusChanged, this,
+            [kpaMini](KPA1500Client::FaultStatus status, const QString &) {
+                kpaMini->setFault(status == KPA1500Client::FaultActive);
+            });
+    connect(m_kpa1500Client, &KPA1500Client::connected, this, [kpaMini]() {
+        kpaMini->setConnected(true);
+        kpaMini->setVisible(true);
+    });
+    connect(m_kpa1500Client, &KPA1500Client::disconnected, this, [kpaMini]() {
+        kpaMini->setConnected(false);
+        kpaMini->setVisible(false);
+    });
+
+    // Wire mini panel button signals to KPA1500 commands
+    connect(kpaMini, &Kpa1500MiniPanel::modeToggled, this,
+            [this](bool operate) { m_kpa1500Client->sendCommand(operate ? "^OS1;" : "^OS0;"); });
+    connect(kpaMini, &Kpa1500MiniPanel::atuTuneRequested, this, [this]() { m_kpa1500Client->sendCommand("^FT;"); });
+    connect(kpaMini, &Kpa1500MiniPanel::atuModeToggled, this,
+            [this](bool in) { m_kpa1500Client->sendCommand(in ? "^AI1;" : "^AI0;"); });
+    connect(kpaMini, &Kpa1500MiniPanel::antennaChanged, this,
             [this](int ant) { m_kpa1500Client->sendCommand(QString("^AN%1;").arg(ant)); });
 
     // Connect to settings for KPA1500 enable/disable and settings changes
