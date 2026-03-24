@@ -73,8 +73,6 @@ public:
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
-    void showEvent(QShowEvent *event) override;
-    void changeEvent(QEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void moveEvent(QMoveEvent *event) override;
 
@@ -92,8 +90,6 @@ private slots:
     void onModeBChanged(RadioState::Mode mode);
     void onSMeterChanged(double value);
     void onSMeterBChanged(double value);
-    void onBandwidthChanged(int bw);
-    void onBandwidthBChanged(int bw);
     void onRfPowerChanged(double watts, bool isQrp);
     void onSupplyVoltageChanged(double volts);
     void onSupplyCurrentChanged(double amps);

@@ -49,7 +49,6 @@
 #include <QInputDialog>
 #include <QHBoxLayout>
 #include <QGridLayout>
-#include <QGroupBox>
 #include <QAction>
 #include <QCoreApplication>
 #include <QLoggingCategory>
@@ -1128,7 +1127,6 @@ MainWindow::MainWindow(QWidget *parent)
     // Data sub-mode changes also update mode label (AFSK, FSK, PSK, DATA)
     connect(m_radioState, &RadioState::dataSubModeChanged, this, [this](int) { updateModeLabels(); });
     connect(m_radioState, &RadioState::sMeterChanged, this, &MainWindow::onSMeterChanged);
-    connect(m_radioState, &RadioState::filterBandwidthChanged, this, &MainWindow::onBandwidthChanged);
     // RX EQ state -> popup (Main and Sub RX share the same EQ)
     connect(m_radioState, &RadioState::rxEqChanged, this, [this]() {
         if (m_rxEqPopup) {
@@ -1168,8 +1166,6 @@ MainWindow::MainWindow(QWidget *parent)
     // Data sub-mode changes also update mode label (AFSK, FSK, PSK, DATA)
     connect(m_radioState, &RadioState::dataSubModeBChanged, this, [this](int) { updateModeLabels(); });
     connect(m_radioState, &RadioState::sMeterBChanged, this, &MainWindow::onSMeterBChanged);
-    connect(m_radioState, &RadioState::filterBandwidthBChanged, this, &MainWindow::onBandwidthBChanged);
-
     // Auto-hide mini pan B when VFOs move to different bands (and SUB RX is off)
     connect(m_radioState, &RadioState::frequencyChanged, this, &MainWindow::checkAndHideMiniPanB);
     connect(m_radioState, &RadioState::frequencyBChanged, this, &MainWindow::checkAndHideMiniPanB);
@@ -4453,16 +4449,6 @@ void MainWindow::onSMeterBChanged(double value) {
     m_vfoB->setSMeterValue(value);
 }
 
-void MainWindow::onBandwidthChanged(int bw) {
-    Q_UNUSED(bw)
-    // Could update a bandwidth display if needed
-}
-
-void MainWindow::onBandwidthBChanged(int bw) {
-    Q_UNUSED(bw)
-    // Could update a bandwidth display if needed
-}
-
 void MainWindow::updateConnectionState(TcpClient::ConnectionState state) {
     switch (state) {
     case TcpClient::Disconnected:
@@ -5248,16 +5234,6 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
     }
 
     return QMainWindow::eventFilter(watched, event);
-}
-
-void MainWindow::showEvent(QShowEvent *event) {
-    QMainWindow::showEvent(event);
-}
-
-void MainWindow::changeEvent(QEvent *event) {
-    // Audio runs on its own thread now — no flush needed on minimize/restore.
-    // The audio thread keeps playing smoothly; the waterfall catches up visually on restore.
-    QMainWindow::changeEvent(event);
 }
 
 void MainWindow::moveEvent(QMoveEvent *event) {
