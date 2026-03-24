@@ -284,10 +284,14 @@ constexpr int MenuBarHeight = 52;  // Bottom menu bar container height
 // =============================================================================
 // Common UI Widths
 // =============================================================================
-constexpr int FormLabelWidth = 80;    // Form field labels in dialogs
+constexpr int SmallIconSize = 20;     // Lock icons, health indicator, small controls
+constexpr int CompactButtonSize = 32; // Side panel icons, EQ +/- buttons
+constexpr int SmallButtonWidth = 36;  // Compact toggle buttons (SUB, DIV, TEST labels)
+constexpr int FormLabelWidth = 80;    // Form field labels, numeric value displays
 constexpr int VfoSquareSize = 45;     // VFO A/B indicator squares and mode labels
 constexpr int NavButtonWidth = 54;    // Navigation buttons in overlays
 constexpr int SidePanelWidth = 105;   // Left and right side panels
+constexpr int NavPanelWidth = 130;    // Menu overlay navigation/search panel
 constexpr int MemoryButtonWidth = 42; // M1-M4, REC, STORE, RCL buttons
 
 // =============================================================================
@@ -301,6 +305,7 @@ constexpr int FontSizeLarge = 11;     // Feature labels, primary labels
 constexpr int FontSizeButton = 12;    // Button text, value displays
 constexpr int FontSizePopup = 14;     // Notifications, popup titles
 constexpr int FontSizeTitle = 16;     // Large control buttons (+/-)
+constexpr int FontSizeIndicator = 18; // TX/RX/SPLIT indicator labels
 constexpr int FontSizeFrequency = 32; // VFO frequency displays (FrequencyDisplayWidget, VfoWidget)
 
 // =============================================================================
