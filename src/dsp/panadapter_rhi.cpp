@@ -823,15 +823,17 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
         int specSize = m_currentSpectrum.size();
         int offset = (m_textureWidth - specSize) / 2;
 
-        QVector<float> normalizedSpectrum(m_textureWidth, 0.0f); // Initialize to zero
+        // Reuse member vector to avoid per-frame heap allocation
+        m_normalizedSpectrum.resize(m_textureWidth);
+        std::fill(m_normalizedSpectrum.begin(), m_normalizedSpectrum.end(), 0.0f);
         for (int i = 0; i < specSize; ++i) {
             float normalized = normalizeDb(m_currentSpectrum[i]);
             float adjusted = qMax(0.0f, normalized - m_smoothedBaseline);
-            normalizedSpectrum[offset + i] = adjusted * 0.95f;
+            m_normalizedSpectrum[offset + i] = adjusted * 0.95f;
         }
 
-        QRhiTextureSubresourceUploadDescription specDataUpload(normalizedSpectrum.constData(),
-                                                               normalizedSpectrum.size() * sizeof(float));
+        QRhiTextureSubresourceUploadDescription specDataUpload(m_normalizedSpectrum.constData(),
+                                                               m_normalizedSpectrum.size() * sizeof(float));
         specDataUpload.setSourceSize(QSize(m_textureWidth, 1));
         rub->uploadTexture(m_spectrumDataTexture.get(), QRhiTextureUploadEntry(0, 0, specDataUpload));
 

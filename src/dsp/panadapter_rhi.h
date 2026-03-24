@@ -181,6 +181,7 @@ private:
     // Spectrum data (cropped to display span for live trace)
     QVector<float> m_currentSpectrum;
     QVector<float> m_rawSpectrum;
+    QVector<float> m_normalizedSpectrum; // Reused per-frame to avoid allocation in render()
     // Full-tier spectrum data (all 1024 bins for waterfall storage)
     QVector<float> m_tierSpectrum;
     QVector<float> m_tierRawSpectrum;
