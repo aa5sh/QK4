@@ -260,7 +260,6 @@ void RadioState::parseCATCommand(const QString &command) {
     for (const auto &entry : m_commandHandlers) {
         if (cmd.startsWith(entry.prefix)) {
             entry.handler(cmd);
-            emit stateUpdated();
             return;
         }
     }

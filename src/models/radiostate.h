@@ -681,8 +681,6 @@ signals:
     void textDecodeBChanged();                                  // TD$$ command - Sub RX settings changed
     void textBufferReceived(const QString &text, bool isSubRx); // TB$ decoded text
 
-    void stateUpdated();
-
 private:
     // Frequency and VFO
     quint64 m_frequency = 0;
