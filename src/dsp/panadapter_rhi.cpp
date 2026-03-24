@@ -1462,15 +1462,18 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
     cb->endPass();
 }
 
-void PanadapterRhiWidget::updateSpectrum(const QByteArray &bins, qint64 centerFreq, qint32 sampleRate,
-                                         float noiseFloor) {
+void PanadapterRhiWidget::updateSpectrum(const QByteArray &payload, int binsOffset, int binCount, qint64 centerFreq,
+                                         qint32 sampleRate, float noiseFloor) {
     m_centerFreq = centerFreq;
     m_sampleRate = sampleRate;
     m_noiseFloor = noiseFloor;
 
+    // Zero-copy view into payload's bin data
+    QByteArray bins = QByteArray::fromRawData(payload.constData() + binsOffset, binCount);
+
     // K4 tier span = sampleRate * 1000 Hz
     qint32 tierSpanHz = sampleRate * 1000;
-    int totalBins = bins.size();
+    int totalBins = binCount;
 
     const float attackAlpha = m_attackAlpha;
     const float decayAlpha = m_decayAlpha;

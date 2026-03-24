@@ -5025,23 +5025,25 @@ void MainWindow::onProcessingChangedB() {
     m_vfoB->setNR(m_radioState->noiseReductionEnabledB());
 }
 
-void MainWindow::onSpectrumData(int receiver, const QByteArray &data, qint64 centerFreq, qint32 sampleRate,
-                                float noiseFloor) {
+void MainWindow::onSpectrumData(int receiver, const QByteArray &payload, int binsOffset, int binCount,
+                                qint64 centerFreq, qint32 sampleRate, float noiseFloor) {
     // Route spectrum data to appropriate panadapter
     // receiver: 0 = Main (VFO A), 1 = Sub (VFO B)
     if (receiver == 0) {
-        m_panadapterA->updateSpectrum(data, centerFreq, sampleRate, noiseFloor);
+        m_panadapterA->updateSpectrum(payload, binsOffset, binCount, centerFreq, sampleRate, noiseFloor);
     } else if (receiver == 1) {
-        m_panadapterB->updateSpectrum(data, centerFreq, sampleRate, noiseFloor);
+        m_panadapterB->updateSpectrum(payload, binsOffset, binCount, centerFreq, sampleRate, noiseFloor);
     }
 }
 
-void MainWindow::onMiniSpectrumData(int receiver, const QByteArray &data) {
+void MainWindow::onMiniSpectrumData(int receiver, const QByteArray &payload, int binsOffset, int binCount) {
+    // Extract bins here to avoid changing VFOWidget/MiniPan interface
+    QByteArray bins = QByteArray::fromRawData(payload.constData() + binsOffset, binCount);
     // Route Mini-PAN data based on receiver byte (0=Main/A, 1=Sub/B)
     if (receiver == 0 && m_vfoA->isMiniPanVisible()) {
-        m_vfoA->updateMiniPan(data);
+        m_vfoA->updateMiniPan(bins);
     } else if (receiver == 1 && m_vfoB->isMiniPanVisible()) {
-        m_vfoB->updateMiniPan(data);
+        m_vfoB->updateMiniPan(bins);
     }
 }
 

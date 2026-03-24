@@ -23,8 +23,9 @@ public:
     explicit PanadapterRhiWidget(QWidget *parent = nullptr);
     ~PanadapterRhiWidget();
 
-    // Update spectrum data from K4 PAN packet
-    void updateSpectrum(const QByteArray &bins, qint64 centerFreq, qint32 sampleRate, float noiseFloor);
+    // Update spectrum data from K4 PAN packet (payload + offset avoids deep copy)
+    void updateSpectrum(const QByteArray &payload, int binsOffset, int binCount, qint64 centerFreq, qint32 sampleRate,
+                        float noiseFloor);
 
     // Update from MiniPAN packet (simpler format)
     void updateMiniSpectrum(const QByteArray &bins);

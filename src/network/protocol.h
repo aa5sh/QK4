@@ -108,9 +108,9 @@ signals:
     void audioDataReady(const QByteArray &opusData);
     void audioSequenceReceived(quint8 seq);
     // receiver: 0 = Main (VFO A), 1 = Sub (VFO B)
-    void spectrumDataReady(int receiver, const QByteArray &spectrumData, qint64 centerFreq, qint32 sampleRate,
-                           float noiseFloor);
-    void miniSpectrumDataReady(int receiver, const QByteArray &spectrumData);
+    void spectrumDataReady(int receiver, const QByteArray &payload, int binsOffset, int binCount, qint64 centerFreq,
+                           qint32 sampleRate, float noiseFloor);
+    void miniSpectrumDataReady(int receiver, const QByteArray &payload, int binsOffset, int binCount);
     void catResponseReceived(const QString &response);
     void packetReceived(quint8 type, const QByteArray &payload);
 

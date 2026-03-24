@@ -112,8 +112,9 @@ private slots:
     void onMessageBankChanged(int bank);
     void onProcessingChanged();
     void onProcessingChangedB();
-    void onSpectrumData(int receiver, const QByteArray &data, qint64 centerFreq, qint32 sampleRate, float noiseFloor);
-    void onMiniSpectrumData(int receiver, const QByteArray &data);
+    void onSpectrumData(int receiver, const QByteArray &payload, int binsOffset, int binCount, qint64 centerFreq,
+                        qint32 sampleRate, float noiseFloor);
+    void onMiniSpectrumData(int receiver, const QByteArray &payload, int binsOffset, int binCount);
     void showRadioManager();
     void connectToRadio(const RadioEntry &radio);
     void updateDateTime();
