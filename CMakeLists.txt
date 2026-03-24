@@ -122,6 +122,7 @@ set(SOURCES
     src/ui/k4popupbase.cpp
     src/ui/kpa1500panel.cpp
     src/ui/kpa1500window.cpp
+    src/ui/kpa1500minipanel.cpp
     src/ui/sidecontroloverlay.cpp
     src/ui/monoverlay.cpp
     src/ui/baloverlay.cpp
