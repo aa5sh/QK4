@@ -42,9 +42,7 @@ class MacroDialog;
 class FilterIndicatorWidget;
 class FeatureMenuBar;
 class ModePopupWidget;
-class KpodDevice;
-class HalikeyDevice;
-class IambicKeyer;
+class HardwareController;
 class KPA1500Client;
 class KPA1500Window;
 class CatServer;
@@ -52,7 +50,6 @@ class OptionsDialog;
 class NotificationWidget;
 class VfoRowWidget;
 class QFrame;
-class SidetoneGenerator;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -121,12 +118,6 @@ private slots:
     void toggleSubRxPopup();
     void toggleTxPopup();
     void closeAllPopups();
-
-    // KPOD slots
-    void onKpodEncoderRotated(int ticks);
-    void onKpodRockerChanged(int position);
-    void onKpodPollError(const QString &error);
-    void onKpodEnabledChanged(bool enabled);
 
     // KPA1500 slots
     void onKpa1500Connected();
@@ -303,17 +294,8 @@ private:
     int m_currentBandNum = -1;  // Current band number for VFO A (BN command)
     int m_currentBandNumB = -1; // Current band number for VFO B (BN$ command)
 
-    // KPOD device
-    KpodDevice *m_kpodDevice;
-
-    // HaliKey CW paddle device
-    HalikeyDevice *m_halikeyDevice;
-    IambicKeyer *m_iambicKeyer;
-    QThread *m_keyerThread = nullptr;
-
-    // Local sidetone generator for CW keying
-    SidetoneGenerator *m_sidetoneGenerator;
-    QThread *m_sidetoneThread = nullptr;
+    // Hardware controller (owns KPOD, HaliKey, IambicKeyer, SidetoneGenerator and their threads)
+    HardwareController *m_hardwareController;
 
     // KPA1500 amplifier client
     KPA1500Client *m_kpa1500Client;
