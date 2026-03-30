@@ -15,10 +15,8 @@
 #include "ui/wheelaccumulator.h"
 
 class PanadapterRhiWidget;
-class AudioEngine;
+class AudioController;
 class NetHealthWidget;
-class OpusDecoder;
-class OpusEncoder;
 class SideControlPanel;
 class RightSidePanel;
 class BottomMenuBar;
@@ -130,11 +128,6 @@ private slots:
     // Error/notification from K4 (ERxx: messages)
     void onErrorNotification(int errorCode, const QString &message);
 
-    // PTT slots
-    void onPttPressed();
-    void onPttReleased();
-    void onMicrophoneFrame(const QByteArray &s16leData);
-
     // Display FPS (synthetic menu item)
     void onDisplayFpsChanged(int fps);
 
@@ -168,15 +161,8 @@ private:
     RadioState *m_radioState;
     QTimer *m_clockTimer;
 
-    // Audio
-    AudioEngine *m_audioEngine;
-    QThread *m_audioThread = nullptr;
-    OpusDecoder *m_opusDecoder;
-    OpusEncoder *m_opusEncoder;
-
-    // PTT state
-    bool m_pttActive = false;
-    quint8 m_txSequence = 0;
+    // Audio controller owns AudioEngine, Opus codecs, audio thread, and PTT state
+    AudioController *m_audioController;
 
     // Top status bar
     QLabel *m_titleLabel;

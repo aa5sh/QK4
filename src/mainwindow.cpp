@@ -31,9 +31,7 @@
 #include "dsp/panadapter_rhi.h"
 #include "dsp/minipan_rhi.h"
 #include "ui/frequencydisplaywidget.h"
-#include "audio/audioengine.h"
-#include "audio/opusdecoder.h"
-#include "audio/opusencoder.h"
+#include "controllers/audiocontroller.h"
 #include "controllers/hardwarecontroller.h"
 #include "network/kpa1500client.h"
 #include "ui/kpa1500window.h"
@@ -92,34 +90,12 @@ static int getNextSpanDown(int currentSpan) {
 // ============== MainWindow Implementation ==============
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), m_radioState(new RadioState(this)), m_clockTimer(new QTimer(this)),
-      m_audioEngine(new AudioEngine(nullptr)), m_opusDecoder(new OpusDecoder(nullptr)),
-      m_opusEncoder(new OpusEncoder(this)), m_menuModel(new MenuModel(this)), m_menuOverlay(nullptr) {
-    // Initialize Opus decoder (K4 sends 12kHz stereo: left=Main, right=Sub)
-    m_opusDecoder->initialize(12000, 2);
-
-    // Initialize Opus encoder for TX audio (12kHz mono)
-    m_opusEncoder->initialize(12000, 1);
-
-    // Load saved audio device settings BEFORE moveToThread (only stores strings/floats,
-    // no Qt audio objects exist yet, so direct calls are safe)
-    QString savedMicDevice = RadioSettings::instance()->micDevice();
-    if (!savedMicDevice.isEmpty()) {
-        m_audioEngine->setMicDevice(savedMicDevice);
-    }
-    QString savedSpeakerDevice = RadioSettings::instance()->speakerDevice();
-    if (!savedSpeakerDevice.isEmpty()) {
-        m_audioEngine->setOutputDevice(savedSpeakerDevice);
-    }
-    m_audioEngine->setMicGain(RadioSettings::instance()->micGain() / 100.0f);
-
-    // Move AudioEngine to dedicated thread for glitch-free audio playback
-    m_audioThread = new QThread(this);
-    m_audioThread->setObjectName("AudioEngine");
-    m_audioEngine->moveToThread(m_audioThread);
-    m_audioThread->start();
-
+      m_menuModel(new MenuModel(this)), m_menuOverlay(nullptr) {
     // Connection controller owns TcpClient, I/O thread, and NetworkMetrics
     m_connectionController = new ConnectionController(m_radioState, this);
+
+    // Audio controller owns AudioEngine, Opus codecs, audio thread, and PTT state
+    m_audioController = new AudioController(m_connectionController, m_radioState, this);
 
     // IMPORTANT: setupUi() MUST be called BEFORE setupMenuBar()!
     // Qt 6.10.1 bug on macOS Tahoe: calling menuBar() before creating QRhiWidget
@@ -1286,11 +1262,6 @@ MainWindow::MainWindow(QWidget *parent)
             // Auto-hide mini pan B if VFOs are on different bands (can't have mini pan B without SUB RX)
             checkAndHideMiniPanB();
         }
-
-        // Mute/unmute sub RX audio channel
-        if (m_audioEngine) {
-            m_audioEngine->setSubMuted(!enabled);
-        }
     });
 
     // DIV indicator - green only when BOTH diversity AND sub RX are enabled
@@ -1790,22 +1761,6 @@ MainWindow::MainWindow(QWidget *parent)
     connect(protocol, &Protocol::spectrumDataReady, this, &MainWindow::onSpectrumData);
     connect(protocol, &Protocol::miniSpectrumDataReady, this, &MainWindow::onMiniSpectrumData);
 
-    // Protocol audio data -> direct decode + enqueue on I/O thread (bypasses main thread entirely)
-    // m_opusDecoder is only called from this lambda → single-threaded access on I/O thread
-    // m_audioEngine->enqueueAudio() is mutex-protected → safe from any thread
-    connect(protocol, &Protocol::audioDataReady, protocol, [this](const QByteArray &payload) {
-        QByteArray pcmData = m_opusDecoder->decodeK4Packet(payload);
-        if (!pcmData.isEmpty()) {
-            m_audioEngine->enqueueAudio(pcmData);
-        }
-    });
-
-    // Audio buffer status -> network health metrics (owned by ConnectionController)
-    connect(protocol, &Protocol::audioSequenceReceived, m_connectionController->networkMetrics(),
-            &NetworkMetrics::onAudioSequence);
-    connect(m_audioEngine, &AudioEngine::bufferStatus, m_connectionController->networkMetrics(),
-            &NetworkMetrics::onBufferStatus);
-
     // Clock timer for date/time display
     connect(m_clockTimer, &QTimer::timeout, this, &MainWindow::updateDateTime);
     m_clockTimer->start(1000);
@@ -1925,11 +1880,7 @@ MainWindow::MainWindow(QWidget *parent)
     // TX;/RX; from external apps controls audio input gate
     // Audio stream itself triggers K4 TX - timing-critical for FT8/FT4
     connect(m_catServer, &CatServer::pttRequested, this, [this](bool on) {
-        m_pttActive = on;
-        if (on) {
-            m_txSequence = 0;
-        }
-        QMetaObject::invokeMethod(m_audioEngine, "setMicEnabled", Qt::QueuedConnection, Q_ARG(bool, on));
+        m_audioController->setPttActive(on);
         m_bottomMenuBar->setPttActive(on);
     });
 
@@ -1964,16 +1915,7 @@ MainWindow::~MainWindow() {
 
     // ConnectionController handles I/O thread shutdown in its destructor
     // (it's a child of MainWindow, so Qt deletes it automatically)
-    delete m_opusDecoder; // No parent, must delete manually
-
-    // Shut down audio thread (consumer stops after producer)
-    if (m_audioThread) {
-        QMetaObject::invokeMethod(m_audioEngine, "stop", Qt::BlockingQueuedConnection);
-        m_audioThread->quit();
-        m_audioThread->wait(2000);
-    }
-    delete m_audioEngine; // No parent, must delete manually
-    m_audioEngine = nullptr;
+    // AudioController handles audio thread shutdown in its destructor
 
     // Disconnect KPA1500 signals before child destruction to prevent
     // callbacks accessing destroyed widgets during cleanup
@@ -2005,8 +1947,8 @@ void MainWindow::setupMenuBar() {
     connect(optionsAction, &QAction::triggered, this, [this]() {
         if (!m_optionsDialog) {
             m_optionsDialog =
-                new OptionsDialog(m_radioState, m_audioEngine, m_hardwareController->kpodDevice(), m_catServer,
-                                  m_hardwareController->halikeyDevice(), m_kpa1500Client, this);
+                new OptionsDialog(m_radioState, m_audioController->audioEngine(), m_hardwareController->kpodDevice(),
+                                  m_catServer, m_hardwareController->halikeyDevice(), m_kpa1500Client, this);
         }
         m_optionsDialog->show();
         m_optionsDialog->raise();
@@ -2422,31 +2364,27 @@ void MainWindow::setupUi() {
         // TODO: Show help dialog
     });
 
-    // Connect volume slider to AudioEngine (Main RX / VFO A)
+    // Connect volume slider to AudioController (Main RX / VFO A)
     connect(m_sideControlPanel, &SideControlPanel::volumeChanged, this, [this](int value) {
-        if (m_audioEngine) {
-            m_audioEngine->setMainVolume(value / 100.0f);
-        }
+        m_audioController->setMainVolume(value / 100.0f);
         RadioSettings::instance()->setVolume(value); // Persist setting
     });
 
-    // Connect sub volume slider to AudioEngine (Sub RX / VFO B)
+    // Connect sub volume slider to AudioController (Sub RX / VFO B)
     // In BAL mode, this slider controls L/R balance offset instead of sub volume
     connect(m_sideControlPanel, &SideControlPanel::subVolumeChanged, this, [this](int value) {
-        if (m_audioEngine) {
-            if (m_radioState->balanceMode() == 1) {
-                // BAL mode: slider controls L/R balance (0-100 maps to -50..+50)
-                int offset = value - 50;
-                m_audioEngine->setBalanceOffset(offset);
-                // Send BL command to radio with current mode and new offset
-                QString sign = offset >= 0 ? "+" : "-";
-                QString cmd = QString("BL1%1%2;").arg(sign).arg(qAbs(offset), 2, 10, QChar('0'));
-                m_connectionController->sendCAT(cmd);
-                m_radioState->setBalance(1, offset);
-            } else {
-                // NOR mode: slider controls sub RX volume
-                m_audioEngine->setSubVolume(value / 100.0f);
-            }
+        if (m_radioState->balanceMode() == 1) {
+            // BAL mode: slider controls L/R balance (0-100 maps to -50..+50)
+            int offset = value - 50;
+            m_audioController->setBalanceOffset(offset);
+            // Send BL command to radio with current mode and new offset
+            QString sign = offset >= 0 ? "+" : "-";
+            QString cmd = QString("BL1%1%2;").arg(sign).arg(qAbs(offset), 2, 10, QChar('0'));
+            m_connectionController->sendCAT(cmd);
+            m_radioState->setBalance(1, offset);
+        } else {
+            // NOR mode: slider controls sub RX volume
+            m_audioController->setSubVolume(value / 100.0f);
         }
         RadioSettings::instance()->setSubVolume(value); // Persist setting
     });
@@ -2785,21 +2723,6 @@ void MainWindow::setupUi() {
     // Update BAL overlay and button when RadioState changes
     connect(m_radioState, &RadioState::balanceChanged, m_sideControlPanel, &SideControlPanel::updateBalance);
 
-    // Forward balance state to audio engine for L/R routing
-    connect(m_radioState, &RadioState::balanceChanged, this, [this](int mode, int offset) {
-        if (m_audioEngine) {
-            m_audioEngine->setBalanceMode(mode);
-            m_audioEngine->setBalanceOffset(offset);
-        }
-    });
-
-    // Forward audio mix routing (MX command) to audio engine
-    connect(m_radioState, &RadioState::audioMixChanged, this, [this](int left, int right) {
-        if (m_audioEngine) {
-            m_audioEngine->setAudioMix(left, right);
-        }
-    });
-
     // Connect right side panel button signals to CAT commands
     // Primary (left-click) signals
     connect(m_rightSidePanel, &RightSidePanel::preClicked, this,
@@ -3018,11 +2941,16 @@ void MainWindow::setupUi() {
     connect(m_bottomMenuBar, &BottomMenuBar::txClicked, this, &MainWindow::toggleTxPopup);
 
     // PTT button connections
-    connect(m_bottomMenuBar, &BottomMenuBar::pttPressed, this, &MainWindow::onPttPressed);
-    connect(m_bottomMenuBar, &BottomMenuBar::pttReleased, this, &MainWindow::onPttReleased);
-
-    // Connect microphone frames to encoding/transmission
-    connect(m_audioEngine, &AudioEngine::microphoneFrame, this, &MainWindow::onMicrophoneFrame);
+    connect(m_bottomMenuBar, &BottomMenuBar::pttPressed, this, [this]() {
+        if (m_connectionController->isConnected()) {
+            m_audioController->setPttActive(true);
+            m_bottomMenuBar->setPttActive(true);
+        }
+    });
+    connect(m_bottomMenuBar, &BottomMenuBar::pttReleased, this, [this]() {
+        m_audioController->setPttActive(false);
+        m_bottomMenuBar->setPttActive(false);
+    });
 
     // Note: audio buffer flushing on mode/filter changes was removed — AudioEngine now runs
     // on a dedicated thread with a properly sized jitter buffer, so stale audio lag no longer
@@ -4097,16 +4025,9 @@ void MainWindow::onConnectionError(const QString &error) {
 void MainWindow::onRadioReady() {
     qCDebug(qk4Main) << "Successfully authenticated with K4 radio";
 
-    // Start audio engine asynchronously on its dedicated thread.
-    // Must NOT use BlockingQueuedConnection — setupAudioInput() (now deferred to
-    // first mic use) can trigger macOS permission dialogs that need the main thread
-    // runloop, which would deadlock if the main thread were blocked here.
-    QMetaObject::invokeMethod(m_audioEngine, "start", Qt::QueuedConnection);
-
-    // Volume setters are atomic — safe as direct calls from any thread
-    m_audioEngine->setMainVolume(m_sideControlPanel->volume() / 100.0f);
-    m_audioEngine->setSubVolume(m_sideControlPanel->subVolume() / 100.0f);
-    m_audioEngine->setMicGain(RadioSettings::instance()->micGain() / 100.0f);
+    // Start audio engine via AudioController
+    m_audioController->startAudio(m_sideControlPanel->volume() / 100.0f, m_sideControlPanel->subVolume() / 100.0f,
+                                  RadioSettings::instance()->micGain() / 100.0f);
 
     // Most state is already included in the RDY; response from TcpClient.
     // Only query commands NOT included in RDY dump:
@@ -4295,9 +4216,7 @@ void MainWindow::updateConnectionState(TcpClient::ConnectionState state) {
             QString("color: %1; font-size: 12px;").arg(K4Styles::Colors::InactiveGray));
         m_titleLabel->setText("Elecraft K4");
         // Stop audio engine to prevent accessing invalid data
-        if (m_audioEngine) {
-            QMetaObject::invokeMethod(m_audioEngine, "stop", Qt::QueuedConnection);
-        }
+        m_audioController->stopAudio();
 
         // Clear all UI state to avoid showing stale data
         // Clear spectrum displays
@@ -4869,85 +4788,6 @@ void MainWindow::onMiniSpectrumData(int receiver, const QByteArray &payload, int
     } else if (receiver == 1 && m_vfoB->isMiniPanVisible()) {
         m_vfoB->updateMiniPan(bins);
     }
-}
-
-void MainWindow::onPttPressed() {
-    if (!m_connectionController->isConnected()) {
-        return;
-    }
-
-    m_pttActive = true;
-    m_txSequence = 0; // Reset sequence on new PTT press
-    QMetaObject::invokeMethod(m_audioEngine, "setMicEnabled", Qt::QueuedConnection, Q_ARG(bool, true));
-    m_bottomMenuBar->setPttActive(true);
-    qCDebug(qk4Main) << "PTT pressed - microphone enabled";
-}
-
-void MainWindow::onPttReleased() {
-    m_pttActive = false;
-    QMetaObject::invokeMethod(m_audioEngine, "setMicEnabled", Qt::QueuedConnection, Q_ARG(bool, false));
-    m_bottomMenuBar->setPttActive(false);
-    qCDebug(qk4Main) << "PTT released - microphone disabled";
-}
-
-void MainWindow::onMicrophoneFrame(const QByteArray &s16leData) {
-    // Only transmit when PTT is active and connected
-    if (!m_pttActive || !m_connectionController->isConnected()) {
-        return;
-    }
-
-    QByteArray audioData;
-
-    switch (m_connectionController->currentRadio().encodeMode) {
-    case 0: // EM0 - RAW 32-bit float stereo
-    {
-        // Convert mono S16LE to stereo float32 (K4 expects stereo: L=Main, R=Sub)
-        const qint16 *samples = reinterpret_cast<const qint16 *>(s16leData.constData());
-        int sampleCount = s16leData.size() / sizeof(qint16);
-
-        audioData.resize(sampleCount * 2 * sizeof(float)); // Stereo output
-        float *output = reinterpret_cast<float *>(audioData.data());
-
-        for (int i = 0; i < sampleCount; i++) {
-            float normalized = static_cast<float>(samples[i]) / 32768.0f;
-            output[i * 2] = normalized;     // Left channel
-            output[i * 2 + 1] = normalized; // Right channel (duplicate)
-        }
-        break;
-    }
-
-    case 1: // EM1 - RAW 16-bit S16LE stereo
-    {
-        // Convert mono S16LE to stereo S16LE (K4 expects stereo: L=Main, R=Sub)
-        const qint16 *samples = reinterpret_cast<const qint16 *>(s16leData.constData());
-        int sampleCount = s16leData.size() / sizeof(qint16);
-
-        audioData.resize(sampleCount * 2 * sizeof(qint16)); // Stereo output
-        qint16 *output = reinterpret_cast<qint16 *>(audioData.data());
-
-        for (int i = 0; i < sampleCount; i++) {
-            output[i * 2] = samples[i];     // Left channel
-            output[i * 2 + 1] = samples[i]; // Right channel (duplicate)
-        }
-        break;
-    }
-
-    case 2: // EM2 - Opus Int
-    case 3: // EM3 - Opus Float
-    default:
-        // Use Opus encoding (encoder handles mono-to-stereo internally)
-        audioData = m_opusEncoder->encode(s16leData);
-        break;
-    }
-
-    if (audioData.isEmpty()) {
-        return;
-    }
-
-    // Build and send the audio packet with the selected encode mode
-    QByteArray packet =
-        Protocol::buildAudioPacket(audioData, m_txSequence++, m_connectionController->currentRadio().encodeMode);
-    m_connectionController->tcpClient()->sendRaw(packet);
 }
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
