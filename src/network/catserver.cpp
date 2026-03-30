@@ -29,7 +29,7 @@ bool CatServer::start(quint16 port) {
         return false;
     }
 
-    m_port = port;
+    m_port = m_server->serverPort(); // use actual port (may differ from requested if 0)
     emit started(port);
     return true;
 }
