@@ -1845,6 +1845,11 @@ MainWindow::MainWindow(QWidget *parent)
 }
 
 MainWindow::~MainWindow() {
+    // Disconnect all signals targeting this object FIRST — prevents queued signals
+    // from arriving during partial destruction (e.g., a RadioState signal firing
+    // after some child widgets are already destroyed but before MainWindow is).
+    disconnect(this);
+
     // HardwareController handles KPOD, HaliKey, Keyer, Sidetone shutdown
     // (it's a child of MainWindow, so Qt deletes it automatically —
     //  its destructor shuts down threads in the correct order)

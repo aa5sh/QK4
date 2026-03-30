@@ -17,6 +17,10 @@
 SpectrumController::SpectrumController(ConnectionController *conn, RadioState *radioState, QObject *parent)
     : QObject(parent), m_connectionController(conn), m_radioState(radioState), m_mouseQsyMode(0) {}
 
+SpectrumController::~SpectrumController() {
+    disconnect(this);
+}
+
 QWidget *SpectrumController::spectrumContainer() const {
     return m_spectrumContainer;
 }

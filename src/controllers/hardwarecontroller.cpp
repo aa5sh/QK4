@@ -180,6 +180,7 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
 }
 
 HardwareController::~HardwareController() {
+    disconnect(this);
     // Shutdown order: HaliKey → Keyer → Sidetone → KPOD
     // HaliKey stops paddle events first, then keyer (producer of KZ commands) stops
     // before sidetone (the audio consumer) is torn down.

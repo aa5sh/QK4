@@ -81,6 +81,7 @@ AudioController::AudioController(ConnectionController *connController, RadioStat
 }
 
 AudioController::~AudioController() {
+    disconnect(this);
     delete m_opusDecoder; // No parent, must delete manually
 
     if (m_audioThread) {
