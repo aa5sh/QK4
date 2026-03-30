@@ -1,5 +1,6 @@
 #include "catserver.h"
 #include "models/radiostate.h"
+#include "protocol.h"
 #include "tcpclient.h"
 
 CatServer::CatServer(RadioState *state, QObject *parent)
@@ -80,6 +81,13 @@ void CatServer::onClientData() {
 
     QByteArray &buffer = m_clientBuffers[client];
     buffer.append(client->readAll());
+
+    // Protect against unbounded buffer growth from misbehaving clients
+    if (buffer.size() > K4Protocol::MAX_BUFFER_SIZE) {
+        qWarning() << "CAT client buffer overflow from" << client->peerAddress().toString() << "- disconnecting";
+        client->disconnectFromHost();
+        return;
+    }
 
     // K4 CAT commands are semicolon-terminated — single-pass offset parsing
     int offset = 0;
