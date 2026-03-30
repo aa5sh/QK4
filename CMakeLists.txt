@@ -103,6 +103,9 @@ set(SOURCES
     src/ui/filterindicatorwidget.cpp
     src/ui/bandpopupwidget.cpp
     src/ui/buttonrowpopup.cpp
+    src/ui/displaymenubutton.cpp
+    src/ui/controlgroupwidget.cpp
+    src/ui/togglegroupwidget.cpp
     src/ui/displaypopupwidget.cpp
     src/ui/optionsdialog.cpp
     src/ui/aboutpage.cpp
@@ -182,6 +185,9 @@ set(HEADERS
     src/ui/filterindicatorwidget.h
     src/ui/bandpopupwidget.h
     src/ui/buttonrowpopup.h
+    src/ui/displaymenubutton.h
+    src/ui/controlgroupwidget.h
+    src/ui/togglegroupwidget.h
     src/ui/displaypopupwidget.h
     src/ui/optionsdialog.h
     src/ui/aboutpage.h
