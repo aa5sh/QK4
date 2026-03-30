@@ -87,6 +87,10 @@ void ConnectionController::sendCAT(const QString &command) {
     m_tcpClient->sendCAT(command);
 }
 
+void ConnectionController::sendRawPacket(const QByteArray &packet) {
+    m_tcpClient->sendRaw(packet);
+}
+
 bool ConnectionController::isConnected() const {
     return m_tcpClient->isConnected();
 }

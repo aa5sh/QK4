@@ -209,5 +209,5 @@ void AudioController::onMicrophoneFrame(const QByteArray &s16leData) {
     // Build and send the audio packet with the selected encode mode
     QByteArray packet =
         Protocol::buildAudioPacket(audioData, m_txSequence++, m_connectionController->currentRadio().encodeMode);
-    m_connectionController->tcpClient()->sendRaw(packet);
+    m_connectionController->sendRawPacket(packet);
 }

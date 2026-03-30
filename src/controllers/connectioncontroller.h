@@ -23,6 +23,9 @@ public:
     // Send CAT command to K4 (thread-safe — uses QueuedConnection internally)
     void sendCAT(const QString &command);
 
+    // Send raw binary packet to K4 (for TX audio — thread-safe)
+    void sendRawPacket(const QByteArray &packet);
+
     // State queries
     bool isConnected() const;
     TcpClient::ConnectionState connectionState() const;
