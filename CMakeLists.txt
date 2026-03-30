@@ -16,7 +16,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 # Core Qt components (GuiPrivate handled separately for cross-platform compatibility)
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets Network Multimedia ShaderTools Gui SerialPort Svg)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Network Multimedia ShaderTools Gui SerialPort Svg Test)
 
 # GuiPrivate is needed for QRhi access but may not have CMake config on all platforms
 if(APPLE)
@@ -351,6 +351,13 @@ qt_add_resources(${PROJECT_NAME} "icons"
         resources/icons/globe.svg
         resources/icons/help.svg
 )
+
+# =============================================================================
+# Tests
+# =============================================================================
+
+enable_testing()
+add_subdirectory(tests)
 
 # =============================================================================
 # Deployment / Bundling - Create self-contained distributable app
