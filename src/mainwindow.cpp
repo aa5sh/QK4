@@ -4272,7 +4272,7 @@ void MainWindow::onMenuValueChangeRequested(int menuId, const QString &action) {
         }
 
         // Update stored preference
-        m_connectionController->currentRadio().displayFps = newValue;
+        m_connectionController->setDisplayFps(newValue);
         return;
     }
 

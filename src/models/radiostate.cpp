@@ -1,6 +1,7 @@
 #include "radiostate.h"
 #include <QDateTime>
 #include <QDebug>
+#include <QThread>
 #include <algorithm>
 
 RadioState::RadioState(QObject *parent) : QObject(parent) {
@@ -247,6 +248,10 @@ void RadioState::reset() {
 }
 
 void RadioState::parseCATCommand(const QString &command) {
+    // RadioState is not thread-safe — all callers must be on the main (GUI) thread.
+    // If cross-thread parsing is ever needed, use QMetaObject::invokeMethod with Qt::QueuedConnection.
+    Q_ASSERT(QThread::currentThread() == thread());
+
     QString cmd = command.trimmed();
     if (cmd.isEmpty())
         return;

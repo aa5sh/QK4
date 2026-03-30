@@ -27,7 +27,7 @@ public:
     bool isConnected() const;
     TcpClient::ConnectionState connectionState() const;
     const RadioEntry &currentRadio() const { return m_currentRadio; }
-    RadioEntry &currentRadio() { return m_currentRadio; }
+    void setDisplayFps(int fps) { m_currentRadio.displayFps = fps; }
 
     // Access to owned objects (for wiring by MainWindow)
     TcpClient *tcpClient() const { return m_tcpClient; }
