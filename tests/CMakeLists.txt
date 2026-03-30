@@ -16,3 +16,11 @@ add_executable(test_radioutils test_radioutils.cpp
 target_include_directories(test_radioutils PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_radioutils Qt6::Core Qt6::Test)
 add_test(NAME RadioUtilsTests COMMAND test_radioutils)
+
+# Protocol packet parsing tests
+add_executable(test_protocol test_protocol.cpp
+    ${CMAKE_SOURCE_DIR}/src/network/protocol.cpp
+)
+target_include_directories(test_protocol PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_protocol Qt6::Core Qt6::Network Qt6::Test)
+add_test(NAME ProtocolTests COMMAND test_protocol)
