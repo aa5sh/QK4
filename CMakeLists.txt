@@ -104,6 +104,13 @@ set(SOURCES
     src/ui/buttonrowpopup.cpp
     src/ui/displaypopupwidget.cpp
     src/ui/optionsdialog.cpp
+    src/ui/aboutpage.cpp
+    src/ui/audioinputpage.cpp
+    src/ui/audiooutputpage.cpp
+    src/ui/rigcontrolpage.cpp
+    src/ui/cwkeyerpage.cpp
+    src/ui/kpodpage.cpp
+    src/ui/kpa1500page.cpp
     src/ui/rightsidepanel.cpp
     src/ui/featuremenubar.cpp
     src/ui/modepopupwidget.cpp
@@ -175,6 +182,13 @@ set(HEADERS
     src/ui/buttonrowpopup.h
     src/ui/displaypopupwidget.h
     src/ui/optionsdialog.h
+    src/ui/aboutpage.h
+    src/ui/audioinputpage.h
+    src/ui/audiooutputpage.h
+    src/ui/rigcontrolpage.h
+    src/ui/cwkeyerpage.h
+    src/ui/kpodpage.h
+    src/ui/kpa1500page.h
     src/ui/rightsidepanel.h
     src/ui/featuremenubar.h
     src/ui/modepopupwidget.h
