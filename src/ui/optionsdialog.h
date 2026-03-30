@@ -9,10 +9,9 @@
 #include <QMediaDevices>
 
 class RadioState;
-class AudioEngine;
-class KpodDevice;
+class AudioController;
+class HardwareController;
 class CatServer;
-class HalikeyDevice;
 class KPA1500Client;
 class AboutPage;
 class AudioInputPage;
@@ -37,8 +36,8 @@ public:
         PageCount
     };
 
-    explicit OptionsDialog(RadioState *radioState, AudioEngine *audioEngine, KpodDevice *kpodDevice,
-                           CatServer *catServer, HalikeyDevice *halikeyDevice, KPA1500Client *kpa1500Client,
+    explicit OptionsDialog(RadioState *radioState, AudioController *audioController,
+                           HardwareController *hardwareController, CatServer *catServer, KPA1500Client *kpa1500Client,
                            QWidget *parent = nullptr);
     ~OptionsDialog();
 
@@ -52,10 +51,9 @@ private:
     void refreshPage(int index);
 
     RadioState *m_radioState;
-    AudioEngine *m_audioEngine;
-    KpodDevice *m_kpodDevice;
+    AudioController *m_audioController;
+    HardwareController *m_hardwareController;
     CatServer *m_catServer;
-    HalikeyDevice *m_halikeyDevice;
     KPA1500Client *m_kpa1500Client;
     QListWidget *m_tabList;
     QStackedWidget *m_pageStack;

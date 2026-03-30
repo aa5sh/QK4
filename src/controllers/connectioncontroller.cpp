@@ -1,5 +1,6 @@
 #include "connectioncontroller.h"
 #include "network/networkmetrics.h"
+#include "network/protocol.h"
 #include "models/radiostate.h"
 #include "ui/fnpopupwidget.h"
 #include <QLoggingCategory>
@@ -23,6 +24,12 @@ ConnectionController::ConnectionController(RadioState *radioState, QObject *pare
     connect(m_tcpClient, &TcpClient::errorOccurred, this, &ConnectionController::connectionError);
     connect(m_tcpClient, &TcpClient::authenticated, this, &ConnectionController::radioReady);
     connect(m_tcpClient, &TcpClient::authenticationFailed, this, &ConnectionController::authFailed);
+
+    // Re-emit Protocol signals so callers don't need tcpClient()->protocol() chains
+    auto *protocol = m_tcpClient->protocol();
+    connect(protocol, &Protocol::catResponseReceived, this, &ConnectionController::catResponseReceived);
+    connect(protocol, &Protocol::spectrumDataReady, this, &ConnectionController::spectrumDataReceived);
+    connect(protocol, &Protocol::miniSpectrumDataReady, this, &ConnectionController::miniSpectrumDataReceived);
 
     // Network health metrics
     connect(m_tcpClient, &TcpClient::latencyChanged, m_networkMetrics, &NetworkMetrics::onLatencyChanged);

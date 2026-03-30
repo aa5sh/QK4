@@ -7,13 +7,18 @@
 #include "kpodpage.h"
 #include "kpa1500page.h"
 #include "k4styles.h"
+#include "controllers/audiocontroller.h"
+#include "controllers/hardwarecontroller.h"
+#include "audio/audioengine.h"
+#include "hardware/kpoddevice.h"
+#include "hardware/halikeydevice.h"
 #include <QHBoxLayout>
 
-OptionsDialog::OptionsDialog(RadioState *radioState, AudioEngine *audioEngine, KpodDevice *kpodDevice,
-                             CatServer *catServer, HalikeyDevice *halikeyDevice, KPA1500Client *kpa1500Client,
+OptionsDialog::OptionsDialog(RadioState *radioState, AudioController *audioController,
+                             HardwareController *hardwareController, CatServer *catServer, KPA1500Client *kpa1500Client,
                              QWidget *parent)
-    : QDialog(parent), m_radioState(radioState), m_audioEngine(audioEngine), m_kpodDevice(kpodDevice),
-      m_catServer(catServer), m_halikeyDevice(halikeyDevice), m_kpa1500Client(kpa1500Client) {
+    : QDialog(parent), m_radioState(radioState), m_audioController(audioController),
+      m_hardwareController(hardwareController), m_catServer(catServer), m_kpa1500Client(kpa1500Client) {
     setWindowModality(Qt::ApplicationModal);
     setupUi();
 }
@@ -104,11 +109,11 @@ void OptionsDialog::ensurePageCreated(int index) {
     QWidget *page = nullptr;
     switch (index) {
     case PageAudioInput:
-        m_audioInputPage = new AudioInputPage(m_audioEngine, this);
+        m_audioInputPage = new AudioInputPage(m_audioController->audioEngine(), this);
         page = m_audioInputPage;
         break;
     case PageAudioOutput:
-        m_audioOutputPage = new AudioOutputPage(m_audioEngine, this);
+        m_audioOutputPage = new AudioOutputPage(m_audioController->audioEngine(), this);
         page = m_audioOutputPage;
         break;
     case PageRigControl:
@@ -116,11 +121,11 @@ void OptionsDialog::ensurePageCreated(int index) {
         page = m_rigControlPage;
         break;
     case PageCwKeyer:
-        m_cwKeyerPage = new CwKeyerPage(m_halikeyDevice, this);
+        m_cwKeyerPage = new CwKeyerPage(m_hardwareController->halikeyDevice(), this);
         page = m_cwKeyerPage;
         break;
     case PageKpod:
-        m_kpodPage = new KpodPage(m_kpodDevice, this);
+        m_kpodPage = new KpodPage(m_hardwareController->kpodDevice(), this);
         page = m_kpodPage;
         break;
     case PageKpa1500:

@@ -29,7 +29,10 @@ public:
     const RadioEntry &currentRadio() const { return m_currentRadio; }
     void setDisplayFps(int fps) { m_currentRadio.displayFps = fps; }
 
-    // Access to owned objects (for wiring by MainWindow)
+    // Access to owned objects
+    // Prefer using re-emitted signals below instead of reaching into tcpClient/protocol directly.
+    // tcpClient() is exposed for AudioController's performance-sensitive audio data path
+    // and for CatServer's direct TCP forwarding — both require the raw TcpClient.
     TcpClient *tcpClient() const { return m_tcpClient; }
     NetworkMetrics *networkMetrics() const { return m_networkMetrics; }
 
@@ -39,6 +42,12 @@ signals:
     void connectionError(const QString &error);                    // Connection error
     void authFailed();                                             // Authentication failed
     void connectionStateChanged(TcpClient::ConnectionState state); // Any state transition
+
+    // Re-emitted Protocol signals (eliminates tcpClient()->protocol() chains from callers)
+    void catResponseReceived(const QString &response);
+    void spectrumDataReceived(int receiver, const QByteArray &payload, int binsOffset, int binCount, qint64 centerFreq,
+                              qint32 sampleRate, float noiseFloor);
+    void miniSpectrumDataReceived(int receiver, const QByteArray &payload, int binsOffset, int binCount);
 
 private slots:
     void onStateChanged(TcpClient::ConnectionState state);

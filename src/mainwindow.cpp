@@ -1057,9 +1057,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_connectionController, &ConnectionController::radioReady, this, &MainWindow::onRadioReady);
     connect(m_connectionController, &ConnectionController::authFailed, this, &MainWindow::onAuthFailed);
 
-    // Protocol CAT responses -> RadioState (via controller's tcpClient accessor)
-    connect(m_connectionController->tcpClient()->protocol(), &Protocol::catResponseReceived, this,
-            &MainWindow::onCatResponse);
+    // Protocol CAT responses -> RadioState (via ConnectionController re-emitted signal)
+    connect(m_connectionController, &ConnectionController::catResponseReceived, this, &MainWindow::onCatResponse);
 
     // RadioState signals -> UI updates (VFO A)
     connect(m_radioState, &RadioState::frequencyChanged, this, &MainWindow::onFrequencyChanged);
@@ -1692,10 +1691,11 @@ MainWindow::MainWindow(QWidget *parent)
         }
     });
 
-    // Protocol spectrum data -> SpectrumController (via controller's tcpClient accessor)
-    auto *protocol = m_connectionController->tcpClient()->protocol();
-    connect(protocol, &Protocol::spectrumDataReady, m_spectrumController, &SpectrumController::onSpectrumData);
-    connect(protocol, &Protocol::miniSpectrumDataReady, m_spectrumController, &SpectrumController::onMiniSpectrumData);
+    // Protocol spectrum data -> SpectrumController (via ConnectionController re-emitted signals)
+    connect(m_connectionController, &ConnectionController::spectrumDataReceived, m_spectrumController,
+            &SpectrumController::onSpectrumData);
+    connect(m_connectionController, &ConnectionController::miniSpectrumDataReceived, m_spectrumController,
+            &SpectrumController::onMiniSpectrumData);
 
     // Clock timer for date/time display
     connect(m_clockTimer, &QTimer::timeout, this, &MainWindow::updateDateTime);
@@ -1882,9 +1882,8 @@ void MainWindow::setupMenuBar() {
     optionsAction->setMenuRole(QAction::PreferencesRole); // macOS: moves to app menu as Preferences
     connect(optionsAction, &QAction::triggered, this, [this]() {
         if (!m_optionsDialog) {
-            m_optionsDialog =
-                new OptionsDialog(m_radioState, m_audioController->audioEngine(), m_hardwareController->kpodDevice(),
-                                  m_catServer, m_hardwareController->halikeyDevice(), m_kpa1500Client, this);
+            m_optionsDialog = new OptionsDialog(m_radioState, m_audioController, m_hardwareController, m_catServer,
+                                                m_kpa1500Client, this);
         }
         m_optionsDialog->show();
         m_optionsDialog->raise();
