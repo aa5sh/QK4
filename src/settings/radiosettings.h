@@ -102,7 +102,6 @@ public:
     QMap<QString, MacroEntry> macros() const;
     MacroEntry macro(const QString &functionId) const;
     void setMacro(const QString &functionId, const QString &label, const QString &command);
-    void clearMacro(const QString &functionId);
 
     // HaliKey CW Keyer settings
     QString halikeyPortName() const;

@@ -90,9 +90,6 @@ public:
     // Parse incoming raw data, extracts complete K4 packets
     void parse(const QByteArray &data);
 
-    // Build a K4 packet from payload
-    static QByteArray buildPacket(const QByteArray &payload);
-
     // Build a CAT command packet
     static QByteArray buildCATPacket(const QString &command);
 
@@ -116,6 +113,9 @@ signals:
 
 private:
     void processPacket(const QByteArray &packet);
+
+    // Build a K4 packet from payload (used internally by buildCATPacket/buildAudioPacket)
+    static QByteArray buildPacket(const QByteArray &payload);
 
     QByteArray m_buffer;
 };

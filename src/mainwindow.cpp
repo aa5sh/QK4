@@ -14,7 +14,6 @@
 #include "ui/rxeqpopupwidget.h"
 #include "ui/macrodialog.h"
 #include "ui/optionsdialog.h"
-#include "ui/txmeterwidget.h"
 #include "ui/notificationwidget.h"
 #include "ui/vforowwidget.h"
 #include "ui/filterindicatorwidget.h"
@@ -28,10 +27,10 @@
 #include "ui/ssbbwpopup.h"
 #include "ui/keyingweightpopup.h"
 #include "ui/textdecodewindow.h"
-#include "ui/frequencydisplaywidget.h"
 #include "models/menumodel.h"
 #include "dsp/panadapter_rhi.h"
 #include "dsp/minipan_rhi.h"
+#include "ui/frequencydisplaywidget.h"
 #include "audio/audioengine.h"
 #include "audio/opusdecoder.h"
 #include "audio/opusencoder.h"
@@ -49,20 +48,16 @@
 #include <QVBoxLayout>
 #include <QInputDialog>
 #include <QHBoxLayout>
-#include <QGridLayout>
 #include <QAction>
 #include <QCoreApplication>
 #include <QLoggingCategory>
 #include <QMessageBox>
-#include <QFont>
 #include <QDateTime>
-#include <QPainter>
 #include <QFrame>
 #include <QEvent>
 #include <QResizeEvent>
 #include <QRegularExpression>
 #include <QMouseEvent>
-#include <QShowEvent>
 #include <QMoveEvent>
 
 Q_LOGGING_CATEGORY(qk4Main, "qk4.main")
@@ -3336,7 +3331,6 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     m_txIndicator->installEventFilter(this);
     m_txTriangle = m_vfoRow->txTriangle();
     m_txTriangleB = m_vfoRow->txTriangleB();
-    m_testLabel = m_vfoRow->testLabel();
     m_subLabel = m_vfoRow->subLabel();
     m_divLabel = m_vfoRow->divLabel();
 
@@ -4276,14 +4270,6 @@ void MainWindow::connectToRadio(const RadioEntry &radio) {
                               Q_ARG(quint16, radio.port), Q_ARG(QString, radio.password), Q_ARG(bool, radio.useTls),
                               Q_ARG(QString, radio.identity), Q_ARG(int, radio.encodeMode),
                               Q_ARG(int, radio.streamingLatency));
-}
-
-void MainWindow::onConnectClicked() {
-    showRadioManager();
-}
-
-void MainWindow::onDisconnectClicked() {
-    QMetaObject::invokeMethod(m_tcpClient, "disconnectFromHost", Qt::QueuedConnection);
 }
 
 void MainWindow::onStateChanged(TcpClient::ConnectionState state) {
@@ -5293,7 +5279,6 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
 }
 
 void MainWindow::setPanadapterMode(PanadapterMode mode) {
-    m_panadapterMode = mode;
     switch (mode) {
     case PanadapterMode::MainOnly:
         m_panadapterA->show();

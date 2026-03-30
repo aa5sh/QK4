@@ -263,14 +263,6 @@ void RadioSettings::setMacro(const QString &functionId, const QString &label, co
     }
 }
 
-void RadioSettings::clearMacro(const QString &functionId) {
-    if (m_macros.contains(functionId)) {
-        m_macros.remove(functionId);
-        save();
-        emit macrosChanged();
-    }
-}
-
 QString RadioSettings::halikeyPortName() const {
     return m_halikeyPortName;
 }

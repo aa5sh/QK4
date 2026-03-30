@@ -6,10 +6,8 @@
 #include <QPushButton>
 #include <QMenuBar>
 #include <QMenu>
-#include <QProgressBar>
 #include <QTimer>
 #include <QThread>
-#include <QStackedWidget>
 #include "network/tcpclient.h"
 #include "settings/radiosettings.h"
 #include "models/radiostate.h"
@@ -48,7 +46,6 @@ class ModePopupWidget;
 class KpodDevice;
 class HalikeyDevice;
 class IambicKeyer;
-class TxMeterWidget;
 class KPA1500Client;
 class KPA1500Window;
 class CatServer;
@@ -77,8 +74,6 @@ protected:
     void moveEvent(QMoveEvent *event) override;
 
 private slots:
-    void onConnectClicked();
-    void onDisconnectClicked();
     void onStateChanged(TcpClient::ConnectionState state);
     void onError(const QString &error);
     void onAuthenticated();
@@ -256,7 +251,6 @@ private:
     QPushButton *m_rclBtn;
     QLabel *m_voxLabel;
     QLabel *m_qskLabel;
-    QLabel *m_testLabel;
     QLabel *m_txAntennaLabel;
 
     // Spectrum/Waterfall displays (QRhiWidget - Metal/DirectX/Vulkan)
@@ -278,9 +272,6 @@ private:
     // VFO indicator badges (bottom-left corner of waterfall)
     QLabel *m_vfoIndicatorA;
     QLabel *m_vfoIndicatorB;
-
-    // Panadapter display mode
-    PanadapterMode m_panadapterMode = PanadapterMode::MainOnly;
 
     // Control panels (L-shaped layout)
     SideControlPanel *m_sideControlPanel;
