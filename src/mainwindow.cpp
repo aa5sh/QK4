@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "utils/radioutils.h"
 #include "ui/radiomanagerdialog.h"
 #include "ui/sidecontrolpanel.h"
 #include "ui/rightsidepanel.h"
@@ -57,64 +58,6 @@
 #include <QMoveEvent>
 
 Q_LOGGING_CATEGORY(qk4Main, "qk4.main")
-
-// K4 Span range: 5 kHz to 368 kHz
-// UP (zoom out): +1 kHz until 144, then +4 kHz until 368
-// DOWN (zoom in): -4 kHz until 140, then -1 kHz until 5
-static constexpr int SPAN_MIN = 5000;
-static constexpr int SPAN_MAX = 368000;
-static constexpr int SPAN_THRESHOLD_UP = 144000;   // Switch to 4kHz steps above this
-static constexpr int SPAN_THRESHOLD_DOWN = 140000; // Switch to 1kHz steps below this
-
-// Convert K4 tuning step index (VT command, 0-5) to Hz
-static int tuningStepToHz(int step) {
-    static const int table[] = {1, 10, 100, 1000, 10000, 100};
-    return (step >= 0 && step <= 5) ? table[step] : 1000;
-}
-
-static int getNextSpanUp(int currentSpan) {
-    if (currentSpan >= SPAN_MAX)
-        return SPAN_MAX;
-    int increment = (currentSpan < SPAN_THRESHOLD_UP) ? 1000 : 4000;
-    int newSpan = currentSpan + increment;
-    return qMin(newSpan, SPAN_MAX);
-}
-
-static int getBandFromFrequency(quint64 freq) {
-    if (freq >= 1800000 && freq <= 2000000)
-        return 0;
-    if (freq >= 3500000 && freq <= 4000000)
-        return 1;
-    if (freq >= 5330500 && freq <= 5405500)
-        return 2;
-    if (freq >= 7000000 && freq <= 7300000)
-        return 3;
-    if (freq >= 10100000 && freq <= 10150000)
-        return 4;
-    if (freq >= 14000000 && freq <= 14350000)
-        return 5;
-    if (freq >= 18068000 && freq <= 18168000)
-        return 6;
-    if (freq >= 21000000 && freq <= 21450000)
-        return 7;
-    if (freq >= 24890000 && freq <= 24990000)
-        return 8;
-    if (freq >= 28000000 && freq <= 29700000)
-        return 9;
-    if (freq >= 50000000 && freq <= 54000000)
-        return 10;
-    if (freq >= 144000000)
-        return 16;
-    return -1;
-}
-
-static int getNextSpanDown(int currentSpan) {
-    if (currentSpan <= SPAN_MIN)
-        return SPAN_MIN;
-    int decrement = (currentSpan > SPAN_THRESHOLD_DOWN) ? 4000 : 1000;
-    int newSpan = currentSpan - decrement;
-    return qMax(newSpan, SPAN_MIN);
-}
 
 // ============== MainWindow Implementation ==============
 MainWindow::MainWindow(QWidget *parent)
@@ -1653,7 +1596,7 @@ MainWindow::MainWindow(QWidget *parent)
         bool vfoA = m_displayPopup->isVfoAEnabled();
         bool vfoB = m_displayPopup->isVfoBEnabled();
         int currentSpan = (vfoB && !vfoA) ? m_radioState->spanHzB() : m_radioState->spanHz();
-        int newSpan = getNextSpanUp(currentSpan); // + increases span
+        int newSpan = RadioUtils::getNextSpanUp(currentSpan); // + increases span
         if (newSpan != currentSpan) {
             if (vfoA) {
                 m_radioState->setSpanHz(newSpan);
@@ -1669,7 +1612,7 @@ MainWindow::MainWindow(QWidget *parent)
         bool vfoA = m_displayPopup->isVfoAEnabled();
         bool vfoB = m_displayPopup->isVfoBEnabled();
         int currentSpan = (vfoB && !vfoA) ? m_radioState->spanHzB() : m_radioState->spanHz();
-        int newSpan = getNextSpanDown(currentSpan); // - decreases span
+        int newSpan = RadioUtils::getNextSpanDown(currentSpan); // - decreases span
         if (newSpan != currentSpan) {
             if (vfoA) {
                 m_radioState->setSpanHz(newSpan);
@@ -3048,7 +2991,7 @@ void MainWindow::setupVfoSection(QWidget *parent) {
         if (!m_connectionController->isConnected())
             return;
         quint64 currentFreq = m_radioState->vfoA();
-        int stepHz = tuningStepToHz(m_radioState->tuningStep());
+        int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStep());
         qint64 newFreq = static_cast<qint64>(currentFreq) + static_cast<qint64>(steps) * stepHz;
         if (newFreq > 0) {
             QString cmd = QString("FA%1;").arg(static_cast<quint64>(newFreq));
@@ -3349,7 +3292,8 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     connect(m_vfoB, &VFOWidget::normalContentClicked, this, [this]() {
         // Block mini pan B if VFOs are on different bands and SUB RX is off
         // (K4 cannot provide separate Sub RX spectrum without SUB RX enabled)
-        if (getBandFromFrequency(m_radioState->vfoA()) != getBandFromFrequency(m_radioState->vfoB()) &&
+        if (RadioUtils::getBandFromFrequency(m_radioState->vfoA()) !=
+                RadioUtils::getBandFromFrequency(m_radioState->vfoB()) &&
             !m_radioState->subReceiverEnabled()) {
             qCDebug(qk4Main) << "Mini-Pan B blocked: VFOs on different bands and SUB RX is off";
             return;
@@ -3374,7 +3318,7 @@ void MainWindow::setupVfoSection(QWidget *parent) {
         if (!m_connectionController->isConnected())
             return;
         quint64 currentFreq = m_radioState->vfoB();
-        int stepHz = tuningStepToHz(m_radioState->tuningStepB());
+        int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStepB());
         qint64 newFreq = static_cast<qint64>(currentFreq) + static_cast<qint64>(steps) * stepHz;
         if (newFreq > 0) {
             QString cmd = QString("FB%1;").arg(static_cast<quint64>(newFreq));

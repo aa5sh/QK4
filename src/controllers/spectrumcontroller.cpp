@@ -4,71 +4,13 @@
 #include "models/radiostate.h"
 #include "ui/k4styles.h"
 #include "ui/vfowidget.h"
+#include "utils/radioutils.h"
 
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
 #include <QResizeEvent>
-
-// ============== Static Helpers ==============
-
-static constexpr int SPAN_MIN = 5000;
-static constexpr int SPAN_MAX = 368000;
-static constexpr int SPAN_THRESHOLD_UP = 144000;   // Switch to 4kHz steps above this
-static constexpr int SPAN_THRESHOLD_DOWN = 140000; // Switch to 1kHz steps below this
-
-// Convert K4 tuning step index (VT command, 0-5) to Hz
-static int tuningStepToHz(int step) {
-    static const int table[] = {1, 10, 100, 1000, 10000, 100};
-    return (step >= 0 && step <= 5) ? table[step] : 1000;
-}
-
-static int getNextSpanUp(int currentSpan) {
-    if (currentSpan >= SPAN_MAX)
-        return SPAN_MAX;
-    int increment = (currentSpan < SPAN_THRESHOLD_UP) ? 1000 : 4000;
-    int newSpan = currentSpan + increment;
-    return qMin(newSpan, SPAN_MAX);
-}
-
-static int getNextSpanDown(int currentSpan) {
-    if (currentSpan <= SPAN_MIN)
-        return SPAN_MIN;
-    int decrement = (currentSpan > SPAN_THRESHOLD_DOWN) ? 4000 : 1000;
-    int newSpan = currentSpan - decrement;
-    return qMax(newSpan, SPAN_MIN);
-}
-
-static int getBandFromFrequency(quint64 freq) {
-    // Convert frequency (Hz) to K4 band number
-    // Returns -1 for out-of-band frequencies
-    if (freq >= 1800000 && freq <= 2000000)
-        return 0; // 160m
-    if (freq >= 3500000 && freq <= 4000000)
-        return 1; // 80m
-    if (freq >= 5330500 && freq <= 5405500)
-        return 2; // 60m
-    if (freq >= 7000000 && freq <= 7300000)
-        return 3; // 40m
-    if (freq >= 10100000 && freq <= 10150000)
-        return 4; // 30m
-    if (freq >= 14000000 && freq <= 14350000)
-        return 5; // 20m
-    if (freq >= 18068000 && freq <= 18168000)
-        return 6; // 17m
-    if (freq >= 21000000 && freq <= 21450000)
-        return 7; // 15m
-    if (freq >= 24890000 && freq <= 24990000)
-        return 8; // 12m
-    if (freq >= 28000000 && freq <= 29700000)
-        return 9; // 10m
-    if (freq >= 50000000 && freq <= 54000000)
-        return 10; // 6m
-    if (freq >= 144000000)
-        return 16; // XVTR (transverter bands 16-25)
-    return -1;     // Out of band / GEN coverage
-}
 
 // ============== SpectrumController Implementation ==============
 
@@ -216,7 +158,7 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
     // Span adjustment for Main: K4 span steps
     connect(m_spanDownBtn, &QPushButton::clicked, this, [this]() {
         int currentSpan = m_radioState->spanHz();
-        int newSpan = getNextSpanDown(currentSpan); // - decreases span
+        int newSpan = RadioUtils::getNextSpanDown(currentSpan); // - decreases span
         if (newSpan != currentSpan) {
             m_radioState->setSpanHz(newSpan);
             m_connectionController->sendCAT(QString("#SPN%1;").arg(newSpan));
@@ -225,7 +167,7 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
 
     connect(m_spanUpBtn, &QPushButton::clicked, this, [this]() {
         int currentSpan = m_radioState->spanHz();
-        int newSpan = getNextSpanUp(currentSpan); // + increases span
+        int newSpan = RadioUtils::getNextSpanUp(currentSpan); // + increases span
         if (newSpan != currentSpan) {
             m_radioState->setSpanHz(newSpan);
             m_connectionController->sendCAT(QString("#SPN%1;").arg(newSpan));
@@ -237,7 +179,7 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
     // Span adjustment for Sub: uses $ suffix for Sub RX commands
     connect(m_spanDownBtnB, &QPushButton::clicked, this, [this]() {
         int currentSpan = m_radioState->spanHzB();
-        int newSpan = getNextSpanDown(currentSpan); // - decreases span
+        int newSpan = RadioUtils::getNextSpanDown(currentSpan); // - decreases span
         if (newSpan != currentSpan) {
             m_radioState->setSpanHzB(newSpan);
             m_connectionController->sendCAT(QString("#SPN$%1;").arg(newSpan));
@@ -246,7 +188,7 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
 
     connect(m_spanUpBtnB, &QPushButton::clicked, this, [this]() {
         int currentSpan = m_radioState->spanHzB();
-        int newSpan = getNextSpanUp(currentSpan); // + increases span
+        int newSpan = RadioUtils::getNextSpanUp(currentSpan); // + increases span
         if (newSpan != currentSpan) {
             m_radioState->setSpanHzB(newSpan);
             m_connectionController->sendCAT(QString("#SPN$%1;").arg(newSpan));
@@ -365,7 +307,7 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
         if (!m_connectionController->isConnected() || freq <= 0)
             return;
         freq = adjustClickFreqForMode(freq, false);
-        int stepHz = tuningStepToHz(m_radioState->tuningStep());
+        int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStep());
         qint64 snapped = (freq / stepHz) * stepHz;
         if (snapped <= 0)
             return;
@@ -380,7 +322,7 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
         if (!m_connectionController->isConnected())
             return;
         quint64 currentFreq = m_radioState->vfoA();
-        int stepHz = tuningStepToHz(m_radioState->tuningStep());
+        int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStep());
         qint64 newFreq = static_cast<qint64>(currentFreq) + static_cast<qint64>(steps) * stepHz;
         if (newFreq > 0) {
             QString cmd = QString("FA%1;").arg(static_cast<quint64>(newFreq));
@@ -433,7 +375,7 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
         if (!m_connectionController->isConnected() || freq <= 0)
             return;
         freq = adjustClickFreqForMode(freq, true); // right-drag on Pan A → VFO B
-        int stepHz = tuningStepToHz(m_radioState->tuningStepB());
+        int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStepB());
         qint64 snapped = (freq / stepHz) * stepHz;
         if (snapped <= 0)
             return;
@@ -524,7 +466,7 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
         bool tuneA = (m_mouseQsyMode == 1);
         freq = adjustClickFreqForMode(freq, !tuneA);
         QString vfo = tuneA ? "FA" : "FB";
-        int stepHz = tuningStepToHz(tuneA ? m_radioState->tuningStep() : m_radioState->tuningStepB());
+        int stepHz = RadioUtils::tuningStepToHz(tuneA ? m_radioState->tuningStep() : m_radioState->tuningStepB());
         qint64 snapped = (freq / stepHz) * stepHz;
         if (snapped <= 0)
             return;
@@ -538,7 +480,7 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
         if (!m_connectionController->isConnected())
             return;
         quint64 currentFreq = m_radioState->vfoB();
-        int stepHz = tuningStepToHz(m_radioState->tuningStepB());
+        int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStepB());
         qint64 newFreq = static_cast<qint64>(currentFreq) + static_cast<qint64>(steps) * stepHz;
         if (newFreq > 0) {
             QString cmd = QString("FB%1;").arg(static_cast<quint64>(newFreq));
@@ -593,7 +535,7 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
             return;
         // L=A R=B mode: right-drag always tunes VFO B
         freq = adjustClickFreqForMode(freq, true);
-        int stepHz = tuningStepToHz(m_radioState->tuningStepB());
+        int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStepB());
         qint64 snapped = (freq / stepHz) * stepHz;
         if (snapped <= 0)
             return;
@@ -738,8 +680,8 @@ void SpectrumController::onMiniSpectrumData(int receiver, const QByteArray &payl
 
 void SpectrumController::checkAndHideMiniPanB() {
     // Auto-hide mini pan B if SUB RX is off and VFOs are on different bands
-    int bandA = getBandFromFrequency(m_radioState->vfoA());
-    int bandB = getBandFromFrequency(m_radioState->vfoB());
+    int bandA = RadioUtils::getBandFromFrequency(m_radioState->vfoA());
+    int bandB = RadioUtils::getBandFromFrequency(m_radioState->vfoB());
     bool differentBands = (bandA != bandB);
 
     if (!m_radioState->subReceiverEnabled() && differentBands) {

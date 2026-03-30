@@ -71,6 +71,7 @@ endif()
 set(SOURCES
     src/main.cpp
     src/mainwindow.cpp
+    src/utils/radioutils.cpp
     src/controllers/connectioncontroller.cpp
     src/controllers/hardwarecontroller.cpp
     src/controllers/audiocontroller.cpp
@@ -149,6 +150,7 @@ set(SOURCES
 
 set(HEADERS
     src/mainwindow.h
+    src/utils/radioutils.h
     src/controllers/connectioncontroller.h
     src/controllers/hardwarecontroller.h
     src/controllers/audiocontroller.h

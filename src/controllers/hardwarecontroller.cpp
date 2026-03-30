@@ -6,15 +6,10 @@
 #include "audio/sidetonegenerator.h"
 #include "models/radiostate.h"
 #include "settings/radiosettings.h"
+#include "utils/radioutils.h"
 #include <QLoggingCategory>
 
 Q_LOGGING_CATEGORY(qk4Hardware, "qk4.hardware")
-
-// VT tuning step index → Hz (shared with panadapter scroll in mainwindow.cpp)
-static int tuningStepToHz(int step) {
-    static const int table[] = {1, 10, 100, 1000, 10000, 100};
-    return (step >= 0 && step <= 5) ? table[step] : 1000;
-}
 
 HardwareController::HardwareController(RadioState *radioState, ConnectionController *connController, QObject *parent)
     : QObject(parent), m_radioState(radioState), m_connectionController(connController) {
@@ -226,7 +221,7 @@ void HardwareController::onKpodEncoderRotated(int ticks) {
     case KpodDevice::RockerLeft: // VFO A
     {
         quint64 currentFreq = m_radioState->vfoA();
-        int stepHz = tuningStepToHz(m_radioState->tuningStep());
+        int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStep());
         qint64 newFreq = static_cast<qint64>(currentFreq) + static_cast<qint64>(ticks) * stepHz;
         if (newFreq > 0) {
             QString cmd = QString("FA%1;").arg(static_cast<quint64>(newFreq));
@@ -238,7 +233,7 @@ void HardwareController::onKpodEncoderRotated(int ticks) {
     case KpodDevice::RockerCenter: // VFO B
     {
         quint64 currentFreq = m_radioState->vfoB();
-        int stepHz = tuningStepToHz(m_radioState->tuningStepB());
+        int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStepB());
         qint64 newFreq = static_cast<qint64>(currentFreq) + static_cast<qint64>(ticks) * stepHz;
         if (newFreq > 0) {
             QString cmd = QString("FB%1;").arg(static_cast<quint64>(newFreq));
