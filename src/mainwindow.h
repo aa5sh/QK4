@@ -14,8 +14,8 @@
 #include "ui/vfowidget.h"
 #include "ui/wheelaccumulator.h"
 
-class PanadapterRhiWidget;
 class AudioController;
+class SpectrumController;
 class NetHealthWidget;
 class SideControlPanel;
 class RightSidePanel;
@@ -47,20 +47,12 @@ class CatServer;
 class OptionsDialog;
 class NotificationWidget;
 class VfoRowWidget;
-class QFrame;
-
 class MainWindow : public QMainWindow {
     Q_OBJECT
 
 public:
-    // Panadapter display modes
-    enum class PanadapterMode { MainOnly, Dual, SubOnly };
-
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
-
-    // Switch between Main only, Dual (A+B), and Sub only display
-    void setPanadapterMode(PanadapterMode mode);
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -91,15 +83,9 @@ private slots:
     void onTestModeChanged(bool enabled);
     void onAtuModeChanged(int mode);
     void onRitXitChanged(bool ritEnabled, bool xitEnabled, int offset);
-    void updatePanadapterPassbands();
-    void updateTxMarkers();
-    qint64 adjustClickFreqForMode(qint64 freq, bool vfoB);
     void onMessageBankChanged(int bank);
     void onProcessingChanged();
     void onProcessingChangedB();
-    void onSpectrumData(int receiver, const QByteArray &payload, int binsOffset, int binCount, qint64 centerFreq,
-                        qint32 sampleRate, float noiseFloor);
-    void onMiniSpectrumData(int receiver, const QByteArray &payload, int binsOffset, int binCount);
     void showRadioManager();
     void connectToRadio(const RadioEntry &radio);
     void updateDateTime();
@@ -147,15 +133,9 @@ private:
     void setupUi();
     void setupTopStatusBar(QWidget *parent);
     void setupVfoSection(QWidget *parent);
-    void setupSpectrumPlaceholder(QWidget *parent);
     void updateConnectionState(TcpClient::ConnectionState state);
     QString formatFrequency(quint64 freq);
     void updateModeLabels();
-
-    // Band and mini pan helpers
-    int getBandFromFrequency(quint64 freq);
-    bool areVfosOnDifferentBands();
-    void checkAndHideMiniPanB();
 
     ConnectionController *m_connectionController;
     RadioState *m_radioState;
@@ -163,6 +143,9 @@ private:
 
     // Audio controller owns AudioEngine, Opus codecs, audio thread, and PTT state
     AudioController *m_audioController;
+
+    // Spectrum controller owns panadapters, span buttons, VFO indicators, and spectrum wiring
+    SpectrumController *m_spectrumController;
 
     // Top status bar
     QLabel *m_titleLabel;
@@ -224,26 +207,6 @@ private:
     QLabel *m_voxLabel;
     QLabel *m_qskLabel;
     QLabel *m_txAntennaLabel;
-
-    // Spectrum/Waterfall displays (QRhiWidget - Metal/DirectX/Vulkan)
-    PanadapterRhiWidget *m_panadapterA; // VFO A (Main RX)
-    PanadapterRhiWidget *m_panadapterB; // VFO B (Sub RX) - for future use
-    QWidget *m_spectrumContainer;
-    QFrame *m_spectrumSeparator; // Vertical divider between A/B panadapters
-
-    // Span control buttons (overlay on panadapter A)
-    QPushButton *m_spanUpBtn;
-    QPushButton *m_spanDownBtn;
-    QPushButton *m_centerBtn;
-
-    // Span control buttons (overlay on panadapter B)
-    QPushButton *m_spanUpBtnB;
-    QPushButton *m_spanDownBtnB;
-    QPushButton *m_centerBtnB;
-
-    // VFO indicator badges (bottom-left corner of waterfall)
-    QLabel *m_vfoIndicatorA;
-    QLabel *m_vfoIndicatorB;
 
     // Control panels (L-shaped layout)
     SideControlPanel *m_sideControlPanel;
