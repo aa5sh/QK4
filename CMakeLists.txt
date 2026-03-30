@@ -71,6 +71,7 @@ endif()
 set(SOURCES
     src/main.cpp
     src/mainwindow.cpp
+    src/controllers/connectioncontroller.cpp
     src/network/tcpclient.cpp
     src/network/protocol.cpp
     src/network/networkmetrics.cpp
@@ -138,6 +139,7 @@ set(SOURCES
 
 set(HEADERS
     src/mainwindow.h
+    src/controllers/connectioncontroller.h
     src/network/tcpclient.h
     src/network/protocol.h
     src/network/networkmetrics.h

@@ -8,7 +8,7 @@
 #include <QMenu>
 #include <QTimer>
 #include <QThread>
-#include "network/tcpclient.h"
+#include "controllers/connectioncontroller.h"
 #include "settings/radiosettings.h"
 #include "models/radiostate.h"
 #include "ui/vfowidget.h"
@@ -17,7 +17,6 @@
 class PanadapterRhiWidget;
 class AudioEngine;
 class NetHealthWidget;
-class NetworkMetrics;
 class OpusDecoder;
 class OpusEncoder;
 class SideControlPanel;
@@ -74,10 +73,10 @@ protected:
     void moveEvent(QMoveEvent *event) override;
 
 private slots:
-    void onStateChanged(TcpClient::ConnectionState state);
-    void onError(const QString &error);
-    void onAuthenticated();
-    void onAuthenticationFailed();
+    void onConnectionStateChanged(TcpClient::ConnectionState state);
+    void onConnectionError(const QString &error);
+    void onRadioReady();
+    void onAuthFailed();
     void onCatResponse(const QString &response);
     void onFrequencyChanged(quint64 freq);
     void onFrequencyBChanged(quint64 freq);
@@ -174,13 +173,9 @@ private:
     bool areVfosOnDifferentBands();
     void checkAndHideMiniPanB();
 
-    TcpClient *m_tcpClient;
-    NetworkMetrics *m_networkMetrics;
+    ConnectionController *m_connectionController;
     RadioState *m_radioState;
     QTimer *m_clockTimer;
-
-    // I/O thread (TcpClient + Protocol + OpusDecoder)
-    QThread *m_ioThread = nullptr;
 
     // Audio
     AudioEngine *m_audioEngine;
@@ -305,7 +300,6 @@ private:
     FeatureMenuBar *m_featureMenuBar;
     ModePopupWidget *m_modePopup;
 
-    RadioEntry m_currentRadio;
     int m_currentBandNum = -1;  // Current band number for VFO A (BN command)
     int m_currentBandNumB = -1; // Current band number for VFO B (BN$ command)
 
