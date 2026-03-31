@@ -3,7 +3,6 @@
 
 #include <QMap>
 #include <QObject>
-#include <QPoint>
 #include <QSettings>
 #include <QString>
 #include <QVector>
@@ -73,8 +72,6 @@ public:
     void setKpa1500Enabled(bool enabled);
     int kpa1500PollInterval() const;
     void setKpa1500PollInterval(int intervalMs);
-    QPoint kpa1500WindowPosition() const;
-    void setKpa1500WindowPosition(const QPoint &pos);
 
     // Audio output settings
     int volume() const;

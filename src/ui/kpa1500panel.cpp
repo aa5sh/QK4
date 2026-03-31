@@ -238,7 +238,7 @@ void KPA1500Panel::paintEvent(QPaintEvent *event) {
     painter.setPen(QPen(QColor(K4Styles::Colors::BorderNormal), 1));
     painter.drawRoundedRect(rect().adjusted(0, 0, -1, -1), 6, 6);
 
-    // Status labels drawn at top (title is in KPA1500Window's title bar)
+    // Status labels drawn at top
     const int statusY = 4;
     const int statusHeight = 14;
     drawStatusLabels(painter, statusY, statusHeight);

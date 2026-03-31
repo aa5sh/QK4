@@ -132,18 +132,6 @@ void RadioSettings::setKpa1500PollInterval(int intervalMs) {
     }
 }
 
-QPoint RadioSettings::kpa1500WindowPosition() const {
-    int x = m_settings.value("kpa1500/windowX", 0).toInt();
-    int y = m_settings.value("kpa1500/windowY", 0).toInt();
-    return QPoint(x, y);
-}
-
-void RadioSettings::setKpa1500WindowPosition(const QPoint &pos) {
-    m_settings.setValue("kpa1500/windowX", pos.x());
-    m_settings.setValue("kpa1500/windowY", pos.y());
-    m_settings.sync();
-}
-
 int RadioSettings::volume() const {
     return m_settings.value("audio/volume", 45).toInt();
 }

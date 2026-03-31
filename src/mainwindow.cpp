@@ -36,8 +36,6 @@
 #include "controllers/audiocontroller.h"
 #include "controllers/hardwarecontroller.h"
 #include "network/kpa1500client.h"
-#include "ui/kpa1500window.h"
-#include "ui/kpa1500panel.h"
 #include "network/catserver.h"
 #include "network/networkmetrics.h"
 #include "ui/nethealthwidget.h"
@@ -1716,38 +1714,6 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_kpa1500Client, &KPA1500Client::disconnected, this, &MainWindow::onKpa1500Disconnected);
     connect(m_kpa1500Client, &KPA1500Client::errorOccurred, this, &MainWindow::onKpa1500Error);
 
-    // Connect KPA1500 data signals to panel
-    connect(m_kpa1500Client, &KPA1500Client::powerChanged, this, [this](double fwd, double ref, double) {
-        m_kpa1500Window->panel()->setForwardPower(static_cast<float>(fwd));
-        m_kpa1500Window->panel()->setReflectedPower(static_cast<float>(ref));
-    });
-    connect(m_kpa1500Client, &KPA1500Client::swrChanged, this,
-            [this](double swr) { m_kpa1500Window->panel()->setSWR(static_cast<float>(swr)); });
-    connect(m_kpa1500Client, &KPA1500Client::paTemperatureChanged, this,
-            [this](double tempC) { m_kpa1500Window->panel()->setTemperature(static_cast<float>(tempC)); });
-    connect(m_kpa1500Client, &KPA1500Client::operatingStateChanged, this, [this](KPA1500Client::OperatingState state) {
-        m_kpa1500Window->panel()->setMode(state == KPA1500Client::StateOperate);
-    });
-    connect(m_kpa1500Client, &KPA1500Client::atuInlineChanged, this,
-            [this](bool inline_) { m_kpa1500Window->panel()->setAtuMode(inline_); });
-    connect(m_kpa1500Client, &KPA1500Client::antennaChanged, this,
-            [this](int antenna) { m_kpa1500Window->panel()->setAntenna(antenna); });
-    connect(m_kpa1500Client, &KPA1500Client::faultStatusChanged, this,
-            [this](KPA1500Client::FaultStatus status, const QString &) {
-                // Only show FAULT for active faults, not fault history
-                m_kpa1500Window->panel()->setFault(status == KPA1500Client::FaultActive);
-            });
-
-    // Connect panel signals to send KPA1500 commands
-    connect(m_kpa1500Window->panel(), &KPA1500Panel::modeToggled, this,
-            [this](bool operate) { m_kpa1500Client->sendCommand(operate ? "^OS1;" : "^OS0;"); });
-    connect(m_kpa1500Window->panel(), &KPA1500Panel::atuTuneRequested, this,
-            [this]() { m_kpa1500Client->sendCommand("^FT;"); });
-    connect(m_kpa1500Window->panel(), &KPA1500Panel::atuModeToggled, this,
-            [this](bool in) { m_kpa1500Client->sendCommand(in ? "^AI1;" : "^AI0;"); });
-    connect(m_kpa1500Window->panel(), &KPA1500Panel::antennaChanged, this,
-            [this](int ant) { m_kpa1500Client->sendCommand(QString("^AN%1;").arg(ant)); });
-
     // Wire KPA1500 data signals to embedded mini panel in right side panel
     auto *kpaMini = m_rightSidePanel->kpa1500Mini();
     connect(m_kpa1500Client, &KPA1500Client::powerChanged, this, [kpaMini](double fwd, double ref, double) {
@@ -3333,11 +3299,6 @@ void MainWindow::setupVfoSection(QWidget *parent) {
 
     layout->addWidget(m_vfoB, 1, Qt::AlignTop);
 
-    // ===== KPA1500 Floating Window =====
-    // Created as a separate floating window, not in the VFO row layout
-    m_kpa1500Window = new KPA1500Window(this);
-    m_kpa1500Window->hide(); // Hidden by default, shown when enabled + connected
-
     // Add the VFO row to main layout
     mainVLayout->addWidget(vfoRowWidget);
 
@@ -4595,10 +4556,6 @@ void MainWindow::updateKpa1500Status() {
                 QString("color: %1; font-size: 12px;").arg(K4Styles::Colors::InactiveGray));
         }
     }
-
-    // Show KPA1500 window only when enabled AND connected
-    m_kpa1500Window->setVisible(enabled && connected);
-    m_kpa1500Window->panel()->setConnected(connected);
 }
 
 // ============== Fn Popup / Macro Slots ==============

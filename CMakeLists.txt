@@ -136,7 +136,6 @@ set(SOURCES
     src/ui/k4styles.cpp
     src/ui/k4popupbase.cpp
     src/ui/kpa1500panel.cpp
-    src/ui/kpa1500window.cpp
     src/ui/kpa1500minipanel.cpp
     src/ui/sidecontroloverlay.cpp
     src/ui/monoverlay.cpp
@@ -218,7 +217,6 @@ set(HEADERS
     src/ui/k4styles.h
     src/ui/k4popupbase.h
     src/ui/kpa1500panel.h
-    src/ui/kpa1500window.h
     src/ui/sidecontroloverlay.h
     src/ui/monoverlay.h
     src/ui/baloverlay.h
