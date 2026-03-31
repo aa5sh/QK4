@@ -4,7 +4,6 @@
 #include <QWidget>
 #include <QCheckBox>
 #include <QLineEdit>
-#include <QComboBox>
 #include <QLabel>
 #include <QPushButton>
 
@@ -25,7 +24,6 @@ private:
     QCheckBox *m_kpa1500EnableCheckbox = nullptr;
     QLineEdit *m_kpa1500HostEdit = nullptr;
     QLineEdit *m_kpa1500PortEdit = nullptr;
-    QComboBox *m_kpa1500ProtocolCombo = nullptr;
     QLabel *m_kpa1500StatusLabel = nullptr;
     QPushButton *m_kpa1500ConnectBtn = nullptr;
     QLabel *m_kpa1500BandLabel = nullptr;

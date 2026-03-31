@@ -87,21 +87,6 @@ Kpa1500Page::Kpa1500Page(KPA1500Client *kpa1500Client, QWidget *parent)
     portLayout->addStretch();
     layout->addLayout(portLayout);
 
-    // Protocol row
-    auto *protoLayout = new QHBoxLayout();
-    auto *protoLabel = new QLabel("Protocol:", this);
-    protoLabel->setStyleSheet(K4Styles::Dialog::formLabel());
-    protoLabel->setFixedWidth(K4Styles::Dimensions::FormLabelWidth);
-    m_kpa1500ProtocolCombo = new QComboBox(this);
-    m_kpa1500ProtocolCombo->setStyleSheet(K4Styles::Dialog::comboBox());
-    m_kpa1500ProtocolCombo->addItem("TCP", 0);
-    m_kpa1500ProtocolCombo->addItem("UDP", 1);
-    m_kpa1500ProtocolCombo->setCurrentIndex(0); // TCP default (protocol setting added in next commit)
-    protoLayout->addWidget(protoLabel);
-    protoLayout->addWidget(m_kpa1500ProtocolCombo);
-    protoLayout->addStretch();
-    layout->addLayout(protoLayout);
-
     // Poll interval row
     auto *pollLayout = new QHBoxLayout();
     auto *pollLabel = new QLabel("Poll:", this);
