@@ -1,7 +1,7 @@
 #ifndef RADIOUTILS_H
 #define RADIOUTILS_H
 
-#include <QtTypes>
+#include <QtGlobal>
 
 /**
  * @brief Shared radio utility functions and constants.
