@@ -9,8 +9,9 @@
 Q_LOGGING_CATEGORY(hwHalikey, "hw.halikey")
 
 // WHY: HalikeyDevice no longer runs a time-window debounce. Each worker is authoritative for
-// clean edges — the V1.4 serial worker confirms across ≥2 reads (≥500 µs apart) before
-// emitting; the MIDI worker delivers already-debounced firmware events. The previous 3 ms
+// clean edges — the V1.4 serial worker confirms across ≥2 reads (≥500 µs apart on Linux/macOS,
+// ~1 ms apart on Windows, where the poll cadence sets the spacing) before emitting; the MIDI
+// worker delivers already-debounced firmware events. The previous 3 ms
 // processing-time gate silently dropped real MIDI releases on Windows when WinMM delivered
 // press+release in a single burst (see docs/halikey-midi-windows-debounce-bug.md), and also
 // harbored a latent bug where a rejected edge left `confirmed` stale. acceptEdge() (extracted

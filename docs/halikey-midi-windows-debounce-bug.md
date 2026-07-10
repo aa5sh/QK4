@@ -77,10 +77,13 @@ is the only thing that remains. Rationale:
   `HalikeyDevice` to worker-variant logic and left a magic number in a class
   that should be a pure cross-thread fan-out.
 - The V1.4 serial worker already has its own count-based debounce
-  (`DEBOUNCE_COUNT=2` across ≥500 µs reads, in `halikeyv14worker.cpp`'s
-  `monitorLoop`). That confirms ≥1 ms of mechanical stability before emit —
-  more than enough for typical sub-millisecond contact bounce. The 3 ms
-  device-layer gate was redundant for serial and harmful for MIDI.
+  (`DEBOUNCE_COUNT=2` consecutive reads, in `halikeyv14worker.cpp`'s
+  `monitorLoop`). Read spacing is set by each platform's cadence: ≥500 µs on
+  macOS (500 µs poll) and Linux (a `TIOCMIWAIT` edge plus one confirming
+  re-read), and ~1 ms on Windows (1 ms high-resolution-timer poll). That
+  confirms ~1–2 ms of mechanical stability before emit — more than enough for
+  typical sub-millisecond contact bounce. The 3 ms device-layer gate was
+  redundant for serial and harmful for MIDI.
 - The MIDI variant doesn't need any debounce on our side — the HaliKey
   firmware delivers logical Note On/Off events, not raw contact transitions.
 

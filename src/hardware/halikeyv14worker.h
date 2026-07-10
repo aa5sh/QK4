@@ -5,9 +5,12 @@
 
 /**
  * @brief HaliKey worker for the V1.4 native-hardware variant. Opens the serial port with
- *        platform-specific native APIs (HANDLE on Windows, fd on POSIX) and polls the
- *        modem-control pins at ~500 µs intervals with 2-sample debounce (~1 ms). `prepareShutdown`
- *        toggles the port state to unblock any pending read so the monitor loop can exit.
+ *        platform-specific native APIs (HANDLE on Windows, fd on POSIX) and watches the
+ *        modem-control pins with a 2-sample debounce. Cadence differs per platform: 500 µs
+ *        usleep poll on macOS (~1 ms to confirm), 1 ms high-resolution-timer poll on Windows
+ *        (~2 ms to confirm), and a blocking TIOCMIWAIT edge plus one 500 µs confirming re-read
+ *        on Linux. `prepareShutdown` toggles the port state to unblock any pending read so the
+ *        monitor loop can exit.
  */
 class HaliKeyV14Worker : public HaliKeyWorkerBase {
     Q_OBJECT
@@ -32,7 +35,7 @@ private:
 
 #ifdef Q_OS_WIN
     // Diagnostic: last-logged raw modem-line states, so readPinState() only logs on a
-    // transition rather than every ~500us poll. Windows-only (the raw-pin trace lives in
+    // transition rather than every ~1 ms poll. Windows-only (the raw-pin trace lives in
     // the Q_OS_WIN branch of readPinState).
     bool m_lastRawCts = false;
     bool m_lastRawDsr = false;

@@ -20,9 +20,11 @@ struct HaliKeyPortInfo {
  *        PTT-footswitch signals to the rest of the app.
  *
  * Debounce responsibility lives in the worker:
- *   - V1.4 serial worker confirms each transition across ≥2 reads spaced ≥500 µs (per
- *     platform: TIOCMIWAIT on Linux, WaitCommEvent on Windows, 2 kHz usleep on macOS).
- *     That count-based filter is the only contact-bounce defense for the serial path.
+ *   - V1.4 serial worker confirms each transition across ≥2 reads before emitting. The read
+ *     cadence is platform-specific: blocking TIOCMIWAIT plus one 500 µs confirming re-read on
+ *     Linux, a 1 ms high-resolution-timer poll of GetCommModemStatus on Windows, and a 2 kHz
+ *     (500 µs) usleep poll on macOS. That count-based filter is the only contact-bounce
+ *     defense for the serial path.
  *   - MIDI worker emits firmware-debounced Note On/Off events as-is. There is no
  *     electrical bounce in a MIDI message stream.
  *

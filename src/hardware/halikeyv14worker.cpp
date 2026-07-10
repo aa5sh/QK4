@@ -118,17 +118,9 @@ bool HaliKeyV14Worker::openNativePort() {
         return false;
     }
 
-    // Set up event mask for CTS, DSR, and DCD (RLSD = Receive Line Signal Detect = DCD).
-    // WHY: DCD is the third unused modem-status pin; HaliKey V1.4 firmware drives the
-    // foot-pedal/PTT input on it (CTS=dit, DSR=dah, DTR+RTS=power). Mirrors the MIDI
-    // variant's NOTE_PTT=31 dispatch. Fallback if firmware uses RI instead: swap to EV_RING.
-    if (!SetCommMask(m_handle, EV_CTS | EV_DSR | EV_RLSD)) {
-        QString error = "Failed to set comm mask for " + m_portName;
-        qCWarning(hwHalikey) << "HaliKeyV14Worker:" << error;
-        closeNativePort();
-        emit errorOccurred(error);
-        return false;
-    }
+    // WHY no SetCommMask: monitorLoop() polls GetCommModemStatus on a 1 ms timer rather than
+    // blocking in WaitCommEvent, so no event mask is needed. See the WHY NOT WaitCommEvent
+    // block in monitorLoop() for why the event-driven approach was abandoned.
 
     return true;
 #else
