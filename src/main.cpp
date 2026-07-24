@@ -3,6 +3,7 @@
 #include <QSysInfo>
 #include <QGuiApplication>
 #include <QFontDatabase>
+#include <QSettings>
 #include <rhi/qrhi.h>
 #ifdef Q_OS_MACOS
 #include <QtGui/private/qguiapplication_p.h>
@@ -100,8 +101,23 @@ int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     app.setApplicationName("QK4");
     app.setApplicationVersion(QK4_VERSION);
+
+    // WHY: call sign changed AI5QK->KF5O. Migrate existing QSettings forward once so saved
+    // window geometry, station profiles, and radio config survive the identity rename.
+    // Default-constructing QSettings under each identity reproduces Qt's per-platform path
+    // logic (macOS keys on the domain, Windows/Linux on the org name). The empty-check keeps
+    // it idempotent — no re-copy after the first launch.
     app.setOrganizationName("AI5QK");
     app.setOrganizationDomain("ai5qk.com");
+    QSettings oldSettings;
+    app.setOrganizationName("KF5O");
+    app.setOrganizationDomain("kf5o.com");
+    QSettings newSettings;
+    if (newSettings.allKeys().isEmpty() && !oldSettings.allKeys().isEmpty()) {
+        for (const QString &key : oldSettings.allKeys())
+            newSettings.setValue(key, oldSettings.value(key));
+        newSettings.sync();
+    }
 
     // Load embedded Inter font family
     setupFonts();

@@ -146,7 +146,7 @@ void TestDxCluster::rejectLoginPrompt() {
 
 void TestDxCluster::rejectBanner() {
     DxSpot spot;
-    QVERIFY(!DxClusterClient::parseSpotLine("Hello, AI5QK! Connected.", spot));
+    QVERIFY(!DxClusterClient::parseSpotLine("Hello, KF5O! Connected.", spot));
 }
 
 void TestDxCluster::rejectBlankLine() {
@@ -157,7 +157,7 @@ void TestDxCluster::rejectBlankLine() {
 void TestDxCluster::rejectPartialLine() {
     DxSpot spot;
     QVERIFY(!DxClusterClient::parseSpotLine("DX de", spot));
-    QVERIFY(!DxClusterClient::parseSpotLine("AI5QK de RELAY 06-Apr-2026 19:02Z >", spot));
+    QVERIFY(!DxClusterClient::parseSpotLine("KF5O de RELAY 06-Apr-2026 19:02Z >", spot));
 }
 
 void TestDxCluster::frequencyConversion() {
