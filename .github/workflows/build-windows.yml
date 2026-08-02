@@ -88,6 +88,19 @@ jobs:
 
           windeployqt --release --no-translations --no-compiler-runtime QK4-windows\QK4.exe
 
+          # WHY: windeployqt omits the OpenSSL TLS backend plugin when it cannot locate
+          # OpenSSL at deploy time, and the vcpkg DLLs below are copied after it runs.
+          # Without this plugin Qt silently falls back to Schannel, which has no TLS-PSK
+          # support at all, so the K4's port-9204 PSK handshake can never complete.
+          $qtPlugins = (& qmake -query QT_INSTALL_PLUGINS).Trim()
+          $opensslBackend = Join-Path $qtPlugins "tls\qopensslbackend.dll"
+          if (-not (Test-Path $opensslBackend)) {
+            Write-Host "Qt OpenSSL TLS backend not found at $opensslBackend"
+            exit 1
+          }
+          New-Item -ItemType Directory -Force -Path QK4-windows\tls | Out-Null
+          Copy-Item $opensslBackend QK4-windows\tls\ -Force
+
           # Bundle the MSVC runtime DLLs app-locally so users never install a
           # redistributable by hand. (windeployqt --compiler-runtime ships the
           # vc_redist installer instead, which defeats the purpose.)
@@ -100,11 +113,18 @@ jobs:
           copy build\vcpkg_installed\x64-windows\bin\libcrypto-3-x64.dll QK4-windows\
           copy build\vcpkg_installed\x64-windows\bin\libusb-1.0.dll QK4-windows\
 
-      - name: Verify VC++ runtime bundled
+      - name: Verify bundle contents
         run: |
-          $runtime = Get-ChildItem QK4-windows -Filter "vcruntime140*.dll"
-          if (-not $runtime) {
-            Write-Host "VC++ runtime DLLs missing from bundle"
+          $required = @(
+            'QK4.exe',
+            'vcruntime140*.dll',
+            'libssl-3-x64.dll',
+            'libcrypto-3-x64.dll',
+            'tls\qopensslbackend.dll'
+          )
+          $missing = $required | Where-Object { -not (Test-Path "QK4-windows\$_") }
+          if ($missing) {
+            Write-Host "Bundle incomplete - missing: $($missing -join ', ')"
             exit 1
           }
           Get-ChildItem QK4-windows -Filter "*.dll" | Select-Object Name
