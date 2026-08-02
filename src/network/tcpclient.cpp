@@ -192,9 +192,20 @@ void TcpClient::attemptConnection() {
                 qCDebug(netTcp) << "  " << cipher.name();
             }
         }
-        if (!tls12PskCiphers.isEmpty()) {
-            sslConfig.setCiphers(tls12PskCiphers);
+        if (tls12PskCiphers.isEmpty()) {
+            // WHY: the Schannel and cert-only backends expose no PSK ciphersuites. Starting
+            // the handshake anyway surfaces as a generic connection timeout, indistinguishable
+            // from a wrong PSK or a firewall drop — which is what made the Windows packaging
+            // regression (missing qopensslbackend.dll) so expensive to diagnose from the field.
+            const QString backend = QSslSocket::activeBackend();
+            qCWarning(netTcp) << "No TLS-PSK ciphers available; active backend =" << backend;
+            emit errorOccurred(QString("TLS unavailable: the active TLS backend (%1) has no PSK "
+                                       "support. Reinstall QK4, or connect on the unencrypted port.")
+                                   .arg(backend));
+            setState(Disconnected);
+            return;
         }
+        sslConfig.setCiphers(tls12PskCiphers);
 
         m_socket->setSslConfiguration(sslConfig);
 

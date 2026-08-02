@@ -4,6 +4,7 @@
 #include <QGuiApplication>
 #include <QFontDatabase>
 #include <QSettings>
+#include <QSslSocket>
 #include <rhi/qrhi.h>
 #ifdef Q_OS_MACOS
 #include <QtGui/private/qguiapplication_p.h>
@@ -51,6 +52,23 @@ void setupFonts() {
     defaultFont.setHintingPreference(QFont::PreferFullHinting);
     defaultFont.setStyleStrategy(QFont::PreferAntialias);
     QApplication::setFont(defaultFont);
+}
+
+// WHY: Windows ships both the Schannel and OpenSSL TLS backends, and Qt may activate
+// Schannel — which has no TLS-PSK support at all, so the K4's port-9204 PSK handshake can
+// never complete under it. Must run before the first QSslSocket is constructed (TcpClient
+// creates one in its constructor). No-op on macOS and Linux, where OpenSSL is already active.
+void selectTlsBackend() {
+    if (QSslSocket::activeBackend() == QLatin1String("openssl"))
+        return;
+
+    if (QSslSocket::availableBackends().contains(QLatin1String("openssl"))) {
+        if (!QSslSocket::setActiveBackend(QStringLiteral("openssl")))
+            qWarning() << "Failed to activate the OpenSSL TLS backend - TLS/PSK unavailable";
+    } else {
+        qWarning() << "OpenSSL TLS backend unavailable (active:" << QSslSocket::activeBackend()
+                   << ") - TLS/PSK connections will fail";
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -121,6 +139,9 @@ int main(int argc, char *argv[]) {
 
     // Load embedded Inter font family
     setupFonts();
+
+    // Must precede MainWindow — its controllers construct the first QSslSocket
+    selectTlsBackend();
 
     MainWindow window;
     window.show();
