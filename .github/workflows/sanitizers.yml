@@ -1,10 +1,12 @@
 name: Scheduled Sanitizers
 
-# Weekly deep sanitizer pass over the test suite. The fast ASAN/UBSAN gate
-# on every push lives in lint.yml; this adds ThreadSanitizer (which cannot
-# coexist with ASAN) and turns failures into a tracked GitHub issue instead
-# of an unread red run: one open tracking issue per sanitizer kind (found by
-# label), with a comment appended per failing run — no duplicate issues.
+# Weekly ThreadSanitizer pass over the test suite. TSan cannot coexist with
+# ASAN, so it gets its own scheduled run; the ASAN/UBSAN gate already runs on
+# every push in ci.yml and is deliberately NOT duplicated here.
+#
+# Failures become a tracked GitHub issue instead of an unread red run: one open
+# tracking issue per sanitizer kind (found by label), with a comment appended
+# per failing run — no duplicate issues.
 
 on:
   schedule:
@@ -24,10 +26,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: asan-ubsan
-            cmake_args: -DCMAKE_BUILD_TYPE=Debug -DQK4_TESTS_SANITIZE=ON
-            cxxflags: ''
-            ldflags: ''
           - name: tsan
             # TSan needs optimized-but-symbolized builds; flags go through the
             # environment so every standalone test executable gets them.

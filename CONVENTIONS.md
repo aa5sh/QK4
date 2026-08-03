@@ -169,7 +169,7 @@ These rules prevent the architectural issues identified in the 2026-03-30 audit.
 
 **How rules are enforced:** not all twelve rules have the same bite. The tag at the front of each rule tells a new contributor what happens when they're broken:
 
-- **[CI]** — a test or lint check in `.github/workflows/lint.yml` fails. The rule *breaks the build*.
+- **[CI]** — a test or lint check in `.github/workflows/ci.yml` fails. The rule *breaks the build*.
 - **[sanitizer]** — ASAN or UBSAN in the sanitizer CI job catches the violation when the offending code path runs.
 - **[review]** — no automation. Enforced by reviewer discipline. Violations ship if reviewers miss them.
 - **[aspirational]** — target not fully met today; documented exemptions exist. Binds new code only.
@@ -249,7 +249,7 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-All four must pass. No exceptions. `.github/workflows/lint.yml` mirrors the format gate and runs the test suites — skipping locally means the CI run will fail.
+All four must pass. No exceptions. `.github/workflows/ci.yml` mirrors the format gate and runs the test suites — skipping locally means the CI run will fail.
 
 ### 11. [sanitizer + review] Controlled Shutdown Order
 

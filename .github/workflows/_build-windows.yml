@@ -1,16 +1,33 @@
-name: Build Windows
+name: _build-windows
+
+# Reusable Windows builder — the single definition of how the QK4 Windows bundle
+# is assembled and verified. Called by build.yml and release.yml; never triggered
+# directly.
+#
+# WHY the explicit TLS-backend copy below: windeployqt omits plugins/tls/
+# qopensslbackend.dll when it cannot locate OpenSSL at deploy time, and Qt then
+# falls back to Schannel, which has no TLS-PSK support at all. That shipped
+# broken TLS on port 9204 between v0.7.0-beta.3 and 2026-08-02.
 
 on:
-  workflow_dispatch:
-  push:
-    branches: [main]
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version string stamped into the binary and the zip filename'
+        required: true
+        type: string
+      retention-days:
+        description: 'Artifact retention in days'
+        required: false
+        type: number
+        default: 14
+    outputs:
+      artifact-name:
+        description: 'Name of the uploaded artifact'
+        value: ${{ jobs.build.outputs.artifact-name }}
 
 permissions:
   contents: read
-
-concurrency:
-  group: build-windows-${{ github.ref }}
-  cancel-in-progress: true
 
 env:
   CMAKE_BUILD_PARALLEL_LEVEL: 4
@@ -20,16 +37,15 @@ jobs:
   build:
     runs-on: windows-latest
     timeout-minutes: 90
+    outputs:
+      artifact-name: ${{ steps.names.outputs.artifact }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
 
-      - name: Derive build version
-        id: version
+      - name: Resolve artifact name
+        id: names
         shell: bash
-        run: |
-          VERSION="main-$(git rev-parse --short HEAD)"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Derived version: $VERSION"
+        run: echo "artifact=QK4-windows-${{ inputs.version }}" >> $GITHUB_OUTPUT
 
       - name: Cache vcpkg binary packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -71,25 +87,12 @@ jobs:
         uses: mozilla-actions/sccache-action@9e7fa8a12102821edf02ca5dbea1acd0f89a2696
 
       - name: Configure CMake
-        # Manifest mode: dependencies from vcpkg.json are installed into
-        # build/vcpkg_installed during configure.
-        run: |
-          cmake -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DQK4_VERSION_FULL="${{ steps.version.outputs.version }}"
+        run: cmake -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DQK4_VERSION_FULL="${{ inputs.version }}"
 
       - name: Build
         run: cmake --build build
 
-      - name: Verify executable
-        run: |
-          if (Test-Path build/QK4.exe) {
-            Write-Host "Build successful"
-            exit 0
-          } else {
-            Write-Host "Build failed - executable not found"
-            exit 1
-          }
-
-      - name: Bundle dependencies
+      - name: Create release package
         run: |
           mkdir QK4-windows
           copy build\QK4.exe QK4-windows\
@@ -121,8 +124,6 @@ jobs:
           copy build\vcpkg_installed\x64-windows\bin\libcrypto-3-x64.dll QK4-windows\
           copy build\vcpkg_installed\x64-windows\bin\libusb-1.0.dll QK4-windows\
 
-      - name: Verify bundle contents
-        run: |
           $required = @(
             'QK4.exe',
             'vcruntime140*.dll',
@@ -135,11 +136,13 @@ jobs:
             Write-Host "Bundle incomplete - missing: $($missing -join ', ')"
             exit 1
           }
-          Get-ChildItem QK4-windows -Filter "*.dll" | Select-Object Name
 
-      - name: Upload build artifact
+          $ZIP_NAME = "QK4-${{ inputs.version }}-windows.zip"
+          Compress-Archive -Path QK4-windows -DestinationPath $ZIP_NAME
+
+      - name: Upload artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: QK4-windows
-          path: QK4-windows/
-          retention-days: 7
+          name: ${{ steps.names.outputs.artifact }}
+          path: QK4-${{ inputs.version }}-windows.zip
+          retention-days: ${{ inputs.retention-days }}
