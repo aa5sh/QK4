@@ -345,6 +345,32 @@ jobs:
           # Clean up
           rm -rf dmg-staging ~/private_keys
 
+      - name: Verify DMG contents
+        run: |
+          # WHY: this must inspect the *packaged* artifact, not build/QK4.app. Symlink
+          # flattening happens during packaging, so a gate on the build tree passes even
+          # when the shipped bundle is broken.
+          DMG_NAME="QK4-${{ steps.version.outputs.version }}-macos.dmg"
+          hdiutil attach "$DMG_NAME" -nobrowse -quiet -mountpoint ./verify-mnt
+          APP=./verify-mnt/QK4.app
+          FAIL=0
+
+          LINKS=$(find "$APP" -type l | wc -l | tr -d ' ')
+          echo "framework symlinks: $LINKS"
+          if [ "$LINKS" -lt 10 ]; then
+            echo "ERROR: bundle symlinks flattened ($LINKS) - framework structure is broken"
+            FAIL=1
+          fi
+
+          codesign --verify --deep --strict "$APP" \
+            || { echo "ERROR: codesign strict verify failed"; FAIL=1; }
+
+          test -f "$APP/Contents/PlugIns/tls/libqopensslbackend.dylib" \
+            || { echo "ERROR: OpenSSL TLS backend missing - TLS/PSK would fail"; FAIL=1; }
+
+          hdiutil detach ./verify-mnt -quiet
+          exit $FAIL
+
       - name: Upload artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
