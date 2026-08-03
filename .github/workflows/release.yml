@@ -99,11 +99,19 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: ${{ needs.windows.outputs.artifact-name }}
+          path: QK4-windows
 
       - name: Download Raspberry Pi artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: ${{ needs.raspberry-pi.outputs.artifact-name }}
+
+      - name: Package Windows release asset
+        # WHY here and not in the builder: actions/upload-artifact wraps every upload
+        # in its own zip, so the builder ships a plain directory to keep the Actions
+        # download a single unwrap. The user-facing asset must be one self-contained
+        # file, so the .zip is assembled once, here, for both the Release and Pages.
+        run: zip -qr "QK4-${{ needs.version.outputs.version }}-windows.zip" QK4-windows
 
       - name: Generate release notes
         run: git-cliff --latest --strip header -o release_notes.md
@@ -131,6 +139,20 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Hand assembled assets to publish
+        # The publish job needs the exact files attached to the Release, including
+        # the Windows zip assembled above. Passing them as one artifact keeps that
+        # assembly in a single place.
+        if: needs.version.outputs.is_release == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: release-assets-${{ needs.version.outputs.version }}
+          path: |
+            QK4-${{ needs.version.outputs.version }}-macos.dmg
+            QK4-${{ needs.version.outputs.version }}-windows.zip
+            QK4-${{ needs.version.outputs.version }}-raspberry-pi-arm64.tar.gz
+          retention-days: 7
+
       - name: Create Release
         if: needs.version.outputs.is_release == 'true'
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228
@@ -155,23 +177,11 @@ jobs:
         with:
           ref: gh-pages
 
-      - name: Download macOS artifact
+      - name: Download assembled release assets
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
-          name: ${{ needs.macos.outputs.artifact-name }}
-          path: artifacts/macos
-
-      - name: Download Windows artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: ${{ needs.windows.outputs.artifact-name }}
-          path: artifacts/windows
-
-      - name: Download Raspberry Pi artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: ${{ needs.raspberry-pi.outputs.artifact-name }}
-          path: artifacts/raspberry-pi
+          name: release-assets-${{ needs.version.outputs.version }}
+          path: artifacts
 
       - name: Update downloads and releases.json
         run: |
@@ -185,9 +195,7 @@ jobs:
           # Remove old downloads, add new
           rm -rf downloads/
           mkdir -p "downloads/$TAG"
-          cp artifacts/macos/$MAC_DMG "downloads/$TAG/"
-          cp artifacts/windows/$WIN_ZIP "downloads/$TAG/"
-          cp artifacts/raspberry-pi/$PI_TGZ "downloads/$TAG/"
+          cp "artifacts/$MAC_DMG" "artifacts/$WIN_ZIP" "artifacts/$PI_TGZ" "downloads/$TAG/"
 
           # Compute human-readable sizes
           SZ_MAC=$(du -h "downloads/$TAG/$MAC_DMG" | cut -f1 | xargs)

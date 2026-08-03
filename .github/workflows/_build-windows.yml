@@ -137,12 +137,14 @@ jobs:
             exit 1
           }
 
-          $ZIP_NAME = "QK4-${{ inputs.version }}-windows.zip"
-          Compress-Archive -Path QK4-windows -DestinationPath $ZIP_NAME
-
+      # WHY upload the directory rather than a zip: actions/upload-artifact always
+      # wraps the upload in its own zip. Uploading a zip therefore produces a
+      # zip-inside-a-zip that testers must unwrap twice. Uploading the directory
+      # gives a single unwrap. release.yml builds the named .zip release asset from
+      # this artifact, so end users still download one self-contained file.
       - name: Upload artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ${{ steps.names.outputs.artifact }}
-          path: QK4-${{ inputs.version }}-windows.zip
+          path: QK4-windows/
           retention-days: ${{ inputs.retention-days }}
