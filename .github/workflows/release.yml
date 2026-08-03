@@ -143,7 +143,10 @@ jobs:
         # The publish job needs the exact files attached to the Release, including
         # the Windows zip assembled above. Passing them as one artifact keeps that
         # assembly in a single place.
-        if: needs.version.outputs.is_release == 'true'
+        #
+        # Deliberately NOT gated on is_release: uploading during a rehearsal is what
+        # makes the assembled assets inspectable before a real tag is ever cut.
+        # Publishing stays gated on the publish job itself.
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: release-assets-${{ needs.version.outputs.version }}
