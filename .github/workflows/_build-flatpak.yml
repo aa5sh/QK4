@@ -115,11 +115,17 @@ jobs:
 
           # The version must have survived the jq stamping into the binary —
           # otherwise every Flatpak user sees the CMake fallback in Help/About.
+          # grep -a scans raw bytes: no binutils dependency, and no guessing about
+          # which ELF sections `strings` does or doesn't walk by default.
           if [ -f "$TREE/bin/qk4" ]; then
-            if strings "$TREE/bin/qk4" | grep -qF "$VERSION"; then
+            if grep -aqF "$VERSION" "$TREE/bin/qk4"; then
               echo "version stamped: $VERSION"
             else
               echo "ERROR: version '$VERSION' not found in the built binary"
+              echo "--- version-like strings actually present, for diagnosis ---"
+              strings -a "$TREE/bin/qk4" 2>/dev/null \
+                | grep -aE "^([0-9]+\.[0-9]+\.[0-9]+|development-|main-|dryrun-)" \
+                | sort -u | head -10 || echo "(strings produced nothing)"
               FAIL=1
             fi
           fi
