@@ -13,6 +13,7 @@ A cross-platform desktop application for remote control of Elecraft K4 radios ov
 | macOS | 14 (Sonoma) | Apple Silicon (M1/M2/M3/M4) |
 | Windows | 11 | x64 |
 | Linux | Debian Trixie / Ubuntu 24.04+ | ARM64 (Raspberry Pi 4/5) |
+| Linux | Any distribution with Flatpak | x86_64 |
 
 ## Features
 
@@ -26,7 +27,7 @@ A cross-platform desktop application for remote control of Elecraft K4 radios ov
 - **KPOD / KPOD+ Support** — USB integration with Elecraft KPOD tuning knob and KPOD+ CW keyer
 - **KPA1500 Support** — Optional integration with Elecraft KPA1500 amplifier
 - **CAT Server** — Built-in CAT server (port 9299) for integration with third-party logging and contest software
-- **Self-Contained Releases** — macOS DMG, Windows ZIP, and Raspberry Pi tarball include all dependencies
+- **Self-Contained Releases** — macOS DMG, Windows ZIP, Raspberry Pi tarball, and Linux Flatpak include all dependencies
 
 ## Download
 
@@ -35,7 +36,26 @@ Pre-built releases are available on the [Releases](https://github.com/mikeg-dal/
 
 ### Windows Prerequisite
 
-- [Visual C++ Redistributable 2019+](https://aka.ms/vs/17/release/vc_redist.x64.exe) (if not already installed)
+None — the Visual C++ runtime ships inside the package.
+
+### Linux x86_64 (Flatpak)
+
+One bundle runs on any distribution with Flatpak — no per-distro packages.
+
+```bash
+# One-time: add Flathub and the KDE runtime
+flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+flatpak install flathub org.kde.Platform//6.10
+
+# Install and run QK4
+flatpak install --bundle QK4-<version>-linux-x86_64.flatpak
+flatpak run io.github.mikeg_dal.QK4
+```
+
+The Flatpak manifest was contributed by [@CSVincentS](https://github.com/CSVincentS)
+(see [#96](https://github.com/mikeg-dal/QK4/issues/96)), with the original packaging
+approach and PipeWire tuning from [@jmeloranta](https://github.com/jmeloranta)'s Arch
+AUR build.
 
 ### Raspberry Pi Prerequisites
 

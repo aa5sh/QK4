@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=QK4
+GenericName=Elecraft K4 Remote Control
+Comment=Remote control for the Elecraft K4 with real-time audio and spectrum display
+Exec=qk4
+Icon=io.github.mikeg_dal.QK4
+Terminal=false
+Categories=Network;HamRadio;
+Keywords=ham;amateur;radio;elecraft;k4;transceiver;cat;

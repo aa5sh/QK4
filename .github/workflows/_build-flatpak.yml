@@ -1,0 +1,119 @@
+name: _build-flatpak
+
+# Reusable Linux x86_64 (Flatpak) builder. Called by build.yml; never triggered
+# directly. Flatpak is distro-agnostic — one bundle runs on Ubuntu, Fedora,
+# Debian, Arch and the rest — so this is one artifact, not per-distro packaging.
+#
+# The manifest in flatpak/ is authored to stay usable for local development
+# (`flatpak-builder build flatpak/io.github.mikeg_dal.QK4.json`), so it tracks
+# the main branch. CI must not do that: an artifact attached to a release has to
+# be the released commit. The jq step below rewrites the manifest in place for
+# the build only, pinning the source commit and stamping the version.
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version string stamped into the binary and the bundle filename'
+        required: true
+        type: string
+      retention-days:
+        description: 'Artifact retention in days'
+        required: false
+        type: number
+        default: 14
+    outputs:
+      artifact-name:
+        description: 'Name of the uploaded artifact'
+        value: ${{ jobs.build.outputs.artifact-name }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:kde-6.10
+      # flatpak-builder needs to create its own sandboxes.
+      options: --privileged
+    outputs:
+      artifact-name: ${{ steps.names.outputs.artifact }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: Resolve artifact name
+        id: names
+        run: echo "artifact=QK4-linux-${{ inputs.version }}" >> $GITHUB_OUTPUT
+
+      - name: Pin manifest to this commit and stamp the version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          MANIFEST=flatpak/io.github.mikeg_dal.QK4.json
+
+          # WHY: left as-is the manifest clones the main branch at build time, so a
+          # bundle attached to a tag could contain commits that are not in that tag.
+          # And without QK4_VERSION_FULL, CMake falls back to PROJECT_VERSION and
+          # every Flatpak user's Help/About reports the wrong version.
+          jq --arg sha "$GITHUB_SHA" --arg ver "$VERSION" '
+            (.modules[] | select(.name == "qk4") | .sources[] | select(.type == "git"))
+              |= (del(.branch) + {commit: $sha})
+            | (.modules[] | select(.name == "qk4") | .["build-commands"][0])
+              |= . + " -DQK4_VERSION_FULL=\($ver)"
+          ' "$MANIFEST" > manifest.pinned.json
+
+          # Fail loudly rather than silently building an unpinned or unstamped bundle.
+          jq -e --arg sha "$GITHUB_SHA" '
+            (.modules[] | select(.name=="qk4") | .sources[] | select(.type=="git") | .commit) == $sha
+          ' manifest.pinned.json > /dev/null || { echo "ERROR: source commit not pinned"; exit 1; }
+          jq -e --arg ver "$VERSION" '
+            (.modules[] | select(.name=="qk4") | .["build-commands"][0]) | contains("-DQK4_VERSION_FULL=" + $ver)
+          ' manifest.pinned.json > /dev/null || { echo "ERROR: version not stamped"; exit 1; }
+
+          mv manifest.pinned.json "$MANIFEST"
+          jq '.modules[] | select(.name=="qk4") | {sources, build_first: .["build-commands"][0]}' "$MANIFEST"
+
+      - name: Build Flatpak
+        uses: flatpak/flatpak-github-actions/flatpak-builder@401fe28a8384095fc1531b9d320b292f0ee45adb
+        with:
+          manifest-path: flatpak/io.github.mikeg_dal.QK4.json
+          bundle: QK4-${{ inputs.version }}-linux-x86_64.flatpak
+          upload-artifact: false
+          cache-key: flatpak-builder-${{ github.sha }}
+
+      - name: Verify bundle contents
+        run: |
+          # WHY: inspect the packaged artifact, not the build tree. Every other
+          # platform gate here exists because a bundle that builds is not a bundle
+          # that ships correctly.
+          set -euo pipefail
+          BUNDLE="QK4-${{ inputs.version }}-linux-x86_64.flatpak"
+          FAIL=0
+
+          test -f "$BUNDLE" || { echo "ERROR: bundle not produced: $BUNDLE"; exit 1; }
+
+          SIZE=$(stat -c%s "$BUNDLE")
+          echo "bundle size: $SIZE bytes"
+          if [ "$SIZE" -lt 10000000 ]; then
+            echo "ERROR: bundle implausibly small ($SIZE bytes) - build likely produced a stub"
+            FAIL=1
+          fi
+
+          # The bundle must declare the app ID users install and launch.
+          if ! flatpak build-bundle --help >/dev/null 2>&1 || \
+             ! strings "$BUNDLE" | grep -q "io.github.mikeg_dal.QK4"; then
+            echo "ERROR: expected app ID io.github.mikeg_dal.QK4 not found in bundle"
+            FAIL=1
+          fi
+
+          exit $FAIL
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ${{ steps.names.outputs.artifact }}
+          path: QK4-${{ inputs.version }}-linux-x86_64.flatpak
+          retention-days: ${{ inputs.retention-days }}
