@@ -169,8 +169,11 @@ jobs:
           prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') }}
 
   publish:
+    # WHY no job-level is_release gate: everything here except the final push is
+    # rehearsable, and releases.json generation is the step most likely to break
+    # the download page. Only "Commit and push" is gated, so a dispatch exercises
+    # the whole path and publishes nothing.
     needs: [version, macos, windows, raspberry-pi, release]
-    if: needs.version.outputs.is_release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -186,71 +189,103 @@ jobs:
           name: release-assets-${{ needs.version.outputs.version }}
           path: artifacts
 
-      - name: Update downloads and releases.json
+      - name: Stage downloads and generate releases.json
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          IS_RELEASE: ${{ needs.version.outputs.is_release }}
         run: |
-          TAG="${GITHUB_REF_NAME}"
-          VERSION="${{ needs.version.outputs.version }}"
-          DATE=$(date -u +%Y-%m-%d)
-          MAC_DMG="QK4-${VERSION}-macos.dmg"
-          WIN_ZIP="QK4-${VERSION}-windows.zip"
-          PI_TGZ="QK4-${VERSION}-raspberry-pi-arm64.tar.gz"
+          set -euo pipefail
 
-          # Remove old downloads, add new
+          if [ "$IS_RELEASE" = "true" ]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="rehearsal-${VERSION}"
+          fi
+          DATE=$(date -u +%Y-%m-%d)
+
+          # Platform table — adding a platform is a data change here, nothing else
+          # in this step needs editing. Format: <releases.json key>|<filename>
+          PLATFORMS=(
+            "macos|QK4-${VERSION}-macos.dmg"
+            "windows|QK4-${VERSION}-windows.zip"
+            "raspberry-pi|QK4-${VERSION}-raspberry-pi-arm64.tar.gz"
+          )
+
           rm -rf downloads/
           mkdir -p "downloads/$TAG"
-          cp "artifacts/$MAC_DMG" "artifacts/$WIN_ZIP" "artifacts/$PI_TGZ" "downloads/$TAG/"
 
-          # Compute human-readable sizes
-          SZ_MAC=$(du -h "downloads/$TAG/$MAC_DMG" | cut -f1 | xargs)
-          SZ_WIN=$(du -h "downloads/$TAG/$WIN_ZIP" | cut -f1 | xargs)
-          SZ_PI=$(du -h "downloads/$TAG/$PI_TGZ" | cut -f1 | xargs)
+          # WHY jq and not a heredoc: a hand-maintained JSON template silently
+          # produces invalid JSON on a missing comma, and index.html fails closed —
+          # one bad entry takes down every platform's download card.
+          ASSETS='{}'
+          for entry in "${PLATFORMS[@]}"; do
+            KEY="${entry%%|*}"
+            FILE="${entry#*|}"
 
-          # Compute SHA256 hashes
-          HASH_MAC=$(sha256sum "downloads/$TAG/$MAC_DMG" | cut -d' ' -f1)
-          HASH_WIN=$(sha256sum "downloads/$TAG/$WIN_ZIP" | cut -d' ' -f1)
-          HASH_PI=$(sha256sum "downloads/$TAG/$PI_TGZ" | cut -d' ' -f1)
+            if [ ! -f "artifacts/$FILE" ]; then
+              echo "ERROR: expected release asset missing: artifacts/$FILE"
+              exit 1
+            fi
 
-          # Detect prerelease
-          if echo "$TAG" | grep -qE 'alpha|beta'; then
-            PRERELEASE=true
-          else
-            PRERELEASE=false
-          fi
+            cp "artifacts/$FILE" "downloads/$TAG/"
+            SZ=$(du -h "downloads/$TAG/$FILE" | cut -f1 | xargs)
+            HASH=$(sha256sum "downloads/$TAG/$FILE" | cut -d' ' -f1)
 
-          # Build releases.json
-          cat > releases.json <<EOF
-          {
-            "tag": "$TAG",
-            "version": "$VERSION",
-            "date": "$DATE",
-            "prerelease": $PRERELEASE,
-            "assets": {
-              "macos": {
-                "name": "$MAC_DMG",
-                "url": "./downloads/$TAG/$MAC_DMG",
-                "size": "$SZ_MAC",
-                "sha256": "$HASH_MAC"
-              },
-              "windows": {
-                "name": "$WIN_ZIP",
-                "url": "./downloads/$TAG/$WIN_ZIP",
-                "size": "$SZ_WIN",
-                "sha256": "$HASH_WIN"
-              },
-              "raspberry-pi": {
-                "name": "$PI_TGZ",
-                "url": "./downloads/$TAG/$PI_TGZ",
-                "size": "$SZ_PI",
-                "sha256": "$HASH_PI"
-              }
-            }
-          }
-          EOF
+            ASSETS=$(jq -n \
+              --argjson acc "$ASSETS" \
+              --arg k "$KEY" --arg n "$FILE" \
+              --arg u "./downloads/$TAG/$FILE" \
+              --arg s "$SZ" --arg h "$HASH" \
+              '$acc + {($k): {name: $n, url: $u, size: $s, sha256: $h}}')
+          done
 
-          # Clean up artifacts directory
+          if echo "$TAG" | grep -qE 'alpha|beta'; then PRERELEASE=true; else PRERELEASE=false; fi
+
+          jq -n \
+            --arg tag "$TAG" \
+            --arg version "$VERSION" \
+            --arg date "$DATE" \
+            --argjson prerelease "$PRERELEASE" \
+            --argjson assets "$ASSETS" \
+            '{tag: $tag, version: $version, date: $date, prerelease: $prerelease, assets: $assets}' \
+            > releases.json
+
           rm -rf artifacts/
 
+      - name: Validate releases.json
+        run: |
+          set -euo pipefail
+          jq empty releases.json || { echo "ERROR: releases.json is not valid JSON"; exit 1; }
+
+          # Every asset must carry the four fields index.html reads, and every
+          # referenced file must actually exist under downloads/.
+          jq -e 'has("tag") and has("version") and has("date") and has("prerelease")
+                 and (.assets | length > 0)' releases.json > /dev/null \
+            || { echo "ERROR: releases.json missing required top-level fields"; exit 1; }
+
+          FAIL=0
+          for key in $(jq -r '.assets | keys[]' releases.json); do
+            jq -e --arg k "$key" '.assets[$k] | has("name") and has("url") and has("size") and has("sha256")' \
+              releases.json > /dev/null || { echo "ERROR: asset '$key' missing fields"; FAIL=1; }
+            URL=$(jq -r --arg k "$key" '.assets[$k].url' releases.json)
+            [ -f "${URL#./}" ] || { echo "ERROR: asset '$key' points at missing file: $URL"; FAIL=1; }
+          done
+          exit $FAIL
+
+      - name: Rehearsal summary
+        if: needs.version.outputs.is_release != 'true'
+        run: |
+          {
+            echo "### gh-pages rehearsal — nothing pushed"
+            echo
+            echo 'Generated and validated `releases.json`:'
+            echo '```json'
+            cat releases.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Commit and push to gh-pages
+        if: needs.version.outputs.is_release == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
