@@ -19,6 +19,8 @@ permissions:
 
 jobs:
   sanitize:
+    # See codeql.yml — keeps scheduled runs from charging forkers.
+    if: github.repository == 'mikeg-dal/QK4'
     name: ${{ matrix.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 60

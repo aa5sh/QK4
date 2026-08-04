@@ -28,6 +28,10 @@ concurrency:
 
 jobs:
   analyze:
+    # WHY: forks inherit this workflow's schedule and burn the forker's free
+    # Actions minutes running our security scans. A PR from a fork still runs in
+    # this repo's context, so the guard only suppresses runs inside the fork.
+    if: github.repository == 'mikeg-dal/QK4'
     name: Analyze C++
     runs-on: ubuntu-latest
     timeout-minutes: 60
