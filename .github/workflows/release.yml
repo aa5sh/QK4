@@ -1,5 +1,13 @@
 name: Release
 
+# WHY a dynamic run-name: a dispatch rehearsal and a real tagged release are the
+# same workflow, so both used to appear in the Actions list titled just "Release".
+# That made a rehearsal indistinguishable at a glance from something that shipped.
+run-name: >-
+  ${{ github.event_name == 'push'
+      && format('Release {0}', github.ref_name)
+      || format('Rehearsal (publishes nothing) — {0}', github.ref_name) }}
+
 # Tagged release: builds all three platforms via the shared _build-*.yml reusable
 # workflows, publishes a GitHub Release, and updates the gh-pages download page.
 #
