@@ -84,29 +84,44 @@ jobs:
           upload-artifact: false
           cache-key: flatpak-builder-${{ github.sha }}
 
-      - name: Verify bundle contents
+      - name: Verify build output
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
-          # WHY: inspect the packaged artifact, not the build tree. Every other
-          # platform gate here exists because a bundle that builds is not a bundle
-          # that ships correctly.
+          # WHY inspect flatpak_app/ rather than the .flatpak: the bundle is a
+          # compressed OSTree delta, so its size and contents can't be read
+          # directly. flatpak_app/files is the tree that lands on a user's machine,
+          # which is what actually needs checking.
+          #
+          # Note a Flatpak bundle is legitimately small — Qt comes from
+          # org.kde.Platform, not from us — so size alone proves nothing here, the
+          # way it does for the DMG and the Pi tarball.
           set -euo pipefail
-          BUNDLE="QK4-${{ inputs.version }}-linux-x86_64.flatpak"
+          BUNDLE="QK4-${VERSION}-linux-x86_64.flatpak"
+          TREE=flatpak_app/files
           FAIL=0
 
           test -f "$BUNDLE" || { echo "ERROR: bundle not produced: $BUNDLE"; exit 1; }
+          echo "bundle size: $(stat -c%s "$BUNDLE") bytes"
 
-          SIZE=$(stat -c%s "$BUNDLE")
-          echo "bundle size: $SIZE bytes"
-          if [ "$SIZE" -lt 10000000 ]; then
-            echo "ERROR: bundle implausibly small ($SIZE bytes) - build likely produced a stub"
-            FAIL=1
-          fi
+          # The executable users launch, plus the desktop entry and icon that make
+          # it appear in a launcher at all.
+          for required in \
+            "$TREE/bin/qk4" \
+            "$TREE/share/applications/io.github.mikeg_dal.QK4.desktop" \
+            "$TREE/share/icons/hicolor/256x256/apps/io.github.mikeg_dal.QK4.png"; do
+            test -f "$required" || { echo "ERROR: missing from build tree: $required"; FAIL=1; }
+          done
 
-          # The bundle must declare the app ID users install and launch.
-          if ! flatpak build-bundle --help >/dev/null 2>&1 || \
-             ! strings "$BUNDLE" | grep -q "io.github.mikeg_dal.QK4"; then
-            echo "ERROR: expected app ID io.github.mikeg_dal.QK4 not found in bundle"
-            FAIL=1
+          # The version must have survived the jq stamping into the binary —
+          # otherwise every Flatpak user sees the CMake fallback in Help/About.
+          if [ -f "$TREE/bin/qk4" ]; then
+            if strings "$TREE/bin/qk4" | grep -qF "$VERSION"; then
+              echo "version stamped: $VERSION"
+            else
+              echo "ERROR: version '$VERSION' not found in the built binary"
+              FAIL=1
+            fi
           fi
 
           exit $FAIL
