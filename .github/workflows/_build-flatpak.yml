@@ -56,13 +56,14 @@ jobs:
 
           # WHY: left as-is the manifest clones the main branch at build time, so a
           # bundle attached to a tag could contain commits that are not in that tag.
-          # And without QK4_VERSION_FULL, CMake falls back to PROJECT_VERSION and
-          # every Flatpak user's Help/About reports the wrong version.
+          # The manifest already carries QK4_VERSION_FULL as a build env var with a
+          # sensible local default, so CI only overrides its value — the build
+          # command itself stays untouched and readable.
           jq --arg sha "$GITHUB_SHA" --arg ver "$VERSION" '
             (.modules[] | select(.name == "qk4") | .sources[] | select(.type == "git"))
               |= (del(.branch) + {commit: $sha})
-            | (.modules[] | select(.name == "qk4") | .["build-commands"][0])
-              |= . + " -DQK4_VERSION_FULL=\($ver)"
+            | (.modules[] | select(.name == "qk4") | .["build-options"].env.QK4_VERSION_FULL)
+              = $ver
           ' "$MANIFEST" > manifest.pinned.json
 
           # Fail loudly rather than silently building an unpinned or unstamped bundle.
@@ -70,11 +71,12 @@ jobs:
             (.modules[] | select(.name=="qk4") | .sources[] | select(.type=="git") | .commit) == $sha
           ' manifest.pinned.json > /dev/null || { echo "ERROR: source commit not pinned"; exit 1; }
           jq -e --arg ver "$VERSION" '
-            (.modules[] | select(.name=="qk4") | .["build-commands"][0]) | contains("-DQK4_VERSION_FULL=" + $ver)
+            (.modules[] | select(.name=="qk4") | .["build-options"].env.QK4_VERSION_FULL) == $ver
           ' manifest.pinned.json > /dev/null || { echo "ERROR: version not stamped"; exit 1; }
 
           mv manifest.pinned.json "$MANIFEST"
-          jq '.modules[] | select(.name=="qk4") | {sources, build_first: .["build-commands"][0]}' "$MANIFEST"
+          jq '.modules[] | select(.name=="qk4")
+              | {sources, version_env: .["build-options"].env.QK4_VERSION_FULL}' "$MANIFEST"
 
       - name: Build Flatpak
         uses: flatpak/flatpak-github-actions/flatpak-builder@401fe28a8384095fc1531b9d320b292f0ee45adb
@@ -109,7 +111,7 @@ jobs:
           for required in \
             "$TREE/bin/qk4" \
             "$TREE/share/applications/io.github.mikeg_dal.QK4.desktop" \
-            "$TREE/share/icons/hicolor/256x256/apps/io.github.mikeg_dal.QK4.png"; do
+            "$TREE/share/icons/hicolor/512x512/apps/io.github.mikeg_dal.QK4.png"; do
             test -f "$required" || { echo "ERROR: missing from build tree: $required"; FAIL=1; }
           done
 

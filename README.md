@@ -43,19 +43,31 @@ None — the Visual C++ runtime ships inside the package.
 One bundle runs on any distribution with Flatpak — no per-distro packages.
 
 ```bash
-# One-time: add Flathub and the KDE runtime
-flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-flatpak install flathub org.kde.Platform//6.10
+# Install Flatpak (if not already installed)
+sudo apt install flatpak
 
-# Install and run QK4
-flatpak install --bundle QK4-<version>-linux-x86_64.flatpak
+# Add the Flathub repository
+flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+
+# Install QK4
+flatpak install QK4-<version>-linux-x86_64.flatpak
+
+# Install the udev rules — required for KPOD / KPOD+ USB access
+sudo curl -o /etc/udev/rules.d/99-kpod.rules https://raw.githubusercontent.com/mikeg-dal/QK4/main/resources/99-kpod.rules
+sudo chmod 644 /etc/udev/rules.d/99-kpod.rules
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+
+# Run QK4
 flatpak run io.github.mikeg_dal.QK4
 ```
 
-The Flatpak manifest was contributed by [@CSVincentS](https://github.com/CSVincentS)
-(see [#96](https://github.com/mikeg-dal/QK4/issues/96)), with the original packaging
-approach and PipeWire tuning from [@jmeloranta](https://github.com/jmeloranta)'s Arch
-AUR build.
+After installation you can also launch QK4 from your application menu.
+
+The Flatpak packaging was contributed by [@CSVincentS](https://github.com/CSVincentS)
+(see [#96](https://github.com/mikeg-dal/QK4/issues/96) and
+[#127](https://github.com/mikeg-dal/QK4/pull/127)), with the original packaging approach
+and PipeWire tuning from [@jmeloranta](https://github.com/jmeloranta)'s Arch AUR build.
 
 ### Raspberry Pi Prerequisites
 
@@ -136,6 +148,29 @@ cmake --build build -j$(nproc)
 # Run
 ./build/QK4
 ```
+
+### Linux x86_64 (Flatpak)
+
+Builds the same bundle CI produces, without needing the Qt dev packages above —
+the KDE SDK supplies them.
+
+```bash
+# Install flatpak-builder and the KDE runtime
+sudo apt install flatpak flatpak-builder
+flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+flatpak install flathub org.kde.Platform//6.10 org.kde.Sdk//6.10
+
+# Clone and build
+git clone https://github.com/mikeg-dal/QK4.git
+cd QK4
+flatpak-builder --user --install build-dir flatpak/io.github.mikeg_dal.QK4.json
+
+# Run
+flatpak run io.github.mikeg_dal.QK4
+```
+
+A local build tracks the `main` branch and reports its version as `main`; CI
+overrides both to pin the released commit and stamp the real version.
 
 ## Testing
 

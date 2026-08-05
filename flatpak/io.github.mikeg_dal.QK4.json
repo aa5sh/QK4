@@ -37,7 +37,8 @@
           "CMAKE_LIBRARY_PATH": "/app/lib64",
           "CMAKE_INCLUDE_PATH": "/app/include",
           "LD_LIBRARY_PATH": "/app/lib64",
-          "LIBRARY_PATH": "/app/lib64"
+          "LIBRARY_PATH": "/app/lib64",
+          "QK4_VERSION_FULL": "main"
         }
       },
       "sources": [
@@ -52,15 +53,15 @@
         },
         {
           "type": "file",
-          "path": "qk4.png"
+          "path": "../resources/qk4.png"
         }
       ],
       "build-commands": [
-        "cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_RPATH=/app/lib64 -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON",
+        "cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_RPATH=/app/lib64 -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON -DQK4_VERSION_FULL=${QK4_VERSION_FULL}",
         "cmake --build build -j$(nproc)",
         "install -Dm755 build/QK4 /app/bin/qk4",
         "install -Dm644 io.github.mikeg_dal.QK4.desktop /app/share/applications/io.github.mikeg_dal.QK4.desktop",
-        "install -Dm644 qk4.png /app/share/icons/hicolor/256x256/apps/io.github.mikeg_dal.QK4.png"
+        "install -Dm644 qk4.png /app/share/icons/hicolor/512x512/apps/io.github.mikeg_dal.QK4.png"
       ]
     }
   ],
@@ -68,9 +69,8 @@
     "--share=network",
     "--share=ipc",
     "--socket=wayland",
-    "--socket=x11",
+    "--socket=fallback-x11",
     "--socket=pulseaudio",
-    "--device=dri",
     "--device=all",
     "--env=PIPEWIRE_QUANTUM=64/48000"
   ]
