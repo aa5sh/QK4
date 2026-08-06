@@ -26,6 +26,8 @@ Rc28Device::Rc28Device(QObject *parent) : QObject(parent) {
     connect(m_hidWorker, &Rc28HidWorker::encoderRotated, this, &Rc28Device::encoderRotated);
     connect(m_hidWorker, &Rc28HidWorker::buttonTapped, this, &Rc28Device::buttonTapped);
     connect(m_hidWorker, &Rc28HidWorker::buttonHeld, this, &Rc28Device::buttonHeld);
+    connect(m_hidWorker, &Rc28HidWorker::buttonPressed, this, &Rc28Device::buttonPressed);
+    connect(m_hidWorker, &Rc28HidWorker::buttonReleased, this, &Rc28Device::buttonReleased);
     connect(m_hidWorker, &Rc28HidWorker::pollError, this, &Rc28Device::pollError);
 
     m_hidThread->start();

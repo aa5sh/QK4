@@ -43,7 +43,7 @@ public:
 
     // Raw byte5 button codes.
     static const unsigned char BTN_NONE = 0x07; // encoder frame / all released
-    static const unsigned char BTN_F1 = 0x7D;
+    static const unsigned char BTN_F1 = 0x05;
     static const unsigned char BTN_F2 = 0x03;
     static const unsigned char BTN_TX = 0x06;
 
@@ -76,6 +76,8 @@ signals:
     void encoderRotated(int ticks);
     void buttonTapped(int buttonNumber);
     void buttonHeld(int buttonNumber);
+    void buttonPressed(int buttonNumber);
+    void buttonReleased(int buttonNumber);
     void pollError(QString message);
 
 private slots:

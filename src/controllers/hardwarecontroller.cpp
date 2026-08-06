@@ -125,10 +125,8 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     });
 
     // =========================================================================
-    // Icom RC-28 USB tuning knob (HID). No rocker switch: F1 tap cycles the
-    // software tuning target (VFO A → VFO B → RIT/XIT) and drives the indicator
-    // LEDs; F1 hold, F2 and TX (tap/hold) are macro buttons. Reuses the K-POD
-    // tuning dispatch via onKpodEncoderRotatedWithRocker.
+    // Icom RC-28 USB tuning knob (HID). F1 selects Main/VFO A, F2 selects
+    // Sub/VFO B, and TRANSMIT toggles PTT. The three LEDs mirror those states.
     // =========================================================================
     m_rc28Device = new Rc28Device(this);
 
@@ -138,19 +136,22 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
         onKpodEncoderRotatedWithRocker(ticks, m_rc28Rocker);
     });
     connect(m_rc28Device, &Rc28Device::pollError, this, &HardwareController::onKpodPollError);
-    connect(m_rc28Device, &Rc28Device::buttonTapped, this, [this](int button) {
+    connect(m_rc28Device, &Rc28Device::buttonPressed, this, [this](int button) {
         if (button == Rc28Device::ButtonF1) {
-            cycleTuningTarget(m_rc28Rocker, QStringLiteral("RC-28"), m_rc28Device);
-            return;
+            selectRc28TuningTarget(2);
+        } else if (button == Rc28Device::ButtonF2) {
+            selectRc28TuningTarget(0);
+        } else if (button == Rc28Device::ButtonTx) {
+            setRc28Ptt(true);
         }
-        QString name = (button == Rc28Device::ButtonF2) ? QStringLiteral("F2") : QStringLiteral("TX");
-        emit macroRequested(QStringLiteral("RC-28.") + name + QStringLiteral("T"));
     });
-    connect(m_rc28Device, &Rc28Device::buttonHeld, this, [this](int button) {
-        QString name = (button == Rc28Device::ButtonF1)   ? QStringLiteral("F1")
-                       : (button == Rc28Device::ButtonF2) ? QStringLiteral("F2")
-                                                          : QStringLiteral("TX");
-        emit macroRequested(QStringLiteral("RC-28.") + name + QStringLiteral("H"));
+    connect(m_rc28Device, &Rc28Device::buttonReleased, this, [this](int button) {
+        if (button == Rc28Device::ButtonTx)
+            setRc28Ptt(false);
+    });
+    connect(m_radioState, &RadioState::transmitStateChanged, this, [this](bool transmitting) {
+        m_rc28PttActive = transmitting;
+        updateRc28Leds();
     });
 
     // Auto-start polling when enabled + detected. setLeds after startPolling is
@@ -159,7 +160,7 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     auto startRc28 = [this]() {
         if (RadioSettings::instance()->rc28Enabled() && m_rc28Device->isDetected() && !m_rc28Device->isPolling()) {
             m_rc28Device->startPolling();
-            m_rc28Device->setLeds(m_rc28Rocker == 2, m_rc28Rocker == 0, m_rc28Rocker == 1);
+            updateRc28Leds();
         }
     };
     connect(m_rc28Device, &Rc28Device::deviceConnected, this, startRc28);
@@ -168,7 +169,7 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
         if (enabled) {
             if (m_rc28Device->isDetected() && !m_rc28Device->isPolling()) {
                 m_rc28Device->startPolling();
-                m_rc28Device->setLeds(m_rc28Rocker == 2, m_rc28Rocker == 0, m_rc28Rocker == 1);
+                updateRc28Leds();
             }
         } else {
             m_rc28Device->stopPolling();
@@ -352,6 +353,26 @@ void HardwareController::cycleTuningTarget(int &rocker, const QString &deviceNam
     if (rc28)
         rc28->setLeds(rocker == 2, rocker == 0, rocker == 1);
     emit hardwareNotice(QStringLiteral("%1: %2").arg(deviceName, tuningTargetLabel(rocker)));
+}
+
+void HardwareController::selectRc28TuningTarget(int rocker) {
+    m_rc28Rocker = rocker;
+    updateRc28Leds();
+    const QString target = (rocker == 2) ? QStringLiteral("Main (VFO A)") : QStringLiteral("Sub (VFO B)");
+    emit hardwareNotice(QStringLiteral("RC-28: %1").arg(target));
+}
+
+void HardwareController::updateRc28Leds() {
+    if (m_rc28Device && m_rc28Device->isDetected())
+        m_rc28Device->setLeds(m_rc28Rocker == 2, m_rc28Rocker == 0, m_rc28PttActive);
+}
+
+void HardwareController::setRc28Ptt(bool active) {
+    if (active && !m_connectionController->isConnected())
+        return;
+    m_rc28PttActive = active;
+    updateRc28Leds();
+    emit pttRequested(active);
 }
 
 // =============================================================================

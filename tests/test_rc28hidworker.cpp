@@ -35,7 +35,7 @@ void TestRc28HidWorker::encoder_clockwise() {
     makeFrame(buf, 1, 0x02, Rc28HidWorker::BTN_NONE);
     auto ev = Rc28HidWorker::decodeReport(buf, 64);
     QVERIFY(ev.emitEncoder);
-    QCOMPARE(ev.encoderTicks, 1);
+    QCOMPARE(ev.encoderTicks, -1);
     QCOMPARE(ev.buttonDown, 0);
 }
 
@@ -44,21 +44,21 @@ void TestRc28HidWorker::encoder_counterClockwise() {
     makeFrame(buf, 2, 0x01, Rc28HidWorker::BTN_NONE);
     auto ev = Rc28HidWorker::decodeReport(buf, 64);
     QVERIFY(ev.emitEncoder);
-    QCOMPARE(ev.encoderTicks, -2);
+    QCOMPARE(ev.encoderTicks, 2);
 }
 
 void TestRc28HidWorker::encoder_speedScales() {
     unsigned char buf[64];
     makeFrame(buf, 4, 0x02, Rc28HidWorker::BTN_NONE);
     auto ev = Rc28HidWorker::decodeReport(buf, 64);
-    QCOMPARE(ev.encoderTicks, 4);
+    QCOMPARE(ev.encoderTicks, -4);
 }
 
 void TestRc28HidWorker::encoder_speedClamped() {
     unsigned char buf[64];
     makeFrame(buf, 9, 0x02, Rc28HidWorker::BTN_NONE); // out-of-range speed
     auto ev = Rc28HidWorker::decodeReport(buf, 64);
-    QCOMPARE(ev.encoderTicks, 4); // clamped to max accel
+    QCOMPARE(ev.encoderTicks, -4); // clamped to max accel
 }
 
 void TestRc28HidWorker::encoder_stoppedNoEvent() {

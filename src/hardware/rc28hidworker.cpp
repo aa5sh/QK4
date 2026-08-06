@@ -1,4 +1,5 @@
 #include "rc28hidworker.h"
+#include "hidapiguard.h"
 #include <QLoggingCategory>
 #include <QString>
 #include <QThread>
@@ -55,10 +56,10 @@ Rc28HidWorker::ReportEvents Rc28HidWorker::decodeReport(const unsigned char *buf
             speed = 4;
         if (dir == 0x01) {
             ev.emitEncoder = true;
-            ev.encoderTicks = -speed; // CCW / down
+            ev.encoderTicks = speed; // Physical RC-28 direction is opposite K-POD
         } else if (dir == 0x02) {
             ev.emitEncoder = true;
-            ev.encoderTicks = speed; // CW / up
+            ev.encoderTicks = -speed;
         }
         // dir == 0x00 → no movement
         return ev;
@@ -88,17 +89,18 @@ Rc28HidWorker::ReportEvents Rc28HidWorker::decodeReport(const unsigned char *buf
 Rc28HidWorker::Rc28HidWorker(QObject *parent) : QObject(parent) {}
 
 Rc28HidWorker::~Rc28HidWorker() {
+    HidApiGuard::Lock lock;
     if (m_hidDevice || m_hidInitialized) {
         releaseHandle();
         if (m_hidInitialized) {
-            hid_exit();
+            HidApiGuard::release();
             m_hidInitialized = false;
         }
     }
 }
 
 void Rc28HidWorker::start() {
-    if (hid_init() != 0) {
+    if (!HidApiGuard::acquire()) {
         qCWarning(hwRc28) << "hid_init failed";
         return;
     }
@@ -136,6 +138,7 @@ void Rc28HidWorker::start() {
 }
 
 void Rc28HidWorker::shutdown() {
+    HidApiGuard::Lock lock;
     if (m_pollTimer)
         m_pollTimer->stop();
 #ifndef Q_OS_LINUX
@@ -151,7 +154,7 @@ void Rc28HidWorker::shutdown() {
 #endif
     releaseHandle();
     if (m_hidInitialized) {
-        hid_exit();
+        HidApiGuard::release();
         m_hidInitialized = false;
     }
 }
@@ -161,6 +164,7 @@ void Rc28HidWorker::shutdown() {
 // =============================================================================
 
 bool Rc28HidWorker::openHandle() {
+    HidApiGuard::Lock lock;
     if (m_hidDevice)
         return true;
     if (m_info.devicePath.isEmpty()) {
@@ -185,6 +189,7 @@ bool Rc28HidWorker::openHandle() {
 }
 
 void Rc28HidWorker::releaseHandle() {
+    HidApiGuard::Lock lock;
     if (m_hidDevice) {
         hid_close(m_hidDevice);
         m_hidDevice = nullptr;
@@ -215,20 +220,21 @@ void Rc28HidWorker::closeDevice() {
 }
 
 void Rc28HidWorker::setLeds(bool f1, bool f2, bool tx) {
+    HidApiGuard::Lock lock;
     if (!m_hidDevice)
         return;
-    // Host LED command: report type 0x01, byte1 = bitfield. Bit assignment from
-    // the emulator: bit0 = TX, bit1 = F1, bit2 = F2 (a set bit lights the LED).
+    // Host LED command: report type 0x01, byte1 = active-low bitfield.
+    // bit0=TX, bit1=F1, bit2=F2, bit3=LINK. Keep LINK lit while connected.
     unsigned char cmd[RC28_REPORT_LEN];
     memset(cmd, 0, sizeof(cmd));
     cmd[0] = 0x01;
-    unsigned char bits = 0;
+    unsigned char bits = 0x07; // function LEDs off, LINK on
     if (tx)
-        bits |= 0x01;
+        bits &= ~0x01;
     if (f1)
-        bits |= 0x02;
+        bits &= ~0x02;
     if (f2)
-        bits |= 0x04;
+        bits &= ~0x04;
     cmd[1] = bits;
     hid_write(m_hidDevice, cmd, sizeof(cmd));
 }
@@ -238,6 +244,7 @@ void Rc28HidWorker::setLeds(bool f1, bool f2, bool tx) {
 // =============================================================================
 
 void Rc28HidWorker::onPollTimer() {
+    HidApiGuard::Lock lock;
     if (!m_hidDevice)
         return;
 
@@ -281,23 +288,30 @@ void Rc28HidWorker::onPollTimer() {
 }
 
 void Rc28HidWorker::updateButtonState(int buttonDown) {
-    if (buttonDown != 0 && m_pressedButton == 0) {
-        // New press.
+    if (buttonDown != m_pressedButton) {
+        // Release the previous control first. Real hardware can transition
+        // directly between button masks without an intervening idle report.
+        if (m_pressedButton != 0) {
+            const int released = m_pressedButton;
+            emit buttonReleased(released);
+            if (!m_holdEmitted)
+                emit buttonTapped(released);
+        }
+
         m_pressedButton = buttonDown;
         m_holdEmitted = false;
-        m_pressTimer.restart();
-    } else if (buttonDown != 0 && m_pressedButton != 0) {
+        if (buttonDown != 0) {
+            m_pressTimer.restart();
+            emit buttonPressed(buttonDown);
+        } else {
+            m_pressTimer.invalidate();
+        }
+    } else if (buttonDown != 0) {
         // Still held — hold emission handled by the timer check in onPollTimer.
         if (!m_holdEmitted && m_pressTimer.isValid() && m_pressTimer.elapsed() >= HOLD_THRESHOLD_MS) {
             emit buttonHeld(m_pressedButton);
             m_holdEmitted = true;
         }
-    } else if (buttonDown == 0 && m_pressedButton != 0) {
-        // Release. Emit a tap only if we never crossed the hold threshold.
-        if (!m_holdEmitted)
-            emit buttonTapped(m_pressedButton);
-        m_pressedButton = 0;
-        m_holdEmitted = false;
     }
 }
 
@@ -306,6 +320,7 @@ void Rc28HidWorker::updateButtonState(int buttonDown) {
 // =============================================================================
 
 void Rc28HidWorker::onPresenceTimer() {
+    HidApiGuard::Lock lock;
     hid_device_info *devs = hid_enumerate(VENDOR_ID, PRODUCT_ID);
     const bool now = (devs != nullptr);
     hid_free_enumeration(devs);
@@ -338,6 +353,7 @@ void Rc28HidWorker::onDeviceRemovedFromHotplug() {
 // =============================================================================
 
 Rc28DeviceInfo Rc28HidWorker::detectDeviceInfo() {
+    HidApiGuard::Lock lock;
     Rc28DeviceInfo info;
 
     hid_device_info *devs = hid_enumerate(VENDOR_ID, PRODUCT_ID);

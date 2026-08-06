@@ -349,6 +349,15 @@ void MainWindow::setupHardwareController() {
         }
     });
 
+    // RC-28 TRANSMIT is momentary PTT. Audio packets key the K4; the
+    // radio's transmit-state echo drives the physical red LED.
+    connect(m_hardwareController, &HardwareController::pttRequested, this, [this](bool active) {
+        if (m_connectionController->isConnected()) {
+            m_audioController->setPttActive(active);
+            m_bottomMenuBar->setPttActive(active);
+        }
+    });
+
     // Hardware-side errors (HaliKey port-open failures today) → notification overlay
     connect(m_hardwareController, &HardwareController::hardwareError, this, &MainWindow::onHardwareError);
 

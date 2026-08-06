@@ -67,6 +67,10 @@ signals:
     // rocker switch, so there is no physical indication otherwise.
     void hardwareNotice(const QString &message);
 
+    // RC-28 TRANSMIT button requests momentary TX while held. MainWindow
+    // owns the audio PTT gate, so it completes the request.
+    void pttRequested(bool active);
+
     // Hardware error (port open failure, MIDI subsystem error, etc.) → MainWindow
     // shows it on the notification overlay. Currently fed by HalikeyDevice's
     // connectionError signal; future device errors can route here too. Prefix the
@@ -87,6 +91,9 @@ private:
     // Emits hardwareNotice; if `rc28` is non-null its indicator LEDs are set.
     void cycleTuningTarget(int &rocker, const QString &deviceName, Rc28Device *rc28);
     static QString tuningTargetLabel(int rocker);
+    void selectRc28TuningTarget(int rocker);
+    void updateRc28Leds();
+    void setRc28Ptt(bool active);
 
 private:
     RadioState *m_radioState;
@@ -98,11 +105,11 @@ private:
     // KPOD+ USB keyer device (libusb, vendor-specific class)
     KpodPlusDevice *m_kpodPlusDevice;
 
-    // Icom RC-28 USB tuning knob (HID). No rocker — m_rc28Rocker tracks the
-    // software tuning target (2=VFO A, 0=VFO B, 1=RIT/XIT, matching the K-POD
-    // rocker encoding consumed by onKpodEncoderRotatedWithRocker).
+    // Icom RC-28 USB tuning knob (HID). F1/F2 select Main/Sub; the stored values
+    // match the K-POD rocker encoding consumed by the shared tuning dispatcher.
     Rc28Device *m_rc28Device = nullptr;
     int m_rc28Rocker = 2;
+    bool m_rc28PttActive = false;
 
     // FlexRadio FlexControl USB tuning knob (serial). Same software-target model.
     FlexControlDevice *m_flexControlDevice = nullptr;

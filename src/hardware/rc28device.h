@@ -24,9 +24,8 @@ struct Rc28DeviceInfo {
 //
 // The RC-28 is a Raw-HID device (VID 0x0C26, PID 0x001E) with a tuning
 // encoder and three buttons (F1, F2, TX) each backed by an LED. Unlike the
-// K-POD it has no rocker switch — the "which VFO does the knob tune" state is
-// synthesised in HardwareController and reflected back onto the three LEDs via
-// setLeds(). Button numbers: 1 = F1, 2 = F2, 3 = TX.
+// F1/F2 select Main/Sub tuning in HardwareController; their LEDs indicate that
+// selection, while the TX LED follows the radio's transmit state.
 class Rc28Device : public QObject {
     Q_OBJECT
 
@@ -58,6 +57,8 @@ signals:
     void encoderRotated(int ticks);
     void buttonTapped(int buttonNumber);
     void buttonHeld(int buttonNumber);
+    void buttonPressed(int buttonNumber);
+    void buttonReleased(int buttonNumber);
     void pollError(const QString &error);
 
 private:
