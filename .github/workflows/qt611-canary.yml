@@ -4,7 +4,7 @@ name: Qt 6.11 Canary
 # repository and the installer tooling can't fetch it yet. This monthly
 # canary attempts a real Qt 6.11 install on a Windows runner; the first
 # time it succeeds, it opens a tracking issue so the version pins in
-# build-windows.yml / build-development.yml / release.yml get bumped.
+# _build-windows.yml gets bumped (the single Windows Qt pin).
 # While the install keeps failing, the workflow exits green and silent.
 #
 # Delete this workflow after the Qt 6.11 bump lands.
@@ -20,6 +20,8 @@ permissions:
 
 jobs:
   probe:
+    # See codeql.yml — keeps scheduled runs from charging forkers.
+    if: github.repository == 'mikeg-dal/QK4'
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -63,11 +65,10 @@ jobs:
               '',
               'To bump Windows CI from Qt 6.10 to 6.11:',
               '1. Change `version: \'6.10.*\'` to `version: \'6.11.*\'` and drop the "6.11 pending" comment in:',
-              '   - `.github/workflows/build-windows.yml`',
-              '   - `.github/workflows/build-development.yml`',
+              '   - `.github/workflows/_build-windows.yml`',
               '   - `.github/workflows/release.yml`',
               '2. Consider the same bump for the CodeQL workflow (`codeql.yml`, Linux Qt).',
-              '3. Validate with a `build-development.yml` dispatch and inspect the Windows artifact.',
+              '3. Validate with a `build.yml` dispatch and inspect the Windows artifact.',
               '4. Delete `.github/workflows/qt611-canary.yml` — its job is done.',
             ].join('\n');
             const { data: issue } = await github.rest.issues.create({
