@@ -18,6 +18,7 @@ private slots:
     void button_aux2Double();
     void button_aux3Long();
     void button_bareMainKnob();
+    void ledCommands();
     void ignore_resetBanner();
     void ignore_empty();
     void ignore_badButton();
@@ -76,10 +77,19 @@ void TestFlexControlSerialWorker::button_bareMainKnob() {
     Event ev;
     QVERIFY(FlexControlSerialWorker::decodeToken("S", ev));
     QCOMPARE(ev.type, Event::Button);
-    QCOMPARE(ev.buttonNumber, 1);
+    QCOMPARE(ev.buttonNumber, 0);
     QCOMPARE(ev.pressType, 0);
     QVERIFY(FlexControlSerialWorker::decodeToken("L", ev));
+    QCOMPARE(ev.buttonNumber, 0);
     QCOMPARE(ev.pressType, 2);
+}
+
+void TestFlexControlSerialWorker::ledCommands() {
+    QCOMPARE(FlexControlSerialWorker::encodeLedCommand(false, false, false), QByteArray("I000;"));
+    QCOMPARE(FlexControlSerialWorker::encodeLedCommand(true, false, false), QByteArray("I100;"));
+    QCOMPARE(FlexControlSerialWorker::encodeLedCommand(false, true, false), QByteArray("I010;"));
+    QCOMPARE(FlexControlSerialWorker::encodeLedCommand(false, false, true), QByteArray("I001;"));
+    QCOMPARE(FlexControlSerialWorker::encodeLedCommand(true, true, true), QByteArray("I111;"));
 }
 
 void TestFlexControlSerialWorker::ignore_resetBanner() {

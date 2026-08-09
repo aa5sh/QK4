@@ -24,9 +24,10 @@ struct FlexControlDeviceInfo {
 //
 // The FlexControl is a USB CDC-ACM device (VID 0x2192, PID 0x0010) that appears
 // as a virtual serial port. It streams ASCII, ';'-terminated tokens: U/D (plus
-// optional multi-tick count) for the tuning knob, and X<n>{S,C,L} for its three
-// AUX buttons (short / double-click / long-hold). It has no rocker switch — the
-// "which VFO does the knob tune" state is synthesised in HardwareController.
+// optional multi-tick count) for the tuning knob, X<n>{S,C,L} for its three AUX
+// buttons, and bare S/C/L for the center-knob switch. It has no rocker switch —
+// the "which VFO does the knob tune" state is synthesised in HardwareController
+// and shown on the device's three software-controlled LEDs.
 //
 // pressType: 0 = short tap, 1 = double click, 2 = long hold.
 class FlexControlDevice : public QObject {
@@ -47,12 +48,14 @@ public:
     // Forwarded as queued invocations to the worker thread.
     bool startPolling();
     void stopPolling();
+    void setLeds(bool aux1, bool aux2, bool aux3);
 
 signals:
     void deviceConnected();
     void deviceDisconnected();
     void deviceInfoReady();
     void encoderRotated(int ticks);
+    // buttonNumber: 0=center knob, 1..3=AUX buttons.
     void buttonPressed(int buttonNumber, int pressType);
     void pollError(const QString &error);
 

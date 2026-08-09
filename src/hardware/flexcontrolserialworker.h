@@ -21,10 +21,11 @@ class QTimer;
 //   D02 .. D06   multiple detents counter-clockwise
 //   X1S/X1C/X1L  AUX button 1: short tap / double click / long hold
 //   X2*, X3*     AUX buttons 2 and 3
+//   S/C/L         center knob: short tap / double click / long hold
 //   F0304        emitted on device reset (ignored)
 //
-// Older single-button firmware sends bare S/C/L for the main knob press; those
-// are treated as AUX button 1.
+// Host-to-device LED commands are Ixyz;, where x/y/z select the three AUX
+// LEDs. For example, I100; lights only AUX1.
 //
 // The token decoder is pure and static for unit testing.
 class FlexControlSerialWorker : public QObject {
@@ -40,13 +41,14 @@ public:
     struct Event {
         enum Type { None, Encoder, Button } type = None;
         int ticks = 0;       // Encoder: signed detents
-        int buttonNumber = 0; // Button: 1..3
+        int buttonNumber = 0; // Button: 0=center knob, 1..3=AUX buttons
         int pressType = 0;    // Button: 0=short 1=double 2=long
     };
 
     // Decode a single ';'-stripped token. Returns true and fills `out` if the
     // token maps to an event; false for empty/unknown/reset tokens.
     static bool decodeToken(const QByteArray &token, Event &out);
+    static QByteArray encodeLedCommand(bool aux1, bool aux2, bool aux3);
 
 public slots:
     void start();
@@ -54,6 +56,7 @@ public slots:
 
     void openDevice();
     void closeDevice();
+    void setLeds(bool aux1, bool aux2, bool aux3);
 
 signals:
     void deviceInfoReady(FlexControlDeviceInfo info);

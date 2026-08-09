@@ -9,6 +9,7 @@
 #include "hardware/flexcontroldevice.h"
 #include "models/radiostate.h"
 #include "settings/radiosettings.h"
+#include "utils/macroids.h"
 #include "utils/radioutils.h"
 #include <QLoggingCategory>
 
@@ -177,9 +178,9 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     });
 
     // =========================================================================
-    // FlexRadio FlexControl USB tuning knob (serial CDC). No rocker: AUX1
-    // short-tap cycles the software tuning target; every other button action is
-    // a macro. Same K-POD tuning dispatch.
+    // FlexRadio FlexControl USB tuning knob (serial CDC). AUX1/2/3 directly
+    // select VFO A, VFO B, or RIT/XIT and the three LEDs show that target. The
+    // center-knob switch is a distinct fourth control used for tuning rate.
     // =========================================================================
     m_flexControlDevice = new FlexControlDevice(this);
 
@@ -189,21 +190,15 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
         onKpodEncoderRotatedWithRocker(ticks, m_flexRocker);
     });
     connect(m_flexControlDevice, &FlexControlDevice::pollError, this, &HardwareController::onKpodPollError);
-    connect(m_flexControlDevice, &FlexControlDevice::buttonPressed, this, [this](int button, int pressType) {
-        if (button == 1 && pressType == FlexControlDevice::PressShort) {
-            cycleTuningTarget(m_flexRocker, QStringLiteral("FlexControl"), nullptr);
-            return;
-        }
-        QString type = (pressType == FlexControlDevice::PressShort)    ? QStringLiteral("S")
-                       : (pressType == FlexControlDevice::PressDouble) ? QStringLiteral("C")
-                                                                       : QStringLiteral("L");
-        emit macroRequested(QStringLiteral("FlexControl.") + QString::number(button) + type);
-    });
+    connect(m_flexControlDevice, &FlexControlDevice::buttonPressed, this, &HardwareController::handleFlexControlButton);
 
     auto startFlex = [this]() {
         if (RadioSettings::instance()->flexControlEnabled() && m_flexControlDevice->isDetected() &&
             !m_flexControlDevice->isPolling()) {
             m_flexControlDevice->startPolling();
+            updateFlexControlLeds();
+        } else if (RadioSettings::instance()->flexControlEnabled() && m_flexControlDevice->isDetected()) {
+            updateFlexControlLeds();
         }
     };
     connect(m_flexControlDevice, &FlexControlDevice::deviceConnected, this, startFlex);
@@ -212,7 +207,9 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
         if (enabled) {
             if (m_flexControlDevice->isDetected() && !m_flexControlDevice->isPolling())
                 m_flexControlDevice->startPolling();
+            updateFlexControlLeds();
         } else {
+            m_flexControlDevice->setLeds(false, false, false);
             m_flexControlDevice->stopPolling();
         }
     });
@@ -347,14 +344,6 @@ QString HardwareController::tuningTargetLabel(int rocker) {
     }
 }
 
-void HardwareController::cycleTuningTarget(int &rocker, const QString &deviceName, Rc28Device *rc28) {
-    // Cycle VFO A (2) → VFO B (0) → RIT/XIT (1) → VFO A (2).
-    rocker = (rocker == 2) ? 0 : (rocker == 0) ? 1 : 2;
-    if (rc28)
-        rc28->setLeds(rocker == 2, rocker == 0, rocker == 1);
-    emit hardwareNotice(QStringLiteral("%1: %2").arg(deviceName, tuningTargetLabel(rocker)));
-}
-
 void HardwareController::selectRc28TuningTarget(int rocker) {
     m_rc28Rocker = rocker;
     updateRc28Leds();
@@ -373,6 +362,101 @@ void HardwareController::setRc28Ptt(bool active) {
     m_rc28PttActive = active;
     updateRc28Leds();
     emit pttRequested(active);
+}
+
+void HardwareController::handleFlexControlButton(int button, int pressType) {
+    // The center-knob switch is button 0. Short cycles the fine tuning rates,
+    // double selects 1 kHz, and long remains a user-assignable macro.
+    if (button == 0) {
+        if (pressType == FlexControlDevice::PressShort)
+            setFlexControlTuningStep(-1);
+        else if (pressType == FlexControlDevice::PressDouble)
+            setFlexControlTuningStep(3);
+        else if (pressType == FlexControlDevice::PressLong)
+            emit macroRequested(MacroIds::FlexControlKnobL);
+        return;
+    }
+
+    if (pressType == FlexControlDevice::PressShort) {
+        if (button == 1)
+            selectFlexControlTuningTarget(2);
+        else if (button == 2)
+            selectFlexControlTuningTarget(0);
+        else if (button == 3)
+            selectFlexControlTuningTarget(1);
+        return;
+    }
+
+    if (!m_connectionController->isConnected())
+        return;
+
+    if (pressType == FlexControlDevice::PressDouble) {
+        if (button == 1)
+            m_connectionController->sendCAT(QStringLiteral("SW41;")); // A/B
+        else if (button == 2)
+            m_connectionController->sendCAT(QStringLiteral("SW145;")); // SPLIT
+        else if (button == 3)
+            m_connectionController->sendCAT(QStringLiteral("SW64;")); // CLR RIT/XIT
+    } else if (pressType == FlexControlDevice::PressLong) {
+        if (button == 1)
+            m_connectionController->sendCAT(QStringLiteral("SW63;")); // LOCK A
+        else if (button == 2)
+            m_connectionController->sendCAT(QStringLiteral("SW151;")); // LOCK B
+        else if (button == 3)
+            cycleFlexControlRitXit();
+    }
+}
+
+void HardwareController::selectFlexControlTuningTarget(int rocker) {
+    m_flexRocker = rocker;
+    if (rocker == 2 || rocker == 0)
+        m_flexLastVfoRocker = rocker;
+    updateFlexControlLeds();
+    emit hardwareNotice(QStringLiteral("FlexControl: %1").arg(tuningTargetLabel(rocker)));
+}
+
+void HardwareController::updateFlexControlLeds() {
+    if (m_flexControlDevice && m_flexControlDevice->isDetected())
+        m_flexControlDevice->setLeds(m_flexRocker == 2, m_flexRocker == 0, m_flexRocker == 1);
+}
+
+void HardwareController::setFlexControlTuningStep(int stepIndex) {
+    if (!m_connectionController->isConnected())
+        return;
+
+    const bool vfoB = (m_flexLastVfoRocker == 0);
+    if (stepIndex < 0) {
+        const int current = vfoB ? m_radioState->tuningStepB() : m_radioState->tuningStep();
+        stepIndex = (current >= 0 && current < 2) ? current + 1 : 0;
+    }
+
+    const QString command = QStringLiteral("%1%2;").arg(vfoB ? QStringLiteral("VT$") : QStringLiteral("VT"))
+                                .arg(stepIndex);
+    m_connectionController->sendCAT(command);
+    m_radioState->parseCATCommand(command);
+    emit hardwareNotice(QStringLiteral("FlexControl: VFO %1 step %2 Hz")
+                            .arg(vfoB ? QStringLiteral("B") : QStringLiteral("A"))
+                            .arg(RadioUtils::tuningStepToHz(stepIndex)));
+}
+
+void HardwareController::cycleFlexControlRitXit() {
+    const bool bSet = m_radioState->bSetEnabled();
+    const bool ritEnabled = bSet ? m_radioState->ritEnabledB() : m_radioState->ritEnabled();
+    const bool xitEnabled = m_radioState->xitEnabled();
+
+    if (xitEnabled) {
+        m_connectionController->sendCAT(QStringLiteral("SW74;"));
+        if (ritEnabled)
+            m_connectionController->sendCAT(QStringLiteral("SW54;"));
+        emit hardwareNotice(QStringLiteral("FlexControl: RIT/XIT off"));
+    } else if (ritEnabled) {
+        m_connectionController->sendCAT(QStringLiteral("SW54;"));
+        m_connectionController->sendCAT(QStringLiteral("SW74;"));
+        emit hardwareNotice(QStringLiteral("FlexControl: XIT"));
+    } else {
+        m_connectionController->sendCAT(QStringLiteral("SW54;"));
+        emit hardwareNotice(QStringLiteral("FlexControl: RIT"));
+    }
 }
 
 // =============================================================================

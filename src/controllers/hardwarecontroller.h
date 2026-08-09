@@ -63,8 +63,7 @@ signals:
 
     // Transient informational notice → MainWindow notification overlay. Used to
     // tell the user which VFO the RC-28 / FlexControl knob now tunes when its
-    // mode button cycles the (software) tuning target — these devices have no
-    // rocker switch, so there is no physical indication otherwise.
+    // software tuning target changes.
     void hardwareNotice(const QString &message);
 
     // RC-28 TRANSMIT button requests momentary TX while held. MainWindow
@@ -86,14 +85,15 @@ private slots:
 private:
     void onKpodEncoderRotatedWithRocker(int ticks, int rockerPosition);
 
-    // Advance a device's software tuning target (VFO A → VFO B → RIT/XIT →
-    // VFO A). Substitutes for the K-POD rocker on devices that lack one.
-    // Emits hardwareNotice; if `rc28` is non-null its indicator LEDs are set.
-    void cycleTuningTarget(int &rocker, const QString &deviceName, Rc28Device *rc28);
     static QString tuningTargetLabel(int rocker);
     void selectRc28TuningTarget(int rocker);
     void updateRc28Leds();
     void setRc28Ptt(bool active);
+    void handleFlexControlButton(int button, int pressType);
+    void selectFlexControlTuningTarget(int rocker);
+    void updateFlexControlLeds();
+    void setFlexControlTuningStep(int stepIndex);
+    void cycleFlexControlRitXit();
 
 private:
     RadioState *m_radioState;
@@ -114,6 +114,7 @@ private:
     // FlexRadio FlexControl USB tuning knob (serial). Same software-target model.
     FlexControlDevice *m_flexControlDevice = nullptr;
     int m_flexRocker = 2;
+    int m_flexLastVfoRocker = 2;
 
     // HaliKey CW paddle device
     HalikeyDevice *m_halikeyDevice;

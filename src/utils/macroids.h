@@ -54,8 +54,8 @@ const QString Rc28F2H = "RC-28.F2H";
 const QString Rc28TxT = "RC-28.TXT";
 const QString Rc28TxH = "RC-28.TXH";
 
-// FlexRadio FlexControl AUX buttons (S=short, C=double-click, L=long-hold).
-// AUX1 short-press is reserved as the tuning-target selector and is not a macro.
+// Legacy FlexControl AUX macro IDs are retained so existing settings files can
+// still be read, although the AUX gestures now have built-in hardware actions.
 const QString FlexControl1C = "FlexControl.1C";
 const QString FlexControl1L = "FlexControl.1L";
 const QString FlexControl2S = "FlexControl.2S";
@@ -64,6 +64,8 @@ const QString FlexControl2L = "FlexControl.2L";
 const QString FlexControl3S = "FlexControl.3S";
 const QString FlexControl3C = "FlexControl.3C";
 const QString FlexControl3L = "FlexControl.3L";
+// The center-knob long press remains user assignable.
+const QString FlexControlKnobL = "FlexControl.KL";
 
 // Keyboard Function Keys (F1-F12)
 const QString KbdF1 = "Keyboard-F1";

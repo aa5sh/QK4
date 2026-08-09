@@ -55,16 +55,25 @@ bool FlexControlSerialWorker::decodeToken(const QByteArray &token, Event &out) {
         return true;
     }
 
-    // Older single-button firmware: bare S / C / L for the main knob press.
+    // The switch built into the center knob reports bare S / C / L tokens. It
+    // is a fourth control, distinct from the three X-prefixed AUX buttons.
     if (token.size() == 1 && (c0 == 'S' || c0 == 'C' || c0 == 'L')) {
         out.type = Event::Button;
-        out.buttonNumber = 1;
+        out.buttonNumber = 0;
         out.pressType = (c0 == 'S') ? 0 : (c0 == 'C') ? 1 : 2;
         return true;
     }
 
     // Reset banner ("F0304") and anything else — ignore.
     return false;
+}
+
+QByteArray FlexControlSerialWorker::encodeLedCommand(bool aux1, bool aux2, bool aux3) {
+    QByteArray command("I000;");
+    command[1] = aux1 ? '1' : '0';
+    command[2] = aux2 ? '1' : '0';
+    command[3] = aux3 ? '1' : '0';
+    return command;
 }
 
 // =============================================================================
@@ -150,6 +159,15 @@ void FlexControlSerialWorker::closeDevice() {
     releaseHandle();
     if (wasOpen)
         emit deviceRemoved();
+}
+
+void FlexControlSerialWorker::setLeds(bool aux1, bool aux2, bool aux3) {
+    if (!m_port || !m_port->isOpen())
+        return;
+
+    const QByteArray command = encodeLedCommand(aux1, aux2, aux3);
+    if (m_port->write(command) != command.size())
+        emit pollError(QStringLiteral("Failed to update FlexControl LEDs"));
 }
 
 // =============================================================================

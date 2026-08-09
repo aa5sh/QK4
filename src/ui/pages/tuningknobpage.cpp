@@ -29,10 +29,10 @@ TuningKnobPage::TuningKnobPage(Rc28Device *rc28Device, FlexControlDevice *flexCo
 
     layout->addLayout(buildDeviceSection(QStringLiteral("FlexRadio FlexControl"), m_flex));
 
-    auto *help = new QLabel(QStringLiteral("These knobs have no rocker switch. Tap the RC-28 F1 button (or "
-                                           "short-press FlexControl AUX1) to cycle what the knob tunes: "
-                                           "VFO A → VFO B → RIT/XIT. Remaining buttons are assignable "
-                                           "as macros in the Macros dialog."),
+    auto *help = new QLabel(QStringLiteral("These knobs have no rocker switch. RC-28 F1 and F2 select "
+                                           "VFO A and VFO B. On FlexControl, AUX1, AUX2, and AUX3 directly "
+                                           "select VFO A, VFO B, and RIT/XIT; the matching LED shows the "
+                                           "selection. Press the center knob to change tuning rate."),
                             this);
     help->setStyleSheet(K4Styles::Dialog::helpText());
     help->setWordWrap(true);

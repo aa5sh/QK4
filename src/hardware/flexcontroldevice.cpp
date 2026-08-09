@@ -61,3 +61,8 @@ bool FlexControlDevice::startPolling() {
 void FlexControlDevice::stopPolling() {
     QMetaObject::invokeMethod(m_worker, "closeDevice", Qt::QueuedConnection);
 }
+
+void FlexControlDevice::setLeds(bool aux1, bool aux2, bool aux3) {
+    QMetaObject::invokeMethod(m_worker, "setLeds", Qt::QueuedConnection, Q_ARG(bool, aux1), Q_ARG(bool, aux2),
+                              Q_ARG(bool, aux3));
+}

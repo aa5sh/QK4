@@ -3,8 +3,8 @@
 QK4 can drive three USB tuning knobs: the Elecraft **K-POD** (the original,
 first-class device) and two third-party knobs added later — the **Icom RC-28**
 and the **FlexRadio FlexControl**. All three share the same job: turn the knob to
-tune, press buttons to fire macros. This document describes how the RC-28 and
-FlexControl behave in QK4 and, crucially, **how each differs from the K-POD**,
+tune and use nearby buttons for radio controls or macros. This document describes
+how the RC-28 and FlexControl behave in QK4 and, crucially, **how each differs from the K-POD**,
 because those differences drive every design choice in the code.
 
 Implementation lives in `src/hardware/` (`rc28device`, `rc28hidworker`,
@@ -115,8 +115,8 @@ hardware, tuning still works and the on-screen notice remains authoritative.)
 ## FlexRadio FlexControl
 
 The FlexControl is a CDC-ACM (virtual serial port) knob with **three AUX buttons
-(AUX1, AUX2, AUX3)**, each of which distinguishes **short / double-click /
-long-hold** in firmware.
+(AUX1, AUX2, AUX3)**, a separate switch in the center knob, and three AUX LEDs.
+Every button distinguishes **short / double-click / long-hold** in firmware.
 
 ### Transport & comms
 
@@ -128,7 +128,7 @@ long-hold** in firmware.
 | Dependency | `Qt6::SerialPort` (already in the build for HaliKey) | K-POD uses hidapi |
 | Hotplug | 2 s `QSerialPortInfo` presence poll (all platforms; no udev) | K-POD uses udev on Linux |
 
-### Token protocol (documented by FlexRadio)
+### Token protocol
 
 ```
 U            one detent clockwise           → +1 tick
@@ -138,44 +138,47 @@ D02 .. D06   fast counter-clockwise         → −N ticks
 X1S/X1C/X1L  AUX1: short / double / long
 X2S/X2C/X2L  AUX2
 X3S/X3C/X3L  AUX3
+S/C/L         center knob: short / double / long
 F0304        emitted on device reset        → ignored
 ```
 
-Older single-button firmware sends bare `S` / `C` / `L` for the main-knob press;
-QK4 treats those as AUX1. Unlike the RC-28, **tap classification is done by the
-device** — QK4 needs no timer.
+The host controls the AUX LEDs with `Ixyz;`, where each digit is `1` or `0` for
+AUX1, AUX2, and AUX3. For example, `I010;` lights only AUX2. Unlike the RC-28,
+**tap classification is done by the device** — QK4 needs no timer.
+
+The serial protocol was independently documented by AA6E from on-wire captures:
+[FlexControl for Linux](https://blog.aa6e.net/2015/01/flexcontrol-for-linux-hamr.html).
 
 ### Button assignments
 
-As with the RC-28, one press is spent on the rocker substitute:
+The AUX buttons provide direct, deterministic tuning-target selection plus
+related radio actions:
 
-| Button / press | Action | Macro ID |
-|---|---|---|
-| **AUX1 short** | Cycle tuning target (VFO A → VFO B → RIT/XIT) — *the rocker substitute* | *(reserved, not a macro)* |
-| AUX1 double / long | Macro | `FlexControl.1C` / `FlexControl.1L` |
-| AUX2 short / double / long | Macro | `FlexControl.2S` / `2C` / `2L` |
-| AUX3 short / double / long | Macro | `FlexControl.3S` / `3C` / `3L` |
+| Button | Short | Double-click | Long |
+|---|---|---|---|
+| **AUX1** | Select VFO A | A/B swap (`SW41;`) | Toggle VFO A lock (`SW63;`) |
+| **AUX2** | Select VFO B | Toggle Split (`SW145;`) | Toggle VFO B lock (`SW151;`) |
+| **AUX3** | Select RIT/XIT | Clear offset (`SW64;`) | Cycle RIT → XIT → Off |
+| **Center knob** | Cycle 1/10/100 Hz rate | Select 1 kHz rate | Macro (`FlexControl.KL`) |
 
-That yields **8 macro slots** — richer than the RC-28 thanks to the three-way
-press classification, still fewer than the K-POD's 16.
+The center-knob tuning-rate action applies to the most recently selected VFO,
+including while AUX3 has RIT/XIT selected.
 
 ### Tuning-target feedback
 
-The FlexControl has **no LEDs**, so there is no physical indication of the
-current target. QK4 relies solely on the brief on-screen notice
-("FlexControl: RIT/XIT") shown when AUX1 cycles it. This is the one place the
-FlexControl is strictly less informative than both the K-POD (physical rocker
-you can see) and the RC-28 (LEDs).
+QK4 lights exactly one AUX LED to show the active target: AUX1 for VFO A, AUX2
+for VFO B, and AUX3 for RIT/XIT. It also shows a brief on-screen notice whenever
+the selection changes.
 
 ### FlexControl vs. K-POD at a glance
 
 - **Serial CDC**, not HID — an entirely different transport and library.
 - **ASCII protocol** the device pushes, vs. binary polled reports.
-- **3 buttons vs. 8**, but each has **three press types** (short/double/long)
-  classified by the device, vs. the K-POD's hardware tap/hold.
-- **No rocker** → AUX1-short cycles the target; **no LEDs**, so feedback is the
-  on-screen notice only.
-- 8 macro slots (vs. 16).
+- **3 AUX buttons plus a center switch**, each with **three press types**
+  (short/double/long) classified by the device.
+- **No rocker** → AUX1/2/3 directly select the target, with LEDs and an
+  on-screen notice for feedback.
+- One macro slot (center-knob long); the AUX gestures have built-in actions.
 
 ---
 
@@ -190,11 +193,11 @@ machinery:
   BSET) behave identically to the K-POD.
 - **Rocker substitute via a software tuning target.** Neither device has a
   rocker, so the target (VFO A = `2`, VFO B = `0`, RIT/XIT = `1`, matching the
-  K-POD's rocker encoding) is held in `HardwareController` and cycled by a
-  designated button. Order is always **VFO A → VFO B → RIT/XIT → VFO A**.
-- **Macros** go through the same `MacroController` / Macros dialog as the K-POD;
-  each button/press maps to a distinct macro ID (`RC-28.*` / `FlexControl.*`)
-  configurable independently.
+  K-POD's rocker encoding) is held in `HardwareController`. RC-28 cycles it;
+  FlexControl selects it directly with AUX1/2/3.
+- **Macros** go through the same `MacroController` / Macros dialog as the K-POD.
+  RC-28 exposes its assignable gestures there; FlexControl exposes center-knob
+  long (`FlexControl.KL`).
 - **Independent enable toggles.** `rc28Enabled` and `flexControlEnabled` are
   separate settings (unlike the single `kpodEnabled` that gates both K-POD
   variants). All three can be enabled and used simultaneously.
@@ -212,21 +215,19 @@ machinery:
 | Transport | HID (polled) | HID (pushed) | Serial CDC (pushed) |
 | Library | hidapi | hidapi | Qt SerialPort |
 | Encoder | signed tick count | dir × accel (1–4) | ±1 or ±N tokens |
-| Tuning target select | physical rocker | F1 tap | AUX1 short |
-| Target feedback | physical switch | 3 LEDs + notice | on-screen notice only |
-| Buttons | 8 | 3 | 3 |
+| Tuning target select | physical rocker | F1 tap | AUX1/2/3 direct |
+| Target feedback | physical switch | 3 LEDs + notice | 3 LEDs + notice |
+| Buttons | 8 | 3 | 3 AUX + center knob |
 | Press types | tap / hold (hardware) | tap / hold (software timer) | short / double / long (device) |
-| Macro slots | 16 | 5 | 8 |
+| Macro slots | 16 | 5 | 1 |
 | Enable setting | `kpodEnabled` | `rc28Enabled` | `flexControlEnabled` |
-| Protocol source | vendor | reverse-engineered ⚠ | vendor-documented |
+| Protocol source | vendor | reverse-engineered ⚠ | reverse-engineered ⚠ |
 
 ## Known limitations
 
 - **RC-28 protocol is reverse-engineered.** Encoder/button decode is plausible;
   the LED bitfield and exact button codes need on-hardware verification. Tuning
   works regardless of LED correctness.
-- **FlexControl has no target feedback beyond the on-screen notice.** Hardware
-  has no LEDs to drive.
-- **Fewer buttons than the K-POD.** Spending one button on the tuning-target
-  cycle is the cost of not having a rocker; it leaves 5 (RC-28) / 8 (FlexControl)
-  macro slots.
+- **Fewer macro slots than the K-POD.** RC-28 leaves five gestures assignable;
+  FlexControl reserves its AUX gestures for cohesive tuning controls and leaves
+  center-knob long assignable.

@@ -15,9 +15,8 @@ class QVBoxLayout;
  *        Icom RC-28 (HID) and the FlexRadio FlexControl (serial) — and shows
  *        probe/descriptor info for whichever is connected.
  *
- * Both devices lack the K-Pod's rocker switch, so the knob's tuning target
- * (VFO A / VFO B / RIT-XIT) is cycled with a device button (RC-28 F1 tap,
- * FlexControl AUX1 short-press). The help text explains this to the user.
+ * Both devices lack the K-Pod's rocker switch, so their buttons select a
+ * software tuning target. The help text explains the device-specific mappings.
  */
 class TuningKnobPage : public QWidget {
     Q_OBJECT
