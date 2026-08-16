@@ -96,7 +96,14 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
+          # WHY blob:none alongside fetch-depth 0: git-cliff needs the full commit
+          # history to build release notes, but only the metadata — it never reads
+          # file contents. A plain full clone also drags down every binary ever
+          # committed to gh-pages (~1 GB and growing by a release each tag), just to
+          # read commit messages. A partial clone fetches commits and trees and
+          # lazily pulls only the blobs the working tree actually needs.
           fetch-depth: 0
+          filter: blob:none
 
       - name: Install git-cliff
         # Pinned so release-notes formatting can't change between releases
