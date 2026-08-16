@@ -8,7 +8,7 @@ run-name: >-
       && format('Release {0}', github.ref_name)
       || format('Rehearsal (publishes nothing) — {0}', github.ref_name) }}
 
-# Tagged release: builds all three platforms via the shared _build-*.yml reusable
+# Tagged release: builds all four platforms via the shared _build-*.yml reusable
 # workflows, publishes a GitHub Release, and updates the gh-pages download page.
 #
 # workflow_dispatch runs the SAME build and packaging path as a rehearsal, then
@@ -79,8 +79,16 @@ jobs:
       retention-days: 30
     secrets: inherit
 
+  flatpak:
+    needs: version
+    uses: ./.github/workflows/_build-flatpak.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+      retention-days: 30
+    secrets: inherit
+
   release:
-    needs: [version, macos, windows, raspberry-pi]
+    needs: [version, macos, windows, raspberry-pi, flatpak]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -114,6 +122,11 @@ jobs:
         with:
           name: ${{ needs.raspberry-pi.outputs.artifact-name }}
 
+      - name: Download Flatpak artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: ${{ needs.flatpak.outputs.artifact-name }}
+
       - name: Package Windows release asset
         # WHY here and not in the builder: actions/upload-artifact wraps every upload
         # in its own zip, so the builder ships a plain directory to keep the Actions
@@ -130,6 +143,7 @@ jobs:
             "QK4-${{ needs.version.outputs.version }}-macos.dmg" \
             "QK4-${{ needs.version.outputs.version }}-windows.zip" \
             "QK4-${{ needs.version.outputs.version }}-raspberry-pi-arm64.tar.gz" \
+            "QK4-${{ needs.version.outputs.version }}-linux-x86_64.flatpak" \
             > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
@@ -139,7 +153,7 @@ jobs:
           {
             echo "### Release rehearsal \`${{ needs.version.outputs.version }}\`"
             echo
-            echo "All three platforms built, notes generated, checksums computed."
+            echo "All four platforms built, notes generated, checksums computed."
             echo "**No GitHub Release created. gh-pages untouched.**"
             echo
             echo '```'
@@ -162,6 +176,7 @@ jobs:
             QK4-${{ needs.version.outputs.version }}-macos.dmg
             QK4-${{ needs.version.outputs.version }}-windows.zip
             QK4-${{ needs.version.outputs.version }}-raspberry-pi-arm64.tar.gz
+            QK4-${{ needs.version.outputs.version }}-linux-x86_64.flatpak
           retention-days: 7
 
       - name: Create Release
@@ -172,6 +187,7 @@ jobs:
             QK4-${{ needs.version.outputs.version }}-macos.dmg
             QK4-${{ needs.version.outputs.version }}-windows.zip
             QK4-${{ needs.version.outputs.version }}-raspberry-pi-arm64.tar.gz
+            QK4-${{ needs.version.outputs.version }}-linux-x86_64.flatpak
             SHA256SUMS.txt
           body_path: release_notes.md
           prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') }}
@@ -181,7 +197,7 @@ jobs:
     # rehearsable, and releases.json generation is the step most likely to break
     # the download page. Only "Commit and push" is gated, so a dispatch exercises
     # the whole path and publishes nothing.
-    needs: [version, macos, windows, raspberry-pi, release]
+    needs: [version, macos, windows, raspberry-pi, flatpak, release]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -217,6 +233,7 @@ jobs:
             "macos|QK4-${VERSION}-macos.dmg"
             "windows|QK4-${VERSION}-windows.zip"
             "raspberry-pi|QK4-${VERSION}-raspberry-pi-arm64.tar.gz"
+            "linux|QK4-${VERSION}-linux-x86_64.flatpak"
           )
 
           rm -rf downloads/
