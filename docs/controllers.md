@@ -76,7 +76,7 @@ Grouped by concern:
 - **AudioController** — audio engine, Opus codecs, PTT, audio thread
 - **SpectrumController** — panadapters, spectrum data routing, click-tune, passband overlays
 - **HardwareController** — constructs + owns KPOD, KPOD+, HaliKey, IambicKeyer, SidetoneGenerator + their threads; KPOD tuning-knob → CAT; device-config push; signal forwarding
-- **CwController** — CW keying orchestration across the HardwareController-owned devices: IambicKeyer↔CAT/sidetone wiring, HaliKey paddle/PTT handlers, V1.4 PTT demux, KPOD+ keyer-active gate. See `cwcontroller.h` for the threading-invariant doc.
+- **CwController** — CW keying orchestration across the HardwareController-owned devices: IambicKeyer↔CAT/sidetone wiring, the single HaliKey line handler (both levers passed to the keyer as one sample), V1.4 pedal demux, KPOD+ keyer-active gate. Paddle input is gated on CW/CW_R for both levers, and both are released on any mode change. See `cwcontroller.h` for the threading-invariant doc.
 - **DxClusterController** — DX cluster client (multi-instance; spot cache)
 
 ### Popup-family
