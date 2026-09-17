@@ -13,6 +13,7 @@ Last updated: architectural endgame refactor — RightSideController, MemoryButt
 |---|---|---|
 | "My KPA1500 amp isn't showing status" | KPA1500UiController | `src/controllers/kpa1500uicontroller.cpp` |
 | "The KPA1500 mini panel buttons don't work" | KPA1500UiController | same |
+| "KPA1500 ANT button doesn't reach sub-antennas / LCD shows the wrong antenna" | KPA1500UiController → KPA1500Client::selectNextAntenna / antennaConnector | `src/network/kpa1500client.cpp`, `src/network/kpa1500antennas.cpp` |
 | "Mode popup won't open / wrong VFO" | ModePopupController | `src/controllers/modepopupcontroller.cpp` |
 | "Mode label shows wrong text (AFSK, DATA-A, +)" | ModeLabelController | `src/controllers/modelabelcontroller.cpp` |
 | "VFO frequency display off by RIT offset" | VfoFrequencyController | `src/controllers/vfofrequencycontroller.cpp` |

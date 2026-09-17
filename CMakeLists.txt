@@ -115,6 +115,7 @@ set(SOURCES
     src/network/protocol.cpp
     src/network/networkmetrics.cpp
     src/network/kpa1500client.cpp
+    src/network/kpa1500antennas.cpp
     src/network/dxclusterclient.cpp
     src/network/catserver.cpp
     src/network/catframes.cpp
