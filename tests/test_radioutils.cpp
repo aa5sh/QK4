@@ -66,6 +66,22 @@ private slots:
     void testSpanDown_atThreshold() { QCOMPARE(RadioUtils::getNextSpanDown(140000), 139000); }
     void testSpanDown_justAboveThreshold() { QCOMPARE(RadioUtils::getNextSpanDown(141000), 137000); }
 
+    // spanAfterZoom
+    void testZoomIn_narrowsTheSpan() { QCOMPARE(RadioUtils::spanAfterZoom(100000, true), 99000); }
+    void testZoomOut_widensTheSpan() { QCOMPARE(RadioUtils::spanAfterZoom(100000, false), 101000); }
+    void testZoomIn_stopsAtMinimum() {
+        QCOMPARE(RadioUtils::spanAfterZoom(RadioUtils::SPAN_MIN, true), RadioUtils::SPAN_MIN);
+    }
+    void testZoomOut_stopsAtMaximum() {
+        QCOMPARE(RadioUtils::spanAfterZoom(RadioUtils::SPAN_MAX, false), RadioUtils::SPAN_MAX);
+    }
+    void testZoom_followsTheK4StepsAcrossTheTierThreshold() {
+        for (int span : {139000, 140000, 141000, 144000, 148000}) {
+            QCOMPARE(RadioUtils::spanAfterZoom(span, true), RadioUtils::getNextSpanDown(span));
+            QCOMPARE(RadioUtils::spanAfterZoom(span, false), RadioUtils::getNextSpanUp(span));
+        }
+    }
+
     // buildEqCommand
     void testBuildEqCommand_flat() {
         QVector<int> flat(8, 0);

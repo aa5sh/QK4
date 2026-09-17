@@ -51,6 +51,10 @@ int getNextSpanUp(int currentSpan) {
     return qMin(newSpan, SPAN_MAX);
 }
 
+int spanAfterZoom(int currentSpan, bool zoomIn) {
+    return zoomIn ? getNextSpanDown(currentSpan) : getNextSpanUp(currentSpan);
+}
+
 int getNextSpanDown(int currentSpan) {
     if (currentSpan <= SPAN_MIN)
         return SPAN_MIN;

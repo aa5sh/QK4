@@ -43,6 +43,10 @@ int getNextSpanUp(int currentSpan);
 /// Clamps at SPAN_MIN.
 int getNextSpanDown(int currentSpan);
 
+/// Span after one zoom step: zooming in narrows the span (getNextSpanDown), zooming out widens it
+/// (getNextSpanUp). The one place that decides which way a + or - span control goes.
+int spanAfterZoom(int currentSpan, bool zoomIn);
+
 /// Build an 8-band EQ CAT command string (e.g., "RE+00-02+04..." or "TE+00...").
 /// prefix is "RE" (RX) or "TE" (TX), bands must have exactly 8 values in [-16, +16].
 QString buildEqCommand(const QString &prefix, const QVector<int> &bands);
