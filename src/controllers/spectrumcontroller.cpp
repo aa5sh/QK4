@@ -140,12 +140,10 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
     m_zoomOutBtn = new QPushButton("-", m_panadapterA);
     m_zoomOutBtn->setStyleSheet(btnStyle);
     m_zoomOutBtn->setFixedSize(K4Styles::Dimensions::ButtonHeightSmall, K4Styles::Dimensions::ButtonHeightMini);
-    m_zoomOutBtn->setToolTip(QStringLiteral("Zoom out (wider span)"));
 
     m_zoomInBtn = new QPushButton("+", m_panadapterA);
     m_zoomInBtn->setStyleSheet(btnStyle);
     m_zoomInBtn->setFixedSize(K4Styles::Dimensions::ButtonHeightSmall, K4Styles::Dimensions::ButtonHeightMini);
-    m_zoomInBtn->setToolTip(QStringLiteral("Zoom in (narrower span)"));
 
     m_centerBtn = new QPushButton("C", m_panadapterA);
     m_centerBtn->setStyleSheet(btnStyle);
@@ -155,12 +153,10 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
     m_zoomOutBtnB = new QPushButton("-", m_panadapterB);
     m_zoomOutBtnB->setStyleSheet(btnStyle);
     m_zoomOutBtnB->setFixedSize(K4Styles::Dimensions::ButtonHeightSmall, K4Styles::Dimensions::ButtonHeightMini);
-    m_zoomOutBtnB->setToolTip(QStringLiteral("Zoom out (wider span)"));
 
     m_zoomInBtnB = new QPushButton("+", m_panadapterB);
     m_zoomInBtnB->setStyleSheet(btnStyle);
     m_zoomInBtnB->setFixedSize(K4Styles::Dimensions::ButtonHeightSmall, K4Styles::Dimensions::ButtonHeightMini);
-    m_zoomInBtnB->setToolTip(QStringLiteral("Zoom in (narrower span)"));
 
     m_centerBtnB = new QPushButton("C", m_panadapterB);
     m_centerBtnB->setStyleSheet(btnStyle);
