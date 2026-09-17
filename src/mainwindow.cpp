@@ -159,6 +159,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
     // pure-forwarding thin shell and has been deleted.
     m_filterAWidget->observe(m_radioState, FilterIndicatorWidget::Vfo::A);
     m_filterBWidget->observe(m_radioState, FilterIndicatorWidget::Vfo::B);
+    connect(m_filterAWidget, &FilterIndicatorWidget::clicked, m_rightSideController,
+            [this]() { m_rightSideController->cycleFilterPreset(false); });
+    connect(m_filterBWidget, &FilterIndicatorWidget::clicked, m_rightSideController,
+            [this]() { m_rightSideController->cycleFilterPreset(true); });
 
     m_ritXitController = new RitXitController(m_radioState, m_connectionController, m_spectrumController, m_ritLabel,
                                               m_xitLabel, m_ritXitValueLabel, this);

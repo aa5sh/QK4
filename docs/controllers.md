@@ -30,6 +30,7 @@ Last updated: architectural endgame refactor — RightSideController, MemoryButt
 | "Antenna label text (TX / RX Main / RX Sub) wrong" | AntennaDisplayController | `src/controllers/antennadisplaycontroller.cpp` |
 | "Antenna config popup (ANT CFG button) not working" | AntennaConfigController | `src/controllers/antennaconfigcontroller.cpp` |
 | "Filter indicator shape / position wrong" | FilterIndicatorWidget (Direct Observation — no controller) | `src/ui/widgets/filterindicatorwidget.cpp` |
+| "Clicking FIL1/2/3 under a VFO doesn't change the filter preset" | RightSideController::cycleFilterPreset | `src/controllers/rightsidecontroller.cpp` |
 | "Side panel knob values (BW/SHFT, power, mic gain) wrong" | SideControlDisplayController | `src/controllers/sidecontroldisplaycontroller.cpp` |
 | "Side panel shows CW knobs (WPM/PITCH) instead of voice (MIC/CMP) or vice versa" | SideControlDisplayController | same |
 | "Side panel scroll wheels (WPM/Power/BW/HI/LO/RFGain/etc.) wrong" | SideControlScrollController | `src/controllers/sidecontrolscrollcontroller.cpp` |

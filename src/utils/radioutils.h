@@ -47,6 +47,10 @@ int getNextSpanDown(int currentSpan);
 /// (getNextSpanUp). The one place that decides which way a + or - span control goes.
 int spanAfterZoom(int currentSpan, bool zoomIn);
 
+/// Next K4 filter preset when cycling like the front panel: 1 -> 3 -> 2 -> 1.
+/// Returns -1 for anything outside 1-3 (preset not known yet).
+int nextFilterPreset(int currentPreset);
+
 /// Build an 8-band EQ CAT command string (e.g., "RE+00-02+04..." or "TE+00...").
 /// prefix is "RE" (RX) or "TE" (TX), bands must have exactly 8 values in [-16, +16].
 QString buildEqCommand(const QString &prefix, const QVector<int> &bands);

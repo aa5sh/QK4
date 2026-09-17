@@ -82,6 +82,24 @@ private slots:
         }
     }
 
+    // nextFilterPreset
+    void testFilterPreset_1GoesTo3() { QCOMPARE(RadioUtils::nextFilterPreset(1), 3); }
+    void testFilterPreset_3GoesTo2() { QCOMPARE(RadioUtils::nextFilterPreset(3), 2); }
+    void testFilterPreset_2GoesTo1() { QCOMPARE(RadioUtils::nextFilterPreset(2), 1); }
+    void testFilterPreset_threeClicksComeBackToTheStart() {
+        for (int start = 1; start <= 3; ++start) {
+            int preset = start;
+            for (int click = 0; click < 3; ++click)
+                preset = RadioUtils::nextFilterPreset(preset);
+            QCOMPARE(preset, start);
+        }
+    }
+    void testFilterPreset_unknownHasNoNext() {
+        QCOMPARE(RadioUtils::nextFilterPreset(-1), -1);
+        QCOMPARE(RadioUtils::nextFilterPreset(0), -1);
+        QCOMPARE(RadioUtils::nextFilterPreset(4), -1);
+    }
+
     // buildEqCommand
     void testBuildEqCommand_flat() {
         QVector<int> flat(8, 0);

@@ -55,6 +55,19 @@ int spanAfterZoom(int currentSpan, bool zoomIn) {
     return zoomIn ? getNextSpanDown(currentSpan) : getNextSpanUp(currentSpan);
 }
 
+int nextFilterPreset(int currentPreset) {
+    switch (currentPreset) {
+    case 1:
+        return 3;
+    case 3:
+        return 2;
+    case 2:
+        return 1;
+    default:
+        return -1;
+    }
+}
+
 int getNextSpanDown(int currentSpan) {
     if (currentSpan <= SPAN_MIN)
         return SPAN_MIN;

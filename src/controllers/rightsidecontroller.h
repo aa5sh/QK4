@@ -26,6 +26,8 @@ class QWidget;
 //   - RATE cycling (RATE left-click) uses VT vs VT$ based on bSet state
 //   - KHZ jump (RATE right-click) uses VT3; vs VT$3; based on bSet state
 //   - FREQ ENT is re-emitted as frequencyEntryRequested; VfoFrequencyController picks the VFO
+//
+// Also owns cycleFilterPreset, driven by clicks on the FIL1/2/3 indicators under each VFO.
 class RightSideController : public QObject {
     Q_OBJECT
 
@@ -34,6 +36,10 @@ public:
                         ModePopupController *modePopup, FeatureMenuController *featureMenu,
                         MacroController *macroController, QWidget *featureAnchor, QObject *parent = nullptr);
     ~RightSideController() override;
+
+    // Step one VFO's filter preset 1 -> 3 -> 2 -> 1 with FP / FP$. Unlike the FIL button (SW33), this
+    // names the VFO explicitly, so it never depends on which VFO the radio considers selected.
+    void cycleFilterPreset(bool vfoB);
 
 signals:
     // FREQ ENT pressed. MainWindow routes this to VfoFrequencyController, which is constructed after

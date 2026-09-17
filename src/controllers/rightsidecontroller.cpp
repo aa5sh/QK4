@@ -9,6 +9,7 @@
 #include "ui/widgets/featuremenubar.h"
 #include "ui/widgets/rightsidepanel.h"
 #include "utils/macroids.h"
+#include "utils/radioutils.h"
 
 #include <QString>
 
@@ -114,4 +115,15 @@ RightSideController::RightSideController(RadioState *radioState, ConnectionContr
 
 RightSideController::~RightSideController() {
     disconnect(this);
+}
+
+void RightSideController::cycleFilterPreset(bool vfoB) {
+    const int current = vfoB ? m_radioState->filterPositionB() : m_radioState->filterPosition();
+    const int next = RadioUtils::nextFilterPreset(current);
+    if (next < 0 || !m_connection->isConnected())
+        return;
+    const QString cmd = QString("%1%2;").arg(vfoB ? "FP$" : "FP").arg(next);
+    m_connection->sendCAT(cmd);
+    // Optimistic, like RATE: the indicator changes now rather than on the radio's echo.
+    m_radioState->parseCATCommand(cmd);
 }
