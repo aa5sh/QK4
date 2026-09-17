@@ -138,6 +138,15 @@ target_include_directories(test_bandplan PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_bandplan Qt6::Core Qt6::Gui Qt6::Test)
 add_test(NAME BandPlanTests COMMAND test_bandplan)
 
+# Band-plan strip layout: blocks, tag, sticky labels, marker collisions (QColor via bandplan.cpp)
+add_executable(test_bandplanstrip test_bandplanstrip.cpp
+    ${CMAKE_SOURCE_DIR}/src/dsp/bandplanstrip.cpp
+    ${CMAKE_SOURCE_DIR}/src/utils/bandplan.cpp
+)
+target_include_directories(test_bandplanstrip PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_bandplanstrip Qt6::Core Qt6::Gui Qt6::Test)
+add_test(NAME BandPlanStripTests COMMAND test_bandplanstrip)
+
 # MenuModel parsing + label resolution tests
 add_executable(test_menumodel test_menumodel.cpp
     ${CMAKE_SOURCE_DIR}/src/models/menumodel.cpp
