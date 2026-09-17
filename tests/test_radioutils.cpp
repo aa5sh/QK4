@@ -15,6 +15,22 @@ private slots:
     void testTuningStep_outOfRange_negative() { QCOMPARE(RadioUtils::tuningStepToHz(-1), 1000); }
     void testTuningStep_outOfRange_high() { QCOMPARE(RadioUtils::tuningStepToHz(6), 1000); }
 
+    // tuningStepForDigit
+    void testDigitStep_1HzTo10kHz() {
+        for (int digit = 0; digit <= 4; ++digit)
+            QCOMPARE(RadioUtils::tuningStepForDigit(digit), digit);
+    }
+    void testDigitStep_eachDigitMatchesItsStepSize() {
+        int hz = 1;
+        for (int digit = 0; digit <= 4; ++digit, hz *= 10)
+            QCOMPARE(RadioUtils::tuningStepToHz(RadioUtils::tuningStepForDigit(digit)), hz);
+    }
+    void testDigitStep_100kHzAndAboveHaveNoStep() {
+        for (int digit = 5; digit <= 9; ++digit)
+            QCOMPARE(RadioUtils::tuningStepForDigit(digit), -1);
+    }
+    void testDigitStep_negativeHasNoStep() { QCOMPARE(RadioUtils::tuningStepForDigit(-1), -1); }
+
     // getBandFromFrequency
     void testBand_160m() { QCOMPARE(RadioUtils::getBandFromFrequency(1900000), 0); }
     void testBand_80m() { QCOMPARE(RadioUtils::getBandFromFrequency(3573000), 1); }

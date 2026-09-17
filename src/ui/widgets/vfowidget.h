@@ -89,6 +89,7 @@ signals:
     void miniPanClicked();                            // User clicked mini-pan → show normal view
     void frequencyEntered(const QString &freqString); // User entered new frequency
     void frequencyScrolled(int steps);                // User scrolled wheel over frequency
+    void tuningDigitClicked(int digitFromRight);      // User clicked a digit to make it the tuning rate
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;

@@ -34,6 +34,7 @@ Last updated: architectural endgame refactor — RightSideController, MemoryButt
 | "Side panel shows CW knobs (WPM/PITCH) instead of voice (MIC/CMP) or vice versa" | SideControlDisplayController | same |
 | "Side panel scroll wheels (WPM/Power/BW/HI/LO/RFGain/etc.) wrong" | SideControlScrollController | `src/controllers/sidecontrolscrollcontroller.cpp` |
 | "Right side panel button (PRE/NB/NR/NTCH/FIL/AB/REV/SPOT/MODE/PF1-4/RATE/LOCK/SUB) wrong" | RightSideController | `src/controllers/rightsidecontroller.cpp` |
+| "Clicking a frequency digit doesn't change the tuning rate (underline)" | VfoFrequencyController::setTuningRateFromDigit | `src/controllers/vfofrequencycontroller.cpp` |
 | "FREQ ENT doesn't open frequency entry / opens it on the wrong VFO" | RightSideController (frequencyEntryRequested) → VfoFrequencyController::toggleFrequencyEntry | `src/controllers/vfofrequencycontroller.cpp` |
 | "Memory buttons M1-M4 / REC / STORE / RCL left/right click wrong" | MemoryButtonsController | `src/controllers/memorybuttonscontroller.cpp` |
 | "B-SET label visibility wrong (still showing SPLIT when B-SET on)" | VfoRowIndicatorController | `src/controllers/vforowindicatorcontroller.cpp` |

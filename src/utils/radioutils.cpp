@@ -11,6 +11,10 @@ int tuningStepToHz(int step) {
     return (step >= 0 && step <= 5) ? table[step] : 1000;
 }
 
+int tuningStepForDigit(int digitFromRight) {
+    return (digitFromRight >= 0 && digitFromRight <= 4) ? digitFromRight : -1;
+}
+
 int getBandFromFrequency(quint64 freq) {
     if (freq >= 1800000 && freq <= 2000000)
         return 0; // 160m

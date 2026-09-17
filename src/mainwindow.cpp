@@ -136,7 +136,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
 
     m_modeLabelController = new ModeLabelController(m_radioState, m_modeALabel, m_modeBLabel, this);
 
-    m_vfoFrequencyController = new VfoFrequencyController(m_radioState, m_vfoA, m_vfoB, this);
+    m_vfoFrequencyController = new VfoFrequencyController(m_radioState, m_connectionController, m_vfoA, m_vfoB, this);
     connect(m_rightSideController, &RightSideController::frequencyEntryRequested, m_vfoFrequencyController,
             &VfoFrequencyController::toggleFrequencyEntry);
 
