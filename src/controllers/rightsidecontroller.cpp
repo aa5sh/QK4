@@ -91,6 +91,7 @@ RightSideController::RightSideController(RadioState *radioState, ConnectionContr
     // ---------------------------------------------------------------------
     connect(m_panel, &RightSidePanel::subClicked, this, [this]() { m_connection->sendCAT("SW83;"); });
     connect(m_panel, &RightSidePanel::diversityClicked, this, [this]() { m_connection->sendCAT("SW152;"); });
+    connect(m_panel, &RightSidePanel::freqEntClicked, this, &RightSideController::frequencyEntryRequested);
     connect(m_panel, &RightSidePanel::rateClicked, this, [this]() {
         // Cycle fine rates: 1 Hz → 10 Hz → 100 Hz → 1 Hz
         const bool bSet = m_radioState->bSetEnabled();

@@ -60,6 +60,11 @@ public:
     // Check if currently in edit mode
     bool isEditing() const;
 
+    // Open direct frequency entry with the cursor on the leftmost digit, or back out of it without
+    // sending. Driven by the FREQ ENT button.
+    void beginEntry();
+    void cancelEntry();
+
 signals:
     // Emitted when user presses Enter to confirm frequency entry
     // digits is the frequency as plain digits (e.g., "7024980")

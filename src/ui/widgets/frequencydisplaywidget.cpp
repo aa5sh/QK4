@@ -67,6 +67,15 @@ bool FrequencyDisplayWidget::isEditing() const {
     return m_cursorPosition >= 0;
 }
 
+void FrequencyDisplayWidget::beginEntry() {
+    if (m_cursorPosition < 0)
+        enterEditMode(0);
+}
+
+void FrequencyDisplayWidget::cancelEntry() {
+    exitEditMode(false);
+}
+
 void FrequencyDisplayWidget::parseFrequency(const QString &freq) {
     // Remove dots and any non-digit characters
     QString digits;

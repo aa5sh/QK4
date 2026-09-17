@@ -32,6 +32,10 @@ public:
     void refreshVfoA(); // recompute VFO A only
     void refreshVfoB(); // recompute VFO B only
 
+    // FREQ ENT: cancel an entry already open on either VFO, otherwise open one on VFO A, or on VFO B
+    // when B SET is engaged.
+    void toggleFrequencyEntry();
+
 private slots:
     void onFrequencyChanged(quint64 freq);
     void onFrequencyBChanged(quint64 freq);

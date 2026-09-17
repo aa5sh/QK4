@@ -80,6 +80,10 @@ public:
     // Check if frequency entry is active (in edit mode)
     bool isFrequencyEntryActive() const;
 
+    // Open or cancel direct frequency entry on this VFO's display.
+    void beginFrequencyEntry();
+    void cancelFrequencyEntry();
+
 signals:
     void normalContentClicked();                      // User clicked normal view → show mini-pan
     void miniPanClicked();                            // User clicked mini-pan → show normal view

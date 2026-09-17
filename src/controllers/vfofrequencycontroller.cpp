@@ -52,6 +52,16 @@ void VfoFrequencyController::refreshVfoB() {
     onFrequencyBChanged(m_radioState->vfoB());
 }
 
+void VfoFrequencyController::toggleFrequencyEntry() {
+    for (VFOWidget *vfo : {m_vfoA, m_vfoB}) {
+        if (vfo->isFrequencyEntryActive()) {
+            vfo->cancelFrequencyEntry();
+            return;
+        }
+    }
+    (m_radioState->bSetEnabled() ? m_vfoB : m_vfoA)->beginFrequencyEntry();
+}
+
 void VfoFrequencyController::onFrequencyChanged(quint64 freq) {
     // WHY: the shown frequency is the *dial* plus whichever offset is
     // currently active. When transmitting with XIT (no split), VFO A is

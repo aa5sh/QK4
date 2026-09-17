@@ -405,3 +405,11 @@ void VFOWidget::setTxMeterQrp(bool isQrp) {
 bool VFOWidget::isFrequencyEntryActive() const {
     return m_frequencyDisplay && m_frequencyDisplay->isEditing();
 }
+
+void VFOWidget::beginFrequencyEntry() {
+    m_frequencyDisplay->beginEntry();
+}
+
+void VFOWidget::cancelFrequencyEntry() {
+    m_frequencyDisplay->cancelEntry();
+}
