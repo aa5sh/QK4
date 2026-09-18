@@ -47,4 +47,3 @@ Message parseMessage(const QString &text);
 } // namespace Ft8
 Q_DECLARE_METATYPE(Ft8::Decode)
 Q_DECLARE_METATYPE(QVector<Ft8::Decode>)
-

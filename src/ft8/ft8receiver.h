@@ -36,4 +36,3 @@ private:
     bool m_earlyDecoded = false;
     QVector<float> m_block;
 };
-

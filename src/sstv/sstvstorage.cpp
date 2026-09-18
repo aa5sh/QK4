@@ -18,13 +18,13 @@ void setError(QString *error, const QString &message) {
     if (error)
         *error = message;
 }
-}
+} // namespace
 
 SstvStorage::SstvStorage(const QString &rootPath)
-    : m_rootPath(rootPath.isEmpty()
-                     ? QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation))
-                           .filePath(QStringLiteral("sstv"))
-                     : QDir::cleanPath(rootPath)) {}
+    : m_rootPath(
+          rootPath.isEmpty()
+              ? QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)).filePath(QStringLiteral("sstv"))
+              : QDir::cleanPath(rootPath)) {}
 
 bool SstvStorage::applyRetentionLimit(int limit, QString *error) {
     m_retentionLimit = limit;
@@ -49,8 +49,7 @@ QString SstvStorage::templatePath(const QString &name) const {
 }
 
 QString SstvStorage::templateImagePath(const QString &name) const {
-    const QByteArray digest = QCryptographicHash::hash(name.trimmed().toUtf8(),
-                                                        QCryptographicHash::Sha256).toHex();
+    const QByteArray digest = QCryptographicHash::hash(name.trimmed().toUtf8(), QCryptographicHash::Sha256).toHex();
     return QDir(templatesPath()).filePath(QString::fromLatin1(digest) + QStringLiteral(".png"));
 }
 
@@ -59,8 +58,8 @@ QString SstvStorage::imageTemplatesPath() const {
 }
 
 QString SstvStorage::imageTemplatePath(const QString &name) const {
-    const QByteArray digest = QCryptographicHash::hash(name.trimmed().toCaseFolded().toUtf8(),
-                                                        QCryptographicHash::Sha256).toHex();
+    const QByteArray digest =
+        QCryptographicHash::hash(name.trimmed().toCaseFolded().toUtf8(), QCryptographicHash::Sha256).toHex();
     return QDir(imageTemplatesPath()).filePath(QString::fromLatin1(digest));
 }
 
@@ -149,9 +148,10 @@ SstvRxRecord SstvStorage::recordFromJson(const QJsonObject &object, const QStrin
     SstvRxRecord record;
     record.id = object.value(QStringLiteral("id")).toString();
     record.metadataPath = metadataPath;
-    record.imagePath = QDir(QFileInfo(metadataPath).absolutePath())
-                           .filePath(object.value(QStringLiteral("imageFile")).toString());
-    record.receivedUtc = QDateTime::fromString(object.value(QStringLiteral("receivedUtc")).toString(), Qt::ISODateWithMs);
+    record.imagePath =
+        QDir(QFileInfo(metadataPath).absolutePath()).filePath(object.value(QStringLiteral("imageFile")).toString());
+    record.receivedUtc =
+        QDateTime::fromString(object.value(QStringLiteral("receivedUtc")).toString(), Qt::ISODateWithMs);
     record.frequencyHz = object.value(QStringLiteral("frequencyHz")).toString().toLongLong();
     record.modeId = object.value(QStringLiteral("modeId")).toInt(-1);
     record.modeName = object.value(QStringLiteral("modeName")).toString();
@@ -170,9 +170,8 @@ bool SstvStorage::writeRecordMetadata(const SstvRxRecord &record, QString *error
     return writeJson(record.metadataPath, recordToJson(record), error);
 }
 
-bool SstvStorage::saveReceived(const QImage &image, int modeId, const QString &modeName,
-                               const QString &slantStatus, qint64 frequencyHz,
-                               SstvRxRecord *savedRecord, QString *error) {
+bool SstvStorage::saveReceived(const QImage &image, int modeId, const QString &modeName, const QString &slantStatus,
+                               qint64 frequencyHz, SstvRxRecord *savedRecord, QString *error) {
     if (image.isNull()) {
         setError(error, QStringLiteral("The completed SSTV image is empty."));
         return false;
@@ -184,14 +183,14 @@ bool SstvStorage::saveReceived(const QImage &image, int modeId, const QString &m
     record.receivedUtc = QDateTime::currentDateTimeUtc();
     const QString timestamp = record.receivedUtc.toString(QStringLiteral("yyyyMMdd_HHmmss_zzz"));
     const QString modeToken = safeModeName(modeName);
-    record.id = timestamp + QStringLiteral("_") + modeToken
-        + QStringLiteral("_") + QUuid::createUuid().toString(QUuid::Id128).left(8);
+    record.id = timestamp + QStringLiteral("_") + modeToken + QStringLiteral("_") +
+                QUuid::createUuid().toString(QUuid::Id128).left(8);
     record.modeId = modeId;
     record.modeName = modeName;
     record.slantStatus = slantStatus;
     record.frequencyHz = frequencyHz;
-    const QString exportBase = QStringLiteral("SSTV_%1_%2")
-                                   .arg(record.receivedUtc.toString(QStringLiteral("yyyyMMdd_HHmmss")), modeToken);
+    const QString exportBase =
+        QStringLiteral("SSTV_%1_%2").arg(record.receivedUtc.toString(QStringLiteral("yyyyMMdd_HHmmss")), modeToken);
     record.imagePath = QDir(rxPath()).filePath(exportBase + QStringLiteral(".png"));
     for (int suffix = 2; QFileInfo::exists(record.imagePath); ++suffix)
         record.imagePath = QDir(rxPath()).filePath(exportBase + QStringLiteral("_%1.png").arg(suffix));
@@ -228,9 +227,8 @@ QVector<SstvRxRecord> SstvStorage::received(QString *error) const {
         if (!record.id.isEmpty() && QFileInfo::exists(record.imagePath))
             result.append(record);
     }
-    std::sort(result.begin(), result.end(), [](const SstvRxRecord &a, const SstvRxRecord &b) {
-        return a.receivedUtc > b.receivedUtc;
-    });
+    std::sort(result.begin(), result.end(),
+              [](const SstvRxRecord &a, const SstvRxRecord &b) { return a.receivedUtc > b.receivedUtc; });
     return result;
 }
 
@@ -246,8 +244,8 @@ bool SstvStorage::setStarred(const QString &id, bool starred, QString *error) {
     return false;
 }
 
-bool SstvStorage::setCallsign(const QString &id, const QString &callsign, const QString &source,
-                              int confidence, QString *error) {
+bool SstvStorage::setCallsign(const QString &id, const QString &callsign, const QString &source, int confidence,
+                              QString *error) {
     QVector<SstvRxRecord> records = received(error);
     for (SstvRxRecord &record : records) {
         if (record.id == id) {
@@ -310,8 +308,7 @@ bool SstvStorage::enforceRetention(QString *error) {
     return true;
 }
 
-bool SstvStorage::saveDraft(const QImage &sourceImage, const QJsonObject &state, QString *error,
-                            bool sourceChanged) {
+bool SstvStorage::saveDraft(const QImage &sourceImage, const QJsonObject &state, QString *error, bool sourceChanged) {
     if (sourceImage.isNull()) {
         setError(error, QStringLiteral("The SSTV draft has no source image."));
         return false;
@@ -383,8 +380,8 @@ bool SstvStorage::saveUserTemplate(const QString &name, const QJsonObject &state
     return saveUserTemplate(name, state, QImage(), error);
 }
 
-bool SstvStorage::saveUserTemplate(const QString &name, const QJsonObject &state,
-                                   const QImage &sourceImage, QString *error) {
+bool SstvStorage::saveUserTemplate(const QString &name, const QJsonObject &state, const QImage &sourceImage,
+                                   QString *error) {
     const QString cleanName = name.trimmed().left(40);
     if (cleanName.isEmpty()) {
         setError(error, QStringLiteral("Enter a template name."));
@@ -415,8 +412,7 @@ bool SstvStorage::loadUserTemplate(const QString &name, QJsonObject *state, QStr
     return loadUserTemplate(name, state, nullptr, error);
 }
 
-bool SstvStorage::loadUserTemplate(const QString &name, QJsonObject *state,
-                                   QImage *sourceImage, QString *error) const {
+bool SstvStorage::loadUserTemplate(const QString &name, QJsonObject *state, QImage *sourceImage, QString *error) const {
     QJsonObject document;
     if (!readJson(templatePath(name), &document, error))
         return false;
@@ -424,8 +420,7 @@ bool SstvStorage::loadUserTemplate(const QString &name, QJsonObject *state,
         *sourceImage = QImage();
         const QString fileName = document.value(QStringLiteral("sourceFile")).toString();
         if (!fileName.isEmpty()) {
-            QImageReader reader(
-                QDir(templatesPath()).filePath(QFileInfo(fileName).fileName()));
+            QImageReader reader(QDir(templatesPath()).filePath(QFileInfo(fileName).fileName()));
             const QImage image = reader.read();
             if (image.isNull()) {
                 setError(error, reader.errorString());
@@ -453,8 +448,8 @@ bool SstvStorage::resetUserTemplates(QString *error) {
     const QDir directory(templatesPath());
     if (!directory.exists())
         return true;
-    for (const QFileInfo &file : directory.entryInfoList(
-             {QStringLiteral("*.json"), QStringLiteral("*.png")}, QDir::Files)) {
+    for (const QFileInfo &file :
+         directory.entryInfoList({QStringLiteral("*.json"), QStringLiteral("*.png")}, QDir::Files)) {
         if (!QFile::remove(file.absoluteFilePath())) {
             setError(error, QStringLiteral("Could not reset the SSTV templates."));
             return false;
@@ -468,11 +463,9 @@ QStringList SstvStorage::imageTemplateNames(QString *error) const {
     const QDir root(imageTemplatesPath());
     if (!root.exists())
         return result;
-    for (const QFileInfo &entry : root.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot,
-                                                     QDir::Name)) {
+    for (const QFileInfo &entry : root.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name)) {
         QJsonObject object;
-        if (readJson(QDir(entry.absoluteFilePath()).filePath(QStringLiteral("template.json")),
-                     &object, error)) {
+        if (readJson(QDir(entry.absoluteFilePath()).filePath(QStringLiteral("template.json")), &object, error)) {
             const QString name = object.value(QStringLiteral("name")).toString();
             if (!name.isEmpty())
                 result.append(name);
@@ -482,9 +475,8 @@ QStringList SstvStorage::imageTemplateNames(QString *error) const {
     return result;
 }
 
-bool SstvStorage::saveImageTemplate(const QString &name, const QImage &sourceImage,
-                                    const QImage &previewImage, const QJsonObject &state,
-                                    QString *error) {
+bool SstvStorage::saveImageTemplate(const QString &name, const QImage &sourceImage, const QImage &previewImage,
+                                    const QJsonObject &state, QString *error) {
     const QString cleanName = name.trimmed().left(40);
     if (cleanName.isEmpty()) {
         setError(error, QStringLiteral("Enter an image template name."));
@@ -498,28 +490,25 @@ bool SstvStorage::saveImageTemplate(const QString &name, const QImage &sourceIma
     if (!ensureDirectory(directoryPath, error))
         return false;
     const QDir directory(directoryPath);
-    if (!writeImage(directory.filePath(QStringLiteral("source.png")), sourceImage, error)
-        || !writeImage(directory.filePath(QStringLiteral("preview.png")), previewImage, error))
+    if (!writeImage(directory.filePath(QStringLiteral("source.png")), sourceImage, error) ||
+        !writeImage(directory.filePath(QStringLiteral("preview.png")), previewImage, error))
         return false;
     QJsonObject document = state;
     document.insert(QStringLiteral("version"), 1);
     document.insert(QStringLiteral("name"), cleanName);
     document.insert(QStringLiteral("sourceFile"), QStringLiteral("source.png"));
     document.insert(QStringLiteral("previewFile"), QStringLiteral("preview.png"));
-    document.insert(QStringLiteral("savedUtc"),
-                    QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs));
+    document.insert(QStringLiteral("savedUtc"), QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs));
     return writeJson(directory.filePath(QStringLiteral("template.json")), document, error);
 }
 
-bool SstvStorage::loadImageTemplate(const QString &name, QImage *sourceImage,
-                                    QImage *previewImage, QJsonObject *state,
+bool SstvStorage::loadImageTemplate(const QString &name, QImage *sourceImage, QImage *previewImage, QJsonObject *state,
                                     QString *error) const {
     const QDir directory(imageTemplatePath(name));
     QJsonObject document;
     if (!readJson(directory.filePath(QStringLiteral("template.json")), &document, error))
         return false;
-    const auto readTemplateImage = [&directory, error](const QString &fileName,
-                                                        QImage *target) {
+    const auto readTemplateImage = [&directory, error](const QString &fileName, QImage *target) {
         if (!target)
             return true;
         QImageReader reader(directory.filePath(fileName));
@@ -531,8 +520,8 @@ bool SstvStorage::loadImageTemplate(const QString &name, QImage *sourceImage,
         *target = image;
         return true;
     };
-    if (!readTemplateImage(document.value(QStringLiteral("sourceFile")).toString(), sourceImage)
-        || !readTemplateImage(document.value(QStringLiteral("previewFile")).toString(), previewImage))
+    if (!readTemplateImage(document.value(QStringLiteral("sourceFile")).toString(), sourceImage) ||
+        !readTemplateImage(document.value(QStringLiteral("previewFile")).toString(), previewImage))
         return false;
     if (state)
         *state = document;
@@ -543,9 +532,8 @@ bool SstvStorage::removeImageTemplate(const QString &name, QString *error) {
     const QDir directory(imageTemplatePath(name));
     if (!directory.exists())
         return true;
-    for (const QString &fileName : {QStringLiteral("template.json"),
-                                    QStringLiteral("source.png"),
-                                    QStringLiteral("preview.png")}) {
+    for (const QString &fileName :
+         {QStringLiteral("template.json"), QStringLiteral("source.png"), QStringLiteral("preview.png")}) {
         const QString path = directory.filePath(fileName);
         if (QFileInfo::exists(path) && !QFile::remove(path)) {
             setError(error, QStringLiteral("Could not remove image template file %1.").arg(fileName));
@@ -557,4 +545,3 @@ bool SstvStorage::removeImageTemplate(const QString &name, QString *error) {
     setError(error, QStringLiteral("Could not remove the SSTV image template."));
     return false;
 }
-

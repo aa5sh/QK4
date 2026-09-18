@@ -13,8 +13,7 @@
 #include <QScrollArea>
 #include <QVBoxLayout>
 
-Ctr2Page::Ctr2Page(HardwareController *controller, QWidget *parent)
-    : QWidget(parent), m_controller(controller) {
+Ctr2Page::Ctr2Page(HardwareController *controller, QWidget *parent) : QWidget(parent), m_controller(controller) {
     setStyleSheet(K4Styles::Dialog::pageBackground());
     auto *root = new QVBoxLayout(this);
     root->setContentsMargins(K4Styles::Dimensions::DialogMargin, K4Styles::Dimensions::DialogMargin,
@@ -23,17 +22,17 @@ Ctr2Page::Ctr2Page(HardwareController *controller, QWidget *parent)
     auto *title = new QLabel(QStringLiteral("CTR2-MIDI controller"), this);
     title->setStyleSheet(K4Styles::Dialog::titleLabel());
     root->addWidget(title);
-    auto *help = new QLabel(QStringLiteral(
-        "Connects CTR2-MIDI independently from HaliKey. The K4-Control mapping is editable "
-        "below, including the FT8/FT4 RX/TX tone actions."), this);
+    auto *help =
+        new QLabel(QStringLiteral("Connects CTR2-MIDI independently from HaliKey. The K4-Control mapping is editable "
+                                  "below, including the FT8/FT4 RX/TX tone actions."),
+                   this);
     help->setStyleSheet(K4Styles::Dialog::helpText());
     help->setWordWrap(true);
     root->addWidget(help);
     auto *deviceBox = new QGroupBox(QStringLiteral("MIDI connection"), this);
-    const QString groupStyle = QString(
-        "QGroupBox { color: %1; border: 1px solid %2; border-radius: 4px; "
-        "            margin-top: 10px; padding: 12px 8px 8px 8px; font-weight: bold; }"
-        "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; }")
+    const QString groupStyle = QString("QGroupBox { color: %1; border: 1px solid %2; border-radius: 4px; "
+                                       "            margin-top: 10px; padding: 12px 8px 8px 8px; font-weight: bold; }"
+                                       "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; }")
                                    .arg(K4Styles::Colors::TextWhite, K4Styles::Colors::DialogBorder);
     deviceBox->setStyleSheet(groupStyle);
     auto *deviceLayout = new QGridLayout(deviceBox);
@@ -53,8 +52,8 @@ Ctr2Page::Ctr2Page(HardwareController *controller, QWidget *parent)
     auto *scroll = new QScrollArea(this);
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setStyleSheet(QString("QScrollArea { background-color: %1; border: none; }")
-                              .arg(K4Styles::Colors::Background));
+    scroll->setStyleSheet(
+        QString("QScrollArea { background-color: %1; border: none; }").arg(K4Styles::Colors::Background));
     scroll->viewport()->setStyleSheet(K4Styles::Dialog::pageBackground());
     auto *mappingWidget = new QWidget(scroll);
     mappingWidget->setStyleSheet(K4Styles::Dialog::pageBackground());
@@ -97,15 +96,16 @@ Ctr2Page::Ctr2Page(HardwareController *controller, QWidget *parent)
     root->addWidget(scroll, 1);
     connect(scan, &QPushButton::clicked, this, &Ctr2Page::refresh);
     connect(m_connect, &QPushButton::clicked, this, [this] {
-        if (m_controller->ctr2MidiDevice()->isConnected()) m_controller->connectCtr2({});
-        else m_controller->connectCtr2(m_device->currentText());
+        if (m_controller->ctr2MidiDevice()->isConnected())
+            m_controller->connectCtr2({});
+        else
+            m_controller->connectCtr2(m_device->currentText());
         refresh();
     });
     connect(applyButton, &QPushButton::clicked, this, &Ctr2Page::apply);
     connect(defaults, &QPushButton::clicked, this, [this] {
-        m_controller->setCtr2Mapping(m_extended->isChecked()
-                                         ? MidiMapping::ctr2ExtendedDefault()
-                                         : MidiMapping::ctr2Default());
+        m_controller->setCtr2Mapping(m_extended->isChecked() ? MidiMapping::ctr2ExtendedDefault()
+                                                             : MidiMapping::ctr2Default());
         refresh();
     });
     refresh();
@@ -117,18 +117,21 @@ void Ctr2Page::refresh() {
     m_device->clear();
     m_device->addItems(Ctr2MidiDevice::availableMidiDevices());
     const int selectedIndex = m_device->findText(selected);
-    if (selectedIndex >= 0) m_device->setCurrentIndex(selectedIndex);
+    if (selectedIndex >= 0)
+        m_device->setCurrentIndex(selectedIndex);
     m_status->setText(device->statusMessage());
     m_connect->setText(device->isConnected() ? QStringLiteral("Disconnect") : QStringLiteral("Connect"));
     const auto mapping = m_controller->ctr2Mapping();
     m_extended->setChecked(mapping.extendedButtons);
     for (auto it = m_knobs.begin(); it != m_knobs.end(); ++it) {
         const int index = it.value()->findData(mapping.knobs.value(it.key()).action);
-        if (index >= 0) it.value()->setCurrentIndex(index);
+        if (index >= 0)
+            it.value()->setCurrentIndex(index);
     }
     for (auto it = m_buttons.begin(); it != m_buttons.end(); ++it) {
         const int index = it.value()->findData(mapping.buttons.value(it.key()).action);
-        if (index >= 0) it.value()->setCurrentIndex(index);
+        if (index >= 0)
+            it.value()->setCurrentIndex(index);
     }
 }
 

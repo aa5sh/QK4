@@ -10,10 +10,8 @@ class SstvEncoder {
 public:
     static constexpr int SampleRate = 12000;
 
-    bool begin(const QImage &frame, SstvModeId mode, QString *error = nullptr,
-               const QString &morseId = QString(), int morseWpm = 20,
-               const QString &fskId = QString(), int preRollMs = 0,
-               int postRollMs = 0);
+    bool begin(const QImage &frame, SstvModeId mode, QString *error = nullptr, const QString &morseId = QString(),
+               int morseWpm = 20, const QString &fskId = QString(), int preRollMs = 0, int postRollMs = 0);
     QVector<qint16> nextSamples(int maximumSamples);
     bool isActive() const;
     bool isComplete() const;
@@ -60,4 +58,3 @@ private:
 };
 
 #endif // SSTVENCODER_H
-

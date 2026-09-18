@@ -19,51 +19,88 @@ double pixelFrequency(quint8 value) {
 
 QString morsePattern(QChar character) {
     switch (character.toUpper().unicode()) {
-    case 'A': return QStringLiteral(".-");
-    case 'B': return QStringLiteral("-...");
-    case 'C': return QStringLiteral("-.-.");
-    case 'D': return QStringLiteral("-..");
-    case 'E': return QStringLiteral(".");
-    case 'F': return QStringLiteral("..-.");
-    case 'G': return QStringLiteral("--.");
-    case 'H': return QStringLiteral("....");
-    case 'I': return QStringLiteral("..");
-    case 'J': return QStringLiteral(".---");
-    case 'K': return QStringLiteral("-.-");
-    case 'L': return QStringLiteral(".-..");
-    case 'M': return QStringLiteral("--");
-    case 'N': return QStringLiteral("-.");
-    case 'O': return QStringLiteral("---");
-    case 'P': return QStringLiteral(".--.");
-    case 'Q': return QStringLiteral("--.-");
-    case 'R': return QStringLiteral(".-.");
-    case 'S': return QStringLiteral("...");
-    case 'T': return QStringLiteral("-");
-    case 'U': return QStringLiteral("..-");
-    case 'V': return QStringLiteral("...-");
-    case 'W': return QStringLiteral(".--");
-    case 'X': return QStringLiteral("-..-");
-    case 'Y': return QStringLiteral("-.--");
-    case 'Z': return QStringLiteral("--..");
-    case '0': return QStringLiteral("-----");
-    case '1': return QStringLiteral(".----");
-    case '2': return QStringLiteral("..---");
-    case '3': return QStringLiteral("...--");
-    case '4': return QStringLiteral("....-");
-    case '5': return QStringLiteral(".....");
-    case '6': return QStringLiteral("-....");
-    case '7': return QStringLiteral("--...");
-    case '8': return QStringLiteral("---..");
-    case '9': return QStringLiteral("----.");
-    case '/': return QStringLiteral("-..-.");
-    default: return QString();
+    case 'A':
+        return QStringLiteral(".-");
+    case 'B':
+        return QStringLiteral("-...");
+    case 'C':
+        return QStringLiteral("-.-.");
+    case 'D':
+        return QStringLiteral("-..");
+    case 'E':
+        return QStringLiteral(".");
+    case 'F':
+        return QStringLiteral("..-.");
+    case 'G':
+        return QStringLiteral("--.");
+    case 'H':
+        return QStringLiteral("....");
+    case 'I':
+        return QStringLiteral("..");
+    case 'J':
+        return QStringLiteral(".---");
+    case 'K':
+        return QStringLiteral("-.-");
+    case 'L':
+        return QStringLiteral(".-..");
+    case 'M':
+        return QStringLiteral("--");
+    case 'N':
+        return QStringLiteral("-.");
+    case 'O':
+        return QStringLiteral("---");
+    case 'P':
+        return QStringLiteral(".--.");
+    case 'Q':
+        return QStringLiteral("--.-");
+    case 'R':
+        return QStringLiteral(".-.");
+    case 'S':
+        return QStringLiteral("...");
+    case 'T':
+        return QStringLiteral("-");
+    case 'U':
+        return QStringLiteral("..-");
+    case 'V':
+        return QStringLiteral("...-");
+    case 'W':
+        return QStringLiteral(".--");
+    case 'X':
+        return QStringLiteral("-..-");
+    case 'Y':
+        return QStringLiteral("-.--");
+    case 'Z':
+        return QStringLiteral("--..");
+    case '0':
+        return QStringLiteral("-----");
+    case '1':
+        return QStringLiteral(".----");
+    case '2':
+        return QStringLiteral("..---");
+    case '3':
+        return QStringLiteral("...--");
+    case '4':
+        return QStringLiteral("....-");
+    case '5':
+        return QStringLiteral(".....");
+    case '6':
+        return QStringLiteral("-....");
+    case '7':
+        return QStringLiteral("--...");
+    case '8':
+        return QStringLiteral("---..");
+    case '9':
+        return QStringLiteral("----.");
+    case '/':
+        return QStringLiteral("-..-.");
+    default:
+        return QString();
     }
 }
-}
+} // namespace
 
-bool SstvEncoder::begin(const QImage &frame, SstvModeId modeId, QString *error,
-                        const QString &morseId, int morseWpm, const QString &fskId,
-                        int preRollMs, int postRollMs) {
+bool SstvEncoder::begin(const QImage &frame, SstvModeId modeId, QString *error, const QString &morseId, int morseWpm,
+                        const QString &fskId, int preRollMs, int postRollMs) {
     m_mode = SstvModeRegistry::find(modeId);
     m_segments.clear();
     m_segmentIndex = 0;
@@ -191,11 +228,9 @@ QVector<qint16> SstvEncoder::nextSamples(int maximumSamples) {
             if (segment.shaped) {
                 const int position = m_currentSegmentSamples - m_remainingSegmentSamples + i;
                 const int remaining = m_currentSegmentSamples - position - 1;
-                const int rampSamples = qMin(qRound(0.005 * SampleRate),
-                                             qMax(1, m_currentSegmentSamples / 4));
-                const double envelope = qMin(1.0,
-                    qMin(static_cast<double>(position) / rampSamples,
-                         static_cast<double>(remaining) / rampSamples));
+                const int rampSamples = qMin(qRound(0.005 * SampleRate), qMax(1, m_currentSegmentSamples / 4));
+                const double envelope = qMin(1.0, qMin(static_cast<double>(position) / rampSamples,
+                                                       static_cast<double>(remaining) / rampSamples));
                 amplitude *= qMax(0.0, envelope);
             }
             output.append(static_cast<qint16>(qRound(qSin(m_phase) * amplitude)));
@@ -246,7 +281,7 @@ void SstvEncoder::appendVis(int visCode) {
         parity ^= one ? 1 : 0;
     }
     appendTone(parity ? VisOneFrequencyHz : VisZeroFrequencyHz, 30.0); // even parity
-    appendTone(BreakFrequencyHz, 30.0); // stop bit
+    appendTone(BreakFrequencyHz, 30.0);                                // stop bit
 }
 
 void SstvEncoder::appendMorseId(const QString &text, int wpm) {
@@ -333,8 +368,7 @@ void SstvEncoder::appendRobot36Image() {
         appendTone(PixelLowFrequencyHz, 4.5);
         appendTone(CenterFrequencyHz, 1.5);
         for (int x = 0; x < m_mode->width; ++x)
-            appendTone(pixelFrequency(static_cast<quint8>(
-                           (redDifference(even[x]) + redDifference(odd[x])) / 2)),
+            appendTone(pixelFrequency(static_cast<quint8>((redDifference(even[x]) + redDifference(odd[x])) / 2)),
                        chromaPixelMs);
 
         appendTone(BreakFrequencyHz, 9.0);
@@ -344,8 +378,7 @@ void SstvEncoder::appendRobot36Image() {
         appendTone(2300.0, 4.5);
         appendTone(CenterFrequencyHz, 1.5);
         for (int x = 0; x < m_mode->width; ++x)
-            appendTone(pixelFrequency(static_cast<quint8>(
-                           (blueDifference(even[x]) + blueDifference(odd[x])) / 2)),
+            appendTone(pixelFrequency(static_cast<quint8>((blueDifference(even[x]) + blueDifference(odd[x])) / 2)),
                        chromaPixelMs);
     }
 }
@@ -360,9 +393,11 @@ void SstvEncoder::appendPdImage() {
         for (int x = 0; x < m_mode->width; ++x)
             appendTone(pixelFrequency(luminance(even[x])), pixelMs);
         for (int x = 0; x < m_mode->width; ++x)
-            appendTone(pixelFrequency(static_cast<quint8>((redDifference(even[x]) + redDifference(odd[x])) / 2)), pixelMs);
+            appendTone(pixelFrequency(static_cast<quint8>((redDifference(even[x]) + redDifference(odd[x])) / 2)),
+                       pixelMs);
         for (int x = 0; x < m_mode->width; ++x)
-            appendTone(pixelFrequency(static_cast<quint8>((blueDifference(even[x]) + blueDifference(odd[x])) / 2)), pixelMs);
+            appendTone(pixelFrequency(static_cast<quint8>((blueDifference(even[x]) + blueDifference(odd[x])) / 2)),
+                       pixelMs);
         for (int x = 0; x < m_mode->width; ++x)
             appendTone(pixelFrequency(luminance(odd[x])), pixelMs);
     }
@@ -377,14 +412,18 @@ int SstvEncoder::roundedSegmentSamples(double durationMs) {
 
 quint8 SstvEncoder::componentValue(QRgb pixel, int component) const {
     switch (component) {
-    case 0: return static_cast<quint8>(qRed(pixel));
-    case 1: return static_cast<quint8>(qGreen(pixel));
-    default: return static_cast<quint8>(qBlue(pixel));
+    case 0:
+        return static_cast<quint8>(qRed(pixel));
+    case 1:
+        return static_cast<quint8>(qGreen(pixel));
+    default:
+        return static_cast<quint8>(qBlue(pixel));
     }
 }
 
 quint8 SstvEncoder::luminance(QRgb pixel) const {
-    return static_cast<quint8>(qBound(0, qRound(0.299 * qRed(pixel) + 0.587 * qGreen(pixel) + 0.114 * qBlue(pixel)), 255));
+    return static_cast<quint8>(
+        qBound(0, qRound(0.299 * qRed(pixel) + 0.587 * qGreen(pixel) + 0.114 * qBlue(pixel)), 255));
 }
 
 quint8 SstvEncoder::redDifference(QRgb pixel) const {
@@ -394,4 +433,3 @@ quint8 SstvEncoder::redDifference(QRgb pixel) const {
 quint8 SstvEncoder::blueDifference(QRgb pixel) const {
     return static_cast<quint8>(qBound(0, qRound(128.0 + (qBlue(pixel) - luminance(pixel)) / 1.772), 255));
 }
-

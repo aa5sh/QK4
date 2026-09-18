@@ -38,10 +38,18 @@ void MidiInputRouter::removeSource(const QString &sourceId) {
 void MidiInputRouter::applyInputTransitions(const QVector<InputTransition> &transitions) {
     for (const InputTransition &transition : transitions) {
         switch (transition.input) {
-        case LogicalInput::Dit: emit ditStateChanged(transition.pressed); break;
-        case LogicalInput::Dah: emit dahStateChanged(transition.pressed); break;
-        case LogicalInput::StraightKey: emit straightKeyStateChanged(transition.pressed); break;
-        case LogicalInput::Ptt: emit pttStateChanged(transition.pressed); break;
+        case LogicalInput::Dit:
+            emit ditStateChanged(transition.pressed);
+            break;
+        case LogicalInput::Dah:
+            emit dahStateChanged(transition.pressed);
+            break;
+        case LogicalInput::StraightKey:
+            emit straightKeyStateChanged(transition.pressed);
+            break;
+        case LogicalInput::Ptt:
+            emit pttStateChanged(transition.pressed);
+            break;
         }
     }
 }
@@ -112,23 +120,19 @@ void MidiInputRouter::processEvent(const QString &sourceId, int status, int data
     routeNote(sourceId, deviceMapping, data1, pressed);
 }
 
-void MidiInputRouter::routeNote(const QString &sourceId, const DeviceMapping &mapping,
-                                int note, bool pressed) {
+void MidiInputRouter::routeNote(const QString &sourceId, const DeviceMapping &mapping, int note, bool pressed) {
     // In CTR2 "MIDI Button" knob mode, CC100-107 use directional NoteOn
     // pairs 40-55 in normal BTN mode and 60-75 in Extended BTN mode. Keeping
     // the ranges mode-specific leaves extended physical-button notes 40-48
     // available to their assigned actions.
     const int firstKnobButtonNote = mapping.extendedButtons ? 60 : 40;
     const int lastKnobButtonNote = firstKnobButtonNote + 15;
-    if (mapping.profile == Profile::Ctr2
-        && note >= firstKnobButtonNote && note <= lastKnobButtonNote) {
+    if (mapping.profile == Profile::Ctr2 && note >= firstKnobButtonNote && note <= lastKnobButtonNote) {
         const int cc = 100 + ((note - firstKnobButtonNote) / 2);
         const auto knob = mapping.knobs.constFind(cc);
         if (knob != mapping.knobs.cend() && knob->output == KnobOutput::Button) {
             if (pressed && knob->action != QStringLiteral("disabled"))
-                emit knobActionRequested(knob->action,
-                                         ((note - firstKnobButtonNote) % 2) == 0 ? -1 : 1,
-                                         false);
+                emit knobActionRequested(knob->action, ((note - firstKnobButtonNote) % 2) == 0 ? -1 : 1, false);
             return;
         }
     }
@@ -140,9 +144,8 @@ void MidiInputRouter::routeNote(const QString &sourceId, const DeviceMapping &ma
                 const int ptt = mapping.extendedButtons ? 99 : 31;
                 if (note == left || note == right) {
                     const bool physicalLeft = note == left;
-                    const LogicalInput input = (physicalLeft != mapping.tipRingSwapped)
-                                                   ? LogicalInput::Dit
-                                                   : LogicalInput::Dah;
+                    const LogicalInput input =
+                        (physicalLeft != mapping.tipRingSwapped) ? LogicalInput::Dit : LogicalInput::Dah;
                     applyInputTransitions(m_inputs.setInput(sourceId, input, pressed));
                     return;
                 }
@@ -156,8 +159,8 @@ void MidiInputRouter::routeNote(const QString &sourceId, const DeviceMapping &ma
                 if (note == tip || note == ring) {
                     const bool physicalTip = note == tip;
                     const bool straight = physicalTip != mapping.tipRingSwapped;
-                    applyInputTransitions(m_inputs.setInput(
-                        sourceId, straight ? LogicalInput::StraightKey : LogicalInput::Ptt, pressed));
+                    applyInputTransitions(
+                        m_inputs.setInput(sourceId, straight ? LogicalInput::StraightKey : LogicalInput::Ptt, pressed));
                     return;
                 }
             }
@@ -165,8 +168,8 @@ void MidiInputRouter::routeNote(const QString &sourceId, const DeviceMapping &ma
             const int left = 20;
             const int right = 21;
             if (mapping.keyingMode == KeyingMode::Paddles && (note == left || note == right)) {
-                applyInputTransitions(m_inputs.setInput(
-                    sourceId, note == left ? LogicalInput::Dit : LogicalInput::Dah, pressed));
+                applyInputTransitions(
+                    m_inputs.setInput(sourceId, note == left ? LogicalInput::Dit : LogicalInput::Dah, pressed));
                 return;
             }
             if (mapping.keyingMode == KeyingMode::StraightKey) {
@@ -195,4 +198,3 @@ void MidiInputRouter::routeNote(const QString &sourceId, const DeviceMapping &ma
         }
     }
 }
-

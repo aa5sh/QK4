@@ -18,9 +18,7 @@ struct DigitalTxControl {
     std::atomic<float> gain{0.5f};
     std::atomic<quint64> audioFault{0};
     std::atomic<bool> calibrating{false};
-    bool allows(quint64 id) const {
-        return id != 0 && generation.load(std::memory_order_acquire) == id;
-    }
+    bool allows(quint64 id) const { return id != 0 && generation.load(std::memory_order_acquire) == id; }
     void close(quint64 id) { generation.compare_exchange_strong(id, 0, std::memory_order_acq_rel); }
 };
 

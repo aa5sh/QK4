@@ -27,4 +27,3 @@ private:
     QString m_lastSent;
     QString m_lastReceivedId;
 };
-

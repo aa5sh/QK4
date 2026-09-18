@@ -37,13 +37,12 @@ public:
     int retentionLimit() const { return m_retentionLimit; }
     bool applyRetentionLimit(int limit, QString *error = nullptr);
 
-    bool saveReceived(const QImage &image, int modeId, const QString &modeName,
-                      const QString &slantStatus, qint64 frequencyHz,
-                      SstvRxRecord *savedRecord = nullptr, QString *error = nullptr);
+    bool saveReceived(const QImage &image, int modeId, const QString &modeName, const QString &slantStatus,
+                      qint64 frequencyHz, SstvRxRecord *savedRecord = nullptr, QString *error = nullptr);
     QVector<SstvRxRecord> received(QString *error = nullptr) const;
     bool setStarred(const QString &id, bool starred, QString *error = nullptr);
-    bool setCallsign(const QString &id, const QString &callsign, const QString &source,
-                     int confidence, QString *error = nullptr);
+    bool setCallsign(const QString &id, const QString &callsign, const QString &source, int confidence,
+                     QString *error = nullptr);
     bool removeReceived(const QString &id, QString *error = nullptr);
     bool clearUnstarred(QString *error = nullptr);
 
@@ -54,20 +53,17 @@ public:
 
     QStringList userTemplateNames(QString *error = nullptr) const;
     bool saveUserTemplate(const QString &name, const QJsonObject &state, QString *error = nullptr);
-    bool saveUserTemplate(const QString &name, const QJsonObject &state,
-                          const QImage &sourceImage, QString *error = nullptr);
+    bool saveUserTemplate(const QString &name, const QJsonObject &state, const QImage &sourceImage,
+                          QString *error = nullptr);
     bool loadUserTemplate(const QString &name, QJsonObject *state, QString *error = nullptr) const;
-    bool loadUserTemplate(const QString &name, QJsonObject *state,
-                          QImage *sourceImage, QString *error = nullptr) const;
+    bool loadUserTemplate(const QString &name, QJsonObject *state, QImage *sourceImage, QString *error = nullptr) const;
     bool removeUserTemplate(const QString &name, QString *error = nullptr);
     bool resetUserTemplates(QString *error = nullptr);
 
     QStringList imageTemplateNames(QString *error = nullptr) const;
-    bool saveImageTemplate(const QString &name, const QImage &sourceImage,
-                           const QImage &previewImage, const QJsonObject &state,
-                           QString *error = nullptr);
-    bool loadImageTemplate(const QString &name, QImage *sourceImage,
-                           QImage *previewImage, QJsonObject *state,
+    bool saveImageTemplate(const QString &name, const QImage &sourceImage, const QImage &previewImage,
+                           const QJsonObject &state, QString *error = nullptr);
+    bool loadImageTemplate(const QString &name, QImage *sourceImage, QImage *previewImage, QJsonObject *state,
                            QString *error = nullptr) const;
     bool removeImageTemplate(const QString &name, QString *error = nullptr);
 
@@ -94,4 +90,3 @@ private:
 };
 
 #endif // SSTVSTORAGE_H
-

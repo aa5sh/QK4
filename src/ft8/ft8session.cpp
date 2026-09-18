@@ -130,4 +130,3 @@ bool Ft8Session::sent(const QDateTime &utc) {
         halt();
     return true;
 }
-

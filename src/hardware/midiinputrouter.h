@@ -31,8 +31,7 @@ signals:
 
 private:
     void applyInputTransitions(const QVector<MidiMapping::InputTransition> &transitions);
-    void routeNote(const QString &sourceId, const MidiMapping::DeviceMapping &mapping,
-                   int note, bool pressed);
+    void routeNote(const QString &sourceId, const MidiMapping::DeviceMapping &mapping, int note, bool pressed);
 
     QMap<QString, MidiMapping::DeviceMapping> m_mappings;
     QMap<QString, QMap<int, int>> m_sliderValues;
@@ -40,4 +39,3 @@ private:
 };
 
 #endif // MIDIINPUTROUTER_H
-

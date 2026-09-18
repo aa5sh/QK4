@@ -14,8 +14,7 @@
 
 namespace {
 bool isQrzManagedField(const QString &field) {
-    return field.startsWith("_QK4_") || field.startsWith("QRZCOM_QSO_UPLOAD_")
-           || field == "APP_QRZLOG_LOGID";
+    return field.startsWith("_QK4_") || field.startsWith("QRZCOM_QSO_UPLOAD_") || field == "APP_QRZLOG_LOGID";
 }
 
 bool fail(QString *error, const QString &message) {
@@ -129,7 +128,8 @@ bool Ft8Logbook::save(const QVector<AdifRecord> &records, QString *error) {
     return true;
 }
 bool Ft8Logbook::append(const AdifRecord &record, QString *error) {
-    if (m_loaded && !m_path.isEmpty() && !load(error)) return false;
+    if (m_loaded && !m_path.isEmpty() && !load(error))
+        return false;
     const auto r = normalize(record);
     const QString invalid = validate(r);
     if (!invalid.isEmpty())
@@ -139,13 +139,15 @@ bool Ft8Logbook::append(const AdifRecord &record, QString *error) {
             return fail(error, "This contact is already logged.");
     auto next = m_records;
     next.append(r);
-    if (!save(next, error)) return false;
+    if (!save(next, error))
+        return false;
     if (!m_path.isEmpty() && r.value("APP_QK4_PRACTICE") != "Y" && contactAdded)
         contactAdded(m_path, next.size() - 1);
     return true;
 }
 bool Ft8Logbook::replace(int index, const AdifRecord &record, QString *error) {
-    if (m_loaded && !m_path.isEmpty() && !load(error)) return false;
+    if (m_loaded && !m_path.isEmpty() && !load(error))
+        return false;
     if (index < 0 || index >= m_records.size())
         return fail(error, "Contact no longer exists.");
     auto r = normalize(record);
@@ -154,10 +156,14 @@ bool Ft8Logbook::replace(int index, const AdifRecord &record, QString *error) {
         return fail(error, "This contact is being sent to QRZ. Try editing after sending finishes.");
     // Upload status is managed by confirmed server responses, never the editor.
     for (auto it = r.begin(); it != r.end();) {
-        if (isQrzManagedField(it.key())) it = r.erase(it); else ++it;
+        if (isQrzManagedField(it.key()))
+            it = r.erase(it);
+        else
+            ++it;
     }
     for (auto it = old.cbegin(); it != old.cend(); ++it)
-        if (isQrzManagedField(it.key())) r[it.key()] = it.value();
+        if (isQrzManagedField(it.key()))
+            r[it.key()] = it.value();
     const auto qrzStatus = old.value("QRZCOM_QSO_UPLOAD_STATUS").toUpper();
     if ((qrzStatus == "Y" || qrzStatus == "M") && r != old)
         r["QRZCOM_QSO_UPLOAD_STATUS"] = "M";
@@ -172,12 +178,16 @@ bool Ft8Logbook::replace(int index, const AdifRecord &record, QString *error) {
     return save(next, error);
 }
 bool Ft8Logbook::patchUpload(int index, const AdifRecord &fields, QString *error) {
-    if (!load(error)) return false;
-    if (index < 0 || index >= m_records.size()) return fail(error, "Contact no longer exists.");
+    if (!load(error))
+        return false;
+    if (index < 0 || index >= m_records.size())
+        return fail(error, "Contact no longer exists.");
     auto next = m_records;
     for (auto it = fields.cbegin(); it != fields.cend(); ++it) {
-        if (it.value().isEmpty()) next[index].remove(it.key());
-        else next[index][it.key()] = it.value();
+        if (it.value().isEmpty())
+            next[index].remove(it.key());
+        else
+            next[index][it.key()] = it.value();
     }
     return save(next, error);
 }
@@ -229,7 +239,8 @@ AdifImport Ft8Logbook::parse(const QString &text) {
             break;
         }
         // Imported ADIF cannot create private IDs or executable upload-queue state.
-        if (!key.startsWith("_QK4_")) record[key] = text.mid(pos, length);
+        if (!key.startsWith("_QK4_"))
+            record[key] = text.mid(pos, length);
         pos += length;
     }
     if (!record.isEmpty())
@@ -257,7 +268,8 @@ AdifImport Ft8Logbook::preview(const QString &text) const {
     return out;
 }
 bool Ft8Logbook::importRecords(const AdifImport &preview, QString *error) {
-    if (m_loaded && !m_path.isEmpty() && !load(error)) return false;
+    if (m_loaded && !m_path.isEmpty() && !load(error))
+        return false;
     if (!preview.errors.isEmpty())
         return fail(error, "Resolve the import errors before importing.");
     auto next = m_records;
@@ -271,7 +283,10 @@ bool Ft8Logbook::importRecords(const AdifImport &preview, QString *error) {
         if (!seen.contains(identity(r))) {
             auto imported = normalize(r);
             for (auto it = imported.begin(); it != imported.end();)
-                if (it.key().startsWith("_QK4_")) it = imported.erase(it); else ++it;
+                if (it.key().startsWith("_QK4_"))
+                    it = imported.erase(it);
+                else
+                    ++it;
             next.append(imported);
             seen.insert(identity(r));
         }
@@ -283,7 +298,8 @@ QString Ft8Logbook::encode(const QVector<AdifRecord> &records, QString *error) {
     for (auto record : records) {
         record = normalize(record);
         for (auto it = record.begin(); it != record.end(); ++it) {
-            if (it.key().startsWith("_QK4_")) continue; // Local queue metadata is not ADIF.
+            if (it.key().startsWith("_QK4_"))
+                continue; // Local queue metadata is not ADIF.
             for (QChar ch : it.value())
                 if (ch.unicode() > 127) {
                     fail(error, "ADI export requires ASCII field values; edit the non-ASCII text first.");

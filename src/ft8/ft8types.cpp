@@ -67,4 +67,3 @@ Message parseMessage(const QString &text) {
     return m;
 }
 } // namespace Ft8
-

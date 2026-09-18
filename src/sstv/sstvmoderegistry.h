@@ -30,21 +30,9 @@ enum class SstvModeId {
     PasokonP7 = 21
 };
 
-enum class SstvColorFamily {
-    RgbSequential,
-    GbrSequential,
-    RobotYuv,
-    PdYuv
-};
+enum class SstvColorFamily { RgbSequential, GbrSequential, RobotYuv, PdYuv };
 
-enum class SstvLineLayout {
-    Martin,
-    Scottie,
-    Robot36,
-    Pd,
-    Wraase,
-    Pasokon
-};
+enum class SstvLineLayout { Martin, Scottie, Robot36, Pd, Wraase, Pasokon };
 
 struct SstvModeSpec {
     SstvModeId id;
@@ -74,4 +62,3 @@ public:
 };
 
 #endif // SSTVMODEREGISTRY_H
-

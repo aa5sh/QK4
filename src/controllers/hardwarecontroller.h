@@ -13,7 +13,9 @@ class RadioState;
 class ConnectionController;
 class Ctr2MidiDevice;
 class MidiInputRouter;
-namespace MidiMapping { struct DeviceMapping; }
+namespace MidiMapping {
+struct DeviceMapping;
+}
 
 /**
  * @brief Owns hardware-side workers: KPOD USB knob (main thread), HaliKey CW paddle

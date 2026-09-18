@@ -64,11 +64,13 @@ QVector<Ft8::Decode> decodeMonitor(const monitor_t &mon, Ft8::Mode mode, QDateTi
                            mon.symbol_period);
         d.dt = (candidates[i].time_offset + float(candidates[i].time_sub) / mon.wf.time_osr) * mon.symbol_period;
         d.syncScore = candidates[i].score;
-        if (!reports) reports = std::make_unique<Ft8Snr>(samples, mode);
+        if (!reports)
+            reports = std::make_unique<Ft8Snr>(samples, mode);
         // The monitor's two-symbol analysis window centers one symbol after
         // the candidate index's physical start. WSJT-X refinement uses start.
-        const double frequency = (mon.min_bin + candidates[i].freq_offset
-                                  + double(candidates[i].freq_sub) / mon.wf.freq_osr) / mon.symbol_period;
+        const double frequency =
+            (mon.min_bin + candidates[i].freq_offset + double(candidates[i].freq_sub) / mon.wf.freq_osr) /
+            mon.symbol_period;
         d.snr = reports->estimate(message.payload, frequency, d.dt - mon.symbol_period);
         result.append(d);
     }
@@ -169,10 +171,13 @@ void Ft8Receiver::consume(const QByteArray &pcm, qint64 utc, quint64 generation,
         // Keep the final pass for late stations; message IDs suppress duplicates.
         if (!m_earlyDecoded && m_position >= (lengthMs - 1500) * 12) {
             m_earlyDecoded = true;
-            emit decoded(decodeMonitor(mon, mode, QDateTime::fromMSecsSinceEpoch(m_slotStart, QTimeZone::UTC), m_dsp->samples), generation);
+            emit decoded(
+                decodeMonitor(mon, mode, QDateTime::fromMSecsSinceEpoch(m_slotStart, QTimeZone::UTC), m_dsp->samples),
+                generation);
         }
         if (m_position >= slotSamples) {
-            auto decodes = decodeMonitor(mon, mode, QDateTime::fromMSecsSinceEpoch(m_slotStart, QTimeZone::UTC), m_dsp->samples);
+            auto decodes =
+                decodeMonitor(mon, mode, QDateTime::fromMSecsSinceEpoch(m_slotStart, QTimeZone::UTC), m_dsp->samples);
             emit decoded(decodes, generation);
             emit streamStatus(QString("Listening · %1 decoded last period").arg(decodes.size()), generation);
             m_slotStart += lengthMs;
@@ -189,4 +194,3 @@ QVector<Ft8::Decode> Ft8Receiver::decodeSamples(const QVector<float> &mono, Ft8:
         monitor_process(&dsp.monitor, mono.constData() + pos);
     return decodeMonitor(dsp.monitor, mode, utc, mono);
 }
-

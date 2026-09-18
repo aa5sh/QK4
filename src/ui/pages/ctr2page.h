@@ -3,13 +3,18 @@
 
 #include <QMap>
 #include <QWidget>
-class HardwareController; class QCheckBox; class QComboBox; class QLabel; class QPushButton;
+class HardwareController;
+class QCheckBox;
+class QComboBox;
+class QLabel;
+class QPushButton;
 
 class Ctr2Page final : public QWidget {
     Q_OBJECT
 public:
     explicit Ctr2Page(HardwareController *controller, QWidget *parent = nullptr);
     void refresh();
+
 private:
     void apply();
     HardwareController *m_controller;

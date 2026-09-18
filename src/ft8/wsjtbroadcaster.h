@@ -12,8 +12,8 @@ class WsjtBroadcaster final : public QObject {
 public:
     explicit WsjtBroadcaster(QObject *parent = nullptr);
     void sendHeartbeat();
-    void sendStatus(qint64 dialFrequency, const QString &mode, bool transmitting,
-                    int rxHz, int txHz, const QString &myCall, const QString &myGrid);
+    void sendStatus(qint64 dialFrequency, const QString &mode, bool transmitting, int rxHz, int txHz,
+                    const QString &myCall, const QString &myGrid);
     void sendDecode(const Ft8::Decode &decode);
     void sendQsoLogged(const AdifRecord &record);
     static QByteArray header(quint32 type);

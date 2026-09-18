@@ -26,8 +26,8 @@ class WsjtBroadcaster;
 class DigitalModesController final : public QObject {
     Q_OBJECT
 public:
-    DigitalModesController(ConnectionController *connection, AudioController *audio,
-                           RadioState *radioState, MainWindow *mainWindow);
+    DigitalModesController(ConnectionController *connection, AudioController *audio, RadioState *radioState,
+                           MainWindow *mainWindow);
     ~DigitalModesController() override;
 
     void showFtx();
@@ -59,8 +59,7 @@ private:
     void finishCalibration(bool success, const QString &status);
     std::optional<float> calibratedGain(int mode) const;
     void startFtxTransmit(const QString &message, int mode, int audioHz, qint64 slotUtc);
-    void startSstvTransmit(const QImage &frame, int modeId, const QString &cwId,
-                           int cwWpm, const QString &fskId);
+    void startSstvTransmit(const QImage &frame, int modeId, const QString &cwId, int cwWpm, const QString &fskId);
     void startPreparedProgramAudio();
     void stopProgramTransmit(const QString &reason = QStringLiteral("Transmission stopped"));
     void finishProgramTransmit(bool completed);

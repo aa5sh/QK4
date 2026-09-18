@@ -162,17 +162,14 @@ bool AudioController::isProgramAudioActive() const {
 void AudioController::startProgramAudio(const QVector<qint16> &samples, float gain) {
     if (!m_audioEngine || samples.isEmpty())
         return;
-    QMetaObject::invokeMethod(m_audioEngine,
-                              [engine = m_audioEngine, samples, gain] {
-                                  engine->startProgramAudio(samples, gain);
-                              },
-                              Qt::QueuedConnection);
+    QMetaObject::invokeMethod(
+        m_audioEngine, [engine = m_audioEngine, samples, gain] { engine->startProgramAudio(samples, gain); },
+        Qt::QueuedConnection);
 }
 
 void AudioController::setProgramAudioGain(float gain) {
     if (m_audioEngine)
-        QMetaObject::invokeMethod(m_audioEngine, "setProgramAudioGain", Qt::QueuedConnection,
-                                  Q_ARG(float, gain));
+        QMetaObject::invokeMethod(m_audioEngine, "setProgramAudioGain", Qt::QueuedConnection, Q_ARG(float, gain));
 }
 
 void AudioController::stopProgramAudio() {

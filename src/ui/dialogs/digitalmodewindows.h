@@ -32,8 +32,7 @@ public:
     int rxTone() const { return m_session.rxHz; }
     int txTone() const { return m_session.txHz; }
     bool receiving() const;
-    void setRadioState(bool connected, qint64 frequencyHz, const QString &radioMode,
-                       bool transmitting, double watts);
+    void setRadioState(bool connected, qint64 frequencyHz, const QString &radioMode, bool transmitting, double watts);
     void addDecodes(const QVector<Ft8::Decode> &decodes);
     void addSpectrum(const QVector<float> &db, double firstHz, double binHz);
     void setReceiveStatus(const QString &status);
@@ -115,14 +114,12 @@ class SstvWindow final : public QMainWindow {
     Q_OBJECT
 public:
     explicit SstvWindow(QWidget *parent = nullptr);
-    void setRadioState(bool connected, qint64 rxFrequencyHz, const QString &rxMode,
-                       qint64 txFrequencyHz, const QString &txMode, double watts);
+    void setRadioState(bool connected, qint64 rxFrequencyHz, const QString &rxMode, qint64 txFrequencyHz,
+                       const QString &txMode, double watts);
     void setReceiveStatus(const QString &status);
     void setReceiveLevel(int percent);
-    void setReceiveImage(const QImage &image, int completedRows, int totalRows,
-                         const QString &slantStatus);
-    void completeReceiveImage(const QImage &image, int modeId, const QString &slantStatus,
-                              qint64 frequencyHz);
+    void setReceiveImage(const QImage &image, int completedRows, int totalRows, const QString &slantStatus);
+    void completeReceiveImage(const QImage &image, int modeId, const QString &slantStatus, qint64 frequencyHz);
     void receiveCallsign(const QString &callsign, const QString &source, int confidence);
     void setTransmitState(bool active, const QString &status);
     void setTransmitProgress(int emitted, int total);
@@ -133,8 +130,7 @@ signals:
     void resetReceiveRequested();
     void frequencyRequested(qint64 frequencyHz);
     void powerRequested(double watts);
-    void transmitRequested(const QImage &image, int modeId, const QString &cwId,
-                           int cwWpm, const QString &fskId);
+    void transmitRequested(const QImage &image, int modeId, const QString &cwId, int cwWpm, const QString &fskId);
     void stopRequested();
     void logContactRequested(const AdifRecord &record);
     void logbookRequested();

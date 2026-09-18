@@ -35,16 +35,21 @@ signals:
     void modeDetected(int modeId, const QString &displayName);
     void inputLevelChanged(int percent);
     void inputStreamChanged(bool active);
-    void imageUpdated(const QImage &image, int completedRows, int totalRows,
-                      const QString &slantStatus);
+    void imageUpdated(const QImage &image, int completedRows, int totalRows, const QString &slantStatus);
     void imageCompleted(const QImage &image, int modeId, const QString &slantStatus);
     void callsignDetected(const QString &callsign, const QString &source, int confidence);
 
 private:
     enum class State { SearchingVis, Receiving };
     enum class AcquisitionKind { FullPreamble, SecondLeaderRecovery };
-    struct SyncObservation { int line; qint64 sample; };
-    struct AfcObservation { int line; double offsetHz; };
+    struct SyncObservation {
+        int line;
+        qint64 sample;
+    };
+    struct AfcObservation {
+        int line;
+        double offsetHz;
+    };
 
     void resetDsp();
     bool boundIdleSearchHistory(qint64 position);
@@ -59,10 +64,8 @@ private:
     void announceModeIfNeeded();
     double meanFrequency(qint64 start, qint64 end) const;
     double percentileFrequency(qint64 start, qint64 end, double percentile) const;
-    double tonePresenceFraction(qint64 start, qint64 end, double targetHz,
-                                double offsetHz, double toleranceHz) const;
-    qint64 longestToneRun(qint64 start, qint64 end, double targetHz,
-                          double offsetHz, double toleranceHz,
+    double tonePresenceFraction(qint64 start, qint64 end, double targetHz, double offsetHz, double toleranceHz) const;
+    qint64 longestToneRun(qint64 start, qint64 end, double targetHz, double offsetHz, double toleranceHz,
                           qint64 mergeGapSamples) const;
     void processSyncSample(double frequency, qint64 position);
     void acceptSync(qint64 start, qint64 end);
@@ -172,4 +175,3 @@ private:
 };
 
 #endif // SSTVDECODER_H
-

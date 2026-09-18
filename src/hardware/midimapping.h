@@ -11,57 +11,33 @@ namespace MidiMapping {
 
 constexpr int FileVersion = 2;
 
-enum class Profile {
-    TinyMidi = 0,
-    HaliKey = 1,
-    Custom = 2,
-    Ctr2 = 3
-};
+enum class Profile { TinyMidi = 0, HaliKey = 1, Custom = 2, Ctr2 = 3 };
 
-enum class KeyingMode {
-    Paddles = 0,
-    StraightKey = 1
-};
+enum class KeyingMode { Paddles = 0, StraightKey = 1 };
 
-enum class PhysicalInput {
-    Left = 0,
-    Right = 1
-};
+enum class PhysicalInput { Left = 0, Right = 1 };
 
-enum class KnobOutput {
-    WheelA = 0,
-    WheelB = 1,
-    WheelBReverse = 2,
-    SliderA = 3,
-    SliderB = 4,
-    Button = 5
-};
+enum class KnobOutput { WheelA = 0, WheelB = 1, WheelBReverse = 2, SliderA = 3, SliderB = 4, Button = 5 };
 
 struct KnobBinding {
     QString action;
     KnobOutput output = KnobOutput::WheelA;
 
-    bool operator==(const KnobBinding &other) const {
-        return action == other.action && output == other.output;
-    }
+    bool operator==(const KnobBinding &other) const { return action == other.action && output == other.output; }
 };
 
 struct ButtonBinding {
     QString action;
     QString macroId;
 
-    bool operator==(const ButtonBinding &other) const {
-        return action == other.action && macroId == other.macroId;
-    }
+    bool operator==(const ButtonBinding &other) const { return action == other.action && macroId == other.macroId; }
 };
 
 struct MacroDefinition {
     QString label;
     QString command;
 
-    bool operator==(const MacroDefinition &other) const {
-        return label == other.label && command == other.command;
-    }
+    bool operator==(const MacroDefinition &other) const { return label == other.label && command == other.command; }
 };
 
 struct DeviceMapping {
@@ -120,12 +96,7 @@ struct KnobValue {
 
 KnobValue interpretKnobValue(KnobOutput output, int midiValue);
 
-enum class LogicalInput {
-    Dit,
-    Dah,
-    StraightKey,
-    Ptt
-};
+enum class LogicalInput { Dit, Dah, StraightKey, Ptt };
 
 struct InputTransition {
     LogicalInput input = LogicalInput::Dit;
@@ -156,4 +127,3 @@ private:
 } // namespace MidiMapping
 
 #endif // MIDIMAPPING_H
-

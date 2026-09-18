@@ -602,8 +602,7 @@ void AudioEngine::startProgramAudio(const QVector<qint16> &samples, float gain) 
         emit programAudioFinished(false);
         return;
     }
-    if (m_pttActive.load(std::memory_order_acquire)
-        || m_programAudioActive.exchange(true, std::memory_order_acq_rel)) {
+    if (m_pttActive.load(std::memory_order_acquire) || m_programAudioActive.exchange(true, std::memory_order_acq_rel)) {
         emit programAudioFinished(false);
         return;
     }
@@ -660,10 +659,9 @@ void AudioEngine::sendProgramAudioFrame() {
     const float targetGain = m_programAudioGain.load(std::memory_order_acquire);
     const int ramp = qMin(60, count);
     for (int i = 0; i < count; ++i) {
-        const float gain = i < ramp
-                               ? m_programAudioCurrentGain
-                                     + (targetGain - m_programAudioCurrentGain) * float(i + 1) / ramp
-                               : targetGain;
+        const float gain =
+            i < ramp ? m_programAudioCurrentGain + (targetGain - m_programAudioCurrentGain) * float(i + 1) / ramp
+                     : targetGain;
         frame[i] = qint16(qRound(m_programAudio[m_programAudioOffset + i] * gain));
     }
     m_programAudioCurrentGain = targetGain;

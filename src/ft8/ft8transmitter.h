@@ -30,6 +30,7 @@ signals:
     void frameReady(const QVector<qint16> &samples, int emitted, int total, quint64 generation);
     void transmitting(quint64 generation);
     void finished(bool success, const QString &reason, quint64 generation);
+
 private:
     void tick();
     void fail(const QString &reason);
@@ -43,4 +44,3 @@ private:
     int m_mode = 0, m_frameSamples = 240, m_emitted = 0;
     QVector<qint16> m_wave;
 };
-

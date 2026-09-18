@@ -61,8 +61,7 @@ QString formatFrequency(qint64 hz) {
 }
 
 QString logPath() {
-    return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
-           + QStringLiteral("/logbook/contacts.json");
+    return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QStringLiteral("/logbook/contacts.json");
 }
 
 AdifRecord basicContact(const QString &call, const QString &mode, qint64 frequencyHz,
@@ -92,7 +91,11 @@ public:
     }
 
     std::function<void(int, bool)> frequencyChosen;
-    void setMarkers(int rx, int tx) { m_rx = rx; m_tx = tx; update(); }
+    void setMarkers(int rx, int tx) {
+        m_rx = rx;
+        m_tx = tx;
+        update();
+    }
     void addSpectrum(const QVector<float> &values, double firstHz, double binHz) {
         if (values.isEmpty() || !std::isfinite(firstHz) || !std::isfinite(binHz) || binHz <= 0)
             return;
@@ -101,8 +104,10 @@ public:
         QVector<float> finite;
         finite.reserve(values.size());
         for (float value : values)
-            if (std::isfinite(value)) finite.append(value);
-        if (finite.isEmpty()) return;
+            if (std::isfinite(value))
+                finite.append(value);
+        if (finite.isEmpty())
+            return;
         std::sort(finite.begin(), finite.end());
         const float floor = finite[qRound((finite.size() - 1) * .12)];
         const float ceiling = finite[qRound((finite.size() - 1) * .97)];
@@ -116,8 +121,7 @@ public:
             // pass through cyan/green, reserving yellow for the strongest peaks.
             const int r = qRound(255 * qMax(0.0f, (n - .78f) / .22f));
             const int g = qRound(255 * qBound(0.0f, (n - .28f) / .52f, 1.0f));
-            const int b = qRound(28 + 205 * qBound(0.0f, n / .52f, 1.0f)
-                                 - 190 * qMax(0.0f, (n - .64f) / .36f));
+            const int b = qRound(28 + 205 * qBound(0.0f, n / .52f, 1.0f) - 190 * qMax(0.0f, (n - .64f) / .36f));
             line[x] = qRgb(r, g, b);
         }
         update();
@@ -134,18 +138,15 @@ protected:
             painter.drawLine(x, 0, x, height());
             painter.drawText(x + 3, 14, QString::number(hz));
         }
-        for (const auto marker : {qMakePair(m_rx, QColor("#67ef89")),
-                                  qMakePair(m_tx, QColor("#ff5c5c"))}) {
+        for (const auto marker : {qMakePair(m_rx, QColor("#67ef89")), qMakePair(m_tx, QColor("#ff5c5c"))}) {
             const int x = qRound(width() * marker.first / 3300.0);
             painter.setPen(QPen(marker.second, 2));
             painter.drawLine(x, 0, x, height());
         }
     }
     void mousePressEvent(QMouseEvent *event) override {
-        if ((event->button() == Qt::LeftButton || event->button() == Qt::RightButton)
-            && frequencyChosen) {
-            frequencyChosen(qBound(100, qRound(3300.0 * event->position().x()
-                                                / qMax(1, width())), 3200),
+        if ((event->button() == Qt::LeftButton || event->button() == Qt::RightButton) && frequencyChosen) {
+            frequencyChosen(qBound(100, qRound(3300.0 * event->position().x() / qMax(1, width())), 3200),
                             event->button() == Qt::RightButton);
         }
     }
@@ -206,8 +207,8 @@ void FtxWindow::buildUi() {
     const int savedBand = m_band->findData(QSettings().value(QStringLiteral("ft8/bandIndex"), -1).toInt());
     if (savedBand >= 0)
         m_band->setCurrentIndex(savedBand);
-    m_frequency = new QLineEdit(QSettings().value(QStringLiteral("ft8/dialMHz"),
-                                                   QStringLiteral("14.074000")).toString(), body);
+    m_frequency =
+        new QLineEdit(QSettings().value(QStringLiteral("ft8/dialMHz"), QStringLiteral("14.074000")).toString(), body);
     m_frequency->setMaximumWidth(130);
     auto *tune = new QPushButton(QStringLiteral("Set frequency"), body);
     auto *rows = new QComboBox(body);
@@ -241,8 +242,7 @@ void FtxWindow::buildUi() {
         bool ok = false;
         const double mhz = m_frequency->text().toDouble(&ok);
         if (ok && mhz > 0.1 && mhz < 10000.0) {
-            QSettings().setValue(QStringLiteral("ft8/dialMHz"),
-                                 QString::number(mhz, 'f', 6));
+            QSettings().setValue(QStringLiteral("ft8/dialMHz"), QString::number(mhz, 'f', 6));
             emit frequencyRequested(qRound64(mhz * 1e6));
             m_frequency->clearFocus();
         } else {
@@ -251,11 +251,10 @@ void FtxWindow::buildUi() {
         }
     });
     connect(m_frequency, &QLineEdit::returnPressed, tune, &QPushButton::click);
-    connect(rows, &QComboBox::currentIndexChanged, this,
-            [this, rows] {
-                setDecodeRows(rows->currentData().toInt());
-                QSettings().setValue(QStringLiteral("ft8/decodeRows"), m_decodeRows);
-            });
+    connect(rows, &QComboBox::currentIndexChanged, this, [this, rows] {
+        setDecodeRows(rows->currentData().toInt());
+        QSettings().setValue(QStringLiteral("ft8/decodeRows"), m_decodeRows);
+    });
     connect(options, &QPushButton::clicked, this, &FtxWindow::showOptions);
 
     m_optionsDialog = new QDialog(this);
@@ -272,16 +271,20 @@ void FtxWindow::buildUi() {
     stationGrid->addRow(QStringLiteral("Grid square"), m_grid);
     m_rxAudio = new QSpinBox(m_optionsDialog);
     m_txAudio = new QSpinBox(m_optionsDialog);
-    for (auto *tone : {m_rxAudio, m_txAudio}) { tone->setRange(100, 3200); tone->setSuffix(QStringLiteral(" Hz")); }
+    for (auto *tone : {m_rxAudio, m_txAudio}) {
+        tone->setRange(100, 3200);
+        tone->setSuffix(QStringLiteral(" Hz"));
+    }
     m_rxAudio->setValue(m_session.rxHz);
     m_txAudio->setValue(m_session.txHz);
     stationGrid->addRow(QStringLiteral("RX audio frequency"), m_rxAudio);
     stationGrid->addRow(QStringLiteral("TX audio frequency"), m_txAudio);
     optionsRoot->addLayout(stationGrid);
     auto *calibrate = new QPushButton(QStringLiteral("Calibrate TX audio level…"), m_optionsDialog);
-    auto *calibrationHelp = new QLabel(
-        QStringLiteral("Runs a protected tone in K4 TEST mode and saves the level that produces ALC 3–5. "
-                       "FT8 and FT4 share the saved calibration."), m_optionsDialog);
+    auto *calibrationHelp =
+        new QLabel(QStringLiteral("Runs a protected tone in K4 TEST mode and saves the level that produces ALC 3–5. "
+                                  "FT8 and FT4 share the saved calibration."),
+                   m_optionsDialog);
     calibrationHelp->setWordWrap(true);
     optionsRoot->addWidget(calibrate);
     optionsRoot->addWidget(calibrationHelp);
@@ -306,8 +309,8 @@ void FtxWindow::buildUi() {
     auto *udpBox = new QGroupBox(QStringLiteral("WSJT-X UDP broadcast"), m_optionsDialog);
     auto *udpForm = new QFormLayout(udpBox);
     auto *udpEnabled = new QCheckBox(QStringLiteral("Broadcast status, decodes, and logged QSOs"), udpBox);
-    auto *udpAddress = new QLineEdit(QSettings().value(QStringLiteral("wsjtUdp/address"),
-                                                       QStringLiteral("127.0.0.1")).toString(), udpBox);
+    auto *udpAddress = new QLineEdit(
+        QSettings().value(QStringLiteral("wsjtUdp/address"), QStringLiteral("127.0.0.1")).toString(), udpBox);
     auto *udpPort = new QSpinBox(udpBox);
     udpPort->setRange(1, 65535);
     udpPort->setValue(QSettings().value(QStringLiteral("wsjtUdp/port"), 2237).toInt());
@@ -319,39 +322,35 @@ void FtxWindow::buildUi() {
     auto *closeOptions = new QDialogButtonBox(QDialogButtonBox::Close, m_optionsDialog);
     optionsRoot->addWidget(closeOptions);
     connect(closeOptions, &QDialogButtonBox::rejected, m_optionsDialog, &QDialog::hide);
-    connect(calibrate, &QPushButton::clicked, this,
-            [this] { emit txSetupRequested(int(mode())); });
+    connect(calibrate, &QPushButton::clicked, this, [this] { emit txSetupRequested(int(mode())); });
     connect(autoLog, &QCheckBox::toggled, this, [this](bool enabled) {
         m_autoLog = enabled;
         QSettings().setValue(QStringLiteral("ft8/autoLog"), enabled);
     });
-    connect(m_rxAudio, &QSpinBox::valueChanged, this, [this](int hz) {
-        setTone(false, hz);
-    });
-    connect(m_txAudio, &QSpinBox::valueChanged, this, [this](int hz) {
-        setTone(true, hz);
-    });
+    connect(m_rxAudio, &QSpinBox::valueChanged, this, [this](int hz) { setTone(false, hz); });
+    connect(m_txAudio, &QSpinBox::valueChanged, this, [this](int hz) { setTone(true, hz); });
     connect(holdTx, &QCheckBox::toggled, this, [this](bool enabled) {
-        m_session.holdTx = enabled; QSettings().setValue(QStringLiteral("ft8/holdTx"), enabled);
+        m_session.holdTx = enabled;
+        QSettings().setValue(QStringLiteral("ft8/holdTx"), enabled);
     });
     connect(callFirst, &QCheckBox::toggled, this, [this](bool enabled) {
-        m_session.callFirst = enabled; QSettings().setValue(QStringLiteral("ft8/callFirst"), enabled);
+        m_session.callFirst = enabled;
+        QSettings().setValue(QStringLiteral("ft8/callFirst"), enabled);
     });
     connect(rr73, &QCheckBox::toggled, this, [this](bool enabled) {
-        m_session.useRr73 = enabled; QSettings().setValue(QStringLiteral("ft8/rr73"), enabled);
+        m_session.useRr73 = enabled;
+        QSettings().setValue(QStringLiteral("ft8/rr73"), enabled);
     });
     connect(retries, &QSpinBox::valueChanged, this, [this](int count) {
-        m_session.maxRetries = count; QSettings().setValue(QStringLiteral("ft8/maxRetries"), count);
+        m_session.maxRetries = count;
+        QSettings().setValue(QStringLiteral("ft8/maxRetries"), count);
     });
-    connect(udpEnabled, &QCheckBox::toggled, this, [](bool enabled) {
-        QSettings().setValue(QStringLiteral("wsjtUdp/enabled"), enabled);
-    });
-    connect(udpAddress, &QLineEdit::editingFinished, this, [udpAddress] {
-        QSettings().setValue(QStringLiteral("wsjtUdp/address"), udpAddress->text().trimmed());
-    });
-    connect(udpPort, &QSpinBox::editingFinished, this, [udpPort] {
-        QSettings().setValue(QStringLiteral("wsjtUdp/port"), udpPort->value());
-    });
+    connect(udpEnabled, &QCheckBox::toggled, this,
+            [](bool enabled) { QSettings().setValue(QStringLiteral("wsjtUdp/enabled"), enabled); });
+    connect(udpAddress, &QLineEdit::editingFinished, this,
+            [udpAddress] { QSettings().setValue(QStringLiteral("wsjtUdp/address"), udpAddress->text().trimmed()); });
+    connect(udpPort, &QSpinBox::editingFinished, this,
+            [udpPort] { QSettings().setValue(QStringLiteral("wsjtUdp/port"), udpPort->value()); });
 
     auto *operating = new QHBoxLayout;
     m_even = new QCheckBox(QStringLiteral("Transmit even periods"), body);
@@ -385,14 +384,11 @@ void FtxWindow::buildUi() {
         m_session.autoSequence = enabled;
         QSettings().setValue(QStringLiteral("ft8/autoSequence"), enabled);
     });
-    connect(m_power, &QDoubleSpinBox::editingFinished, this,
-            [this] { emit powerRequested(m_power->value()); });
+    connect(m_power, &QDoubleSpinBox::editingFinished, this, [this] { emit powerRequested(m_power->value()); });
 
     m_waterfall = new FtxWaterfallWidget(body);
     m_waterfall->setToolTip(QStringLiteral("Left-click sets RX tone; right-click sets TX tone"));
-    m_waterfall->frequencyChosen = [this](int hz, bool transmit) {
-        setTone(transmit, hz);
-    };
+    m_waterfall->frequencyChosen = [this](int hz, bool transmit) { setTone(transmit, hz); };
     m_tones = new QLabel(QStringLiteral("RX 1500 Hz  ·  TX 1500 Hz   (left-click RX, right-click TX)"), body);
     m_tones->setAlignment(Qt::AlignCenter);
     auto *waterPane = new QWidget(body);
@@ -403,9 +399,8 @@ void FtxWindow::buildUi() {
     waterLayout->addWidget(m_tones);
 
     m_activity = new QTableWidget(0, 5, body);
-    m_activity->setHorizontalHeaderLabels({QStringLiteral("UTC"), QStringLiteral("dB"),
-                                            QStringLiteral("Hz"), QStringLiteral("DT"),
-                                            QStringLiteral("Message")});
+    m_activity->setHorizontalHeaderLabels({QStringLiteral("UTC"), QStringLiteral("dB"), QStringLiteral("Hz"),
+                                           QStringLiteral("DT"), QStringLiteral("Message")});
     m_activity->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Stretch);
     m_activity->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_activity->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -422,9 +417,8 @@ void FtxWindow::buildUi() {
         if (splitterState.isEmpty() || !splitter->restoreState(splitterState))
             splitter->setSizes({150, 520});
     });
-    connect(splitter, &QSplitter::splitterMoved, this, [splitter] {
-        QSettings().setValue(QStringLiteral("ft8/splitterState"), splitter->saveState());
-    });
+    connect(splitter, &QSplitter::splitterMoved, this,
+            [splitter] { QSettings().setValue(QStringLiteral("ft8/splitterState"), splitter->saveState()); });
     connect(m_activity, &QTableWidget::cellClicked, this, [this](int row, int) { selectDecode(row, false); });
     connect(m_activity, &QTableWidget::cellDoubleClicked, this, [this](int row, int) { selectDecode(row, true); });
 
@@ -496,7 +490,8 @@ void FtxWindow::setTone(bool transmit, int hz) {
     m_selectedTxTone = transmit;
     m_waterfall->setMarkers(m_session.rxHz, m_session.txHz);
     m_tones->setText(QStringLiteral("RX %1 Hz  ·  TX %2 Hz   (%3 selected)")
-                         .arg(m_session.rxHz).arg(m_session.txHz)
+                         .arg(m_session.rxHz)
+                         .arg(m_session.txHz)
                          .arg(m_selectedTxTone ? QStringLiteral("TX") : QStringLiteral("RX")));
 }
 
@@ -520,14 +515,18 @@ void FtxWindow::setDecodeRows(int rows) {
 void FtxWindow::setTransmitProtection(const QString &status, bool fault) {
     m_protection->setText(status);
     m_protection->setStyleSheet(fault ? QStringLiteral("color:#ff7070;font-weight:bold;")
-                                     : QStringLiteral("color:#67ef89;"));
+                                      : QStringLiteral("color:#67ef89;"));
 }
 
-Ft8::Mode FtxWindow::mode() const { return m_mode->currentIndex() == 1 ? Ft8::Mode::FT4 : Ft8::Mode::FT8; }
-bool FtxWindow::receiving() const { return isVisible() && !m_liveTx; }
+Ft8::Mode FtxWindow::mode() const {
+    return m_mode->currentIndex() == 1 ? Ft8::Mode::FT4 : Ft8::Mode::FT8;
+}
+bool FtxWindow::receiving() const {
+    return isVisible() && !m_liveTx;
+}
 
-void FtxWindow::setRadioState(bool connected, qint64 frequencyHz, const QString &radioMode,
-                              bool transmitting, double watts) {
+void FtxWindow::setRadioState(bool connected, qint64 frequencyHz, const QString &radioMode, bool transmitting,
+                              double watts) {
     m_connected = connected;
     m_radioTx = transmitting;
     m_frequencyHz = frequencyHz;
@@ -548,7 +547,8 @@ void FtxWindow::addDecodes(const QVector<Ft8::Decode> &decodes) {
     for (const auto &decode : decodes) {
         if (decode.mode != mode())
             continue;
-        if (std::none_of(m_decodes.cbegin(), m_decodes.cend(), [&](const auto &old) { return old.id() == decode.id(); }))
+        if (std::none_of(m_decodes.cbegin(), m_decodes.cend(),
+                         [&](const auto &old) { return old.id() == decode.id(); }))
             m_decodes.prepend(decode);
         if (m_session.receive(decode))
             refreshSession();
@@ -560,17 +560,17 @@ void FtxWindow::addDecodes(const QVector<Ft8::Decode> &decodes) {
         const auto &d = m_decodes[row];
         const QString time = d.utc.toUTC().toString("HH:mm:ss");
         const QString db = d.snr ? Ft8::reportText(*d.snr) : QStringLiteral("—");
-        const QString detail = QStringLiteral("%1 UTC  ·  %2 dB  ·  %3 Hz  ·  DT %4")
-                                   .arg(time, db).arg(d.audioHz).arg(d.dt, 0, 'f', 1);
-        const QStringList cells{time,
-                                d.snr ? Ft8::reportText(*d.snr) : QStringLiteral("—"),
-                                QString::number(d.audioHz), QString::number(d.dt, 'f', 1),
+        const QString detail =
+            QStringLiteral("%1 UTC  ·  %2 dB  ·  %3 Hz  ·  DT %4").arg(time, db).arg(d.audioHz).arg(d.dt, 0, 'f', 1);
+        const QStringList cells{time, d.snr ? Ft8::reportText(*d.snr) : QStringLiteral("—"), QString::number(d.audioHz),
+                                QString::number(d.dt, 'f', 1),
                                 m_decodeRows == 2 ? d.message + QLatin1Char('\n') + detail : d.message};
         for (int column = 0; column < cells.size(); ++column)
             m_activity->setItem(row, column, new QTableWidgetItem(cells[column]));
         const auto parsed = Ft8::parseMessage(d.message);
-        const QColor color = parsed.cq ? QColor("#204f39")
-                            : parsed.to == m_session.myCall ? QColor("#662d35") : QColor("#172430");
+        const QColor color = parsed.cq                       ? QColor("#204f39")
+                             : parsed.to == m_session.myCall ? QColor("#662d35")
+                                                             : QColor("#172430");
         for (int column = 0; column < cells.size(); ++column)
             m_activity->item(row, column)->setBackground(color);
     }
@@ -579,7 +579,10 @@ void FtxWindow::addDecodes(const QVector<Ft8::Decode> &decodes) {
 void FtxWindow::addSpectrum(const QVector<float> &db, double firstHz, double binHz) {
     m_waterfall->addSpectrum(db, firstHz, binHz);
 }
-void FtxWindow::setReceiveStatus(const QString &status) { if (!m_liveTx) m_status->setText(status); }
+void FtxWindow::setReceiveStatus(const QString &status) {
+    if (!m_liveTx)
+        m_status->setText(status);
+}
 void FtxWindow::setTransmitState(bool active, const QString &status) {
     m_liveTx = active;
     m_txProgress->setVisible(active);
@@ -684,12 +687,13 @@ void FtxWindow::queueNextTransmit() {
 
 void FtxWindow::refreshSession() {
     m_message->setText(m_session.nextMessage);
-    m_partner->setText(m_session.dxCall.isEmpty()
-                           ? (m_session.callingCq ? QStringLiteral("Calling CQ") : QStringLiteral("No station selected"))
-                           : QStringLiteral("QSO: %1  %2  sent %3  received %4")
-                                 .arg(m_session.dxCall, m_session.dxGrid,
-                                      m_session.sentReport.isEmpty() ? QStringLiteral("—") : m_session.sentReport,
-                                      m_session.receivedReport.isEmpty() ? QStringLiteral("—") : m_session.receivedReport));
+    m_partner->setText(
+        m_session.dxCall.isEmpty()
+            ? (m_session.callingCq ? QStringLiteral("Calling CQ") : QStringLiteral("No station selected"))
+            : QStringLiteral("QSO: %1  %2  sent %3  received %4")
+                  .arg(m_session.dxCall, m_session.dxGrid,
+                       m_session.sentReport.isEmpty() ? QStringLiteral("—") : m_session.sentReport,
+                       m_session.receivedReport.isEmpty() ? QStringLiteral("—") : m_session.receivedReport));
     const bool canArm = !m_liveTx && !m_radioTx;
     m_cqButton->setEnabled(canArm);
     m_callButton->setEnabled(canArm && !m_session.dxCall.isEmpty());
@@ -709,8 +713,7 @@ void FtxWindow::refreshSession() {
 }
 
 AdifRecord FtxWindow::contactRecord() const {
-    auto record = basicContact(m_session.dxCall, Ft8::modeName(mode()), m_frequencyHz,
-                               m_call->text());
+    auto record = basicContact(m_session.dxCall, Ft8::modeName(mode()), m_frequencyHz, m_call->text());
     record["GRIDSQUARE"] = m_session.dxGrid;
     record["MY_GRIDSQUARE"] = m_grid->text().trimmed().toUpper();
     record["RST_SENT"] = m_session.sentReport;
@@ -760,8 +763,7 @@ void SstvWindow::buildUi() {
     protectionRow->addWidget(m_txProtection, 1);
     protectionRow->addWidget(txSetup);
     root->addLayout(protectionRow);
-    connect(txSetup, &QPushButton::clicked, this,
-            [this] { emit txSetupRequested(int(DigitalTxGuard::Mode::Sstv)); });
+    connect(txSetup, &QPushButton::clicked, this, [this] { emit txSetupRequested(int(DigitalTxGuard::Mode::Sstv)); });
     m_tabs = new QTabWidget(body);
     root->addWidget(m_tabs, 1);
 
@@ -814,7 +816,10 @@ void SstvWindow::buildUi() {
     m_mode = new QComboBox(transmit);
     for (const auto &spec : SstvModeRegistry::all())
         m_mode->addItem(QStringLiteral("%1 · %2×%3 · %4 s")
-                            .arg(spec.displayName).arg(spec.width).arg(spec.height).arg(spec.durationMs / 1000),
+                            .arg(spec.displayName)
+                            .arg(spec.width)
+                            .arg(spec.height)
+                            .arg(spec.durationMs / 1000),
                         int(spec.id));
     m_mode->setCurrentIndex(m_mode->findData(int(SstvModeId::ScottieS1)));
     m_modeInfo = new QLabel(transmit);
@@ -876,8 +881,7 @@ void SstvWindow::buildUi() {
         m_myCall->setText(m_myCall->text().trimmed().toUpper());
         QSettings().setValue("digital/myCall", m_myCall->text());
     });
-    connect(m_power, &QDoubleSpinBox::editingFinished, this,
-            [this] { emit powerRequested(m_power->value()); });
+    connect(m_power, &QDoubleSpinBox::editingFinished, this, [this] { emit powerRequested(m_power->value()); });
     connect(m_send, &QPushButton::clicked, this, [this] {
         if (m_sourceImage.isNull()) {
             QMessageBox::warning(this, QStringLiteral("SSTV"), QStringLiteral("Choose an image first."));
@@ -886,14 +890,12 @@ void SstvWindow::buildUi() {
         const auto *spec = SstvModeRegistry::find(SstvModeId(m_mode->currentData().toInt()));
         if (!spec)
             return;
-        const auto scaled = m_sourceImage.scaled(spec->width, spec->height, Qt::KeepAspectRatioByExpanding,
-                                                  Qt::SmoothTransformation);
+        const auto scaled =
+            m_sourceImage.scaled(spec->width, spec->height, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
         const auto frame = scaled.copy(QRect(qMax(0, (scaled.width() - spec->width) / 2),
-                                              qMax(0, (scaled.height() - spec->height) / 2),
-                                              spec->width, spec->height));
+                                             qMax(0, (scaled.height() - spec->height) / 2), spec->width, spec->height));
         emit transmitRequested(frame, int(spec->id), m_cwId->isChecked() ? m_myCall->text() : QString(),
-                               m_cwWpm->currentData().toInt(),
-                               m_fskId->isChecked() ? m_myCall->text() : QString());
+                               m_cwWpm->currentData().toInt(), m_fskId->isChecked() ? m_myCall->text() : QString());
     });
     connect(m_stop, &QPushButton::pressed, this, &SstvWindow::stopRequested);
     connect(logTx, &QPushButton::clicked, this, [this] { emit logContactRequested(contactRecord()); });
@@ -902,8 +904,9 @@ void SstvWindow::buildUi() {
 }
 
 void SstvWindow::chooseImage() {
-    const QString path = QFileDialog::getOpenFileName(this, QStringLiteral("Choose SSTV image"), {},
-                                                       QStringLiteral("Images (*.png *.jpg *.jpeg *.bmp *.webp);;All files (*)"));
+    const QString path =
+        QFileDialog::getOpenFileName(this, QStringLiteral("Choose SSTV image"), {},
+                                     QStringLiteral("Images (*.png *.jpg *.jpeg *.bmp *.webp);;All files (*)"));
     if (path.isEmpty())
         return;
     QImage image(path);
@@ -919,14 +922,15 @@ void SstvWindow::refreshPreview() {
     const auto *spec = m_mode ? SstvModeRegistry::find(SstvModeId(m_mode->currentData().toInt())) : nullptr;
     if (!spec)
         return;
-    m_modeInfo->setText(QStringLiteral("%1×%2 · about %3 s").arg(spec->width).arg(spec->height).arg(spec->durationMs / 1000));
+    m_modeInfo->setText(
+        QStringLiteral("%1×%2 · about %3 s").arg(spec->width).arg(spec->height).arg(spec->durationMs / 1000));
     if (!m_sourceImage.isNull())
-        m_txImage->setPixmap(QPixmap::fromImage(m_sourceImage).scaled(m_txImage->size(), Qt::KeepAspectRatio,
-                                                                      Qt::SmoothTransformation));
+        m_txImage->setPixmap(
+            QPixmap::fromImage(m_sourceImage).scaled(m_txImage->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
 }
 
-void SstvWindow::setRadioState(bool connected, qint64 rxFrequencyHz, const QString &rxMode,
-                               qint64 txFrequencyHz, const QString &txMode, double watts) {
+void SstvWindow::setRadioState(bool connected, qint64 rxFrequencyHz, const QString &rxMode, qint64 txFrequencyHz,
+                               const QString &txMode, double watts) {
     m_connected = connected;
     m_rxFrequency = rxFrequencyHz;
     m_txFrequency = txFrequencyHz;
@@ -939,28 +943,30 @@ void SstvWindow::setRadioState(bool connected, qint64 rxFrequencyHz, const QStri
                               formatFrequency(rxFrequencyHz), rxMode, formatFrequency(txFrequencyHz), txMode)
                          .arg(watts, 0, 'f', watts < 10 ? 1 : 0));
 }
-void SstvWindow::setReceiveStatus(const QString &status) { m_rxStatus->setText(status); }
-void SstvWindow::setReceiveLevel(int percent) { m_rxLevel->setValue(percent); }
-void SstvWindow::setReceiveImage(const QImage &image, int completedRows, int totalRows,
-                                 const QString &slantStatus) {
+void SstvWindow::setReceiveStatus(const QString &status) {
+    m_rxStatus->setText(status);
+}
+void SstvWindow::setReceiveLevel(int percent) {
+    m_rxLevel->setValue(percent);
+}
+void SstvWindow::setReceiveImage(const QImage &image, int completedRows, int totalRows, const QString &slantStatus) {
     m_receiveImageValue = image;
-    m_rxImage->setPixmap(QPixmap::fromImage(image).scaled(m_rxImage->size(), Qt::KeepAspectRatio,
-                                                            Qt::SmoothTransformation));
+    m_rxImage->setPixmap(
+        QPixmap::fromImage(image).scaled(m_rxImage->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
     m_rxStatus->setText(QStringLiteral("Decoding %1/%2 lines · %3").arg(completedRows).arg(totalRows).arg(slantStatus));
 }
-void SstvWindow::completeReceiveImage(const QImage &image, int modeId, const QString &slantStatus,
-                                      qint64 frequencyHz) {
+void SstvWindow::completeReceiveImage(const QImage &image, int modeId, const QString &slantStatus, qint64 frequencyHz) {
     m_receiveImageValue = image;
     const auto *spec = SstvModeRegistry::find(SstvModeId(modeId));
     QString error;
-    if (!m_storage.saveReceived(image, modeId, spec ? spec->displayName : QStringLiteral("SSTV"),
-                                slantStatus, frequencyHz, nullptr, &error))
+    if (!m_storage.saveReceived(image, modeId, spec ? spec->displayName : QStringLiteral("SSTV"), slantStatus,
+                                frequencyHz, nullptr, &error))
         m_rxStatus->setText(QStringLiteral("Decoded, but could not save: %1").arg(error));
     else
         m_rxStatus->setText(QStringLiteral("Image complete · %1 · saved to history")
                                 .arg(spec ? spec->displayName : QStringLiteral("SSTV")));
-    m_rxImage->setPixmap(QPixmap::fromImage(image).scaled(m_rxImage->size(), Qt::KeepAspectRatio,
-                                                            Qt::SmoothTransformation));
+    m_rxImage->setPixmap(
+        QPixmap::fromImage(image).scaled(m_rxImage->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
     refreshHistory();
 }
 void SstvWindow::receiveCallsign(const QString &callsign, const QString &source, int confidence) {
@@ -986,7 +992,9 @@ void SstvWindow::setTransmitProtection(const QString &status, bool fault) {
     m_txProtection->setStyleSheet(fault ? QStringLiteral("color:#ff7070;font-weight:bold;")
                                         : QStringLiteral("color:#67ef89;"));
 }
-bool SstvWindow::receiving() const { return isVisible() && !m_programTx; }
+bool SstvWindow::receiving() const {
+    return isVisible() && !m_programTx;
+}
 
 void SstvWindow::refreshHistory() {
     QString error;
@@ -995,9 +1003,9 @@ void SstvWindow::refreshHistory() {
     m_historyCombo->clear();
     m_historyCombo->addItem(QStringLiteral("Live image"));
     for (const auto &record : m_history)
-        m_historyCombo->addItem(QStringLiteral("%1 · %2 · %3")
-                                    .arg(record.receivedUtc.toLocalTime().toString("yyyy-MM-dd HH:mm"),
-                                         record.modeName, record.callsign));
+        m_historyCombo->addItem(
+            QStringLiteral("%1 · %2 · %3")
+                .arg(record.receivedUtc.toLocalTime().toString("yyyy-MM-dd HH:mm"), record.modeName, record.callsign));
 }
 void SstvWindow::selectHistory(int index) {
     if (index <= 0 || index - 1 >= m_history.size())
@@ -1006,16 +1014,15 @@ void SstvWindow::selectHistory(int index) {
     QImage image(record.imagePath);
     if (!image.isNull()) {
         m_receiveImageValue = image;
-        m_rxImage->setPixmap(QPixmap::fromImage(image).scaled(m_rxImage->size(), Qt::KeepAspectRatio,
-                                                                Qt::SmoothTransformation));
+        m_rxImage->setPixmap(
+            QPixmap::fromImage(image).scaled(m_rxImage->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
         m_rxCall->setText(record.callsign);
         m_rxFrequency = record.frequencyHz;
     }
 }
 AdifRecord SstvWindow::contactRecord() const {
-    return basicContact(m_tabs->currentIndex() == 0 ? m_rxCall->text() : m_toCall->text(),
-                        QStringLiteral("SSTV"), m_tabs->currentIndex() == 0 ? m_rxFrequency : m_txFrequency,
-                        m_myCall->text());
+    return basicContact(m_tabs->currentIndex() == 0 ? m_rxCall->text() : m_toCall->text(), QStringLiteral("SSTV"),
+                        m_tabs->currentIndex() == 0 ? m_rxFrequency : m_txFrequency, m_myCall->text());
 }
 void SstvWindow::closeEvent(QCloseEvent *event) {
     if (m_programTx)
@@ -1023,8 +1030,7 @@ void SstvWindow::closeEvent(QCloseEvent *event) {
     event->accept();
 }
 
-LogbookWindow::LogbookWindow(QWidget *parent)
-    : QMainWindow(parent), m_logbook(logPath()) {
+LogbookWindow::LogbookWindow(QWidget *parent) : QMainWindow(parent), m_logbook(logPath()) {
     setWindowTitle(QStringLiteral("QK4 — Logbook"));
     setAttribute(Qt::WA_DeleteOnClose, false);
     resize(980, 650);
@@ -1041,8 +1047,8 @@ void LogbookWindow::buildUi() {
     root->addWidget(m_search);
     m_table = new QTableWidget(0, 7, body);
     m_table->setHorizontalHeaderLabels({QStringLiteral("UTC"), QStringLiteral("Call"), QStringLiteral("Band"),
-                                        QStringLiteral("Mode"), QStringLiteral("Frequency"),
-                                        QStringLiteral("Grid"), QStringLiteral("Comments")});
+                                        QStringLiteral("Mode"), QStringLiteral("Frequency"), QStringLiteral("Grid"),
+                                        QStringLiteral("Comments")});
     m_table->horizontalHeader()->setSectionResizeMode(6, QHeaderView::Stretch);
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -1081,8 +1087,13 @@ void LogbookWindow::buildUi() {
     connect(exportButton, &QPushButton::clicked, this, &LogbookWindow::exportAdif);
 }
 
-void LogbookWindow::showEvent(QShowEvent *event) { QMainWindow::showEvent(event); reload(); }
-void LogbookWindow::setDefaults(const AdifRecord &record) { m_defaults = record; }
+void LogbookWindow::showEvent(QShowEvent *event) {
+    QMainWindow::showEvent(event);
+    reload();
+}
+void LogbookWindow::setDefaults(const AdifRecord &record) {
+    m_defaults = record;
+}
 void LogbookWindow::reload() {
     QString error;
     if (!m_logbook.load(&error))
@@ -1106,9 +1117,12 @@ void LogbookWindow::populate() {
         const int row = m_table->rowCount();
         m_table->insertRow(row);
         const QStringList values{record.value("QSO_DATE") + QLatin1Char(' ') + record.value("TIME_ON"),
-                                 record.value("CALL"), record.value("BAND"),
-                                 Ft8Logbook::canonicalMode(record), record.value("FREQ"),
-                                 record.value("GRIDSQUARE"), record.value("COMMENT")};
+                                 record.value("CALL"),
+                                 record.value("BAND"),
+                                 Ft8Logbook::canonicalMode(record),
+                                 record.value("FREQ"),
+                                 record.value("GRIDSQUARE"),
+                                 record.value("COMMENT")};
         for (int column = 0; column < values.size(); ++column)
             m_table->setItem(row, column, new QTableWidgetItem(values[column]));
         m_table->item(row, 0)->setData(Qt::UserRole, index);
@@ -1120,12 +1134,21 @@ bool LogbookWindow::editRecord(AdifRecord record, int index) {
     dialog.setWindowTitle(index < 0 ? QStringLiteral("Add contact") : QStringLiteral("Edit contact"));
     auto *root = new QVBoxLayout(&dialog);
     auto *form = new QFormLayout;
-    const QList<QPair<QString, QString>> definitions{
-        {"CALL", "Callsign"}, {"QSO_DATE", "UTC date (YYYYMMDD)"}, {"TIME_ON", "UTC time (HHMMSS)"},
-        {"FREQ", "Frequency (MHz)"}, {"BAND", "Band"}, {"MODE", "Mode"}, {"SUBMODE", "Submode"},
-        {"RST_SENT", "Report sent"}, {"RST_RCVD", "Report received"}, {"GRIDSQUARE", "Station grid"},
-        {"STATION_CALLSIGN", "My callsign"}, {"MY_GRIDSQUARE", "My grid"}, {"NAME", "Name"},
-        {"QTH", "Location"}, {"COMMENT", "Comments"}};
+    const QList<QPair<QString, QString>> definitions{{"CALL", "Callsign"},
+                                                     {"QSO_DATE", "UTC date (YYYYMMDD)"},
+                                                     {"TIME_ON", "UTC time (HHMMSS)"},
+                                                     {"FREQ", "Frequency (MHz)"},
+                                                     {"BAND", "Band"},
+                                                     {"MODE", "Mode"},
+                                                     {"SUBMODE", "Submode"},
+                                                     {"RST_SENT", "Report sent"},
+                                                     {"RST_RCVD", "Report received"},
+                                                     {"GRIDSQUARE", "Station grid"},
+                                                     {"STATION_CALLSIGN", "My callsign"},
+                                                     {"MY_GRIDSQUARE", "My grid"},
+                                                     {"NAME", "Name"},
+                                                     {"QTH", "Location"},
+                                                     {"COMMENT", "Comments"}};
     QMap<QString, QLineEdit *> fields;
     for (const auto &definition : definitions) {
         auto *field = new QLineEdit(record.value(definition.first), &dialog);
@@ -1141,7 +1164,10 @@ bool LogbookWindow::editRecord(AdifRecord record, int index) {
         return false;
     for (auto it = fields.cbegin(); it != fields.cend(); ++it) {
         const QString value = it.value()->text().trimmed();
-        if (value.isEmpty()) record.remove(it.key()); else record[it.key()] = value;
+        if (value.isEmpty())
+            record.remove(it.key());
+        else
+            record[it.key()] = value;
     }
     QString error;
     const bool saved = index < 0 ? m_logbook.append(record, &error) : m_logbook.replace(index, record, &error);
@@ -1153,16 +1179,24 @@ bool LogbookWindow::editRecord(AdifRecord record, int index) {
 
 bool LogbookWindow::addContact(const AdifRecord &record, bool review, QString *error) {
     reload();
-    if (review) { show(); raise(); activateWindow(); }
+    if (review) {
+        show();
+        raise();
+        activateWindow();
+    }
     return review ? editRecord(record) : m_logbook.append(record, error);
 }
 
 void LogbookWindow::importAdif() {
     const QString path = QFileDialog::getOpenFileName(this, QStringLiteral("Import ADIF"), {},
-                                                       QStringLiteral("ADIF (*.adi *.adif);;All files (*)"));
-    if (path.isEmpty()) return;
+                                                      QStringLiteral("ADIF (*.adi *.adif);;All files (*)"));
+    if (path.isEmpty())
+        return;
     QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) { QMessageBox::warning(this, QStringLiteral("Import ADIF"), file.errorString()); return; }
+    if (!file.open(QIODevice::ReadOnly)) {
+        QMessageBox::warning(this, QStringLiteral("Import ADIF"), file.errorString());
+        return;
+    }
     const auto preview = m_logbook.preview(QString::fromUtf8(file.readAll()));
     if (!preview.errors.isEmpty()) {
         QMessageBox::warning(this, QStringLiteral("Import ADIF"), preview.errors.join(QLatin1Char('\n')));
@@ -1170,7 +1204,8 @@ void LogbookWindow::importAdif() {
     }
     if (QMessageBox::question(this, QStringLiteral("Import ADIF"),
                               QStringLiteral("Import %1 new contacts? %2 duplicates will be skipped.")
-                                  .arg(preview.records.size()).arg(preview.duplicates)) != QMessageBox::Yes)
+                                  .arg(preview.records.size())
+                                  .arg(preview.duplicates)) != QMessageBox::Yes)
         return;
     QString error;
     if (!m_logbook.importRecords(preview, &error))
@@ -1181,10 +1216,14 @@ void LogbookWindow::importAdif() {
 void LogbookWindow::exportAdif() {
     QString error;
     const QString text = m_logbook.exportAdif(&error);
-    if (text.isEmpty()) { QMessageBox::warning(this, QStringLiteral("Export ADIF"), error); return; }
-    const QString path = QFileDialog::getSaveFileName(this, QStringLiteral("Export ADIF"), QStringLiteral("qk4-log.adi"),
-                                                       QStringLiteral("ADIF (*.adi)"));
-    if (path.isEmpty()) return;
+    if (text.isEmpty()) {
+        QMessageBox::warning(this, QStringLiteral("Export ADIF"), error);
+        return;
+    }
+    const QString path = QFileDialog::getSaveFileName(this, QStringLiteral("Export ADIF"),
+                                                      QStringLiteral("qk4-log.adi"), QStringLiteral("ADIF (*.adi)"));
+    if (path.isEmpty())
+        return;
     QSaveFile file(path);
     const QByteArray data = text.toUtf8();
     if (!file.open(QIODevice::WriteOnly) || file.write(data) != data.size() || !file.commit())

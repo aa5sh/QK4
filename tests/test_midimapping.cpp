@@ -56,10 +56,8 @@ void TestMidiMapping::ctr2DefaultsMatchK4Control() {
     QCOMPARE(mapping.buttons.value(1).action, QStringLiteral("mode_next"));
     QCOMPARE(mapping.buttons.value(16).action, QStringLiteral("tune"));
     QVERIFY(MidiMapping::supportedButtonActions().contains(QStringLiteral("tx_rx_toggle")));
-    QCOMPARE(MidiMapping::buttonActionLabel(QStringLiteral("tx_rx_toggle")),
-             QStringLiteral("TX/RX toggle"));
-    QCOMPARE(MidiMapping::buttonActionLabel(QStringLiteral("tune_step")),
-             QStringLiteral("Rate"));
+    QCOMPARE(MidiMapping::buttonActionLabel(QStringLiteral("tx_rx_toggle")), QStringLiteral("TX/RX toggle"));
+    QCOMPARE(MidiMapping::buttonActionLabel(QStringLiteral("tune_step")), QStringLiteral("Rate"));
     QVERIFY(MidiMapping::supportedButtonActions().contains(QStringLiteral("khz")));
     QCOMPARE(MidiMapping::buttonActionLabel(QStringLiteral("khz")), QStringLiteral("KHZ"));
 }
@@ -79,15 +77,13 @@ void TestMidiMapping::ctr2ExtendedDefaultsInitializeHomeOnly() {
 void TestMidiMapping::ctr2ButtonModeTransitionUsesHomeOnly() {
     auto normal = MidiMapping::ctr2Default();
     normal.buttons[2] = {QStringLiteral("macro"), QStringLiteral("normal-button-2")};
-    normal.macros[QStringLiteral("normal-button-2")] = {
-        QStringLiteral("Normal Button 2"), QStringLiteral("SWT13;")};
+    normal.macros[QStringLiteral("normal-button-2")] = {QStringLiteral("Normal Button 2"), QStringLiteral("SWT13;")};
 
     const auto extended = MidiMapping::withCtr2ButtonMode(normal, true);
     QVERIFY(extended.extendedButtons);
     QCOMPARE(extended.buttons.size(), 48);
     QCOMPARE(extended.buttons.value(2).action, QStringLiteral("macro"));
-    QCOMPARE(extended.macros.value(extended.buttons.value(2).macroId).command,
-             QStringLiteral("SWT13;"));
+    QCOMPARE(extended.macros.value(extended.buttons.value(2).macroId).command, QStringLiteral("SWT13;"));
     QCOMPARE(extended.buttons.value(26).action, normal.buttons.value(12).action);
     QCOMPARE(extended.buttons.value(8).action, QStringLiteral("disabled"));
     QCOMPARE(extended.buttons.value(32).action, QStringLiteral("disabled"));
@@ -96,8 +92,7 @@ void TestMidiMapping::ctr2ButtonModeTransitionUsesHomeOnly() {
     QVERIFY(!reduced.extendedButtons);
     QCOMPARE(reduced.buttons.size(), 12);
     QCOMPARE(reduced.buttons.value(2).action, QStringLiteral("macro"));
-    QCOMPARE(reduced.macros.value(reduced.buttons.value(2).macroId).command,
-             QStringLiteral("SWT13;"));
+    QCOMPARE(reduced.macros.value(reduced.buttons.value(2).macroId).command, QStringLiteral("SWT13;"));
     QCOMPARE(reduced.buttons.value(12).action, normal.buttons.value(12).action);
 }
 
@@ -117,12 +112,9 @@ void TestMidiMapping::ctr2ButtonLayoutsMatchDocumentedNotes() {
     QCOMPARE(extended.at(12), 7);
     QCOMPARE(extended.at(13), 31);
     QCOMPARE(extended.last(), 48);
-    QCOMPARE(MidiMapping::ctr2ButtonLabel(true, 1),
-             QStringLiteral("Home knob mode Button 1 short"));
-    QCOMPARE(MidiMapping::ctr2ButtonLabel(true, 31),
-             QStringLiteral("Knob mode 1 Button 1 long"));
-    QCOMPARE(MidiMapping::ctr2ButtonLabel(true, 48),
-             QStringLiteral("Knob mode 3 Button 6 long"));
+    QCOMPARE(MidiMapping::ctr2ButtonLabel(true, 1), QStringLiteral("Home knob mode Button 1 short"));
+    QCOMPARE(MidiMapping::ctr2ButtonLabel(true, 31), QStringLiteral("Knob mode 1 Button 1 long"));
+    QCOMPARE(MidiMapping::ctr2ButtonLabel(true, 48), QStringLiteral("Knob mode 3 Button 6 long"));
 }
 
 void TestMidiMapping::jsonRoundTrip() {
@@ -149,21 +141,15 @@ void TestMidiMapping::buttonModeFileCompatibilityAndValidation() {
     QCOMPARE(json.value(QStringLiteral("_buttonModeGuide")).toArray().size(), 5);
     const QJsonArray extendedButtons = json.value(QStringLiteral("buttons")).toArray();
     const QJsonObject firstExtendedButton = extendedButtons.at(0).toObject();
-    QCOMPARE(firstExtendedButton.value(QStringLiteral("buttonLabel")).toString(),
-             QStringLiteral("Button 1"));
+    QCOMPARE(firstExtendedButton.value(QStringLiteral("buttonLabel")).toString(), QStringLiteral("Button 1"));
     QCOMPARE(firstExtendedButton.value(QStringLiteral("note")).toInt(), 1);
-    QCOMPARE(firstExtendedButton.value(QStringLiteral("pressType")).toString(),
-             QStringLiteral("short"));
-    QCOMPARE(firstExtendedButton.value(QStringLiteral("knobMode")).toString(),
-             QStringLiteral("Home"));
+    QCOMPARE(firstExtendedButton.value(QStringLiteral("pressType")).toString(), QStringLiteral("short"));
+    QCOMPARE(firstExtendedButton.value(QStringLiteral("knobMode")).toString(), QStringLiteral("Home"));
     const QJsonObject lastExtendedButton = extendedButtons.last().toObject();
-    QCOMPARE(lastExtendedButton.value(QStringLiteral("buttonLabel")).toString(),
-             QStringLiteral("Button 6"));
+    QCOMPARE(lastExtendedButton.value(QStringLiteral("buttonLabel")).toString(), QStringLiteral("Button 6"));
     QCOMPARE(lastExtendedButton.value(QStringLiteral("note")).toInt(), 48);
-    QCOMPARE(lastExtendedButton.value(QStringLiteral("pressType")).toString(),
-             QStringLiteral("long"));
-    QCOMPARE(lastExtendedButton.value(QStringLiteral("knobMode")).toString(),
-             QStringLiteral("Knob mode 3"));
+    QCOMPARE(lastExtendedButton.value(QStringLiteral("pressType")).toString(), QStringLiteral("long"));
+    QCOMPARE(lastExtendedButton.value(QStringLiteral("knobMode")).toString(), QStringLiteral("Knob mode 3"));
 
     MidiMapping::DeviceMapping decoded;
     QString error;
@@ -189,8 +175,7 @@ void TestMidiMapping::buttonModeFileCompatibilityAndValidation() {
 
     QJsonObject invalidNormalNote = MidiMapping::toJson(MidiMapping::ctr2Default());
     QJsonArray buttons = invalidNormalNote.value(QStringLiteral("buttons")).toArray();
-    buttons.append(QJsonObject{{QStringLiteral("note"), 25},
-                               {QStringLiteral("action"), QStringLiteral("disabled")}});
+    buttons.append(QJsonObject{{QStringLiteral("note"), 25}, {QStringLiteral("action"), QStringLiteral("disabled")}});
     invalidNormalNote.insert(QStringLiteral("buttons"), buttons);
     QVERIFY(!MidiMapping::fromJson(invalidNormalNote, &decoded, &error));
     QVERIFY(error.contains(QStringLiteral("normal"), Qt::CaseInsensitive));
@@ -234,8 +219,7 @@ void TestMidiMapping::exportedFileDocumentsEveryPredefinedAction() {
     QVERIFY(!comments.isEmpty());
     QVERIFY(comments.at(1).toString().contains(QStringLiteral("documentation only")));
 
-    const QJsonArray buttonActionGuide =
-        json.value(QStringLiteral("_buttonActionGuide")).toArray();
+    const QJsonArray buttonActionGuide = json.value(QStringLiteral("_buttonActionGuide")).toArray();
     QCOMPARE(buttonActionGuide.size(), 7);
     QVERIFY(buttonActionGuide.at(0).toString().contains(QStringLiteral("reference list")));
     QVERIFY(buttonActionGuide.at(2).toString().contains(QStringLiteral("adjust_")));
@@ -244,49 +228,47 @@ void TestMidiMapping::exportedFileDocumentsEveryPredefinedAction() {
     QVERIFY(buttonActionGuide.at(5).toString().contains(QStringLiteral("do not need")));
     QVERIFY(buttonActionGuide.at(6).toString().contains(QStringLiteral("nr_level")));
 
-    const QJsonObject selectedAdjustmentExample =
-        json.value(QStringLiteral("_selectedAdjustmentExample")).toObject();
-    QVERIFY(selectedAdjustmentExample.value(QStringLiteral("pairingRule")).toString()
+    const QJsonObject selectedAdjustmentExample = json.value(QStringLiteral("_selectedAdjustmentExample")).toObject();
+    QVERIFY(selectedAdjustmentExample.value(QStringLiteral("pairingRule"))
+                .toString()
                 .contains(QStringLiteral("No note-to-CC pairing")));
-    QVERIFY(selectedAdjustmentExample.value(QStringLiteral("ordering")).toString()
+    QVERIFY(selectedAdjustmentExample.value(QStringLiteral("ordering"))
+                .toString()
                 .contains(QStringLiteral("do not matter")));
-    QCOMPARE(selectedAdjustmentExample.value(QStringLiteral("buttonArrayEntry")).toObject()
-                 .value(QStringLiteral("action")).toString(),
+    QCOMPARE(selectedAdjustmentExample.value(QStringLiteral("buttonArrayEntry"))
+                 .toObject()
+                 .value(QStringLiteral("action"))
+                 .toString(),
              QStringLiteral("adjust_nr_level"));
-    QCOMPARE(selectedAdjustmentExample.value(QStringLiteral("knobArrayEntry")).toObject()
-                 .value(QStringLiteral("action")).toString(),
+    QCOMPARE(selectedAdjustmentExample.value(QStringLiteral("knobArrayEntry"))
+                 .toObject()
+                 .value(QStringLiteral("action"))
+                 .toString(),
              QStringLiteral("selected_adjustment"));
 
     const QJsonArray knobs = json.value(QStringLiteral("knobs")).toArray();
     const QJsonObject homeTurn = knobs.at(0).toObject();
-    QCOMPARE(homeTurn.value(QStringLiteral("controlLabel")).toString(),
-             QStringLiteral("Home turn"));
+    QCOMPARE(homeTurn.value(QStringLiteral("controlLabel")).toString(), QStringLiteral("Home turn"));
     QCOMPARE(homeTurn.value(QStringLiteral("knobMode")).toString(), QStringLiteral("Home"));
     QCOMPARE(homeTurn.value(QStringLiteral("gesture")).toString(), QStringLiteral("turn"));
-    const QJsonObject homeButtonNotes =
-        homeTurn.value(QStringLiteral("buttonOutputNotes")).toObject();
-    QCOMPARE(homeButtonNotes.value(QStringLiteral("normal")).toObject()
-                 .value(QStringLiteral("counterClockwise")).toInt(), 40);
-    QCOMPARE(homeButtonNotes.value(QStringLiteral("extended")).toObject()
-                 .value(QStringLiteral("clockwise")).toInt(), 61);
+    const QJsonObject homeButtonNotes = homeTurn.value(QStringLiteral("buttonOutputNotes")).toObject();
+    QCOMPARE(
+        homeButtonNotes.value(QStringLiteral("normal")).toObject().value(QStringLiteral("counterClockwise")).toInt(),
+        40);
+    QCOMPARE(homeButtonNotes.value(QStringLiteral("extended")).toObject().value(QStringLiteral("clockwise")).toInt(),
+             61);
 
     const QJsonArray buttons = json.value(QStringLiteral("buttons")).toArray();
     const QJsonObject firstButton = buttons.at(0).toObject();
-    QCOMPARE(firstButton.value(QStringLiteral("buttonLabel")).toString(),
-             QStringLiteral("Button 1"));
+    QCOMPARE(firstButton.value(QStringLiteral("buttonLabel")).toString(), QStringLiteral("Button 1"));
     QCOMPARE(firstButton.value(QStringLiteral("note")).toInt(), 1);
-    QCOMPARE(firstButton.value(QStringLiteral("pressType")).toString(),
-             QStringLiteral("short"));
-    QCOMPARE(firstButton.value(QStringLiteral("knobMode")).toString(),
-             QStringLiteral("All knob modes"));
+    QCOMPARE(firstButton.value(QStringLiteral("pressType")).toString(), QStringLiteral("short"));
+    QCOMPARE(firstButton.value(QStringLiteral("knobMode")).toString(), QStringLiteral("All knob modes"));
     const QJsonObject lastButton = buttons.last().toObject();
-    QCOMPARE(lastButton.value(QStringLiteral("buttonLabel")).toString(),
-             QStringLiteral("Button 6"));
+    QCOMPARE(lastButton.value(QStringLiteral("buttonLabel")).toString(), QStringLiteral("Button 6"));
     QCOMPARE(lastButton.value(QStringLiteral("note")).toInt(), 16);
-    QCOMPARE(lastButton.value(QStringLiteral("pressType")).toString(),
-             QStringLiteral("long"));
-    QCOMPARE(lastButton.value(QStringLiteral("knobMode")).toString(),
-             QStringLiteral("All knob modes"));
+    QCOMPARE(lastButton.value(QStringLiteral("pressType")).toString(), QStringLiteral("long"));
+    QCOMPARE(lastButton.value(QStringLiteral("knobMode")).toString(), QStringLiteral("All knob modes"));
 
     const QJsonArray knobOutputGuide = json.value(QStringLiteral("_knobOutputGuide")).toArray();
     QCOMPARE(knobOutputGuide.size(), 6);
@@ -295,23 +277,18 @@ void TestMidiMapping::exportedFileDocumentsEveryPredefinedAction() {
     QVERIFY(knobOutputGuide.at(0).toString().contains(QStringLiteral("CC100")));
     QVERIFY(knobOutputGuide.at(0).toString().contains(QStringLiteral("CC101")));
 
-    const QJsonObject buttonActionGroups =
-        json.value(QStringLiteral("_buttonActions")).toObject();
-    const QJsonObject immediateActions =
-        buttonActionGroups.value(QStringLiteral("immediateActions")).toObject();
-    const QJsonObject adjustmentSelectors =
-        buttonActionGroups.value(QStringLiteral("adjustmentSelectors")).toObject();
+    const QJsonObject buttonActionGroups = json.value(QStringLiteral("_buttonActions")).toObject();
+    const QJsonObject immediateActions = buttonActionGroups.value(QStringLiteral("immediateActions")).toObject();
+    const QJsonObject adjustmentSelectors = buttonActionGroups.value(QStringLiteral("adjustmentSelectors")).toObject();
     for (const QString &action : MidiMapping::supportedButtonActions()) {
         if (action == QStringLiteral("macro"))
             continue;
-        const QJsonObject &group = action.startsWith(QStringLiteral("adjust_"))
-                                       ? adjustmentSelectors
-                                       : immediateActions;
+        const QJsonObject &group =
+            action.startsWith(QStringLiteral("adjust_")) ? adjustmentSelectors : immediateActions;
         QVERIFY2(group.contains(action), qPrintable(action));
         QCOMPARE(group.value(action).toString(), MidiMapping::buttonActionLabel(action));
     }
-    QCOMPARE(immediateActions.size() + adjustmentSelectors.size(),
-             MidiMapping::supportedButtonActions().size() - 1);
+    QCOMPARE(immediateActions.size() + adjustmentSelectors.size(), MidiMapping::supportedButtonActions().size() - 1);
     QVERIFY(!immediateActions.contains(QStringLiteral("macro")));
     QVERIFY(!adjustmentSelectors.contains(QStringLiteral("macro")));
     QVERIFY(immediateActions.contains(QStringLiteral("nr_toggle")));
@@ -545,8 +522,7 @@ void TestMidiMapping::ctr2SliderControlsUseSingleSignedSteps() {
     QSignalSpy knobSpy(&router, &MidiInputRouter::knobActionRequested);
 
     const int controls[] = {102, 106, 107};
-    const QString actions[] = {QStringLiteral("other_vfo_frequency"),
-                               QStringLiteral("rf_power"),
+    const QString actions[] = {QStringLiteral("other_vfo_frequency"), QStringLiteral("rf_power"),
                                QStringLiteral("cw_speed")};
     for (int index = 0; index < 3; ++index) {
         const int cc = controls[index];
@@ -718,8 +694,7 @@ void TestMidiMapping::adjustmentSelectorsCoverTypedKnobs() {
     const QStringList knobActions = MidiMapping::supportedKnobActions();
     const QStringList buttonActions = MidiMapping::supportedButtonActions();
     for (const QString &knobAction : knobActions) {
-        if (knobAction == QStringLiteral("disabled")
-            || knobAction == QStringLiteral("selected_adjustment")) {
+        if (knobAction == QStringLiteral("disabled") || knobAction == QStringLiteral("selected_adjustment")) {
             continue;
         }
         const QString selector = QStringLiteral("adjust_") + knobAction;
@@ -793,4 +768,3 @@ void TestMidiMapping::routesCtr2ShortAndLongButtons() {
 
 QTEST_APPLESS_MAIN(TestMidiMapping)
 #include "test_midimapping.moc"
-

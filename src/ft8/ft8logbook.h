@@ -37,4 +37,3 @@ private:
     bool m_loaded = false;
     QVector<AdifRecord> m_records;
 };
-
