@@ -672,15 +672,16 @@ void MenuOverlayWidget::updateNormButton() {
     }
 
     MenuItem *item = m_itemWidgets[m_selectedIndex]->menuItem();
-    bool isDefault = (item->currentValue == item->defaultValue);
-
-    if (isDefault) {
-        // Grey - value is at default
-        m_normBtn->setStyleSheet(normBtnDefault);
-    } else {
-        // White/bright - value differs from default
-        m_normBtn->setStyleSheet(normBtnActive);
+    if (item->isReadOnly()) {
+        // NORM cannot change a read-only item, so it must not light up for one either
+        m_normBtn->setStyleSheet(normBtnDisabled);
+        return;
     }
+
+    // Lit when the item IS at its default - NORM reads "this is the normal setting". Pressing it on
+    // an item that is not sets the default, and the value change re-runs this and lights it.
+    const bool isDefault = (item->currentValue == item->defaultValue);
+    m_normBtn->setStyleSheet(isDefault ? normBtnActive : normBtnDefault);
 }
 
 void MenuOverlayWidget::onMenuValueChanged(int menuId, int newValue) {
