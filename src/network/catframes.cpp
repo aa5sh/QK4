@@ -296,7 +296,7 @@ QByteArray noiseReduction(int level, bool on) {
 }
 
 QByteArray agcSpeed(int agc) {
-    return QString("GT%1;").arg(agc, 3, 10, QChar('0')).toUtf8();
+    return QString("GT%1;").arg(qBound(0, agc, 2)).toUtf8();
 }
 
 QByteArray vox(const RadioState &rs) {

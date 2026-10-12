@@ -877,6 +877,27 @@ private slots:
 
         QCOMPARE(sendCommand(server, "VX;"), expected);
     }
+
+    // #134. The K4D at R40 answered GT2; QK4 answered GT002, the K3's three-digit form. The same
+    // builder sends TCI's agc_mode to the radio, so GT002 went to the K4 as well.
+    void testGtIsOneDigit_data() {
+        QTest::addColumn<QString>("fromRadio");
+        QTest::newRow("off") << "GT0;";
+        QTest::newRow("slow") << "GT1;";
+        QTest::newRow("fast") << "GT2;";
+    }
+
+    void testGtIsOneDigit() {
+        QFETCH(QString, fromRadio);
+        RadioState rs;
+        rs.parseCATCommand(fromRadio);
+
+        CatServer server(&rs);
+        QVERIFY(server.start(0));
+
+        QCOMPARE(sendCommand(server, "GT;"), fromRadio);
+        QCOMPARE(CatFrames::agcSpeed(fromRadio.mid(2, 1).toInt()), fromRadio.toUtf8());
+    }
 };
 
 QTEST_MAIN(TestCatServer)

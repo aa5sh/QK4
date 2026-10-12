@@ -97,6 +97,7 @@ QByteArray setRfPower(int value, bool qrp);
 
 // NRnnm: nn is the level, m is on/off - the radio's form in both directions (NR050 is level 05, off).
 QByteArray noiseReduction(int level, bool on);
+// GTn, one digit: 0 off, 1 slow, 2 fast - the radio's form in both directions (GT2 at R40).
 QByteArray agcSpeed(int agc);
 // VXmn: the radio keeps VOX per mode group (C = CW, V = voice, D = data) and answers a bare `VX;`
 // with the group of the CURRENT mode - measured on a K4D at R40, in DATA: VXD0 while VXC1 was on.
