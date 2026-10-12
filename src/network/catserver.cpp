@@ -224,6 +224,33 @@ QByteArray CatServer::handleCommand(const QString &cmd, QTcpSocket *client) {
             const int rg = m_radioState->rfGainB();
             return rg < 0 ? QByteArray() : CatFrames::rfGain(rg, true);
         }
+        if (prefix == "RO") {
+            return CatFrames::subRx(CatFrames::ritOffset(m_radioState->ritXitOffsetB()));
+        }
+        if (prefix == "RT") {
+            return CatFrames::subRx(CatFrames::ritEnabled(m_radioState->ritEnabledB()));
+        }
+        if (prefix == "GT") {
+            return CatFrames::subRx(CatFrames::agcSpeed(static_cast<int>(m_radioState->agcSpeedB())));
+        }
+        if (prefix == "NB") {
+            return CatFrames::subRx(CatFrames::setNoiseBlanker(m_radioState->noiseBlankerLevelB(),
+                                                               m_radioState->noiseBlankerEnabledB(),
+                                                               m_radioState->noiseBlankerFilterWidthB()));
+        }
+        if (prefix == "NR") {
+            return CatFrames::subRx(CatFrames::noiseReduction(m_radioState->noiseReductionLevelB(),
+                                                              m_radioState->noiseReductionEnabledB()));
+        }
+        if (prefix == "BW") {
+            const int bw = m_radioState->filterBandwidthB();
+            return bw < 0 ? QByteArray() : CatFrames::subRx(CatFrames::setFilterBandwidth(bw));
+        }
+        if (prefix == "DT") {
+            const int dt = m_radioState->dataSubModeB();
+            return dt < 0 ? QByteArray() : CatFrames::subRx(CatFrames::dataSubMode(dt));
+        }
+        // XT$ stays unanswered: the radio itself does not answer it.
     }
 
     // Handle GET commands (no args) - respond from RadioState
@@ -279,13 +306,15 @@ QByteArray CatServer::handleCommand(const QString &cmd, QTcpSocket *client) {
             return CatFrames::vox(*m_radioState);
         }
         if (prefix == "BW") {
-            return CatFrames::setFilterBandwidth(m_radioState->filterBandwidth());
+            const int bw = m_radioState->filterBandwidth();
+            return bw < 0 ? QByteArray() : CatFrames::setFilterBandwidth(bw);
         }
         if (prefix == "ID") {
             return QByteArray("ID017;"); // K4 ID
         }
         if (prefix == "DT") {
-            return CatFrames::dataSubMode(m_radioState->dataSubMode());
+            const int dt = m_radioState->dataSubMode();
+            return dt < 0 ? QByteArray() : CatFrames::dataSubMode(dt);
         }
         if (prefix == "OM") {
             QString om = m_radioState->optionModules();

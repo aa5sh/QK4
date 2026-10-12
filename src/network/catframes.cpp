@@ -303,6 +303,10 @@ QByteArray rfGain(int magnitude, bool subRx) {
     return QString("RG%1-%2;").arg(subRx ? "$" : "").arg(qBound(0, magnitude, 99), 2, 10, QChar('0')).toUtf8();
 }
 
+QByteArray subRx(const QByteArray &mainFrame) {
+    return mainFrame.left(2) + '$' + mainFrame.mid(2);
+}
+
 QByteArray agcSpeed(int agc) {
     return QString("GT%1;").arg(qBound(0, agc, 2)).toUtf8();
 }

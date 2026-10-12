@@ -103,6 +103,9 @@ QByteArray agcSpeed(int agc);
 QByteArray squelch(int level, bool subRx);
 // RG-nn / RG$-nn - the radio's form (RG-00 at R40). RadioState stores the magnitude.
 QByteArray rfGain(int magnitude, bool subRx);
+// The Sub RX form of a two-letter main frame: `$` after the prefix (RT0; -> RT$0;). Every Sub RX
+// reply measured on a K4D at R40 has this shape: RO$+0000, RT$0, GT$2, NB$0301, NR$050, BW$0020, DT$0.
+QByteArray subRx(const QByteArray &mainFrame);
 // VXmn: the radio keeps VOX per mode group (C = CW, V = voice, D = data) and answers a bare `VX;`
 // with the group of the CURRENT mode - measured on a K4D at R40, in DATA: VXD0 while VXC1 was on.
 QByteArray vox(const RadioState &rs);

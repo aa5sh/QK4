@@ -934,6 +934,43 @@ private slots:
         QCOMPARE(sendCommand(server, "RG;"), QString("RG-00;"));
         QCOMPARE(sendCommand(server, "RG$;"), QString("RG$-12;"));
     }
+
+    // #134. Only MD$ was answered; every other Sub RX query reached the radio and its reply went to
+    // QK4, not the client. Each row is the radio's own reply, captured from a K4D at R40.
+    void testSubRxQueriesAnswerTheRadiosForm_data() {
+        QTest::addColumn<QString>("fromRadio");
+        QTest::addColumn<QString>("query");
+        QTest::newRow("RO$") << "RO$+0000;" << "RO$;";
+        QTest::newRow("RT$") << "RT$0;" << "RT$;";
+        QTest::newRow("GT$") << "GT$2;" << "GT$;";
+        QTest::newRow("NB$") << "NB$0301;" << "NB$;";
+        QTest::newRow("NR$") << "NR$050;" << "NR$;";
+        QTest::newRow("BW$") << "BW$0020;" << "BW$;";
+        QTest::newRow("DT$") << "DT$0;" << "DT$;";
+    }
+
+    void testSubRxQueriesAnswerTheRadiosForm() {
+        QFETCH(QString, fromRadio);
+        QFETCH(QString, query);
+        RadioState rs;
+        rs.parseCATCommand(fromRadio);
+
+        CatServer server(&rs);
+        QVERIFY(server.start(0));
+
+        QCOMPARE(sendCommand(server, query), fromRadio);
+    }
+
+    // Before the radio reports them, BW and DT have nothing true to say. DT answered DT-1; - not even
+    // well-formed.
+    void testBwAndDtAreSilentUntilTheRadioReportsThem() {
+        RadioState rs;
+        CatServer server(&rs);
+        QVERIFY(server.start(0));
+
+        QCOMPARE(sendCommand(server, "DT;"), QString());
+        QCOMPARE(sendCommand(server, "BW$;"), QString());
+    }
 };
 
 QTEST_MAIN(TestCatServer)
