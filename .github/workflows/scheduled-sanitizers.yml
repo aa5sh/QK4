@@ -7,6 +7,12 @@ name: Scheduled · Sanitizers
 # Failures become a tracked GitHub issue instead of an unread red run: one open
 # tracking issue per sanitizer kind (found by label), with a comment appended
 # per failing run — no duplicate issues.
+#
+# Qt is built here, with TSan, rather than installed from apt. A distro Qt is not
+# instrumented, so TSan cannot see Qt's own locking and reports every cross-thread
+# queued call as a data race — #172, reproduced with a Qt-only program. See
+# scripts/build-qtbase-tsan.sh. Only qtbase is built (the tests need nothing else)
+# and it is cached, so only the first run after the script changes pays for it.
 
 on:
   schedule:
@@ -23,7 +29,8 @@ jobs:
     if: github.repository == 'mikeg-dal/QK4'
     name: ${{ matrix.name }}
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # A cold cache builds qtbase with TSan first; a warm one restores it in seconds.
+    timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
@@ -37,19 +44,29 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
-      - name: Install Qt 6 and dependencies
+      - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y qt6-base-dev qt6-base-private-dev \
-            qt6-multimedia-dev qt6-serialport-dev qt6-svg-dev \
-            qt6-shadertools-dev \
-            libopus-dev libhidapi-dev libusb-1.0-0-dev libssl-dev libudev-dev libasound2-dev
+          sudo apt-get install -y cmake ninja-build pkg-config perl python3 \
+            libfontconfig1-dev libfreetype-dev \
+            libopus-dev libhidapi-dev libusb-1.0-0-dev libssl-dev libudev-dev
+
+      - name: Restore TSan-instrumented qtbase
+        id: qt-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ~/qt-tsan
+          key: qtbase-tsan-${{ runner.os }}-${{ env.ImageOS }}-${{ hashFiles('scripts/build-qtbase-tsan.sh') }}
+
+      - name: Build TSan-instrumented qtbase
+        if: steps.qt-cache.outputs.cache-hit != 'true'
+        run: scripts/build-qtbase-tsan.sh "$HOME/qt-tsan"
 
       - name: Configure CMake
         env:
           CXXFLAGS: ${{ matrix.cxxflags }}
           LDFLAGS: ${{ matrix.ldflags }}
-        run: cmake -B build-san ${{ matrix.cmake_args }}
+        run: cmake -B build-san -G Ninja ${{ matrix.cmake_args }} -DQK4_TESTS_ONLY=ON -DCMAKE_PREFIX_PATH="$HOME/qt-tsan"
 
       - name: Build instrumented tests
         run: cmake --build build-san --target qk4_tests
