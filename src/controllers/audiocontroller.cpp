@@ -239,6 +239,11 @@ void AudioController::setSubVolume(float vol) {
         m_audioEngine->setSubVolume(vol);
 }
 
+void AudioController::setRxBoostDb(int db) {
+    if (m_audioEngine)
+        m_audioEngine->setRxBoostDb(db);
+}
+
 void AudioController::setBalanceMode(int mode) {
     if (m_audioEngine)
         m_audioEngine->setBalanceMode(mode);

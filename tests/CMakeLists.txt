@@ -500,6 +500,12 @@ target_include_directories(test_meterscale PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_meterscale Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
 add_test(NAME MeterScaleTests COMMAND test_meterscale)
 
+# RX playback boost + soft limiter - header-only, no audio device.
+add_executable(test_rxoutputstage test_rxoutputstage.cpp)
+target_include_directories(test_rxoutputstage PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_rxoutputstage Qt6::Core Qt6::Test)
+add_test(NAME RxOutputStageTests COMMAND test_rxoutputstage)
+
 # Form-control theming — renders bare controls under the app-wide fallback stylesheet, offscreen.
 add_executable(test_formcontroltheme
     test_formcontroltheme.cpp

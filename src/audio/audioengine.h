@@ -62,6 +62,9 @@ public:
     // Channel volume controls (applied at playback time for instant response)
     void setMainVolume(float volume);
     void setSubVolume(float volume);
+    // Boost above the MAIN/SUB sliders, 0 to +12 dB in 3 dB steps (Options -> Audio Output). Above
+    // 0 dB the output also goes through RxOutputStage's soft limiter.
+    void setRxBoostDb(int db);
     float mainVolume() const { return m_mainVolume.load(std::memory_order_relaxed); }
     float subVolume() const { return m_subVolume.load(std::memory_order_relaxed); }
 
@@ -215,11 +218,11 @@ private:
         double sumSqSub = 0.0;
         float peakMain = 0.0f;
         float peakSub = 0.0f;
-        float peakOut = 0.0f; // before the clamp, so it can read above 0 dBFS
-        int clipped = 0;
+        float peakOut = 0.0f; // before the clamp or limiter, so it can read above 0 dBFS
+        int clipped = 0;      // samples over full scale before that stage: clipped at 0 dB, rounded off when boosted
     };
     RxLevelStats m_rxStats;
-    void reportRxLevels(float mainVol, float subVol);
+    void reportRxLevels(float mainVol, float subVol, float boost);
 
     // Audio output format: 12kHz stereo Float32 (K4 RX audio, L=Main R=Sub)
     QAudioFormat m_outputFormat;
@@ -249,6 +252,7 @@ private:
     // Channel volume controls (0.0 to 1.0)
     std::atomic<float> m_mainVolume{1.0f};
     std::atomic<float> m_subVolume{1.0f};
+    std::atomic<float> m_rxBoostGain{1.0f};
 
     // SUB RX mute state (true = sub muted, sub channel is silent)
     std::atomic<bool> m_subMuted{true}; // Starts muted (SUB RX is off at startup)

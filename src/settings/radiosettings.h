@@ -142,6 +142,10 @@ public:
     int tciTxGain() const;
     void setTciTxGain(int value); // 0-100, default 25
 
+    // RX playback boost above the MAIN/SUB sliders, in dB: 0, 3, 6, 9 or 12 (default 0).
+    int rxAudioBoostDb() const;
+    void setRxAudioBoostDb(int db);
+
     // Macro settings
     QMap<QString, MacroEntry> macros() const;
     MacroEntry macro(const QString &functionId) const;
@@ -222,6 +226,7 @@ signals:
     void tciServerPortChanged(quint16 port);
     void tciAudioEnabledChanged(bool enabled);
     void tciTxGainChanged(int value);
+    void rxAudioBoostDbChanged(int db);
     void macrosChanged();
     void halikeyEnabledChanged(bool enabled);
     void halikeyPortNameChanged(const QString &portName);

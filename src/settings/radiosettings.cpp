@@ -1,4 +1,5 @@
 #include "radiosettings.h"
+#include "audio/rxoutputstage.h"
 
 // Starting point for the TCI transmit level: 25% on the cubic curve is 0.0156x, measured on a K4 as
 // keeping ALC at or below 5 on an injected signal, WITH WSJT-X'S OWN OUTPUT AT 80%.
@@ -430,6 +431,19 @@ void RadioSettings::setTciTxGain(int value) {
         m_settings.setValue("tci/txGain", value);
         m_settings.sync();
         emit tciTxGainChanged(value);
+    }
+}
+
+int RadioSettings::rxAudioBoostDb() const {
+    return RxOutputStage::snapBoostDb(m_settings.value("audio/rxBoostDb", 0).toInt());
+}
+
+void RadioSettings::setRxAudioBoostDb(int db) {
+    db = RxOutputStage::snapBoostDb(db);
+    if (rxAudioBoostDb() != db) {
+        m_settings.setValue("audio/rxBoostDb", db);
+        m_settings.sync();
+        emit rxAudioBoostDbChanged(db);
     }
 }
 

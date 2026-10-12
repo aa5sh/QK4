@@ -1,6 +1,7 @@
 #include "ui/pages/audiooutputpage.h"
 #include "ui/styling/k4styles.h"
 #include "audio/audioengine.h"
+#include "audio/rxoutputstage.h"
 #include "controllers/audiocontroller.h"
 #include "settings/radiosettings.h"
 #include <QFrame>
@@ -50,6 +51,28 @@ AudioOutputPage::AudioOutputPage(AudioController *audioController, QWidget *pare
     helpLabel->setWordWrap(true);
     layout->addWidget(helpLabel);
 
+    layout->addSpacing(K4Styles::Dimensions::PaddingMedium);
+
+    // === RX audio boost ===
+    auto *boostLabel = new QLabel("RX audio boost:", this);
+    boostLabel->setStyleSheet(K4Styles::Dialog::formLabel());
+    layout->addWidget(boostLabel);
+
+    m_rxBoostCombo = new QComboBox(this);
+    m_rxBoostCombo->setStyleSheet(K4Styles::Dialog::comboBox());
+    for (int db = 0; db <= RxOutputStage::kMaxBoostDb; db += RxOutputStage::kBoostStepDb) {
+        m_rxBoostCombo->addItem(db == 0 ? QStringLiteral("Off (0 dB)") : QStringLiteral("+%1 dB").arg(db), db);
+    }
+    m_rxBoostCombo->setCurrentIndex(m_rxBoostCombo->findData(RadioSettings::instance()->rxAudioBoostDb()));
+    connect(m_rxBoostCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            &AudioOutputPage::onRxBoostChanged);
+    layout->addWidget(m_rxBoostCombo);
+
+    auto *boostHelp = new QLabel("Raises receive audio above what the MAIN and SUB sliders reach at 100%.", this);
+    boostHelp->setStyleSheet(K4Styles::Dialog::helpText());
+    boostHelp->setWordWrap(true);
+    layout->addWidget(boostHelp);
+
     layout->addStretch();
 }
 
@@ -78,6 +101,16 @@ void AudioOutputPage::populateSpeakerDevices() {
     }
 
     m_speakerDeviceCombo->setCurrentIndex(selectedIndex);
+}
+
+void AudioOutputPage::onRxBoostChanged(int index) {
+    if (!m_rxBoostCombo || index < 0)
+        return;
+    const int db = m_rxBoostCombo->itemData(index).toInt();
+    RadioSettings::instance()->setRxAudioBoostDb(db);
+    if (m_audioController) {
+        m_audioController->setRxBoostDb(db);
+    }
 }
 
 void AudioOutputPage::onSpeakerDeviceChanged(int index) {

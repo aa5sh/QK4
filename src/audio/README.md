@@ -10,6 +10,7 @@ RX and TX audio pipeline. Owned by `controllers/audiocontroller.cpp`.
 - `rawaudioformat.h` — header-only, Qt-free. Builds the EM0 (S32LE, 24-bit) and EM1 (S16LE) TX wire payloads from a captured **Float32** mono frame. Holds `EM0_FULL_SCALE` (2^23 — EM0 is 24-bit in a 32-bit container), which `OpusDecoder::NORMALIZE_K4_RAW` is derived from so the two directions of EM0 cannot drift apart. See the WHY block for AUD-003 and the 2026-09-19 calibration.
 - `audiodeviceselection.h` — header-only, Qt-free. Decides which device a stream belongs on when the device list changes. Follows the system default when nothing is pinned, and claims a PINNED device the moment it reappears — a pinned device absent at startup falls back silently, and without this the stream never returned to it.
 - `audiodecimator.h` — header-only, Qt-free. Decimates a captured mic stream to the K4's 12 kHz. The factor comes from the rate the DEVICE reports, not one we demand: asking for a fixed 48 kHz produced zero bytes from an AirPods Pro while Qt reported the format as supported. See its WHY block (INT-005).
+- `rxoutputstage.h` — header-only, Qt-free. The last stage of RX playback: the 0 to +12 dB boost above the MAIN/SUB sliders (Options → Audio Output) and the soft limiter used when it is above 0 dB. Tested in `tests/test_rxoutputstage.cpp`.
 - `sidetonegenerator.{cpp,h}` — Real-time CW sidetone synthesis at 48kHz.
 
 ## Threading

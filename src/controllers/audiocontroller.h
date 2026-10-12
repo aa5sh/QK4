@@ -66,6 +66,7 @@ public:
     // Volume/mix controls (atomic — safe from any thread)
     void setMainVolume(float vol);
     void setSubVolume(float vol);
+    void setRxBoostDb(int db); // 0 to +12 dB above the sliders; see RxOutputStage
 
     // Read-through to the engine's atomics. READS ONLY - these change nothing. Safe from any
     // thread because the underlying members are std::atomic<float>.

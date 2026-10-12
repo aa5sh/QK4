@@ -1302,7 +1302,9 @@ void MainWindow::onRadioReady() {
     m_connectionController->sendCAT(QString("SL%1;").arg(sl));
     m_radioState->parseCATCommand(QString("SL%1;").arg(sl));
 
-    // Start audio engine via AudioController
+    // Start audio engine via AudioController. The boost is applied here rather than read inside
+    // AudioController's constructor, which already reaches for settings it should be given (#151).
+    m_audioController->setRxBoostDb(RadioSettings::instance()->rxAudioBoostDb());
     m_audioController->startAudio(m_sideControlPanel->volume() / 100.0f, m_sideControlPanel->subVolume() / 100.0f,
                                   RadioSettings::instance()->micGain() / 100.0f);
 
