@@ -246,6 +246,12 @@ constexpr int ChartScaleTickLen = 5;        // Length of the left-edge scale tic
 constexpr int VfoIndicatorWidth = 34;  // VFO A/B label width on panadapter
 constexpr int VfoIndicatorHeight = 30; // VFO A/B label height on panadapter
 
+// Under each VFO's frequency: the multifunction meter OR the mini-pan, then the feature row (AGC, PRE,
+// ATT, NB, NR, NTCH, APF), which stays visible either way. Panel + 2 px layout spacing + row = 150,
+// the height the meter-or-mini-pan block had when the feature row was hidden by the mini-pan.
+constexpr int VfoPanelHeight = 130;     // Meter (5 bars) or mini-pan; both pages of the VFO's stack
+constexpr int VfoFeatureRowHeight = 18; // The feature indicator row below it
+
 // =============================================================================
 // Dialog Dimensions
 // =============================================================================

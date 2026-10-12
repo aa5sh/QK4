@@ -64,10 +64,10 @@ void VFOWidget::setupUi() {
     m_stackedWidget->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
     m_stackedWidget->setMaximumWidth(270); // Fit all indicators with values (ATT-6, NTCH-A/M, APF-150)
 
-    // Page 0: Normal content (multifunction meter + features)
-    // Height must match MiniPanRhiWidget (150px) to prevent layout shift when toggling
+    // Page 0: the multifunction meter. Same height as the mini-pan (page 1), so toggling between
+    // them never shifts the layout. The feature row is NOT on this page - see below.
     m_normalContent = new QWidget(m_stackedWidget);
-    m_normalContent->setFixedSize(270, 150); // Fit all indicators with values (ATT-6, NTCH-A/M, APF-150)
+    m_normalContent->setFixedSize(270, K4Styles::Dimensions::VfoPanelHeight);
     auto *normalLayout = new QVBoxLayout(m_normalContent);
     normalLayout->setContentsMargins(0, 0, 0, 0);
     normalLayout->setSpacing(2);
@@ -78,8 +78,10 @@ void VFOWidget::setupUi() {
     m_txMeter->setFixedWidth(260); // Match expanded indicator row
     normalLayout->addWidget(m_txMeter);
 
-    // Row 3: AGC, PRE, ATT, NB, NR labels (aligned with meter)
-    auto *featuresContainer = new QWidget(m_normalContent);
+    // Row 3: AGC, PRE, ATT, NB, NR, NTCH, APF. Its own row below the stack, so it stays visible when
+    // the mini-pan replaces the meter.
+    auto *featuresContainer = new QWidget(this);
+    featuresContainer->setFixedHeight(K4Styles::Dimensions::VfoFeatureRowHeight);
     auto *featuresRow = new QHBoxLayout(featuresContainer);
     featuresRow->setContentsMargins(0, 0, 0, 0);
     featuresRow->setSpacing(4); // Comfortable spacing for all indicators
@@ -119,9 +121,6 @@ void VFOWidget::setupUi() {
     featuresRow->addWidget(m_ntchLabel);
     featuresRow->addWidget(m_apfLabel);
 
-    // Features row is left-aligned within its container for both VFOs
-    normalLayout->addWidget(featuresContainer, 0, Qt::AlignLeft);
-
     m_stackedWidget->addWidget(m_normalContent); // Index 0
 
     // Page 1: Placeholder for Mini-Pan widget
@@ -131,16 +130,31 @@ void VFOWidget::setupUi() {
     // ALL QRhiWidgets in the window from initializing properly.
     m_miniPan = nullptr; // Will be created on first showMiniPan() call
 
-    // Wrap stacked widget in HBox for edge alignment
+    // The stack and the feature row share one column, the size the meter page used to be on its
+    // own (270 x 150). WHY one column and not a third row in mainLayout: this widget is usually
+    // given more height than it needs and mainLayout shares the spare among its rows, so adding a
+    // row moved the frequency display and the meter. With the column the row count is unchanged
+    // and every pixel stays where it was; the feature row sits left-aligned below the stack, where
+    // it was on the meter page.
+    auto *panelColumn = new QWidget(this);
+    panelColumn->setFixedSize(270,
+                              K4Styles::Dimensions::VfoPanelHeight + 2 + K4Styles::Dimensions::VfoFeatureRowHeight);
+    auto *panelColumnLayout = new QVBoxLayout(panelColumn);
+    panelColumnLayout->setContentsMargins(0, 0, 0, 0);
+    panelColumnLayout->setSpacing(2);
+    panelColumnLayout->addWidget(m_stackedWidget);
+    panelColumnLayout->addWidget(featuresContainer, 0, Qt::AlignLeft);
+
+    // Wrap the column in HBox for edge alignment
     // VFO A: content on left, VFO B: content on right (mirrored layout)
     auto *stackedRow = new QHBoxLayout();
     stackedRow->setContentsMargins(0, 0, 0, 0);
     if (m_type == VFO_A) {
-        stackedRow->addWidget(m_stackedWidget);
+        stackedRow->addWidget(panelColumn);
         stackedRow->addStretch();
     } else {
         stackedRow->addStretch();
-        stackedRow->addWidget(m_stackedWidget);
+        stackedRow->addWidget(panelColumn);
     }
     mainLayout->addLayout(stackedRow);
 
