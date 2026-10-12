@@ -290,6 +290,9 @@ const QString &comboBox();
 /// Full line edit styling (dark bg, focus border)
 const QString &lineEdit();
 
+/// Full spin box styling (dark bg, focus border, drawn step arrows)
+const QString &spinBox();
+
 /// Checkbox with indicator sizing (enabled)
 const QString &checkBox();
 

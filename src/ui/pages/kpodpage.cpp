@@ -156,6 +156,7 @@ void KpodPage::setupKeyerConfigSection(QVBoxLayout *parentLayout) {
     auto *encodeLabel = new QLabel("Encode Mode", gridWidget);
     encodeLabel->setStyleSheet(labelStyle);
     m_encodeModeCombo = new QComboBox(gridWidget);
+    m_encodeModeCombo->setStyleSheet(K4Styles::Dialog::comboBox());
     m_encodeModeCombo->addItem("Element (KZ)", 0);
     m_encodeModeCombo->addItem("ASCII (KX)", 1);
     m_encodeModeCombo->setCurrentIndex(settings->kpodPlusEncodeMode());

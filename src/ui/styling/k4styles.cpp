@@ -713,8 +713,7 @@ const QString &comboBox() {
                 "           padding: %6px; font-size: %5px; border-radius: %7px; }"
                 "QComboBox:focus { border-color: %4; }"
                 "QComboBox::drop-down { border: none; width: 20px; }"
-                "QComboBox::down-arrow { image: none; border-left: 5px solid transparent; "
-                "           border-right: 5px solid transparent; border-top: 5px solid %2; }"
+                "QComboBox::down-arrow { image: url(:/icons/arrow-down.svg); width: 10px; height: 6px; }"
                 "QComboBox QAbstractItemView { background-color: %1; color: %2; selection-background-color: %4; }")
             .arg(Colors::DarkBackground, Colors::TextWhite, Colors::DialogBorder, Colors::AccentAmber)
             .arg(Dimensions::FontSizePopup)
@@ -728,6 +727,28 @@ const QString &lineEdit() {
         QString("QLineEdit { background-color: %1; color: %2; border: 1px solid %3; "
                 "           padding: %6px; font-size: %5px; border-radius: %7px; }"
                 "QLineEdit:focus { border-color: %4; }")
+            .arg(Colors::DarkBackground, Colors::TextWhite, Colors::DialogBorder, Colors::AccentAmber)
+            .arg(Dimensions::FontSizePopup)
+            .arg(Dimensions::PaddingSmall)
+            .arg(Dimensions::SliderBorderRadius);
+    return s;
+}
+
+const QString &spinBox() {
+    // WHY: the step buttons and arrows are styled here too. Styling only the frame leaves them to
+    // the platform, which on Windows 11 dark mode renders them dark-on-dark - the checkbox
+    // indicator failure again. The arrows are SVGs because the zero-size-border triangle trick
+    // renders as a solid bar, not a triangle.
+    static const QString s =
+        QString("QSpinBox { background-color: %1; color: %2; border: 1px solid %3; "
+                "           padding: %6px; padding-right: 18px; font-size: %5px; border-radius: %7px; }"
+                "QSpinBox:focus { border-color: %4; }"
+                "QSpinBox::up-button, QSpinBox::down-button { subcontrol-origin: border; width: 16px; "
+                "           border: none; background: transparent; }"
+                "QSpinBox::up-button { subcontrol-position: top right; }"
+                "QSpinBox::down-button { subcontrol-position: bottom right; }"
+                "QSpinBox::up-arrow { image: url(:/icons/arrow-up.svg); width: 10px; height: 6px; }"
+                "QSpinBox::down-arrow { image: url(:/icons/arrow-down.svg); width: 10px; height: 6px; }")
             .arg(Colors::DarkBackground, Colors::TextWhite, Colors::DialogBorder, Colors::AccentAmber)
             .arg(Dimensions::FontSizePopup)
             .arg(Dimensions::PaddingSmall)

@@ -493,6 +493,8 @@ qt_add_resources(${PROJECT_NAME} "icons"
     PREFIX "/"
     BASE "resources"
     FILES
+        resources/icons/arrow-down.svg
+        resources/icons/arrow-up.svg
         resources/icons/globe.svg
         resources/icons/help.svg
 )

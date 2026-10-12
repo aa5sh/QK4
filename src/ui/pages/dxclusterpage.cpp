@@ -229,10 +229,11 @@ DxClusterPage::DxClusterPage(DxClusterController *controller, QWidget *parent)
     fontLabel->setStyleSheet(K4Styles::Dialog::formLabel());
     fontLabel->setFixedWidth(100);
     m_spotFontSizeSpin = new QSpinBox(this);
+    m_spotFontSizeSpin->setStyleSheet(K4Styles::Dialog::spinBox());
     m_spotFontSizeSpin->setRange(K4Styles::Dimensions::FontSizeSpotMin, K4Styles::Dimensions::FontSizeSpotMax);
     m_spotFontSizeSpin->setSingleStep(1);
     m_spotFontSizeSpin->setSuffix(" px");
-    m_spotFontSizeSpin->setFixedWidth(70);
+    m_spotFontSizeSpin->setFixedWidth(80);
     m_spotFontSizeSpin->setValue(RadioSettings::instance()->dxClusterSpotFontSize());
     connect(m_spotFontSizeSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
             [](int value) { RadioSettings::instance()->setDxClusterSpotFontSize(value); });
