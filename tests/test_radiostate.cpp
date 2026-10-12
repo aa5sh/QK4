@@ -1956,7 +1956,7 @@ private slots:
     // MX (audio mix routing: "<L>.<R>" with A/B/AB/-A components).
     // =========================================================================
 
-    // --- LO (Line Out: LOlllrrrm; lll=left 0-40, rrr=right 0-40, m=mode) ---
+    // --- LO (Line Out: LOlllrrrm; lll=left 0-50, rrr=right 0-50, m=mode) ---
     void testLineOutParses() {
         RadioState rs;
         QSignalSpy spy(&rs, &RadioState::lineOutChanged);
@@ -1965,6 +1965,27 @@ private slots:
         QCOMPARE(rs.lineOutRight(), 30);
         QCOMPARE(rs.lineOutRightEqualsLeft(), false);
         QCOMPARE(spy.count(), 1);
+    }
+
+    // #86: a K4D at R38 reports up to 50. Anything above the old 40 was dropped whole, leaving
+    // QK4 showing a stale level.
+    void testLineOutAcceptsFullRange() {
+        RadioState rs;
+        rs.parseCATCommand("LO0160151;");
+        QSignalSpy spy(&rs, &RadioState::lineOutChanged);
+        rs.parseCATCommand("LO0500151;"); // captured from the radio with the panel at 50
+        QCOMPARE(rs.lineOutLeft(), 50);
+        QCOMPARE(rs.lineOutRight(), 15);
+        QCOMPARE(rs.lineOutRightEqualsLeft(), true);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testLineOutSetterClampsToMax() {
+        RadioState rs;
+        rs.setLineOutLeft(60);
+        rs.setLineOutRight(50);
+        QCOMPARE(rs.lineOutLeft(), 50);
+        QCOMPARE(rs.lineOutRight(), 50);
     }
 
     void testLineOutRightEqualsLeftFlag() {
@@ -1987,7 +2008,7 @@ private slots:
         RadioState rs;
         rs.parseCATCommand("LO020030M;");
         QSignalSpy spy(&rs, &RadioState::lineOutChanged);
-        rs.parseCATCommand("LO050030M;"); // left=50 > 40
+        rs.parseCATCommand("LO051030M;"); // left=51 > 50
         QCOMPARE(spy.count(), 0);
         QCOMPARE(rs.lineOutLeft(), 20); // unchanged
     }

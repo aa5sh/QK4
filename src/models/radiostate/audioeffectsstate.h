@@ -50,7 +50,10 @@ struct AudioEffectsState {
     int rxEqBands[8] = {0, 0, 0, 0, 0, 0, 0, 0};
     int txEqBands[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
-    // LO — Line Out (0-40 per channel). rightEqualsLeft is the "mode" flag.
+    // LO — Line Out (0-50 per channel). rightEqualsLeft is the "mode" flag.
+    // WHY: 50, not the 40 in resources/k4_cat_commands.json. Measured on a K4D at R38: the front
+    // panel goes to 50 and `LO;` answers `LO050...`. #86.
+    static constexpr int LineOutMax = 50;
     int lineOutLeft = -1;
     int lineOutRight = -1;
     bool lineOutRightEqualsLeft = false;

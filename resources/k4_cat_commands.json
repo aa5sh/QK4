@@ -1122,11 +1122,11 @@
       "toggleFormat": null,
       "incrDecrFormat": null,
       "parameters": [
-        {"name": "lll", "type": "integer", "range": "000-040", "description": "Left channel level"},
-        {"name": "rrr", "type": "integer", "range": "000-040", "description": "Right channel level"},
+        {"name": "lll", "type": "integer", "range": "000-050", "description": "Left channel level"},
+        {"name": "rrr", "type": "integer", "range": "000-050", "description": "Right channel level"},
         {"name": "m", "type": "integer", "range": "0-1", "description": "0=independent, 1=R follows L"}
       ],
-      "notes": []
+      "notes": ["Range measured as 000-050 on a K4D at firmware R38 (front panel and LO; reply agree); earlier references said 000-040. See #86."]
     },
     {
       "command": "LOG",

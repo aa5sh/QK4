@@ -5,7 +5,7 @@
 #include "utils/wheelaccumulator.h"
 #include <QPushButton>
 
-// Floating popup for LINE OUT L/R levels (0-40) with optional "R = L"
+// Floating popup for LINE OUT L/R levels (0-50) with optional "R = L"
 // link. Emits leftLevelChanged / rightLevelChanged /
 // rightEqualsLeftChanged for MainWindow -> CAT.
 class LineOutPopupWidget : public K4PopupBase {
@@ -14,8 +14,8 @@ class LineOutPopupWidget : public K4PopupBase {
 public:
     explicit LineOutPopupWidget(QWidget *parent = nullptr);
 
-    void setLeftLevel(int level);  // 0-40
-    void setRightLevel(int level); // 0-40
+    void setLeftLevel(int level);  // 0-50
+    void setRightLevel(int level); // 0-50
     void setRightEqualsLeft(bool enabled);
 
     int leftLevel() const { return m_leftLevel; }
