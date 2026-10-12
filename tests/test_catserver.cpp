@@ -793,6 +793,26 @@ private slots:
 
         QCOMPARE(sendCommand(server, "PC;"), expected);
     }
+
+    // #134. Captured from a K4D at R40: BW0300 is 3000 Hz. The reply was BW3000;, which a client
+    // reads as 30 kHz.
+    void testBwReplyIsInTenHertzUnits_data() {
+        QTest::addColumn<QString>("fromRadio");
+        QTest::newRow("3000 Hz") << "BW0300;";
+        QTest::newRow("3420 Hz") << "BW0342;";
+        QTest::newRow("200 Hz") << "BW0020;";
+    }
+
+    void testBwReplyIsInTenHertzUnits() {
+        QFETCH(QString, fromRadio);
+        RadioState rs;
+        rs.parseCATCommand(fromRadio);
+
+        CatServer server(&rs);
+        QVERIFY(server.start(0));
+
+        QCOMPARE(sendCommand(server, "BW;"), fromRadio);
+    }
 };
 
 QTEST_MAIN(TestCatServer)

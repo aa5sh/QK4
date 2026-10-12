@@ -204,10 +204,6 @@ QByteArray rfPowerExtended(double value, LevelsState::PowerRange range) {
     return QString("PCX%1%2;").arg(powerToWire(value, range), 3, 10, QChar('0')).arg(powerRangeSuffix(range)).toUtf8();
 }
 
-QByteArray filterBandwidth(int bwHz) {
-    return QString("BW%1;").arg(bwHz, 4, 10, QChar('0')).toUtf8();
-}
-
 QByteArray filterWidthExtended(int bwHz) {
     return QString("FW%1;").arg(bwHz, 8, 10, QChar('0')).toUtf8();
 }

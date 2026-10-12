@@ -32,7 +32,6 @@ QByteArray xitEnabled(bool en);
 // Passing a bool could never express the XVTR range at all. See CAT-005.
 QByteArray rfPower(double value, LevelsState::PowerRange range);
 QByteArray rfPowerExtended(double value, LevelsState::PowerRange range);
-QByteArray filterBandwidth(int bwHz);
 QByteArray filterWidthExtended(int bwHz);
 // KSnnn. CLAMPED to the K4's documented range (manual: "from 8 to 100 WPM"), because the CW macro
 // grammar reaches this with ARITHMETIC - each '>' adds 5 WPM with no upper bound of its own - and
@@ -69,16 +68,12 @@ bool modeKeysCwText(RadioState::Mode mode);
 // Aborts a message in progress: KY<0x04>;RX;. One frame carrying two commands, which is how the
 // radio is given it. Bench-confirmed on Elecraft hardware (TR4W's TK4Radio.StopCW).
 QByteArray cwAbort();
-// WHY THESE TWO EXIST ALONGSIDE noiseBlanker() AND filterBandwidth() BELOW.
+// WHY setNoiseBlanker() EXISTS ALONGSIDE noiseBlanker() BELOW.
 //
-// The pair below build REPLIES to a CAT client (catserver.cpp, catpushbroadcaster.cpp). They have
-// never been used to send anything TO the radio, and neither is in the K4's actual command form:
-// noiseBlanker() emits "NB1;" where the K4 wants NBnnm, and filterBandwidth() emits the width in
-// Hz where the K4 wants 10-Hz units. Both are pre-existing reply-direction bugs, reported
-// separately rather than changed here - altering them would change what every existing CAT client
-// on port 9299 is told.
+// noiseBlanker() builds a REPLY to a CAT client (catserver.cpp, catpushbroadcaster.cpp) and is not
+// in the K4's form: it emits "NB1;" where the K4 wants NBnnm. #134.
 //
-// These two are for SENDING, and match what QK4's own UI already sends by hand
+// setNoiseBlanker() and setFilterBandwidth() are in the K4's form and match what QK4's own UI already sends by hand
 // (sidecontrolscrollcontroller.cpp divides the bandwidth by 10; featuremenucontroller.cpp uses the
 // NB/ toggle).
 
@@ -91,7 +86,8 @@ QByteArray setNoiseBlanker(int level, bool on, int filterWidth = -1);
 // LKn / LK$n - VFO tuning lock, per VFO.
 QByteArray setVfoLock(bool locked, bool subVfo);
 
-// BWnnnn in 10-Hz units, which is the inverse of what RadioState's handleBW parses.
+// BWnnnn in 10-Hz units, which is the inverse of what RadioState's handleBW parses. The radio uses
+// the same form in both directions, so this is also the reply to a CAT client's `BW;`.
 QByteArray setFilterBandwidth(int bwHz);
 
 // ACMzabcdefg; / ACSzabcdefg; / ACTzabc; - antenna configuration from the ANT CFG popups.

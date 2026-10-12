@@ -28,6 +28,7 @@ private slots:
     void testCompoundProcessingDiff();
     void testRitXitCompoundEmitsAllThree();
     void testPushPowerCarriesRangeLetter();
+    void testPushBandwidthInTenHertzUnits();
 
 private:
     struct SocketPair {
@@ -164,6 +165,17 @@ void TestCatPushBroadcaster::testPushPowerCarriesRangeLetter() {
     m_radioState->parseCATCommand("PC050X;");
     QCoreApplication::processEvents();
     QCOMPARE(waitForBytes(pair.clientSide, 7), QByteArray("PC050X;"));
+}
+
+// #134. A subscriber was pushed BW3000; for a 3000 Hz filter, which reads as 30 kHz.
+void TestCatPushBroadcaster::testPushBandwidthInTenHertzUnits() {
+    auto pair = makeSocketPair();
+    m_broadcaster->addClient(pair.serverSide);
+    m_broadcaster->setClientAiMode(pair.serverSide, 2);
+
+    m_radioState->parseCATCommand("BW0300;");
+    QCoreApplication::processEvents();
+    QCOMPARE(waitForBytes(pair.clientSide, 7), QByteArray("BW0300;"));
 }
 
 void TestCatPushBroadcaster::testPollingClientReceivesNothing() {

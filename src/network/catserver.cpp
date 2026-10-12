@@ -269,7 +269,7 @@ QByteArray CatServer::handleCommand(const QString &cmd, QTcpSocket *client) {
             return CatFrames::vox(m_radioState->voxEnabled());
         }
         if (prefix == "BW") {
-            return CatFrames::filterBandwidth(m_radioState->filterBandwidth());
+            return CatFrames::setFilterBandwidth(m_radioState->filterBandwidth());
         }
         if (prefix == "ID") {
             return QByteArray("ID017;"); // K4 ID

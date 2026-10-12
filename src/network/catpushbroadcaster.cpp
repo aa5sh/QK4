@@ -87,7 +87,7 @@ void CatPushBroadcaster::onRfPowerChanged(double value, LevelsState::PowerRange 
 }
 
 void CatPushBroadcaster::onFilterBandwidthChanged(int bw) {
-    broadcast(CatFrames::filterBandwidth(bw));
+    broadcast(CatFrames::setFilterBandwidth(bw));
 }
 
 void CatPushBroadcaster::onKeyerSpeedChanged(int wpm) {
