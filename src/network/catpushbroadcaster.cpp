@@ -21,6 +21,7 @@ CatPushBroadcaster::CatPushBroadcaster(RadioState *state, QObject *parent) : QOb
     connect(m_radioState, &RadioState::diversityChanged, this, &CatPushBroadcaster::onDiversityChanged);
     connect(m_radioState, &RadioState::dataSubModeChanged, this, &CatPushBroadcaster::onDataSubModeChanged);
     connect(m_radioState, &RadioState::processingChanged, this, &CatPushBroadcaster::onProcessingChanged);
+    m_lastVX = CatFrames::vox(*m_radioState);
 }
 
 CatPushBroadcaster::~CatPushBroadcaster() = default;
@@ -61,6 +62,9 @@ void CatPushBroadcaster::onModeChanged(RadioState::Mode m) {
     // WHY: K3/K4-era loggers (RumlogNG, N1MM) parse mode out of the IF composite,
     // not the standalone MD frame. Matches real-K4 AI2 behavior (IF on every change).
     broadcast(CatFrames::ifFrame(*m_radioState));
+    // The VX answer follows the mode. Track it without pushing, so the next VOX change is compared
+    // against what VX; would answer now, not before the mode change.
+    m_lastVX = CatFrames::vox(*m_radioState);
 }
 
 void CatPushBroadcaster::onModeBChanged(RadioState::Mode m) {
@@ -94,8 +98,13 @@ void CatPushBroadcaster::onKeyerSpeedChanged(int wpm) {
     broadcast(CatFrames::keyerSpeed(wpm));
 }
 
-void CatPushBroadcaster::onVoxChanged(bool on) {
-    broadcast(CatFrames::vox(on));
+void CatPushBroadcaster::onVoxChanged(bool) {
+    // voxChanged fires for any mode group; a subscriber only hears about the current mode's.
+    const QByteArray vx = CatFrames::vox(*m_radioState);
+    if (vx == m_lastVX)
+        return;
+    m_lastVX = vx;
+    broadcast(vx);
 }
 
 void CatPushBroadcaster::onDiversityChanged(bool on) {

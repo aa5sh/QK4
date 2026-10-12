@@ -33,7 +33,7 @@ commit that introduced this contract:
 | `keyerSpeed()` | `int` | `KS` |
 | `noiseBlankerEnabled()` | `bool` | `NB` |
 | `noiseReductionEnabled()` | `bool` | `NR` |
-| `voxEnabled()` | `bool` (rollup) | `VX` |
+| `mode()` + `voxCW()` / `voxVoice()` / `voxData()` | `Mode`, `bool` | `VX` (the current mode's group, as the radio answers it: `VXD0`) |
 | `filterBandwidth()` | `int` | `BW` |
 | `dataSubMode()` | `int` | `DT` |
 | `optionModules()` | `QString` | `OM` |

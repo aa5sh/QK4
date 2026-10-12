@@ -44,6 +44,7 @@ private:
 
     QByteArray m_lastNB;
     QByteArray m_lastNR;
+    QByteArray m_lastVX;
     int m_lastAGC = -1;
     bool m_processingCacheInitialized = false;
 };

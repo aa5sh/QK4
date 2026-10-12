@@ -268,7 +268,7 @@ QByteArray CatServer::handleCommand(const QString &cmd, QTcpSocket *client) {
                                              m_radioState->noiseReductionEnabled());
         }
         if (prefix == "VX") {
-            return CatFrames::vox(m_radioState->voxEnabled());
+            return CatFrames::vox(*m_radioState);
         }
         if (prefix == "BW") {
             return CatFrames::setFilterBandwidth(m_radioState->filterBandwidth());

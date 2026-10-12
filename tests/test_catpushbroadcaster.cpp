@@ -31,6 +31,7 @@ private slots:
     void testPushBandwidthInTenHertzUnits();
     void testPushNoiseBlankerLevelChange();
     void testPushNoiseReductionLevelChange();
+    void testPushVoxOnlyForTheCurrentMode();
 
 private:
     struct SocketPair {
@@ -207,6 +208,32 @@ void TestCatPushBroadcaster::testPushNoiseReductionLevelChange() {
     m_radioState->parseCATCommand("NR070;");
     QCoreApplication::processEvents();
     QCOMPARE(waitForBytes(pair.clientSide, 6), QByteArray("NR070;"));
+}
+
+// #134. A VOX change in another mode group pushed VX1 - VOX on - to a client in DATA, where it
+// was off. Only the current mode's group is reported now.
+void TestCatPushBroadcaster::testPushVoxOnlyForTheCurrentMode() {
+    m_radioState->parseCATCommand("MD6;");
+    m_radioState->parseCATCommand("VXD0;");
+    QCoreApplication::processEvents();
+
+    auto pair = makeSocketPair();
+    m_broadcaster->addClient(pair.serverSide);
+    m_broadcaster->setClientAiMode(pair.serverSide, 2);
+
+    m_radioState->parseCATCommand("VXC1;"); // CW group: not the current mode
+    QCoreApplication::processEvents();
+    QElapsedTimer timer;
+    timer.start();
+    while (timer.elapsed() < 100) {
+        pair.clientSide->waitForReadyRead(20);
+        QCoreApplication::processEvents();
+    }
+    QCOMPARE(pair.clientSide->bytesAvailable(), qint64(0));
+
+    m_radioState->parseCATCommand("VXD1;"); // DATA group: the current mode
+    QCoreApplication::processEvents();
+    QCOMPARE(waitForBytes(pair.clientSide, 5), QByteArray("VXD1;"));
 }
 
 void TestCatPushBroadcaster::testPollingClientReceivesNothing() {

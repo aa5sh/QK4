@@ -394,7 +394,7 @@ private slots:
         CatServer server(&rs);
         QVERIFY(server.start(0));
 
-        QCOMPARE(sendCommand(server, "VX;"), QString("VX0;"));
+        QCOMPARE(sendCommand(server, "VX;"), QString("VXV0;")); // no mode yet: the voice group
     }
 
     // =========================================================================
@@ -848,6 +848,34 @@ private slots:
         QVERIFY(server.start(0));
 
         QCOMPARE(sendCommand(server, "NR;"), fromRadio);
+    }
+
+    // #134. The K4D at R40 reported VXC1, VXV0, VXD0 in its state dump and was in DATA (MD6); it
+    // answered VX; with VXD0. QK4 answered VX1 - VOX on - because it reported on if ANY mode had it.
+    void testVxReplyIsForTheCurrentMode_data() {
+        QTest::addColumn<QString>("mode");
+        QTest::addColumn<QString>("expected");
+        QTest::newRow("DATA") << "MD6;" << "VXD0;";
+        QTest::newRow("DATA-R") << "MD9;" << "VXD0;";
+        QTest::newRow("CW") << "MD3;" << "VXC1;";
+        QTest::newRow("CW-R") << "MD7;" << "VXC1;";
+        QTest::newRow("USB") << "MD2;" << "VXV0;";
+        QTest::newRow("AM") << "MD5;" << "VXV0;";
+    }
+
+    void testVxReplyIsForTheCurrentMode() {
+        QFETCH(QString, mode);
+        QFETCH(QString, expected);
+        RadioState rs;
+        rs.parseCATCommand("VXC1;");
+        rs.parseCATCommand("VXV0;");
+        rs.parseCATCommand("VXD0;");
+        rs.parseCATCommand(mode);
+
+        CatServer server(&rs);
+        QVERIFY(server.start(0));
+
+        QCOMPARE(sendCommand(server, "VX;"), expected);
     }
 };
 
