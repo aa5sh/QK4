@@ -216,6 +216,10 @@ QByteArray CatServer::handleCommand(const QString &cmd, QTcpSocket *client) {
         if (prefix == "MD") {
             return CatFrames::modeB(m_radioState->modeB());
         }
+        if (prefix == "SQ") {
+            const int sq = m_radioState->squelchLevelB();
+            return sq < 0 ? QByteArray() : CatFrames::squelch(sq, true);
+        }
     }
 
     // Handle GET commands (no args) - respond from RadioState
@@ -308,7 +312,10 @@ QByteArray CatServer::handleCommand(const QString &cmd, QTcpSocket *client) {
             return QByteArray("AG000;");
         }
         if (prefix == "SQ") {
-            return QByteArray("SQ000;");
+            // No answer until the radio has reported it - a made-up 000 is indistinguishable from
+            // a real zero.
+            const int sq = m_radioState->squelchLevel();
+            return sq < 0 ? QByteArray() : CatFrames::squelch(sq, false);
         }
         if (prefix == "FW") {
             return CatFrames::filterWidthExtended(m_radioState->filterBandwidth());

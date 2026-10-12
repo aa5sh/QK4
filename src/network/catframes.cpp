@@ -295,6 +295,10 @@ QByteArray noiseReduction(int level, bool on) {
     return QString("NR%1%2;").arg(qBound(0, level, 99), 2, 10, QChar('0')).arg(on ? 1 : 0).toUtf8();
 }
 
+QByteArray squelch(int level, bool subRx) {
+    return QString("SQ%1%2;").arg(subRx ? "$" : "").arg(qBound(0, level, 999), 3, 10, QChar('0')).toUtf8();
+}
+
 QByteArray agcSpeed(int agc) {
     return QString("GT%1;").arg(qBound(0, agc, 2)).toUtf8();
 }

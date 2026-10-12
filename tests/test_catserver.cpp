@@ -898,6 +898,29 @@ private slots:
         QCOMPARE(sendCommand(server, "GT;"), fromRadio);
         QCOMPARE(CatFrames::agcSpeed(fromRadio.mid(2, 1).toInt()), fromRadio.toUtf8());
     }
+
+    // #134. SQ was answered SQ000 whatever the radio said, and SQ$ not at all. Captured from a
+    // K4D at R40 after the squelch was turned up: SQ010, SQ$005.
+    void testSqAnswersTheRadiosSquelch() {
+        RadioState rs;
+        rs.parseCATCommand("SQ010;");
+        rs.parseCATCommand("SQ$005;");
+
+        CatServer server(&rs);
+        QVERIFY(server.start(0));
+
+        QCOMPARE(sendCommand(server, "SQ;"), QString("SQ010;"));
+        QCOMPARE(sendCommand(server, "SQ$;"), QString("SQ$005;"));
+    }
+
+    void testSqIsSilentUntilTheRadioReportsIt() {
+        RadioState rs;
+        CatServer server(&rs);
+        QVERIFY(server.start(0));
+
+        QCOMPARE(sendCommand(server, "SQ;"), QString());
+        QCOMPARE(sendCommand(server, "SQ$;"), QString());
+    }
 };
 
 QTEST_MAIN(TestCatServer)
