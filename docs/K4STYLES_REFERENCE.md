@@ -407,6 +407,8 @@ const QString &K4Styles::Dialog::checkBoxDisabled(); // Checkbox (disabled / gra
 const QString &K4Styles::Dialog::actionButton();     // Dialog action button (dark bg, padding 10px 20px)
 const QString &K4Styles::Dialog::actionButtonSmall();// Small action button (padding 6px 12px)
 
+const QString &K4Styles::applicationStyleSheet();    // App-wide fallback: checkBox + comboBox + lineEdit + spinBox, installed in main()
+
 // Dynamic — `QString` (fresh each call; color/size vary)
 const QString &K4Styles::Dialog::statusLabel(const QString &color);  // Bold status label, dynamic color
 QString K4Styles::Dialog::labelText(const QString &color, int sizePx);

@@ -500,6 +500,17 @@ target_include_directories(test_meterscale PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_meterscale Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
 add_test(NAME MeterScaleTests COMMAND test_meterscale)
 
+# Form-control theming — renders bare controls under the app-wide fallback stylesheet, offscreen.
+add_executable(test_formcontroltheme
+    test_formcontroltheme.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/styling/k4styles.cpp
+)
+target_include_directories(test_formcontroltheme PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_compile_definitions(test_formcontroltheme PRIVATE QK4_SOURCE_DIR="${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(test_formcontroltheme Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
+add_test(NAME FormControlThemeTests COMMAND test_formcontroltheme)
+set_tests_properties(FormControlThemeTests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 # Capture-rate decimation — pure logic, no audio device needed.
 add_executable(test_audiodecimator test_audiodecimator.cpp)
 target_include_directories(test_audiodecimator PRIVATE ${CMAKE_SOURCE_DIR}/src)

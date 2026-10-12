@@ -821,4 +821,15 @@ const QString &actionButtonSmall() {
 
 } // namespace Dialog
 
+const QString &applicationStyleSheet() {
+    // WHY: before this, the theme reached a control only if its constructor remembered to call
+    // setStyleSheet. Three did not - the spot label size spin box, the KPOD+ encode mode dropdown
+    // and the TLS indicator - and Windows 11 in dark mode drew each dark-on-dark, invisible on our
+    // near-black dialogs. macOS, Linux, Windows 10 and Windows 11 light all drew them legibly, so
+    // nothing in development or review could catch it. One app-wide rule set makes forgetting
+    // harmless. Covered types are enforced by tests/test_formcontroltheme.cpp.
+    static const QString s = Dialog::checkBox() + Dialog::comboBox() + Dialog::lineEdit() + Dialog::spinBox();
+    return s;
+}
+
 } // namespace K4Styles

@@ -307,6 +307,10 @@ const QString &actionButtonSmall();
 
 } // namespace Dialog
 
+/// App-wide fallback for every form control, installed once in main(). A control that sets its own
+/// stylesheet still wins; one that forgets gets the K4 look instead of the operating system's theme.
+const QString &applicationStyleSheet();
+
 } // namespace K4Styles
 
 #endif // K4STYLES_H

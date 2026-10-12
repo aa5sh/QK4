@@ -241,6 +241,9 @@ int main(int argc, char *argv[]) {
     // Load embedded Inter font family
     setupFonts();
 
+    // Before any widget exists, so no control is ever polished with the platform's theme
+    app.setStyleSheet(K4Styles::applicationStyleSheet());
+
     // Must precede MainWindow — its controllers construct the first QSslSocket
     selectTlsBackend();
 

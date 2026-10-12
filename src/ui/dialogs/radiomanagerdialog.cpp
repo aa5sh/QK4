@@ -35,9 +35,11 @@ QString RadioManagerDialog::lineEditStyle(const QString &borderColor) {
                    "  border-radius: 4px; "
                    "  padding: %4px; "
                    "  min-width: 150px; "
+                   "  font-size: %5px; "
                    "}")
         .arg(K4Styles::Colors::DarkBackground, K4Styles::Colors::TextWhite, borderColor)
-        .arg(K4Styles::Dimensions::PaddingSmall);
+        .arg(K4Styles::Dimensions::PaddingSmall)
+        .arg(K4Styles::Dimensions::FontSizeLarge);
 }
 
 void RadioManagerDialog::setupUi() {
@@ -204,6 +206,7 @@ void RadioManagerDialog::setupUi() {
                 "  border: 1px solid %3; "
                 "  border-radius: 4px; "
                 "  padding: %4px; "
+                "  font-size: %6px; "
                 "} "
                 "QComboBox::drop-down { "
                 "  border: none; "
@@ -221,7 +224,8 @@ void RadioManagerDialog::setupUi() {
                 "}")
             .arg(K4Styles::Colors::DarkBackground, K4Styles::Colors::TextWhite, K4Styles::Colors::DialogBorder)
             .arg(K4Styles::Dimensions::PaddingSmall)
-            .arg(K4Styles::Colors::AccentAmber));
+            .arg(K4Styles::Colors::AccentAmber)
+            .arg(K4Styles::Dimensions::FontSizeLarge));
     // EM0 is 24-bit audio in a 32-bit container, not the "RAW 32-bit float" Elecraft's
     // documentation describes — measured 2026-09-19, see docs/k4-protocol-quirks.md. The old
     // label told the operator something untrue about the format they were selecting.

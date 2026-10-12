@@ -193,6 +193,7 @@ Rules for new widget code:
 - Use `K4Styles::Colors::*` constants — never hardcoded hex strings.
 - For custom-painted widgets, use `K4Styles::Fonts::paintFont()` / `dataFont()` instead of constructing `QFont` directly.
 - For inline stylesheet construction, prefer `K4Styles::Dialog::labelText(color, size)` over `QString("color: %1; font-size: %2px;").arg(...)`.
+- **Never leave a form control to the operating system's theme.** `main()` installs `K4Styles::applicationStyleSheet()` app-wide, so a checkbox, combo box, line edit or spin box with no stylesheet of its own still gets the K4 look. Give each control its `Dialog::` helper anyway — the fallback is the safety net, not the design. A **new** form-control type (a `QRadioButton`, a `QDoubleSpinBox`) needs a rule in `applicationStyleSheet()` first; `test_formcontroltheme` fails until it has one. Why: Windows 11 in dark mode draws unstyled controls dark-on-dark, and no other platform does, so it cannot be caught by eye on a Mac.
 
 **Adding a popup menu** follows a fixed recipe — see `PATTERNS.md` → "Adding a Popup Menu".
 
