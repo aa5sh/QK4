@@ -27,6 +27,7 @@ private slots:
     void testTwoClientsDifferentAiModes();
     void testCompoundProcessingDiff();
     void testRitXitCompoundEmitsAllThree();
+    void testPushPowerCarriesRangeLetter();
 
 private:
     struct SocketPair {
@@ -147,6 +148,22 @@ void TestCatPushBroadcaster::testPushFrequencyOnRadioStateChange() {
 
     QByteArray received = waitForBytes(pair.clientSide, 14);
     QCOMPARE(received, QByteArray("FA00014074000;"));
+}
+
+// #134. Without the letter a subscriber reads 0.6 W as 6 W, and XVTR milliwatts could not be pushed
+// at all - they were skipped for exactly that reason.
+void TestCatPushBroadcaster::testPushPowerCarriesRangeLetter() {
+    auto pair = makeSocketPair();
+    m_broadcaster->addClient(pair.serverSide);
+    m_broadcaster->setClientAiMode(pair.serverSide, 2);
+
+    m_radioState->parseCATCommand("PC006L;");
+    QCoreApplication::processEvents();
+    QCOMPARE(waitForBytes(pair.clientSide, 7), QByteArray("PC006L;"));
+
+    m_radioState->parseCATCommand("PC050X;");
+    QCoreApplication::processEvents();
+    QCOMPARE(waitForBytes(pair.clientSide, 7), QByteArray("PC050X;"));
 }
 
 void TestCatPushBroadcaster::testPollingClientReceivesNothing() {

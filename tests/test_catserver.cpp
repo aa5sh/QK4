@@ -744,8 +744,7 @@ private slots:
         QVERIFY(server.start(0));
 
         QCOMPARE(sendCommand(server, "PCX;"), QString("PCX050L;"));
-        // The plain PC reply carries no suffix, but must not mis-scale either.
-        QCOMPARE(sendCommand(server, "PC;"), QString("PC050;"));
+        QCOMPARE(sendCommand(server, "PC;"), QString("PC050L;"));
     }
 
     void testPcxXvtrRangeCanBeEmitted() {
@@ -769,7 +768,30 @@ private slots:
         QVERIFY(server.start(0));
 
         QCOMPARE(sendCommand(server, "PCX;"), QString("PCX100H;"));
-        QCOMPARE(sendCommand(server, "PC;"), QString("PC100;"));
+        QCOMPARE(sendCommand(server, "PC;"), QString("PC100H;"));
+    }
+
+    // #134. Each pair was captured from a K4D at R40: what the radio reported, then its own answer
+    // to a bare `PC;`. Without the range letter PC006 reads as 6 W and PC100 as 100 W.
+    void testPcReplyMatchesTheRadio_data() {
+        QTest::addColumn<QString>("fromRadio");
+        QTest::addColumn<QString>("expected");
+        QTest::newRow("15 W, QRO") << "PC015H;" << "PC015H;";
+        QTest::newRow("10.0 W, QRP") << "PC100L;" << "PC100L;";
+        QTest::newRow("0.6 W, QRP") << "PC006L;" << "PC006L;";
+        QTest::newRow("5.0 mW, XVTR") << "PC050X;" << "PC050X;";
+    }
+
+    void testPcReplyMatchesTheRadio() {
+        QFETCH(QString, fromRadio);
+        QFETCH(QString, expected);
+        RadioState rs;
+        rs.parseCATCommand(fromRadio);
+
+        CatServer server(&rs);
+        QVERIFY(server.start(0));
+
+        QCOMPARE(sendCommand(server, "PC;"), expected);
     }
 };
 

@@ -27,8 +27,8 @@ commit that introduced this contract:
 | `ritEnabled()` | `bool` | `RT`, `IF` |
 | `xitEnabled()` | `bool` | `XT`, `IF` |
 | `ritXitOffset()` | `int` | `IF` (offset field) |
-| `rfPower()` | `double` | `PC` |
-| `isQrpMode()` | `bool` | `PC` (L/H/X flag) |
+| `rfPower()` | `double` | `PC`, `PCX` |
+| `powerRange()` | `LevelsState::PowerRange` | `PC`, `PCX` (range letter L/H/X, as the radio sends it) |
 | `agcSpeed()` | `RadioState::AGCSpeed` | `GT` |
 | `keyerSpeed()` | `int` | `KS` |
 | `noiseBlankerEnabled()` | `bool` | `NB` |

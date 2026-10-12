@@ -194,10 +194,10 @@ char powerRangeSuffix(LevelsState::PowerRange range) {
 } // namespace
 
 QByteArray rfPower(double value, LevelsState::PowerRange range) {
-    // No range suffix: PC is the plain query and the K4's own echo carries one (PC045H), but
-    // whether its reply to a bare `PC;` includes it has not been confirmed on the radio, so the
-    // shape is left alone here and only the scaling is corrected.
-    return QString("PC%1;").arg(powerToWire(value, range), 3, 10, QChar('0')).toUtf8();
+    // WHY the range letter: without it the digits are ambiguous - PC006 is 6 W in the QRO range
+    // but 0.6 W in QRP. Measured on a K4D at R40: the radio answers a bare `PC;` with the letter
+    // (PC015H, PC100L, PC006L), so a client that works with a real K4 expects it. #134.
+    return QString("PC%1%2;").arg(powerToWire(value, range), 3, 10, QChar('0')).arg(powerRangeSuffix(range)).toUtf8();
 }
 
 QByteArray rfPowerExtended(double value, LevelsState::PowerRange range) {
