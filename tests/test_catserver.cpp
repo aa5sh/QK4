@@ -386,7 +386,7 @@ private slots:
         CatServer server(&rs);
         QVERIFY(server.start(0));
 
-        QCOMPARE(sendCommand(server, "NR;"), QString("NR0;"));
+        QCOMPARE(sendCommand(server, "NR;"), QString("NR000;")); // level 00, off
     }
 
     void testVoxOff() {
@@ -830,6 +830,24 @@ private slots:
         QVERIFY(server.start(0));
 
         QCOMPARE(sendCommand(server, "NB;"), fromRadio);
+    }
+
+    // #134. Captured from a K4D at R40: NR050 is level 05, off. The reply was NR0;.
+    void testNrReplyIsTheRadiosForm_data() {
+        QTest::addColumn<QString>("fromRadio");
+        QTest::newRow("level 5, off") << "NR050;";
+        QTest::newRow("level 10, on") << "NR101;";
+    }
+
+    void testNrReplyIsTheRadiosForm() {
+        QFETCH(QString, fromRadio);
+        RadioState rs;
+        rs.parseCATCommand(fromRadio);
+
+        CatServer server(&rs);
+        QVERIFY(server.start(0));
+
+        QCOMPARE(sendCommand(server, "NR;"), fromRadio);
     }
 };
 

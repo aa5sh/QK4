@@ -43,7 +43,7 @@ private:
     QHash<QTcpSocket *, int> m_clientAiModes;
 
     QByteArray m_lastNB;
-    bool m_lastNR = false;
+    QByteArray m_lastNR;
     int m_lastAGC = -1;
     bool m_processingCacheInitialized = false;
 };

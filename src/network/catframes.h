@@ -95,7 +95,8 @@ QByteArray setMenuValue(int menuId, int value);
 // NOT the PCX form below - that one is the extended QUERY, and the radio ignores it as a set.
 QByteArray setRfPower(int value, bool qrp);
 
-QByteArray noiseReduction(bool on);
+// NRnnm: nn is the level, m is on/off - the radio's form in both directions (NR050 is level 05, off).
+QByteArray noiseReduction(int level, bool on);
 QByteArray agcSpeed(int agc);
 QByteArray vox(bool on);
 QByteArray diversity(bool on);

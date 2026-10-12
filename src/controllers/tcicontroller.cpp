@@ -437,7 +437,9 @@ void TciController::wireCatSets() {
                 const int level = m_radioState ? m_radioState->noiseBlankerLevel() : 0;
                 applyCat(CatFrames::setNoiseBlanker(level < 0 ? 0 : level, value));
             } else if (name == QLatin1String("rx_nr_enable")) {
-                applyCat(CatFrames::noiseReduction(value));
+                // Same as NB: preserve the level. NR1; alone is not the radio's NRnnm form.
+                const int level = m_radioState ? m_radioState->noiseReductionLevel() : 0;
+                applyCat(CatFrames::noiseReduction(level < 0 ? 0 : level, value));
             }
         });
 

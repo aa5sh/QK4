@@ -30,6 +30,7 @@ private slots:
     void testPushPowerCarriesRangeLetter();
     void testPushBandwidthInTenHertzUnits();
     void testPushNoiseBlankerLevelChange();
+    void testPushNoiseReductionLevelChange();
 
 private:
     struct SocketPair {
@@ -192,6 +193,20 @@ void TestCatPushBroadcaster::testPushNoiseBlankerLevelChange() {
     m_radioState->parseCATCommand("NB0501;");
     QCoreApplication::processEvents();
     QCOMPARE(waitForBytes(pair.clientSide, 7), QByteArray("NB0501;"));
+}
+
+// #134. Same as NB: a level change never reached a subscriber, and the frame was NR0/NR1.
+void TestCatPushBroadcaster::testPushNoiseReductionLevelChange() {
+    m_radioState->parseCATCommand("NR050;");
+    QCoreApplication::processEvents(); // seeds the cache
+
+    auto pair = makeSocketPair();
+    m_broadcaster->addClient(pair.serverSide);
+    m_broadcaster->setClientAiMode(pair.serverSide, 2);
+
+    m_radioState->parseCATCommand("NR070;");
+    QCoreApplication::processEvents();
+    QCOMPARE(waitForBytes(pair.clientSide, 6), QByteArray("NR070;"));
 }
 
 void TestCatPushBroadcaster::testPollingClientReceivesNothing() {

@@ -264,7 +264,8 @@ QByteArray CatServer::handleCommand(const QString &cmd, QTcpSocket *client) {
                                               m_radioState->noiseBlankerFilterWidth());
         }
         if (prefix == "NR") {
-            return CatFrames::noiseReduction(m_radioState->noiseReductionEnabled());
+            return CatFrames::noiseReduction(m_radioState->noiseReductionLevel(),
+                                             m_radioState->noiseReductionEnabled());
         }
         if (prefix == "VX") {
             return CatFrames::vox(m_radioState->voxEnabled());
