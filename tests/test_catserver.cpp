@@ -971,6 +971,144 @@ private slots:
         QCOMPARE(sendCommand(server, "DT;"), QString());
         QCOMPARE(sendCommand(server, "BW$;"), QString());
     }
+
+    // =========================================================================
+    // AG / AG$ - answered by asking the radio (#134)
+    //
+    // The radio does not report AF gain when the knob moves (a K4D at R40 sent no AG traffic while
+    // it was turned), so only the radio knows the current value. Each test plays the radio's side
+    // by calling onRadioResponse().
+    // =========================================================================
+
+private:
+    // A client that stays connected, since the answer arrives after the radio replies.
+    struct Client {
+        QTcpSocket socket;
+        QByteArray received;
+    };
+
+    void connectClient(CatServer &server, Client &c) {
+        c.socket.connectToHost("127.0.0.1", server.port());
+        QVERIFY(c.socket.waitForConnected(1000));
+        QCoreApplication::processEvents();
+    }
+
+    void send(Client &c, const char *cmd) {
+        c.socket.write(cmd);
+        c.socket.flush();
+    }
+
+    bool waitForReply(Client &c, const QByteArray &expected) {
+        return spinUntil(
+            [&] {
+                c.received += c.socket.readAll();
+                return c.received.contains(expected);
+            },
+            kReplyTimeoutMs);
+    }
+
+private slots:
+    void testAgIsAskedOfTheRadioAndItsAnswerReturned() {
+        RadioState rs;
+        CatServer server(&rs);
+        QVERIFY(server.start(0));
+        QSignalSpy asked(&server, &CatServer::radioQueryRequested);
+
+        Client c;
+        connectClient(server, c);
+        send(c, "AG;");
+        QVERIFY(spinUntil([&] { return asked.count() == 1; }, kReplyTimeoutMs));
+        QCOMPARE(asked.at(0).at(0).toString(), QString("AG;"));
+
+        server.onRadioResponse("AG$005;"); // Sub's answer starts with "AG" too and must not satisfy it
+        server.onRadioResponse("SM04;AG018;FA00014049500;"); // batched, as the radio sends them
+        QVERIFY(waitForReply(c, "AG018;"));
+        QCOMPARE(c.received, QByteArray("AG018;"));
+    }
+
+    void testSubAgIsKeptApartFromMain() {
+        RadioState rs;
+        CatServer server(&rs);
+        QVERIFY(server.start(0));
+        QSignalSpy asked(&server, &CatServer::radioQueryRequested);
+
+        Client c;
+        connectClient(server, c);
+        send(c, "AG$;");
+        QVERIFY(spinUntil([&] { return asked.count() == 1; }, kReplyTimeoutMs));
+        QCOMPARE(asked.at(0).at(0).toString(), QString("AG$;"));
+
+        server.onRadioResponse("AG000;"); // Main's answer must not satisfy a Sub query
+        server.onRadioResponse("AG$018;");
+        QVERIFY(waitForReply(c, "AG$018;"));
+        QCOMPARE(c.received, QByteArray("AG$018;"));
+    }
+
+    void testTwoWaitersShareOneQuestionToTheRadio() {
+        RadioState rs;
+        CatServer server(&rs);
+        QVERIFY(server.start(0));
+        QSignalSpy asked(&server, &CatServer::radioQueryRequested);
+
+        Client a, b;
+        connectClient(server, a);
+        connectClient(server, b);
+        send(a, "AG;");
+        QVERIFY(spinUntil([&] { return asked.count() == 1; }, kReplyTimeoutMs));
+        send(b, "AG;");
+        QTest::qWait(100);
+        QCOMPARE(asked.count(), 1);
+
+        server.onRadioResponse("AG018;");
+        QVERIFY(waitForReply(a, "AG018;"));
+        QVERIFY(waitForReply(b, "AG018;"));
+    }
+
+    // No answer from the radio - disconnected, or off - leaves the client with no reply, as a real
+    // radio that is off would. A reply arriving after the timeout goes nowhere.
+    void testUnansweredQueryIsDroppedAfterTheTimeout() {
+        RadioState rs;
+        CatServer server(&rs);
+        QVERIFY(server.start(0));
+        QSignalSpy asked(&server, &CatServer::radioQueryRequested);
+
+        Client c;
+        connectClient(server, c);
+        send(c, "AG;");
+        QVERIFY(spinUntil([&] { return asked.count() == 1; }, kReplyTimeoutMs));
+        QTest::qWait(CatServer::kRadioQueryTimeoutMs + 200);
+
+        server.onRadioResponse("AG018;");
+        QTest::qWait(100);
+        c.received += c.socket.readAll();
+        QCOMPARE(c.received, QByteArray());
+
+        send(c, "AG;"); // and the next query asks the radio again
+        QVERIFY(spinUntil([&] { return asked.count() == 2; }, kReplyTimeoutMs));
+    }
+
+    void testWaiterThatDisconnectsIsSkipped() {
+        RadioState rs;
+        CatServer server(&rs);
+        QVERIFY(server.start(0));
+        QSignalSpy asked(&server, &CatServer::radioQueryRequested);
+
+        auto *gone = new Client;
+        connectClient(server, *gone);
+        Client stays;
+        connectClient(server, stays);
+        send(*gone, "AG;");
+        QVERIFY(spinUntil([&] { return asked.count() == 1; }, kReplyTimeoutMs));
+        send(stays, "AG;");
+        QTest::qWait(50);
+
+        gone->socket.disconnectFromHost();
+        delete gone;
+        QVERIFY(spinUntil([&] { return server.clientCount() == 1; }, kReplyTimeoutMs));
+
+        server.onRadioResponse("AG018;");
+        QVERIFY(waitForReply(stays, "AG018;"));
+    }
 };
 
 QTEST_MAIN(TestCatServer)

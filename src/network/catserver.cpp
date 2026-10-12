@@ -12,6 +12,7 @@
 #include "tcpclient.h"
 
 #include <QLoggingCategory>
+#include <QTimer>
 
 Q_LOGGING_CATEGORY(netCat, "net.cat")
 
@@ -59,6 +60,7 @@ void CatServer::stop() {
         client->disconnectFromHost();
     }
     m_clients.clear();
+    m_pendingRadioQueries.clear();
 
     if (m_server->isListening()) {
         m_server->close();
@@ -141,6 +143,51 @@ void CatServer::onNewConnection() {
     }
 }
 
+void CatServer::askRadio(const QString &key, QTcpSocket *client) {
+    PendingRadioQuery &pending = m_pendingRadioQueries[key];
+    pending.waiters.append(client);
+    if (pending.waiters.size() > 1)
+        return;
+
+    pending.generation = ++m_radioQueryGeneration;
+    const quint64 generation = pending.generation;
+    QTimer::singleShot(kRadioQueryTimeoutMs, this, [this, key, generation]() {
+        auto it = m_pendingRadioQueries.find(key);
+        if (it != m_pendingRadioQueries.end() && it->generation == generation) {
+            qCDebug(netCat) << "   radio did not answer" << key << "- dropping" << it->waiters.size() << "waiter(s)";
+            m_pendingRadioQueries.erase(it);
+        }
+    });
+    qCDebug(netCat) << "   asking the radio:" << key;
+    emit radioQueryRequested(key + ';');
+}
+
+void CatServer::onRadioResponse(const QString &response) {
+    if (m_pendingRadioQueries.isEmpty())
+        return;
+    const QStringList frames = response.split(';', Qt::SkipEmptyParts);
+    for (const QString &frame : frames) {
+        // AG018 answers "AG"; AG$018 answers "AG$". The character after the key decides, so the
+        // Main reply can never satisfy a Sub query or the reverse.
+        for (auto it = m_pendingRadioQueries.begin(); it != m_pendingRadioQueries.end();) {
+            const QString &key = it.key();
+            const bool matches = frame.startsWith(key) && (key.endsWith('$') || frame.mid(key.size(), 1) != "$");
+            if (!matches) {
+                ++it;
+                continue;
+            }
+            const QByteArray reply = (frame + ';').toUtf8();
+            for (const QPointer<QTcpSocket> &client : std::as_const(it->waiters)) {
+                if (client && m_clients.contains(client)) {
+                    qCDebug(netCat) << "TX ->" << client->peerPort() << reply << "(from the radio)";
+                    client->write(reply);
+                }
+            }
+            it = m_pendingRadioQueries.erase(it);
+        }
+    }
+}
+
 void CatServer::releasePttIfOwner(QTcpSocket *client) {
     if (!client || m_pttOwner != client) {
         return;
@@ -219,6 +266,10 @@ QByteArray CatServer::handleCommand(const QString &cmd, QTcpSocket *client) {
         if (prefix == "SQ") {
             const int sq = m_radioState->squelchLevelB();
             return sq < 0 ? QByteArray() : CatFrames::squelch(sq, true);
+        }
+        if (prefix == "AG") {
+            askRadio(QStringLiteral("AG$"), client);
+            return QByteArray();
         }
         if (prefix == "RG") {
             const int rg = m_radioState->rfGainB();
@@ -342,7 +393,11 @@ QByteArray CatServer::handleCommand(const QString &cmd, QTcpSocket *client) {
             return CatFrames::rfPowerExtended(m_radioState->rfPower(), m_radioState->powerRange());
         }
         if (prefix == "AG") {
-            return QByteArray("AG000;");
+            // WHY ask: the radio does not report AF gain when the knob moves - measured on a K4D at
+            // R40, turning it produced no AG traffic at all - so a stored value goes stale at the
+            // first turn. Only the radio knows the current one.
+            askRadio(QStringLiteral("AG"), client);
+            return QByteArray();
         }
         if (prefix == "SQ") {
             // No answer until the radio has reported it - a made-up 000 is indistinguishable from

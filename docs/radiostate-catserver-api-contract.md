@@ -31,14 +31,21 @@ commit that introduced this contract:
 | `powerRange()` | `LevelsState::PowerRange` | `PC`, `PCX` (range letter L/H/X, as the radio sends it) |
 | `agcSpeed()` | `RadioState::AGCSpeed` | `GT` |
 | `keyerSpeed()` | `int` | `KS` |
-| `noiseBlankerEnabled()` | `bool` | `NB` |
-| `noiseReductionEnabled()` | `bool` | `NR` |
+| `noiseBlankerLevel()` / `noiseBlankerEnabled()` / `noiseBlankerFilterWidth()` | `int`, `bool`, `int` | `NB` (`NB0301`) |
+| `noiseReductionLevel()` / `noiseReductionEnabled()` | `int`, `bool` | `NR` (`NR050`) |
 | `mode()` + `voxCW()` / `voxVoice()` / `voxData()` | `Mode`, `bool` | `VX` (the current mode's group, as the radio answers it: `VXD0`) |
 | `filterBandwidth()` | `int` | `BW` |
 | `dataSubMode()` | `int` | `DT` |
 | `optionModules()` | `QString` | `OM` |
 | `diversityEnabled()` | `bool` | `DV` |
 | `sMeter()` | `double` | `SM` |
+| `squelchLevel()` / `squelchLevelB()` | `int` | `SQ` / `SQ$` (no answer while -1) |
+| `rfGain()` / `rfGainB()` | `int` | `RG` / `RG$` (`RG-00`; no answer while unset) |
+| `ritXitOffsetB()`, `ritEnabledB()`, `agcSpeedB()`, the `…B()` NB / NR getters, `filterBandwidthB()`, `dataSubModeB()` | | `RO$`, `RT$`, `GT$`, `NB$`, `NR$`, `BW$`, `DT$` (main frame with `$` after the prefix) |
+
+`AG` / `AG$` read no getter. The radio does not report AF gain when the knob moves, so a stored
+value would be stale, and CatServer asks the radio instead (`radioQueryRequested`, answered through
+`onRadioResponse`). #134.
 
 ## Phase 1 rules
 

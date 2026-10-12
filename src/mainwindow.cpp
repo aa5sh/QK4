@@ -400,6 +400,13 @@ void MainWindow::setupCatServer() {
         m_radioState->parseCATCommand(command);
     });
 
+    // Queries only the radio can answer (AG): sent as is, and NOT applied to RadioState the way a
+    // client's SET is above. The reply reaches the CAT server through every incoming frame.
+    connect(m_catServer, &CatServer::radioQueryRequested, this,
+            [this](const QString &command) { m_connectionController->sendCAT(command); });
+    connect(m_connectionController, &ConnectionController::catResponseReceived, m_catServer,
+            &CatServer::onRadioResponse);
+
     // Surface CAT server bind failures to the user
     connect(m_catServer, &CatServer::errorOccurred, this,
             [this](const QString &error) { qWarning() << "CAT server:" << error; });
