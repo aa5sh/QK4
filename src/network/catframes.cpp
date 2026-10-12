@@ -291,10 +291,6 @@ QByteArray setFilterBandwidth(int bwHz) {
     return QString("BW%1;").arg(qBound(0, bwHz / 10, 9999), 4, 10, QChar('0')).toUtf8();
 }
 
-QByteArray noiseBlanker(bool on) {
-    return QString("NB%1;").arg(on ? 1 : 0).toUtf8();
-}
-
 QByteArray noiseReduction(bool on) {
     return QString("NR%1;").arg(on ? 1 : 0).toUtf8();
 }

@@ -260,7 +260,8 @@ QByteArray CatServer::handleCommand(const QString &cmd, QTcpSocket *client) {
             return CatFrames::keyerSpeed(m_radioState->keyerSpeed());
         }
         if (prefix == "NB") {
-            return CatFrames::noiseBlanker(m_radioState->noiseBlankerEnabled());
+            return CatFrames::setNoiseBlanker(m_radioState->noiseBlankerLevel(), m_radioState->noiseBlankerEnabled(),
+                                              m_radioState->noiseBlankerFilterWidth());
         }
         if (prefix == "NR") {
             return CatFrames::noiseReduction(m_radioState->noiseReductionEnabled());

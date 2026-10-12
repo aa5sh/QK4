@@ -29,6 +29,7 @@ private slots:
     void testRitXitCompoundEmitsAllThree();
     void testPushPowerCarriesRangeLetter();
     void testPushBandwidthInTenHertzUnits();
+    void testPushNoiseBlankerLevelChange();
 
 private:
     struct SocketPair {
@@ -178,6 +179,21 @@ void TestCatPushBroadcaster::testPushBandwidthInTenHertzUnits() {
     QCOMPARE(waitForBytes(pair.clientSide, 7), QByteArray("BW0300;"));
 }
 
+// #134. Only on/off was compared, so a level change - which the radio reports - never reached a
+// subscriber. Captured NB0301 is level 03, off, filter 1.
+void TestCatPushBroadcaster::testPushNoiseBlankerLevelChange() {
+    m_radioState->parseCATCommand("NB0301;");
+    QCoreApplication::processEvents(); // seeds the cache
+
+    auto pair = makeSocketPair();
+    m_broadcaster->addClient(pair.serverSide);
+    m_broadcaster->setClientAiMode(pair.serverSide, 2);
+
+    m_radioState->parseCATCommand("NB0501;");
+    QCoreApplication::processEvents();
+    QCOMPARE(waitForBytes(pair.clientSide, 7), QByteArray("NB0501;"));
+}
+
 void TestCatPushBroadcaster::testPollingClientReceivesNothing() {
     auto pair = makeSocketPair();
     m_broadcaster->addClient(pair.serverSide);
@@ -237,8 +253,8 @@ void TestCatPushBroadcaster::testCompoundProcessingDiff() {
     m_radioState->parseCATCommand("NB050;");
     QCoreApplication::processEvents();
 
-    QByteArray received = waitForBytes(pair.clientSide, 4);
-    QCOMPARE(received, QByteArray("NB0;"));
+    QByteArray received = waitForBytes(pair.clientSide, 7);
+    QCOMPARE(received, QByteArray("NB0500;"));
 }
 
 void TestCatPushBroadcaster::testRitXitCompoundEmitsAllThree() {

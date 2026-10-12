@@ -107,7 +107,10 @@ void CatPushBroadcaster::onDataSubModeChanged(int subMode) {
 }
 
 void CatPushBroadcaster::onProcessingChanged() {
-    const bool nb = m_radioState->noiseBlankerEnabled();
+    // The whole frame, not just on/off, so a level or filter change reaches subscribers too.
+    const QByteArray nb =
+        CatFrames::setNoiseBlanker(m_radioState->noiseBlankerLevel(), m_radioState->noiseBlankerEnabled(),
+                                   m_radioState->noiseBlankerFilterWidth());
     const bool nr = m_radioState->noiseReductionEnabled();
     const int agc = static_cast<int>(m_radioState->agcSpeed());
 
@@ -121,7 +124,7 @@ void CatPushBroadcaster::onProcessingChanged() {
         return;
     }
     if (nb != m_lastNB) {
-        broadcast(CatFrames::noiseBlanker(nb));
+        broadcast(nb);
         m_lastNB = nb;
     }
     if (nr != m_lastNR) {

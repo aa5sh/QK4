@@ -378,7 +378,7 @@ private slots:
         CatServer server(&rs);
         QVERIFY(server.start(0));
 
-        QCOMPARE(sendCommand(server, "NB;"), QString("NB0;"));
+        QCOMPARE(sendCommand(server, "NB;"), QString("NB0000;")); // level 00, off, filter 0
     }
 
     void testNoiseReductionOff() {
@@ -812,6 +812,24 @@ private slots:
         QVERIFY(server.start(0));
 
         QCOMPARE(sendCommand(server, "BW;"), fromRadio);
+    }
+
+    // #134. Captured from a K4D at R40: NB0301 is level 03, off, filter 1. The reply was NB0;.
+    void testNbReplyIsTheRadiosForm_data() {
+        QTest::addColumn<QString>("fromRadio");
+        QTest::newRow("level 3, off, filter 1") << "NB0301;";
+        QTest::newRow("level 15, on, filter 2") << "NB1512;";
+    }
+
+    void testNbReplyIsTheRadiosForm() {
+        QFETCH(QString, fromRadio);
+        RadioState rs;
+        rs.parseCATCommand(fromRadio);
+
+        CatServer server(&rs);
+        QVERIFY(server.start(0));
+
+        QCOMPARE(sendCommand(server, "NB;"), fromRadio);
     }
 };
 

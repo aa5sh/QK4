@@ -68,17 +68,9 @@ bool modeKeysCwText(RadioState::Mode mode);
 // Aborts a message in progress: KY<0x04>;RX;. One frame carrying two commands, which is how the
 // radio is given it. Bench-confirmed on Elecraft hardware (TR4W's TK4Radio.StopCW).
 QByteArray cwAbort();
-// WHY setNoiseBlanker() EXISTS ALONGSIDE noiseBlanker() BELOW.
-//
-// noiseBlanker() builds a REPLY to a CAT client (catserver.cpp, catpushbroadcaster.cpp) and is not
-// in the K4's form: it emits "NB1;" where the K4 wants NBnnm. #134.
-//
-// setNoiseBlanker() and setFilterBandwidth() are in the K4's form and match what QK4's own UI already sends by hand
-// (sidecontrolscrollcontroller.cpp divides the bandwidth by 10; featuremenucontroller.cpp uses the
-// NB/ toggle).
-
 // NBnnm: nn is the level 00-15, m is on/off. The level is preserved by the caller, because TCI's
-// RX_NB_ENABLE is on/off only and must not silently move the level.
+// RX_NB_ENABLE is on/off only and must not silently move the level. The radio uses the same form
+// in both directions, so this is also the reply to a CAT client's `NB;`.
 // NBnnm, or NBnnmf when filterWidth is given (0-2). Pass filterWidth < 0 to leave it off the
 // command and change only the level and the on/off flag.
 QByteArray setNoiseBlanker(int level, bool on, int filterWidth = -1);
@@ -103,7 +95,6 @@ QByteArray setMenuValue(int menuId, int value);
 // NOT the PCX form below - that one is the extended QUERY, and the radio ignores it as a set.
 QByteArray setRfPower(int value, bool qrp);
 
-QByteArray noiseBlanker(bool on);
 QByteArray noiseReduction(bool on);
 QByteArray agcSpeed(int agc);
 QByteArray vox(bool on);
