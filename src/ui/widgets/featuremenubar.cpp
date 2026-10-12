@@ -45,7 +45,7 @@ void FeatureMenuBar::setupUi() {
     m_toggleBtn->setCursor(Qt::PointingHandCursor);
     m_toggleBtn->setStyleSheet(K4Styles::menuBarButtonSmall());
 
-    // NR engine toggle — only shown for NrAdjust. Tapping flips LMS <-> SSNR.
+    // NR engine toggle — only shown for NrAdjust. Tapping flips LMS <-> NR+ (SSNR).
     m_nrEngineBtn = new QPushButton("LMS", this);
     m_nrEngineBtn->setMinimumWidth(60);
     m_nrEngineBtn->setFixedHeight(K4Styles::Dimensions::ButtonHeightMedium);
@@ -206,7 +206,7 @@ void FeatureMenuBar::updateForFeature() {
     case NrAdjust:
         m_titleLabel->setText("NR ADJUST");
         m_extraBtn->hide();
-        m_nrEngineBtn->setText(m_nrEngine == Ssnr ? "SSNR" : "LMS");
+        m_nrEngineBtn->setText(m_nrEngine == Ssnr ? "NR+" : "LMS");
         m_nrEngineBtn->show();
         m_valueUnit = "";
         break;
@@ -227,7 +227,7 @@ void FeatureMenuBar::setNrEngine(NrEngine engine) {
         return;
     m_nrEngine = engine;
     if (m_currentFeature == NrAdjust)
-        m_nrEngineBtn->setText(m_nrEngine == Ssnr ? "SSNR" : "LMS");
+        m_nrEngineBtn->setText(m_nrEngine == Ssnr ? "NR+" : "LMS");
 }
 
 void FeatureMenuBar::setFeatureEnabled(bool enabled) {
@@ -291,7 +291,7 @@ void FeatureMenuBar::paintEvent(QPaintEvent *event) {
     // Draw delimiters after each section
     drawDelimiter(m_titleLabel);  // After title
     drawDelimiter(m_toggleBtn);   // After OFF/ON
-    drawDelimiter(m_nrEngineBtn); // After LMS/SSNR (only visible for NrAdjust)
+    drawDelimiter(m_nrEngineBtn); // After LMS/NR+ (only visible for NrAdjust)
     drawDelimiter(m_extraBtn);    // After FILTER NONE (only visible for NB)
     drawDelimiter(m_valueLabel);  // After value
     // No delimiter after +/- buttons (they're at the end now)

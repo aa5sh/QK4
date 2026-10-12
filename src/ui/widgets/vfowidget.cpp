@@ -221,7 +221,7 @@ void VFOWidget::setNB(bool on) {
 
 void VFOWidget::setNR(bool lmsOn, bool ssnrOn) {
     const bool active = lmsOn || ssnrOn;
-    m_nrLabel->setText(ssnrOn ? "SSNR" : "NR");
+    m_nrLabel->setText(ssnrOn ? "NR+" : "NR");
     m_nrLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
                                  .arg(active ? K4Styles::Colors::TextWhite : K4Styles::Colors::TextGray)
                                  .arg(K4Styles::Dimensions::FontSizeLarge));
