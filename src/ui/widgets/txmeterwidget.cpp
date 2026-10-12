@@ -225,13 +225,11 @@ void TxMeterWidget::paintEvent(QPaintEvent *event) {
     const int barHeight = 14;
     const int spacing = 2;
 
-    // Font for labels (10pt bold, matches KPA1500)
     QFont labelFont = font();
     labelFont.setPixelSize(K4Styles::Dimensions::FontSizeMedium);
     labelFont.setBold(true);
     painter.setFont(labelFont);
 
-    // Scale font (8pt, matches KPA1500)
     QFont scaleFont = font();
     scaleFont.setPixelSize(K4Styles::Dimensions::FontSizeSmall);
 
@@ -312,7 +310,6 @@ void TxMeterWidget::drawMeterRow(QPainter &painter, int y, int rowHeight, const 
     painter.setBrush(QColor(K4Styles::Colors::Background));
     painter.drawRect(labelRect);
 
-    // Label text (10pt bold, matches KPA1500)
     painter.setPen(QColor(K4Styles::Colors::TextWhite));
     QFont labelFont = font();
     labelFont.setPixelSize(K4Styles::Dimensions::FontSizeMedium);
