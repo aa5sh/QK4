@@ -8,15 +8,17 @@
 #include <QLabel>
 
 RadioManagerDialog::RadioManagerDialog(QWidget *parent) : QDialog(parent), m_currentIndex(-1), m_discovery(nullptr) {
-    // Application-modal. Nothing was set before, so show() left an ordinary window that the main
-    // window buried the moment you clicked anywhere else - and since this dialog now stays open
-    // across a disconnect, that left the operator with an app that does nothing and the one control
-    // that fixes it hidden behind it.
+    // WHY a tool window and not modal: the dialog has two jobs that modality set against each other.
+    // It must not be buried - an ordinary window disappeared behind the main window at the first
+    // click elsewhere, and since it stays open across a disconnect that left an inert app with the
+    // one control that fixes it hidden. And the globe icon must close it again (d46a802), which
+    // needs the main window to keep taking clicks. Modal (f1b6b82) fixed the first and broke the
+    // second: input to the main window was blocked, so the globe click never arrived. A tool
+    // window floats above its parent on macOS, Windows and Linux without blocking it.
     //
-    // Modal via show() rather than exec(): exec() nests an event loop, and this dialog is deleted
-    // from its own finished() signal. It does not block the event loop, so the spectrum, audio and
-    // CAT traffic all keep running underneath - only input is held here, which is the point.
-    setModal(true);
+    // Shown with show(), not exec(): exec() nests an event loop, and this dialog is deleted from
+    // its own finished() signal.
+    setWindowFlag(Qt::Tool);
 
     setupUi();
     refreshList();
