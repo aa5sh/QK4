@@ -208,6 +208,19 @@ private:
     // Apply MX routing + volume + balance to a raw [main, sub] interleaved packet
     void applyMixAndVolume(QByteArray &packet);
 
+    // qk4.audio.rx accumulator, reported and reset once a second of audio. Audio-thread only.
+    struct RxLevelStats {
+        int frames = 0;
+        double sumSqMain = 0.0;
+        double sumSqSub = 0.0;
+        float peakMain = 0.0f;
+        float peakSub = 0.0f;
+        float peakOut = 0.0f; // before the clamp, so it can read above 0 dBFS
+        int clipped = 0;
+    };
+    RxLevelStats m_rxStats;
+    void reportRxLevels(float mainVol, float subVol);
+
     // Audio output format: 12kHz stereo Float32 (K4 RX audio, L=Main R=Sub)
     QAudioFormat m_outputFormat;
 

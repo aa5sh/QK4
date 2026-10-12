@@ -250,7 +250,8 @@ bool AudioEngine::setupAudioOutput() {
         return false;
     }
 
-    // Volume is always 1.0 — actual volume control is in the K4's AG command
+    // Always 1.0: QK4's volume is applied per sample in applyMixAndVolume (the MAIN/SUB sliders).
+    // The K4's AG is the radio's own speaker and does not reach this stream.
     m_audioSink->setVolume(1.0f);
 
     // WHY: every sink (re)build must re-arm prebuffering and drop any backlog. setupAudioOutput()
@@ -483,14 +484,32 @@ void AudioEngine::applyMixAndVolume(QByteArray &packet) {
         balRightGain = qBound(0.0f, (50.0f + balOffset) / 50.0f, 1.0f);
     }
 
+    const bool measure = qk4AudioRx().isDebugEnabled();
+    auto measureIn = [&](float mainSample, float subSample) {
+        m_rxStats.sumSqMain += static_cast<double>(mainSample) * mainSample;
+        m_rxStats.sumSqSub += static_cast<double>(subSample) * subSample;
+        m_rxStats.peakMain = qMax(m_rxStats.peakMain, std::fabs(mainSample));
+        m_rxStats.peakSub = qMax(m_rxStats.peakSub, std::fabs(subSample));
+        ++m_rxStats.frames;
+    };
+    auto measureOut = [&](float left, float right) {
+        const float peak = qMax(std::fabs(left), std::fabs(right));
+        m_rxStats.peakOut = qMax(m_rxStats.peakOut, peak);
+        m_rxStats.clipped += (std::fabs(left) > 1.0f) + (std::fabs(right) > 1.0f);
+    };
+
     for (int i = 0; i < sampleCount; i++) {
         float mainSample = samples[i * 2];    // Left channel (Main RX / VFO A)
         float subSample = samples[i * 2 + 1]; // Right channel (Sub RX / VFO B)
+        if (measure)
+            measureIn(mainSample, subSample);
 
         // Step 1: SUB RX off — both channels get main audio only, sub slider has no effect
         // BL balance still applies (L/R gain is independent of SUB RX state)
         if (subMuted) {
             float s = mainSample * mainVol;
+            if (measure)
+                measureOut(s * balLeftGain, s * balRightGain);
             samples[i * 2] = qBound(-1.0f, s * balLeftGain, 1.0f);
             samples[i * 2 + 1] = qBound(-1.0f, s * balRightGain, 1.0f);
             continue;
@@ -513,9 +532,26 @@ void AudioEngine::applyMixAndVolume(QByteArray &packet) {
         }
 
         // Step 4: Clamp
+        if (measure)
+            measureOut(left, right);
         samples[i * 2] = qBound(-1.0f, left, 1.0f);
         samples[i * 2 + 1] = qBound(-1.0f, right, 1.0f);
     }
+
+    if (measure && m_rxStats.frames >= m_outputFormat.sampleRate())
+        reportRxLevels(mainVol, subVol);
+}
+
+void AudioEngine::reportRxLevels(float mainVol, float subVol) {
+    auto dbfs = [](double v) { return v > 0.0 ? 20.0 * std::log10(v) : -999.0; };
+    const double n = static_cast<double>(m_rxStats.frames);
+    qCDebug(qk4AudioRx,
+            "RX 1s: main peak %.1f rms %.1f dBFS | sub peak %.1f rms %.1f dBFS | out peak %.1f dBFS clipped %d | "
+            "sliders main %.2f sub %.2f",
+            dbfs(m_rxStats.peakMain), dbfs(std::sqrt(m_rxStats.sumSqMain / n)), dbfs(m_rxStats.peakSub),
+            dbfs(std::sqrt(m_rxStats.sumSqSub / n)), dbfs(m_rxStats.peakOut), m_rxStats.clipped,
+            static_cast<double>(mainVol), static_cast<double>(subVol));
+    m_rxStats = RxLevelStats{};
 }
 
 void AudioEngine::openMic() {

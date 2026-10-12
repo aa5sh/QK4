@@ -17,4 +17,11 @@ Q_DECLARE_LOGGING_CATEGORY(qk4Audio)
 //     QT_LOGGING_RULES="qk4.audio.tx.debug=true"
 Q_DECLARE_LOGGING_CATEGORY(qk4AudioTx)
 
+// RX playback level, once a second: MAIN and SUB as decoded (before the sliders), the mix that
+// goes to the device, and how many samples the final clamp clipped. Off by default for the same
+// reason as TX - it touches every sample on the RT audio thread.
+//
+//     QT_LOGGING_RULES="qk4.audio.rx.debug=true"
+Q_DECLARE_LOGGING_CATEGORY(qk4AudioRx)
+
 #endif // AUDIO_AUDIOLOGGING_H
