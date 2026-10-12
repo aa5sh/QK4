@@ -220,6 +220,10 @@ QByteArray CatServer::handleCommand(const QString &cmd, QTcpSocket *client) {
             const int sq = m_radioState->squelchLevelB();
             return sq < 0 ? QByteArray() : CatFrames::squelch(sq, true);
         }
+        if (prefix == "RG") {
+            const int rg = m_radioState->rfGainB();
+            return rg < 0 ? QByteArray() : CatFrames::rfGain(rg, true);
+        }
     }
 
     // Handle GET commands (no args) - respond from RadioState
@@ -316,6 +320,10 @@ QByteArray CatServer::handleCommand(const QString &cmd, QTcpSocket *client) {
             // a real zero.
             const int sq = m_radioState->squelchLevel();
             return sq < 0 ? QByteArray() : CatFrames::squelch(sq, false);
+        }
+        if (prefix == "RG") {
+            const int rg = m_radioState->rfGain();
+            return rg < 0 ? QByteArray() : CatFrames::rfGain(rg, false);
         }
         if (prefix == "FW") {
             return CatFrames::filterWidthExtended(m_radioState->filterBandwidth());

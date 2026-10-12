@@ -921,6 +921,19 @@ private slots:
         QCOMPARE(sendCommand(server, "SQ;"), QString());
         QCOMPARE(sendCommand(server, "SQ$;"), QString());
     }
+
+    // #134. RG and RG$ went unanswered although QK4 stores both. Captured from a K4D at R40: RG-00.
+    void testRgAnswersTheRadiosRfGain() {
+        RadioState rs;
+        rs.parseCATCommand("RG-00;");
+        rs.parseCATCommand("RG$-12;");
+
+        CatServer server(&rs);
+        QVERIFY(server.start(0));
+
+        QCOMPARE(sendCommand(server, "RG;"), QString("RG-00;"));
+        QCOMPARE(sendCommand(server, "RG$;"), QString("RG$-12;"));
+    }
 };
 
 QTEST_MAIN(TestCatServer)
