@@ -159,6 +159,7 @@ set(SOURCES
     src/dsp/spectrumscale.cpp
     src/dsp/waterfallgeometry.cpp
     src/settings/radiosettings.cpp
+    src/settings/interfacescale.cpp
     src/models/radiostate.cpp
     src/models/radiostate/antennastate.cpp
     src/models/radiostate/audioeffectsstate.cpp
@@ -193,6 +194,7 @@ set(SOURCES
     src/ui/dialogs/optionsdialog.cpp
     src/ui/pages/aboutpage.cpp
     src/ui/pages/stationpage.cpp
+    src/ui/pages/displaypage.cpp
     src/ui/pages/audioinputpage.cpp
     src/ui/pages/audiooutputpage.cpp
     src/ui/pages/rigcontrolpage.cpp
@@ -298,6 +300,7 @@ set(HEADERS
     src/dsp/panadapter_rhi.h
     src/dsp/minipan_rhi.h
     src/settings/radiosettings.h
+    src/settings/interfacescale.h
     src/models/radiostate.h
     src/models/radiostate/antennastate.h
     src/models/radiostate/datacontrolstate.h
@@ -329,6 +332,7 @@ set(HEADERS
     src/ui/dialogs/optionsdialog.h
     src/ui/pages/aboutpage.h
     src/ui/pages/stationpage.h
+    src/ui/pages/displaypage.h
     src/ui/pages/audioinputpage.h
     src/ui/pages/audiooutputpage.h
     src/ui/pages/rigcontrolpage.h

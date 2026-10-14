@@ -1,6 +1,7 @@
 #include "ui/dialogs/optionsdialog.h"
 #include "ui/pages/aboutpage.h"
 #include "ui/pages/stationpage.h"
+#include "ui/pages/displaypage.h"
 #include "ui/pages/audioinputpage.h"
 #include "ui/pages/audiooutputpage.h"
 #include "ui/pages/rigcontrolpage.h"
@@ -54,6 +55,7 @@ void OptionsDialog::setupUi() {
     m_tabList->setFixedWidth(K4Styles::Dimensions::TabListWidth);
     m_tabList->addItem("About");
     m_tabList->addItem("Station");
+    m_tabList->addItem("Display");
     m_tabList->addItem("Audio Input");
     m_tabList->addItem("Audio Output");
     m_tabList->addItem("Rig Control");
@@ -115,6 +117,10 @@ void OptionsDialog::ensurePageCreated(int index) {
     case PageStation:
         m_stationPage = new StationPage(this);
         page = m_stationPage;
+        break;
+    case PageDisplay:
+        m_displayPage = new DisplayPage(this);
+        page = m_displayPage;
         break;
     case PageAudioInput:
         m_audioInputPage = new AudioInputPage(m_audioController, this);

@@ -193,6 +193,62 @@ private slots:
         s->setConnectAtStartupRadio(99);
         QCOMPARE(s->connectAtStartupIndex(), -1);
     }
+
+    void interfaceScaleDefaultsToAuto() {
+        QSettings raw(QSettings::defaultFormat(), QSettings::UserScope, QStringLiteral("QK4"), QStringLiteral("QK4"));
+        raw.remove(QStringLiteral("ui"));
+        raw.sync();
+        QCOMPARE(RadioSettings::instance()->interfaceScale(), RadioSettings::kInterfaceScaleAuto);
+        bool isAuto = false;
+        QCOMPARE(RadioSettings::startupInterfaceScale(&isAuto), 1.0);
+        QVERIFY(isAuto);
+    }
+
+    void interfaceScaleRoundTripsAndSignalsOnlyOnChange() {
+        RadioSettings *s = RadioSettings::instance();
+        s->setInterfaceScale(RadioSettings::kInterfaceScaleAuto);
+        QSignalSpy spy(s, &RadioSettings::interfaceScaleChanged);
+        s->setInterfaceScale(80);
+        s->setInterfaceScale(80);
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.first().first().toInt(), 80);
+        QCOMPARE(s->interfaceScale(), 80);
+        bool isAuto = true;
+        QCOMPARE(RadioSettings::startupInterfaceScale(&isAuto), 0.8);
+        QVERIFY(!isAuto);
+        s->setInterfaceScale(RadioSettings::kInterfaceScaleAuto);
+    }
+
+    void unknownInterfaceScaleFallsBackToAuto() {
+        // Hand-edited or from a step since removed. Auto is the one value that cannot leave the
+        // window larger than the screen.
+        RadioSettings *s = RadioSettings::instance();
+        s->setInterfaceScale(83);
+        QCOMPARE(s->interfaceScale(), RadioSettings::kInterfaceScaleAuto);
+        QSettings raw(QSettings::defaultFormat(), QSettings::UserScope, QStringLiteral("QK4"), QStringLiteral("QK4"));
+        raw.setValue(QStringLiteral("ui/interfaceScale"), 300);
+        raw.sync();
+        QCOMPARE(s->interfaceScale(), RadioSettings::kInterfaceScaleAuto);
+        s->setInterfaceScale(RadioSettings::kInterfaceScaleAuto);
+    }
+
+    void autoUsesTheFittedFactorWithinBounds() {
+        RadioSettings *s = RadioSettings::instance();
+        s->setInterfaceScale(RadioSettings::kInterfaceScaleAuto);
+        s->setAutoScaleFactor(0.75);
+        QCOMPARE(RadioSettings::startupInterfaceScale(), 0.75);
+        s->setAutoScaleFactor(0.1);
+        QCOMPARE(s->autoScaleFactor(), 0.5);
+        s->setAutoScaleFactor(3.0);
+        QCOMPARE(s->autoScaleFactor(), 1.0);
+        QSettings raw(QSettings::defaultFormat(), QSettings::UserScope, QStringLiteral("QK4"), QStringLiteral("QK4"));
+        raw.setValue(QStringLiteral("ui/autoScaleFactor"), QStringLiteral("nonsense"));
+        raw.sync();
+        // An unparseable value reads as 0, which clamps to the floor rather than to full size -
+        // the safe direction for a value that exists only because a screen was too small.
+        QCOMPARE(RadioSettings::startupInterfaceScale(), 0.5);
+        s->setAutoScaleFactor(1.0);
+    }
 };
 
 QTEST_MAIN(TestRadioSettings)

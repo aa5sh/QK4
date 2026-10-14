@@ -1,5 +1,8 @@
 #include "radiosettings.h"
 #include "audio/rxoutputstage.h"
+#include "utils/windowfit.h"
+#include <algorithm>
+#include <cmath>
 
 // Starting point for the TCI transmit level: 25% on the cubic curve is 0.0156x, measured on a K4 as
 // keeping ALC at or below 5 on an injected signal, WITH WSJT-X'S OWN OUTPUT AT 80%.
@@ -314,6 +317,57 @@ void RadioSettings::setTemperatureInFahrenheit(bool fahrenheit) {
         m_settings.sync();
         emit temperatureInFahrenheitChanged(fahrenheit);
     }
+}
+
+namespace {
+
+// An unknown saved value (hand-edited, or a step since removed) falls back to Auto: the one
+// setting that cannot leave the window larger than the screen.
+int sanitizeInterfaceScale(int percent) {
+    for (int allowed : RadioSettings::kInterfaceScales)
+        if (percent == allowed)
+            return percent;
+    return RadioSettings::kInterfaceScaleAuto;
+}
+
+double sanitizeAutoScaleFactor(double factor) {
+    return std::isfinite(factor) ? std::clamp(factor, WindowFit::kMinScale, WindowFit::kMaxScale)
+                                 : WindowFit::kMaxScale;
+}
+
+} // namespace
+
+int RadioSettings::interfaceScale() const {
+    return sanitizeInterfaceScale(m_settings.value("ui/interfaceScale", kInterfaceScaleAuto).toInt());
+}
+
+void RadioSettings::setInterfaceScale(int percent) {
+    percent = sanitizeInterfaceScale(percent);
+    if (interfaceScale() != percent) {
+        m_settings.setValue("ui/interfaceScale", percent);
+        m_settings.sync();
+        emit interfaceScaleChanged(percent);
+    }
+}
+
+double RadioSettings::autoScaleFactor() const {
+    return sanitizeAutoScaleFactor(m_settings.value("ui/autoScaleFactor", WindowFit::kMaxScale).toDouble());
+}
+
+void RadioSettings::setAutoScaleFactor(double factor) {
+    m_settings.setValue("ui/autoScaleFactor", sanitizeAutoScaleFactor(factor));
+    m_settings.sync();
+}
+
+double RadioSettings::startupInterfaceScale(bool *isAuto) {
+    const QSettings store(QSettings::defaultFormat(), QSettings::UserScope, QStringLiteral("QK4"),
+                          QStringLiteral("QK4"));
+    const int percent = sanitizeInterfaceScale(store.value("ui/interfaceScale", kInterfaceScaleAuto).toInt());
+    if (isAuto)
+        *isAuto = percent == kInterfaceScaleAuto;
+    if (percent == kInterfaceScaleAuto)
+        return sanitizeAutoScaleFactor(store.value("ui/autoScaleFactor", WindowFit::kMaxScale).toDouble());
+    return percent / 100.0;
 }
 
 int RadioSettings::micGain() const {

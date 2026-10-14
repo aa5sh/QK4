@@ -17,6 +17,7 @@ class KPA1500Client;
 class DxClusterController;
 class AboutPage;
 class StationPage;
+class DisplayPage;
 class AudioInputPage;
 class AudioOutputPage;
 class RigControlPage;
@@ -27,8 +28,9 @@ class Kpa1500Page;
 class DxClusterPage;
 
 /**
- * @brief Tabbed Options dialog. Left QListWidget drives a QStackedWidget holding the 8 option
- *        pages (About, Audio Input/Output, Rig Control, CW Keyer, KPOD, KPA1500, DX Cluster).
+ * @brief Tabbed Options dialog. Left QListWidget drives a QStackedWidget holding the option
+ *        pages (About, Station, Display, Audio Input/Output, Rig Control, TCI Server, CW Keyer,
+ *        KPOD, KPA1500, DX Cluster).
  *        Pages are lazy-constructed on first tab activation via @c ensurePageCreated.
  */
 class OptionsDialog : public QDialog {
@@ -38,6 +40,7 @@ public:
     enum Page {
         PageAbout = 0,
         PageStation,
+        PageDisplay,
         PageAudioInput,
         PageAudioOutput,
         PageRigControl,
@@ -79,6 +82,7 @@ private:
     // Page widgets
     AboutPage *m_aboutPage = nullptr;
     StationPage *m_stationPage = nullptr;
+    DisplayPage *m_displayPage = nullptr;
     AudioInputPage *m_audioInputPage = nullptr;
     AudioOutputPage *m_audioOutputPage = nullptr;
     TciServerPage *m_tciServerPage = nullptr;

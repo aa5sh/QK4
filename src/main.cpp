@@ -18,6 +18,7 @@
 #include <QTextStream>
 #include "settings/radiosettings.h"
 #include "mainwindow.h"
+#include "settings/interfacescale.h"
 #include "ui/styling/k4styles.h"
 // WHY: last, after every project header. windows.h defines SendMessage, ERROR and a long tail of
 // other unqualified macros, and anything it reaches first it rewrites - a header that later
@@ -217,6 +218,9 @@ int main(int argc, char *argv[]) {
     // Enable HiDPI scaling for crisp rendering on Retina/4K displays
     QApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
 
+    // Must precede QApplication: Qt reads the scale factor once, when it is constructed.
+    InterfaceScale::applyBeforeApp();
+
     QApplication app(argc, argv);
     app.setApplicationName("QK4");
     app.setApplicationVersion(QK4_VERSION);
@@ -345,12 +349,28 @@ int main(int argc, char *argv[]) {
         qWarning() << "Ignoring command line:" << parser.errorText();
     }
 
-    MainWindow window;
-    if (!parser.value(connectOption).trimmed().isEmpty()) {
-        // Before exec(), because the startup connect runs on the first pass of the event loop.
-        window.setStartupRadioOverride(parser.value(connectOption).trimmed());
+    int exitCode = 0;
+    bool relaunch = false;
+    {
+        MainWindow window;
+        if (InterfaceScale::fitNeedsRelaunch(window)) {
+            // Before show() and exec(): the operator never sees the misfitted window, and the
+            // startup connect - which runs on the first pass of the event loop - never starts.
+            window.close();
+            relaunch = true;
+        } else {
+            if (!parser.value(connectOption).trimmed().isEmpty()) {
+                // Before exec(), because the startup connect runs on the first pass of the event loop.
+                window.setStartupRadioOverride(parser.value(connectOption).trimmed());
+            }
+            window.show();
+            exitCode = app.exec();
+            relaunch = InterfaceScale::restartRequested();
+        }
     }
-    window.show();
-
-    return app.exec();
+    // WHY: only after MainWindow is destroyed. Its teardown closes the CAT and TCI listeners and
+    // releases the USB devices; a new instance started any earlier would race this one for them.
+    if (relaunch)
+        InterfaceScale::relaunch();
+    return exitCode;
 }
