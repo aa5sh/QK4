@@ -1,4 +1,5 @@
 #include "ui/popups/lineoutpopup.h"
+#include "models/radiostate/audioeffectsstate.h"
 #include "ui/styling/k4styles.h"
 #include <QHBoxLayout>
 #include <QPainter>
@@ -165,7 +166,7 @@ void LineOutPopupWidget::updateValueLabels() {
 }
 
 void LineOutPopupWidget::setLeftLevel(int level) {
-    m_leftLevel = qBound(0, level, 40);
+    m_leftLevel = qBound(0, level, AudioEffectsState::LineOutMax);
     m_leftValueLabel->setText(QString::number(m_leftLevel));
     if (m_rightEqualsLeft) {
         m_rightLevel = m_leftLevel;
@@ -174,7 +175,7 @@ void LineOutPopupWidget::setLeftLevel(int level) {
 }
 
 void LineOutPopupWidget::setRightLevel(int level) {
-    m_rightLevel = qBound(0, level, 40);
+    m_rightLevel = qBound(0, level, AudioEffectsState::LineOutMax);
     m_rightValueLabel->setText(QString::number(m_rightLevel));
 }
 
@@ -199,7 +200,7 @@ void LineOutPopupWidget::wheelEvent(QWheelEvent *event) {
     }
 
     if (m_leftSelected) {
-        int newLevel = qBound(0, m_leftLevel + steps, 40);
+        int newLevel = qBound(0, m_leftLevel + steps, AudioEffectsState::LineOutMax);
         if (newLevel != m_leftLevel) {
             m_leftLevel = newLevel;
             m_leftValueLabel->setText(QString::number(newLevel));
@@ -211,7 +212,7 @@ void LineOutPopupWidget::wheelEvent(QWheelEvent *event) {
         }
     } else {
         if (!m_rightEqualsLeft) {
-            int newLevel = qBound(0, m_rightLevel + steps, 40);
+            int newLevel = qBound(0, m_rightLevel + steps, AudioEffectsState::LineOutMax);
             if (newLevel != m_rightLevel) {
                 m_rightLevel = newLevel;
                 m_rightValueLabel->setText(QString::number(newLevel));

@@ -196,16 +196,18 @@ bool HaliKeyV14Worker::readPinState(bool &ditState, bool &dahState, bool &pttSta
     //
     // We map the three logical signals as follows:
     //
-    //   ditState = false                (V1.4 cannot uniquely identify the dit lever — both
-    //                                    pedal and dit lever drive CTS. dit-vs-pedal demux
-    //                                    happens in HardwareController based on operating
-    //                                    mode: in CW we treat CTS as dit, in voice as PTT.)
+    //   ditState = false                (V1.4 cannot report the dit lever on its own line — see
+    //                                    pttState below, which carries it.)
     //   dahState = DCD || DSR           (paddle dah lever — both pins fire together; OR collapses
     //                                    them into one stable edge.)
-    //   pttState = CTS                  (mode-routed downstream: voice → PTT, CW → setDitPaddle.)
+    //   pttState = CTS                  (the dit lever, in CW. CwController maps it.)
     //
-    // The MIDI worker is unaffected — it has true distinct sources for dit/dah/PTT (notes
-    // 20/21/31), so HardwareController's mode-routing only kicks in for the V1.4 variant.
+    // WHY the dit lever arrives on a field named pttState: a footswitch wired inline with the
+    // paddles also drives CTS, so on this firmware the two are the same signal and the name kept
+    // both readings open. Footswitch PTT is now withdrawn from both transports (see
+    // cwcontroller.h), so CTS means the dit lever and nothing else; the field name is left alone
+    // because it is the transport-level line name shared with the MIDI worker, not a claim about
+    // what QK4 does with it.
 #ifdef Q_OS_WIN
     DWORD modemStatus = 0;
     if (!GetCommModemStatus(m_handle, &modemStatus)) {
@@ -274,7 +276,7 @@ void HaliKeyV14Worker::monitorLoop() {
     // Linux: use TIOCMIWAIT for kernel-level interrupt-driven monitoring
     while (m_running) {
         // Wait for CTS, DSR, or DCD change — blocks in kernel until edge detected.
-        // DCD added so foot-pedal/PTT presses wake the loop the same way paddles do.
+        // DCD added so a dah-lever edge wakes the loop the same way a CTS edge does.
         if (ioctl(m_fd, TIOCMIWAIT, TIOCM_CTS | TIOCM_DSR | TIOCM_CD) < 0) {
             if (!m_running)
                 break;
@@ -289,46 +291,80 @@ void HaliKeyV14Worker::monitorLoop() {
         if (!m_running)
             break;
 
-        // Read new state
+        // Read until the lines settle, rather than going back to TIOCMIWAIT when they disagree.
+        //
+        // WHY: TIOCMIWAIT snapshots the kernel's interrupt counters when it is ENTERED, so any
+        // change arriving before re-entry is never reported. Giving up on an unstable pair and
+        // waiting again therefore threw away the settled state: a squeeze release whose second
+        // lever drops a millisecond later (which is what the recommended 1 ms FTDI latency timer
+        // produces) left both levers reading down with no further edge to correct them, and the
+        // keyer sent dit-dah forever. The macOS and Windows branches cannot hit this because they
+        // poll — every tick re-reads. This loop now re-reads too.
         bool ditState = false, dahState = false, pttState = false;
-        if (!readPinState(ditState, dahState, pttState)) {
-            if (!m_running)
-                break;
-            QString error = "Failed to read pin state";
-            qCWarning(hwHalikey) << "HaliKeyV14Worker:" << error;
-            emit errorOccurred(error);
-            return;
-        }
+        bool settled = false;
+        for (int attempt = 0; attempt < kSettleAttempts && m_running; ++attempt) {
+            if (!readPinState(ditState, dahState, pttState)) {
+                if (!m_running)
+                    break;
+                QString error = "Failed to read pin state";
+                qCWarning(hwHalikey) << "HaliKeyV14Worker:" << error;
+                emit errorOccurred(error);
+                return;
+            }
 
-        // Confirm state is stable (matches macOS/Windows debounce)
-        bool stable = true;
-        for (int i = 1; i < DEBOUNCE_COUNT && m_running; ++i) {
-            usleep(500);
-            bool d = false, h = false, p = false;
-            if (!readPinState(d, h, p)) {
-                stable = false;
+            // Confirm across DEBOUNCE_COUNT reads ≥500 µs apart — the only contact-bounce defense
+            // on this path, unchanged in substance from the original count-based filter.
+            bool stable = true;
+            for (int i = 1; i < DEBOUNCE_COUNT && m_running; ++i) {
+                usleep(500);
+                bool d = false, h = false, p = false;
+                if (!readPinState(d, h, p)) {
+                    stable = false;
+                    break;
+                }
+                if (d != ditState || h != dahState || p != pttState) {
+                    stable = false;
+                    break;
+                }
+            }
+            if (stable) {
+                settled = true;
                 break;
             }
-            if (d != ditState || h != dahState || p != pttState) {
-                stable = false;
-                break;
-            }
         }
-        if (!stable || !m_running)
-            continue;
+        if (!m_running)
+            break;
+        if (!settled) {
+            // Still bouncing after kSettleAttempts. Fall back to the last read rather than
+            // dropping it: an unsettled line is still closer to the truth than a stale one, and
+            // the next edge will correct it.
+            qCDebug(hwHalikey) << "HaliKeyV14Worker: lines did not settle, using last read";
+        }
 
-        if (ditState != lastDitState) {
+        // One emit for the whole sample. These lines were read together and must stay together:
+        // see the lineStateChanged comment in halikeyworkerbase.h.
+        if (ditState != lastDitState || dahState != lastDahState || pttState != lastPttState) {
+            qCDebug(hwHalikey) << "HaliKeyV14Worker: lines dit:" << ditState << " dah:" << dahState
+                               << " ptt:" << pttState;
             lastDitState = ditState;
-            emit ditStateChanged(ditState);
-        }
-        if (dahState != lastDahState) {
             lastDahState = dahState;
-            emit dahStateChanged(dahState);
-        }
-        if (pttState != lastPttState) {
             lastPttState = pttState;
-            qCDebug(hwHalikey) << "HaliKeyV14Worker: ptt edge:" << pttState;
-            emit pttStateChanged(pttState);
+            emit lineStateChanged(ditState, dahState, pttState);
+        }
+
+        // Re-read once more before blocking again, and emit if anything moved while we were
+        // confirming. Without this the change that lands between the confirm read and re-entry
+        // into TIOCMIWAIT is lost for good — the same hole as above, at the other end of the loop.
+        bool reDit = false, reDah = false, rePtt = false;
+        if (m_running && readPinState(reDit, reDah, rePtt)) {
+            if (reDit != lastDitState || reDah != lastDahState || rePtt != lastPttState) {
+                qCDebug(hwHalikey) << "HaliKeyV14Worker: lines moved while confirming, dit:" << reDit
+                                   << " dah:" << reDah << " ptt:" << rePtt;
+                lastDitState = reDit;
+                lastDahState = reDah;
+                lastPttState = rePtt;
+                emit lineStateChanged(reDit, reDah, rePtt);
+            }
         }
     }
 
@@ -375,14 +411,17 @@ void HaliKeyV14Worker::monitorLoop() {
             return;
         }
 
+        // One emit per loop iteration covering every line that settled on this pass — the lines
+        // were sampled together by readPinState() and must reach the keyer together.
+        bool linesChanged = false;
+
         // Debounce dit (count-based; identical to the macOS branch)
         if (ditState == rawDitState) {
             if (ditDebounceCounter < DEBOUNCE_COUNT)
                 ditDebounceCounter++;
             if (ditDebounceCounter >= DEBOUNCE_COUNT && ditState != lastDitState) {
                 lastDitState = ditState;
-                qCDebug(hwHalikey) << "HaliKeyV14Worker: dit edge:" << ditState;
-                emit ditStateChanged(ditState);
+                linesChanged = true;
             }
         } else {
             rawDitState = ditState;
@@ -395,8 +434,7 @@ void HaliKeyV14Worker::monitorLoop() {
                 dahDebounceCounter++;
             if (dahDebounceCounter >= DEBOUNCE_COUNT && dahState != lastDahState) {
                 lastDahState = dahState;
-                qCDebug(hwHalikey) << "HaliKeyV14Worker: dah edge:" << dahState;
-                emit dahStateChanged(dahState);
+                linesChanged = true;
             }
         } else {
             rawDahState = dahState;
@@ -409,12 +447,17 @@ void HaliKeyV14Worker::monitorLoop() {
                 pttDebounceCounter++;
             if (pttDebounceCounter >= DEBOUNCE_COUNT && pttState != lastPttState) {
                 lastPttState = pttState;
-                qCDebug(hwHalikey) << "HaliKeyV14Worker: ptt edge:" << pttState;
-                emit pttStateChanged(pttState);
+                linesChanged = true;
             }
         } else {
             rawPttState = pttState;
             pttDebounceCounter = 1;
+        }
+
+        if (linesChanged) {
+            qCDebug(hwHalikey) << "HaliKeyV14Worker: lines dit:" << lastDitState << " dah:" << lastDahState
+                               << " ptt:" << lastPttState;
+            emit lineStateChanged(lastDitState, lastDahState, lastPttState);
         }
     }
 
@@ -436,14 +479,17 @@ void HaliKeyV14Worker::monitorLoop() {
             return;
         }
 
+        // One emit per loop iteration covering every line that settled on this pass — the lines
+        // were sampled together by readPinState() and must reach the keyer together.
+        bool linesChanged = false;
+
         // Debounce dit
         if (ditState == rawDitState) {
             if (ditDebounceCounter < DEBOUNCE_COUNT)
                 ditDebounceCounter++;
             if (ditDebounceCounter >= DEBOUNCE_COUNT && ditState != lastDitState) {
                 lastDitState = ditState;
-                qCDebug(hwHalikey) << "HaliKeyV14Worker: dit edge:" << ditState;
-                emit ditStateChanged(ditState);
+                linesChanged = true;
             }
         } else {
             rawDitState = ditState;
@@ -456,8 +502,7 @@ void HaliKeyV14Worker::monitorLoop() {
                 dahDebounceCounter++;
             if (dahDebounceCounter >= DEBOUNCE_COUNT && dahState != lastDahState) {
                 lastDahState = dahState;
-                qCDebug(hwHalikey) << "HaliKeyV14Worker: dah edge:" << dahState;
-                emit dahStateChanged(dahState);
+                linesChanged = true;
             }
         } else {
             rawDahState = dahState;
@@ -470,12 +515,17 @@ void HaliKeyV14Worker::monitorLoop() {
                 pttDebounceCounter++;
             if (pttDebounceCounter >= DEBOUNCE_COUNT && pttState != lastPttState) {
                 lastPttState = pttState;
-                qCDebug(hwHalikey) << "HaliKeyV14Worker: ptt edge:" << pttState;
-                emit pttStateChanged(pttState);
+                linesChanged = true;
             }
         } else {
             rawPttState = pttState;
             pttDebounceCounter = 1;
+        }
+
+        if (linesChanged) {
+            qCDebug(hwHalikey) << "HaliKeyV14Worker: lines dit:" << lastDitState << " dah:" << lastDahState
+                               << " ptt:" << lastPttState;
+            emit lineStateChanged(lastDitState, lastDahState, lastPttState);
         }
     }
 #endif

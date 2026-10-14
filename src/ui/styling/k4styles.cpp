@@ -713,8 +713,7 @@ const QString &comboBox() {
                 "           padding: %6px; font-size: %5px; border-radius: %7px; }"
                 "QComboBox:focus { border-color: %4; }"
                 "QComboBox::drop-down { border: none; width: 20px; }"
-                "QComboBox::down-arrow { image: none; border-left: 5px solid transparent; "
-                "           border-right: 5px solid transparent; border-top: 5px solid %2; }"
+                "QComboBox::down-arrow { image: url(:/icons/arrow-down.svg); width: 10px; height: 6px; }"
                 "QComboBox QAbstractItemView { background-color: %1; color: %2; selection-background-color: %4; }")
             .arg(Colors::DarkBackground, Colors::TextWhite, Colors::DialogBorder, Colors::AccentAmber)
             .arg(Dimensions::FontSizePopup)
@@ -735,23 +734,66 @@ const QString &lineEdit() {
     return s;
 }
 
+const QString &spinBox() {
+    // WHY: the step buttons and arrows are styled here too. Styling only the frame leaves them to
+    // the platform, which on Windows 11 dark mode renders them dark-on-dark - the checkbox
+    // indicator failure again. The arrows are SVGs because the zero-size-border triangle trick
+    // renders as a solid bar, not a triangle.
+    static const QString s =
+        QString("QSpinBox { background-color: %1; color: %2; border: 1px solid %3; "
+                "           padding: %6px; padding-right: 18px; font-size: %5px; border-radius: %7px; }"
+                "QSpinBox:focus { border-color: %4; }"
+                "QSpinBox::up-button, QSpinBox::down-button { subcontrol-origin: border; width: 16px; "
+                "           border: none; background: transparent; }"
+                "QSpinBox::up-button { subcontrol-position: top right; }"
+                "QSpinBox::down-button { subcontrol-position: bottom right; }"
+                "QSpinBox::up-arrow { image: url(:/icons/arrow-up.svg); width: 10px; height: 6px; }"
+                "QSpinBox::down-arrow { image: url(:/icons/arrow-down.svg); width: 10px; height: 6px; }")
+            .arg(Colors::DarkBackground, Colors::TextWhite, Colors::DialogBorder, Colors::AccentAmber)
+            .arg(Dimensions::FontSizePopup)
+            .arg(Dimensions::PaddingSmall)
+            .arg(Dimensions::SliderBorderRadius);
+    return s;
+}
+
 const QString &checkBox() {
+    // THE INDICATOR IS DRAWN, NOT LEFT TO THE PLATFORM. Sizing it and nothing else leaves the
+    // unchecked box rendering near-black on these near-black dialogs - present, clickable and
+    // invisible. An operator reported being unable to find a checkbox that was under the cursor.
+    // Grey outline for off, amber fill for on, matching the accent used everywhere else.
     static const QString s = QString("QCheckBox { color: %1; font-size: %2px; spacing: %3px; }"
-                                     "QCheckBox::indicator { width: %4px; height: %4px; }")
+                                     "QCheckBox::indicator { width: %4px; height: %4px;"
+                                     "  border: 1px solid %5; border-radius: 3px;"
+                                     "  background-color: %6; }"
+                                     "QCheckBox::indicator:checked { background-color: %7;"
+                                     "  border-color: %7; }"
+                                     "QCheckBox::indicator:hover { border-color: %7; }")
                                  .arg(Colors::TextWhite)
                                  .arg(Dimensions::FontSizePopup)
                                  .arg(Dimensions::BorderRadiusLarge)
-                                 .arg(Dimensions::CheckboxSize);
+                                 .arg(Dimensions::CheckboxSize)
+                                 .arg(Colors::TextGray, Colors::DarkBackground, Colors::AccentAmber);
     return s;
 }
 
 const QString &checkBoxDisabled() {
+    // Same indicator problem as checkBox(), and the same fix - but deliberately NOT the same
+    // colours. A disabled control still has to READ as disabled, so the outline is InactiveGray
+    // rather than text grey, a checked box fills with DisabledBackground rather than amber, and
+    // there is no hover rule at all. The operator can see what it is set to and see that they
+    // cannot change it. Note this is NOT the dialog border grey: at #333 on a #0d0d0d dialog it
+    // would have been as invisible as the bug being fixed here.
     static const QString s = QString("QCheckBox { color: %1; font-size: %2px; spacing: %3px; }"
-                                     "QCheckBox::indicator { width: %4px; height: %4px; }")
+                                     "QCheckBox::indicator { width: %4px; height: %4px;"
+                                     "  border: 1px solid %5; border-radius: 3px;"
+                                     "  background-color: %6; }"
+                                     "QCheckBox::indicator:checked { background-color: %7;"
+                                     "  border-color: %7; }")
                                  .arg(Colors::TextGray)
                                  .arg(Dimensions::FontSizePopup)
                                  .arg(Dimensions::BorderRadiusLarge)
-                                 .arg(Dimensions::CheckboxSize);
+                                 .arg(Dimensions::CheckboxSize)
+                                 .arg(Colors::InactiveGray, Colors::DarkBackground, Colors::DisabledBackground);
     return s;
 }
 
@@ -778,5 +820,16 @@ const QString &actionButtonSmall() {
 }
 
 } // namespace Dialog
+
+const QString &applicationStyleSheet() {
+    // WHY: before this, the theme reached a control only if its constructor remembered to call
+    // setStyleSheet. Three did not - the spot label size spin box, the KPOD+ encode mode dropdown
+    // and the TLS indicator - and Windows 11 in dark mode drew each dark-on-dark, invisible on our
+    // near-black dialogs. macOS, Linux, Windows 10 and Windows 11 light all drew them legibly, so
+    // nothing in development or review could catch it. One app-wide rule set makes forgetting
+    // harmless. Covered types are enforced by tests/test_formcontroltheme.cpp.
+    static const QString s = Dialog::checkBox() + Dialog::comboBox() + Dialog::lineEdit() + Dialog::spinBox();
+    return s;
+}
 
 } // namespace K4Styles

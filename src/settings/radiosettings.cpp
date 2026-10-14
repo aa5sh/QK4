@@ -1,4 +1,34 @@
 #include "radiosettings.h"
+#include "audio/rxoutputstage.h"
+#include "utils/windowfit.h"
+#include <algorithm>
+#include <cmath>
+
+// Starting point for the TCI transmit level: 25% on the cubic curve is 0.0156x, measured on a K4 as
+// keeping ALC at or below 5 on an injected signal, WITH WSJT-X'S OWN OUTPUT AT 80%.
+//
+// That pairing is the whole measurement - 25% on its own means nothing, because there are two gain
+// stages in series and the client owns the first one. 80% is recorded because it is a common
+// setting, not a required one; an operator running their client hotter or quieter moves this to
+// suit, which is why the control is a slider and why the help text gives them the ALC criterion
+// instead of a number to copy.
+//
+// WHY QK4 NEEDS ITS OWN CONTROL AT ALL, when WSJT-X already has an output slider: the client's
+// slider is not QK4's to spend. The same WSJT-X installation is commonly used against other
+// programs and other radios, where its output level is already set to suit them. Asking the
+// operator to retune it for QK4 would break those setups every time they switch. This control is
+// the one that belongs to this path, so the client's level can stay where the rest of their
+// station needs it.
+//
+// WHY THIS DEFAULT CARRIES MORE WEIGHT THAN MIC GAIN'S: the K4 has a settable line-in level for its
+// soundcard input and another for the rear 3.5 mm jack, but NONE for LAN audio. There is no
+// radio-side trim on this path, so this gain and the client's own output level are the only two
+// controls in the chain. That also means a bad default cannot be absorbed at the radio the way a
+// hot line input can.
+//
+// It coincides with the Mic Gain default by measurement, not derivation - the two are tuned against
+// different sources and different meters, and either may move without the other.
+static constexpr int kTciTxGainDefault = 25;
 
 static const QByteArray obfuscationKey = "K4RemoteObfuscation";
 
@@ -26,12 +56,60 @@ RadioSettings *RadioSettings::instance() {
 }
 
 RadioSettings::RadioSettings(QObject *parent)
-    : QObject(parent), m_lastSelectedIndex(-1), m_kpodEnabled(false), m_settings("QK4", "QK4") {
+    : QObject(parent), m_lastSelectedIndex(-1), m_kpodEnabled(false),
+      // Same store as QSettings("QK4", "QK4") - on every platform the two resolve to the identical
+      // file - but named through defaultFormat() so it can be REDIRECTED.
+      //
+      // WHY THAT MATTERS: Qt's two-argument QSettings(org, app) constructor ignores
+      // QSettings::setDefaultFormat() and always uses NativeFormat, which on macOS is the
+      // CFPreferences domain. A test therefore had NO way to point this singleton anywhere else,
+      // and one that tried ran against a developer's real preferences and deleted every saved
+      // radio. Spelling the format out is the whole fix: setDefaultFormat() now reaches this.
+      m_settings(QSettings::defaultFormat(), QSettings::UserScope, QStringLiteral("QK4"), QStringLiteral("QK4")) {
     load();
 }
 
 QVector<RadioEntry> RadioSettings::radios() const {
     return m_radios;
+}
+
+int RadioSettings::connectAtStartupIndex() const {
+    for (int i = 0; i < m_radios.size(); ++i) {
+        if (m_radios[i].connectAtStartup) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+int RadioSettings::indexOfRadioNamed(const QString &name) const {
+    if (name.isEmpty()) {
+        return -1;
+    }
+    for (int i = 0; i < m_radios.size(); ++i) {
+        if (m_radios[i].name.compare(name, Qt::CaseInsensitive) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+void RadioSettings::setConnectAtStartupRadio(int index) {
+    // Clearing every other entry is the whole point: the flag means "the radio QK4 opens with",
+    // which only has meaning for one. Enforcing it here rather than in the dialog covers a
+    // settings file edited by hand or restored from a backup.
+    bool changed = false;
+    for (int i = 0; i < m_radios.size(); ++i) {
+        const bool wanted = (i == index);
+        if (m_radios[i].connectAtStartup != wanted) {
+            m_radios[i].connectAtStartup = wanted;
+            changed = true;
+        }
+    }
+    if (changed) {
+        save();
+        emit radiosChanged();
+    }
 }
 
 void RadioSettings::addRadio(const RadioEntry &radio) {
@@ -229,6 +307,69 @@ void RadioSettings::setBandPlanOverlayEnabled(bool enabled) {
     }
 }
 
+bool RadioSettings::temperatureInFahrenheit() const {
+    return m_settings.value("ui/temperatureFahrenheit", false).toBool();
+}
+
+void RadioSettings::setTemperatureInFahrenheit(bool fahrenheit) {
+    if (temperatureInFahrenheit() != fahrenheit) {
+        m_settings.setValue("ui/temperatureFahrenheit", fahrenheit);
+        m_settings.sync();
+        emit temperatureInFahrenheitChanged(fahrenheit);
+    }
+}
+
+namespace {
+
+// An unknown saved value (hand-edited, or a step since removed) falls back to Auto: the one
+// setting that cannot leave the window larger than the screen.
+int sanitizeInterfaceScale(int percent) {
+    for (int allowed : RadioSettings::kInterfaceScales)
+        if (percent == allowed)
+            return percent;
+    return RadioSettings::kInterfaceScaleAuto;
+}
+
+double sanitizeAutoScaleFactor(double factor) {
+    return std::isfinite(factor) ? std::clamp(factor, WindowFit::kMinScale, WindowFit::kMaxScale)
+                                 : WindowFit::kMaxScale;
+}
+
+} // namespace
+
+int RadioSettings::interfaceScale() const {
+    return sanitizeInterfaceScale(m_settings.value("ui/interfaceScale", kInterfaceScaleAuto).toInt());
+}
+
+void RadioSettings::setInterfaceScale(int percent) {
+    percent = sanitizeInterfaceScale(percent);
+    if (interfaceScale() != percent) {
+        m_settings.setValue("ui/interfaceScale", percent);
+        m_settings.sync();
+        emit interfaceScaleChanged(percent);
+    }
+}
+
+double RadioSettings::autoScaleFactor() const {
+    return sanitizeAutoScaleFactor(m_settings.value("ui/autoScaleFactor", WindowFit::kMaxScale).toDouble());
+}
+
+void RadioSettings::setAutoScaleFactor(double factor) {
+    m_settings.setValue("ui/autoScaleFactor", sanitizeAutoScaleFactor(factor));
+    m_settings.sync();
+}
+
+double RadioSettings::startupInterfaceScale(bool *isAuto) {
+    const QSettings store(QSettings::defaultFormat(), QSettings::UserScope, QStringLiteral("QK4"),
+                          QStringLiteral("QK4"));
+    const int percent = sanitizeInterfaceScale(store.value("ui/interfaceScale", kInterfaceScaleAuto).toInt());
+    if (isAuto)
+        *isAuto = percent == kInterfaceScaleAuto;
+    if (percent == kInterfaceScaleAuto)
+        return sanitizeAutoScaleFactor(store.value("ui/autoScaleFactor", WindowFit::kMaxScale).toDouble());
+    return percent / 100.0;
+}
+
 int RadioSettings::micGain() const {
     return m_settings.value("audio/micGain", 25).toInt();
 }
@@ -292,6 +433,71 @@ void RadioSettings::setCatServerPort(quint16 port) {
         m_catServerPort = port;
         save();
         emit catServerPortChanged(port);
+    }
+}
+
+bool RadioSettings::tciServerEnabled() const {
+    return m_tciServerEnabled;
+}
+
+void RadioSettings::setTciServerEnabled(bool enabled) {
+    if (m_tciServerEnabled != enabled) {
+        m_tciServerEnabled = enabled;
+        save();
+        emit tciServerEnabledChanged(enabled);
+    }
+}
+
+quint16 RadioSettings::tciServerPort() const {
+    return m_tciServerPort;
+}
+
+void RadioSettings::setTciServerPort(quint16 port) {
+    // Clamp to valid port range (1024-65535)
+    port = qBound(quint16(1024), port, quint16(65535));
+    if (m_tciServerPort != port) {
+        m_tciServerPort = port;
+        save();
+        emit tciServerPortChanged(port);
+    }
+}
+
+bool RadioSettings::tciAudioEnabled() const {
+    return m_tciAudioEnabled;
+}
+
+void RadioSettings::setTciAudioEnabled(bool enabled) {
+    if (m_tciAudioEnabled != enabled) {
+        m_tciAudioEnabled = enabled;
+        save();
+        emit tciAudioEnabledChanged(enabled);
+    }
+}
+
+int RadioSettings::tciTxGain() const {
+    return m_settings.value("tci/txGain", kTciTxGainDefault).toInt();
+}
+
+void RadioSettings::setTciTxGain(int value) {
+    value = qBound(0, value, 100);
+    const int oldValue = m_settings.value("tci/txGain", kTciTxGainDefault).toInt();
+    if (oldValue != value) {
+        m_settings.setValue("tci/txGain", value);
+        m_settings.sync();
+        emit tciTxGainChanged(value);
+    }
+}
+
+int RadioSettings::rxAudioBoostDb() const {
+    return RxOutputStage::snapBoostDb(m_settings.value("audio/rxBoostDb", 0).toInt());
+}
+
+void RadioSettings::setRxAudioBoostDb(int db) {
+    db = RxOutputStage::snapBoostDb(db);
+    if (rxAudioBoostDb() != db) {
+        m_settings.setValue("audio/rxBoostDb", db);
+        m_settings.sync();
+        emit rxAudioBoostDbChanged(db);
     }
 }
 
@@ -517,13 +723,28 @@ void RadioSettings::load() {
         entry.port = m_settings.value("port").toUInt();
         entry.useTls = m_settings.value("useTls", false).toBool();
         entry.identity = m_settings.value("identity").toString();
-        entry.encodeMode = m_settings.value("encodeMode", 3).toInt();             // Default EM3 (Opus Float)
+        entry.encodeMode = m_settings.value("encodeMode", 3).toInt();             // Default EM3 (Opus)
         entry.streamingLatency = m_settings.value("streamingLatency", 3).toInt(); // Default SL3
         entry.displayFps = m_settings.value("displayFps", 15).toInt();            // Default 15 FPS
+        entry.connectAtStartup = m_settings.value("connectAtStartup", false).toBool();
         m_radios.append(entry);
     }
     m_settings.endArray();
     sortRadios();
+
+    // Keep the "at most one" rule true even for a settings file that was not written by us - a
+    // hand edit, or a backup from before the rule existed. First flagged entry wins; the rest are
+    // cleared so startup cannot depend on list order.
+    bool seenStartupRadio = false;
+    for (RadioEntry &entry : m_radios) {
+        if (!entry.connectAtStartup) {
+            continue;
+        }
+        if (seenStartupRadio) {
+            entry.connectAtStartup = false;
+        }
+        seenStartupRadio = true;
+    }
 
     m_lastSelectedIndex = m_settings.value("lastSelectedIndex", -1).toInt();
     m_kpodEnabled = m_settings.value("kpodEnabled", false).toBool();
@@ -537,6 +758,9 @@ void RadioSettings::load() {
     // CAT Server settings (migrate from old rigctld keys if present)
     m_catServerEnabled = m_settings.value("catServer/enabled", m_settings.value("rigctld/enabled", false)).toBool();
     m_catServerPort = m_settings.value("catServer/port", m_settings.value("rigctld/port", 9299)).toUInt();
+    m_tciServerEnabled = m_settings.value("tciServer/enabled", false).toBool();
+    m_tciServerPort = m_settings.value("tciServer/port", 50001).toUInt();
+    m_tciAudioEnabled = m_settings.value("tciServer/audio", true).toBool();
 
     // DX Cluster settings
     int dxCount = m_settings.beginReadArray("dxClusters");
@@ -645,6 +869,7 @@ void RadioSettings::save() {
         m_settings.setValue("encodeMode", m_radios[i].encodeMode);
         m_settings.setValue("streamingLatency", m_radios[i].streamingLatency);
         m_settings.setValue("displayFps", m_radios[i].displayFps);
+        m_settings.setValue("connectAtStartup", m_radios[i].connectAtStartup);
     }
     m_settings.endArray();
 
@@ -660,6 +885,9 @@ void RadioSettings::save() {
     // CAT Server settings
     m_settings.setValue("catServer/enabled", m_catServerEnabled);
     m_settings.setValue("catServer/port", m_catServerPort);
+    m_settings.setValue("tciServer/enabled", m_tciServerEnabled);
+    m_settings.setValue("tciServer/port", m_tciServerPort);
+    m_settings.setValue("tciServer/audio", m_tciAudioEnabled);
 
     // HaliKey settings
     m_settings.setValue("halikey/portName", m_halikeyPortName);

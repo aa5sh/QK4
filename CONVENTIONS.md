@@ -39,8 +39,14 @@ Code style, naming conventions, and development rules for QK4.
 | Member Variables | m_camelCase | `m_frequencyALabel`, `m_tcpClient` |
 | Signals | camelCase | `frequencyChanged`, `clicked` |
 | Slots | on + Source + Event | `onFrequencyChanged`, `onConnectClicked` |
-| Constants | SCREAMING_SNAKE | `WATERFALL_HISTORY`, `TOTAL_BANDWIDTH_HZ` |
+| Constants (header / class) | SCREAMING_SNAKE | `WATERFALL_HISTORY`, `BASE_TEXTURE_WIDTH` |
+| Constants (file-local in `.cpp`) | `kCamelCase` | `kArpMaxRetries`, `kOverlayMaxSegments` |
 | Namespaces | PascalCase | `K4Styles`, `K4Styles::Colors` |
+
+The two constant styles are split by **location**, not by taste: a constant visible through a header
+is SCREAMING_SNAKE, one confined to a single `.cpp` is `kCamelCase`. The codebase follows this about
+95% of the time; it was documented in 2026-08 after an audit found the rule in the code but not in
+this file.
 
 ## Member Variable Prefixes
 
@@ -68,11 +74,28 @@ m_panadapterA, m_panadapterB
 | Includes | Preserve order (no auto-sort) |
 
 ```bash
-# Check formatting
-find src -name '*.cpp' -o -name '*.h' | xargs clang-format --dry-run --Werror
+# Check formatting - src AND tests, the same file set CI walks
+scripts/check-format.sh
 
 # Auto-format
-find src -name '*.cpp' -o -name '*.h' | xargs clang-format -i
+scripts/check-format.sh --fix
+```
+
+The script finds clang-format wherever it is installed and **refuses to run on the wrong version**
+rather than reporting a misleading pass. It reads the pinned version out of `ci-checks.yml`, so there is no
+second copy of the number to keep in sync. If you have no matching version, `--bootstrap` installs
+one into `.format-venv/`.
+
+The version matters more than it looks: clang-format changes its line-breaking heuristics between
+**patch** releases, so a nearby 18.x can accept wrapping CI rejects. `ci-checks.yml` pins an exact version
+for this reason.
+
+Running clang-format by hand works too, but the path below is correct only on an Apple Silicon Mac
+with Homebrew — it does not exist on Linux, on Windows, or on an Intel Mac:
+
+```bash
+CF=/opt/homebrew/opt/llvm@18/bin/clang-format
+find src tests -name '*.cpp' -o -name '*.h' | xargs $CF --dry-run --Werror
 ```
 
 ### Example
@@ -103,13 +126,25 @@ MainWindow::MainWindow(QWidget *parent)
 
 ```bash
 # 1. Run lint check (MUST pass before commit)
-find src -name '*.cpp' -o -name '*.h' | xargs clang-format --dry-run --Werror
+scripts/check-format.sh
 
 # 2. Auto-fix if lint fails
-find src -name '*.cpp' -o -name '*.h' | xargs clang-format -i
+scripts/check-format.sh --fix
 ```
 
 If lint fails in CI, it means this step was skipped locally.
+
+**Or stop skipping it.** Install it as a pre-commit hook, which checks only the staged content of
+staged files and so costs a fraction of a second:
+
+```bash
+printf '#!/bin/sh\nexec "$(git rev-parse --show-toplevel)/scripts/check-format.sh" --staged\n' \
+    > .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+```
+
+Do not symlink the script into `.git/hooks/` instead — a symlink cannot pass `--staged`, so every
+commit pays for a whole-tree check.
 
 ## Code Review Checklist
 
@@ -158,6 +193,7 @@ Rules for new widget code:
 - Use `K4Styles::Colors::*` constants — never hardcoded hex strings.
 - For custom-painted widgets, use `K4Styles::Fonts::paintFont()` / `dataFont()` instead of constructing `QFont` directly.
 - For inline stylesheet construction, prefer `K4Styles::Dialog::labelText(color, size)` over `QString("color: %1; font-size: %2px;").arg(...)`.
+- **Never leave a form control to the operating system's theme.** `main()` installs `K4Styles::applicationStyleSheet()` app-wide, so a checkbox, combo box, line edit or spin box with no stylesheet of its own still gets the K4 look. Give each control its `Dialog::` helper anyway — the fallback is the safety net, not the design. A **new** form-control type (a `QRadioButton`, a `QDoubleSpinBox`) needs a rule in `applicationStyleSheet()` first; `test_formcontroltheme` fails until it has one. Why: Windows 11 in dark mode draws unstyled controls dark-on-dark, and no other platform does, so it cannot be caught by eye on a Mac.
 
 **Adding a popup menu** follows a fixed recipe — see `PATTERNS.md` → "Adding a Popup Menu".
 
@@ -169,7 +205,7 @@ These rules prevent the architectural issues identified in the 2026-03-30 audit.
 
 **How rules are enforced:** not all twelve rules have the same bite. The tag at the front of each rule tells a new contributor what happens when they're broken:
 
-- **[CI]** — a test or lint check in `.github/workflows/ci.yml` fails. The rule *breaks the build*.
+- **[CI]** — a test or lint check in `.github/workflows/ci-checks.yml` fails. The rule *breaks the build*.
 - **[sanitizer]** — ASAN or UBSAN in the sanitizer CI job catches the violation when the offending code path runs.
 - **[review]** — no automation. Enforced by reviewer discipline. Violations ship if reviewers miss them.
 - **[aspirational]** — target not fully met today; documented exemptions exist. Binds new code only.
@@ -243,13 +279,12 @@ Never combine structural moves with logic changes in the same commit. If a refac
 ### 10. [CI] Build + Format + Tests Before Every Commit
 
 ```bash
-clang-format -i <changed files>
-find src tests -name '*.cpp' -o -name '*.h' | xargs clang-format --dry-run --Werror
+scripts/check-format.sh --fix   # or scripts/check-format.sh to check without rewriting
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-All four must pass. No exceptions. `.github/workflows/ci.yml` mirrors the format gate and runs the test suites — skipping locally means the CI run will fail.
+All three must pass. No exceptions. `.github/workflows/ci-checks.yml` mirrors the format gate and runs the test suites — skipping locally means the CI run will fail.
 
 ### 11. [sanitizer + review] Controlled Shutdown Order
 
@@ -259,7 +294,7 @@ ASAN in the sanitizer CI job catches use-after-free on violation if the destruct
 
 ### 12. [review] New UI Concerns Belong in Controllers, Not MainWindow
 
-After the 2026-04 MainWindow decomposition, `MainWindow.cpp`'s scope is **window chrome, top-level layout, and controller coordination — nothing else**. New features that need a widget, a signal wiring, a CAT dispatch helper, or mode-dependent UI behavior go in a controller under `src/controllers/` (see `PATTERNS.md` → Controller Pattern). If the widget only consumes a single RadioState property, use Direct Observation instead of adding a controller.
+After the 2026-04 MainWindow decomposition, `src/mainwindow.cpp`'s scope is **window chrome, top-level layout, and controller coordination — nothing else**. New features that need a widget, a signal wiring, a CAT dispatch helper, or mode-dependent UI behavior go in a controller under `src/controllers/` (see `PATTERNS.md` → Controller Pattern). If the widget only consumes a single RadioState property, use Direct Observation instead of adding a controller.
 
 Regressing to "throw it on MainWindow" is the single biggest risk for re-drifting into a god object. The banned anti-patterns in `PATTERNS.md` are non-negotiable:
 

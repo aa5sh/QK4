@@ -3,12 +3,14 @@
 #include "controllers/connectioncontroller.h"
 #include "models/radiostate.h"
 #include "network/networkmetrics.h"
+#include "settings/radiosettings.h"
 #include "ui/popups/confirmpopup.h"
 #include "ui/styling/k4glyphs.h"
 #include "ui/styling/k4styles.h"
 #include "ui/widgets/icontextlabel.h"
 #include "ui/widgets/nethealthwidget.h"
 #include "ui/widgets/powerstatusbutton.h"
+#include "utils/radioutils.h"
 
 #include <QDateTime>
 #include <QHBoxLayout>
@@ -96,16 +98,26 @@ StatusBarController::StatusBarController(RadioState *radioState, ConnectionContr
     m_lpaTempField->setGlyph(K4Glyphs::thermometer());
     m_lpaTempField->setGlyphColor(QColor(K4Styles::Colors::MeterOrange));
     m_lpaTempField->setLabel("LPA");
-    m_lpaTempField->setUnit("°C");
+    m_lpaTempField->setClickable(true);
+    m_lpaTempField->setToolTip("Click to switch between °C and °F");
     layout->addWidget(m_lpaTempField);
+    connect(m_lpaTempField, &IconTextLabel::clicked, this, &StatusBarController::toggleTemperatureUnit);
 
     // PA heatsink temperature (SIRF PT, °C).
     m_paTempField = new IconTextLabel(m_container);
     m_paTempField->setGlyph(K4Glyphs::thermometer());
     m_paTempField->setGlyphColor(QColor(K4Styles::Colors::MeterOrange));
     m_paTempField->setLabel("PA");
-    m_paTempField->setUnit("°C");
+    m_paTempField->setClickable(true);
+    m_paTempField->setToolTip("Click to switch between °C and °F");
     layout->addWidget(m_paTempField);
+    connect(m_paTempField, &IconTextLabel::clicked, this, &StatusBarController::toggleTemperatureUnit);
+
+    // Restore the operator's unit choice. Both fields are empty at this point, so this only sets
+    // the unit labels - which is what makes a just-launched, not-yet-connected bar read "LPA -- °F"
+    // rather than defaulting to °C until the first reading arrives.
+    m_tempInFahrenheit = RadioSettings::instance()->temperatureInFahrenheit();
+    refreshTemperatureFields();
 
     // Supply voltage.
     m_voltageField = new IconTextLabel(m_container);
@@ -153,16 +165,12 @@ StatusBarController::StatusBarController(RadioState *radioState, ConnectionContr
     // sits in the warm-orange "this is heat" baseline and re-tints to red
     // when the value crosses critical.
     connect(m_radioState, &RadioState::paTemperatureChanged, this, [this](int c) {
-        const auto colors = temperatureColors(c);
-        m_paTempField->setGlyphColor(colors.glyph);
-        m_paTempField->setValueColor(colors.value);
-        m_paTempField->setValue(QString::number(c));
+        m_paTempC = c;
+        applyTemperature(m_paTempField, c);
     });
     connect(m_radioState, &RadioState::lpaTemperatureChanged, this, [this](int c) {
-        const auto colors = temperatureColors(c);
-        m_lpaTempField->setGlyphColor(colors.glyph);
-        m_lpaTempField->setValueColor(colors.value);
-        m_lpaTempField->setValue(QString::number(c));
+        m_lpaTempC = c;
+        applyTemperature(m_lpaTempField, c);
     });
 
     // PS0/PS1 → power button state.
@@ -176,9 +184,7 @@ StatusBarController::StatusBarController(RadioState *radioState, ConnectionContr
     connect(m_connectionController, &ConnectionController::connectionStateChanged, this,
             [this](TcpClient::ConnectionState state) {
                 if (state == TcpClient::Disconnected) {
-                    m_lpaTempField->clear();
-                    m_paTempField->clear();
-                    m_voltageField->clear();
+                    clearReadings();
                     m_powerButton->setState(PowerStatusButton::State::Off);
                 } else if (state == TcpClient::Connecting || state == TcpClient::Authenticating) {
                     m_powerButton->setState(PowerStatusButton::State::Unknown);
@@ -211,6 +217,18 @@ void StatusBarController::setTitle(const QString &text) {
 }
 
 void StatusBarController::showDisconnected() {
+    // WHY the guard: TcpClient reports a failure as errorOccurred() followed by
+    // setState(Disconnected), both queued to this thread in that order. Without this, the
+    // Disconnected handler landed a moment after showError() and reset the very label it had just
+    // written - so every connection and authentication failure was replaced by a plain grey "K4"
+    // before the operator could read it. The error was in the log and nowhere on screen.
+    //
+    // The error stays until the next attempt starts; showConnecting() is what clears it.
+    if (m_errorShown) {
+        m_titleLabel->setText("Elecraft K4");
+        return;
+    }
+
     m_connectionStatusLabel->setText("K4");
     m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
                                                .arg(K4Styles::Colors::InactiveGray)
@@ -219,6 +237,8 @@ void StatusBarController::showDisconnected() {
 }
 
 void StatusBarController::showConnecting() {
+    // A new attempt is the one thing that supersedes a previous failure.
+    m_errorShown = false;
     m_connectionStatusLabel->setText("K4");
     m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
                                                .arg(K4Styles::Colors::AccentAmber)
@@ -226,6 +246,7 @@ void StatusBarController::showConnecting() {
 }
 
 void StatusBarController::showConnected() {
+    m_errorShown = false;
     m_connectionStatusLabel->setText("K4");
     m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
                                                .arg(K4Styles::Colors::StatusGreen)
@@ -233,14 +254,14 @@ void StatusBarController::showConnected() {
 }
 
 void StatusBarController::showError(const QString &errorMessage) {
-    m_connectionStatusLabel->setText("Error: " + errorMessage);
-    m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                               .arg(K4Styles::Colors::TxRed)
-                                               .arg(K4Styles::Dimensions::FontSizeButton));
-}
-
-void StatusBarController::showAuthFailed() {
-    m_connectionStatusLabel->setText("Auth Failed");
+    // The status bar carries the STATE, not the story. The whole failure message used to be
+    // written into this label in red, which crammed a sentence naming a host and a port into a
+    // slot sized for the word "K4" and looked nothing like the themed banner every device
+    // notification uses. MainWindow sends the text to the NotificationWidget instead; what stays
+    // here is a red "K4", which is the part that should persist after the banner times out.
+    Q_UNUSED(errorMessage)
+    m_errorShown = true;
+    m_connectionStatusLabel->setText("K4");
     m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
                                                .arg(K4Styles::Colors::TxRed)
                                                .arg(K4Styles::Dimensions::FontSizeButton));
@@ -250,6 +271,37 @@ void StatusBarController::clearReadings() {
     m_lpaTempField->clear();
     m_paTempField->clear();
     m_voltageField->clear();
+    // Drop the cached readings with the display. Without this, toggling the unit after a
+    // disconnect would repaint the last values over the "--" placeholder.
+    m_paTempC = kNoTempReading;
+    m_lpaTempC = kNoTempReading;
+}
+
+void StatusBarController::toggleTemperatureUnit() {
+    m_tempInFahrenheit = !m_tempInFahrenheit;
+    RadioSettings::instance()->setTemperatureInFahrenheit(m_tempInFahrenheit);
+    refreshTemperatureFields();
+}
+
+void StatusBarController::applyTemperature(IconTextLabel *field, int celsius) {
+    // Colour is decided on the CELSIUS value whichever unit is displayed, so the warn and
+    // critical thresholds mean the same heatsink temperature in both.
+    const auto colors = temperatureColors(celsius);
+    field->setGlyphColor(colors.glyph);
+    field->setValueColor(colors.value);
+    field->setUnit(m_tempInFahrenheit ? "°F" : "°C");
+    field->setValue(QString::number(m_tempInFahrenheit ? RadioUtils::celsiusToFahrenheit(celsius) : celsius));
+}
+
+void StatusBarController::refreshTemperatureFields() {
+    // The unit label moves even with no reading yet, so a field sitting at "--" still shows
+    // which unit it will report in.
+    m_paTempField->setUnit(m_tempInFahrenheit ? "°F" : "°C");
+    m_lpaTempField->setUnit(m_tempInFahrenheit ? "°F" : "°C");
+    if (m_paTempC != kNoTempReading)
+        applyTemperature(m_paTempField, m_paTempC);
+    if (m_lpaTempC != kNoTempReading)
+        applyTemperature(m_lpaTempField, m_lpaTempC);
 }
 
 void StatusBarController::setKpa1500Visible(bool visible) {

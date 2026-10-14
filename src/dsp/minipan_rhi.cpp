@@ -1,5 +1,6 @@
 #include "minipan_rhi.h"
 #include "panadapter_constants.h"
+#include "dashgeometry.h"
 #include "rhi_utils.h"
 #include "ui/styling/k4constants.h"
 #include <QLoggingCategory>
@@ -11,7 +12,7 @@
 Q_LOGGING_CATEGORY(dspMiniPan, "dsp.minipan")
 
 MiniPanRhiWidget::MiniPanRhiWidget(QWidget *parent) : QRhiWidget(parent) {
-    setFixedHeight(150);
+    setFixedHeight(K4Styles::Dimensions::VfoPanelHeight);
     setMinimumWidth(180);
     setMaximumWidth(200);
 
@@ -131,19 +132,20 @@ void MiniPanRhiWidget::initialize(QRhiCommandBuffer *cb) {
     m_notchVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, 64 * sizeof(float)));
     m_notchVbo->create();
 
-    // Dedicated RTTY space-tone dashed-line buffers.
-    // 30 dash segments max (300 px Retina / 10 px stride) × 6 verts × 2 floats = 360; 512 adds
-    // headroom for wider canvases without reallocating at runtime.
-    constexpr int kRttyDashFloatCount = 512;
-    m_rttySpaceVbo.reset(
-        m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, kRttyDashFloatCount * sizeof(float)));
+    // Dedicated RTTY space-tone dashed-line buffer. Sized from the shared ceiling, NOT from this
+    // widget's expected height: the loop below spans the full widget in DEVICE pixels, so the old
+    // 512-float size (42 dashes = 420 px, reasoned from a 300 px Retina window) was overrun by any
+    // mini-pan taller than that. One constant for both widgets — see PanadapterConstants.
+    m_rttySpaceVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer,
+                                          PanadapterConstants::MaxDashFloats * sizeof(float)));
     m_rttySpaceVbo->create();
 
     // Create uniform buffers
     m_spectrumUniformBuffer.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 16));
     m_spectrumUniformBuffer->create();
 
-    m_waterfallUniformBuffer.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 32));
+    m_waterfallUniformBuffer.reset(
+        m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, sizeof(RhiUtils::WaterfallUniforms)));
     m_waterfallUniformBuffer->create();
 
     m_overlayUniformBuffer.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 32));
@@ -402,21 +404,26 @@ void MiniPanRhiWidget::render(QRhiCommandBuffer *cb) {
     } spectrumUniforms = {w, spectrumHeight, {0, 0}};
     rub->updateDynamicBuffer(m_spectrumUniformBuffer.get(), 0, sizeof(spectrumUniforms), &spectrumUniforms);
 
-    // Update waterfall uniform buffer (matches waterfall.frag shader layout)
+    // Layout comes from RhiUtils so it cannot drift from the shaders or from the main panadapter.
+    // Mini pan: tierSpan == span (no cropping, 1:1 mapping), and visibleFraction is 1.0 because it
+    // shows its whole buffer — the quad's own texcoords already stop one row short of the row being
+    // written.
+    //
+    // WHY storedRows is 0.0 (the second-to-last field): that opts out of waterfall.frag's V snap.
+    // The panadapter draws one stored row per device pixel, where snapping removes a blend of two
+    // moments in time. The mini-pan instead spreads a fixed WATERFALL_HISTORY across whatever
+    // height it happens to have, so when that height is under WATERFALL_HISTORY px it is
+    // downsampling — and there the linear blend is a cheap box filter, while snapping would drop
+    // rows outright. Revisit once the diagnostic reports this widget's px-per-row.
     float scrollOffset = static_cast<float>(m_waterfallWriteRow) / WATERFALL_HISTORY;
-    struct {
-        float scrollOffset;
-        float binCount;
-        float textureWidth;
-        float tierSpanHz; // Mini pan: tierSpan == span (no cropping, 1:1 mapping)
-        float spanHz;
-        float padding[3];
-    } waterfallUniforms = {scrollOffset,
-                           static_cast<float>(TEXTURE_WIDTH),
-                           static_cast<float>(TEXTURE_WIDTH),
-                           static_cast<float>(TEXTURE_WIDTH),
-                           static_cast<float>(TEXTURE_WIDTH),
-                           {0, 0, 0}};
+    RhiUtils::WaterfallUniforms waterfallUniforms = {scrollOffset,
+                                                     static_cast<float>(TEXTURE_WIDTH),
+                                                     static_cast<float>(TEXTURE_WIDTH),
+                                                     static_cast<float>(TEXTURE_WIDTH),
+                                                     static_cast<float>(TEXTURE_WIDTH),
+                                                     1.0f,
+                                                     0.0f,
+                                                     0.0f};
     rub->updateDynamicBuffer(m_waterfallUniformBuffer.get(), 0, sizeof(waterfallUniforms), &waterfallUniforms);
 
     // Build spectrum vertices with peak-hold downsampling
@@ -751,17 +758,10 @@ void MiniPanRhiWidget::render(QRhiCommandBuffer *cb) {
             float spaceX = centerX - spaceOffsetPixels;
 
             if (spaceX >= 0 && spaceX < w) {
-                float dashLen = PanadapterConstants::DashLengthPx;
-                float gapLen = PanadapterConstants::DashGapPx;
-                float stride = dashLen + gapLen;
                 float lineWidth = PanadapterConstants::RttyDashLineWidth;
 
                 QVector<float> verts;
-                for (float y = 0.0f; y < h; y += stride) {
-                    float yEnd = qMin(y + dashLen, h);
-                    verts << spaceX << y << spaceX + lineWidth << y << spaceX + lineWidth << yEnd << spaceX << y
-                          << spaceX + lineWidth << yEnd << spaceX << yEnd;
-                }
+                DashGeometry::appendDashedVerticalLine(verts, spaceX, lineWidth, 0.0f, h);
 
                 QRhiResourceUpdateBatch *rtRub = m_rhi->nextResourceUpdateBatch();
                 rtRub->updateDynamicBuffer(m_rttySpaceVbo.get(), 0, verts.size() * sizeof(float), verts.constData());

@@ -11,6 +11,10 @@ int tuningStepToHz(int step) {
     return (step >= 0 && step <= 5) ? table[step] : 1000;
 }
 
+int tuningStepForDigit(int digitFromRight) {
+    return (digitFromRight >= 0 && digitFromRight <= 4) ? digitFromRight : -1;
+}
+
 int getBandFromFrequency(quint64 freq) {
     if (freq >= 1800000 && freq <= 2000000)
         return 0; // 160m
@@ -45,6 +49,23 @@ int getNextSpanUp(int currentSpan) {
     int increment = (currentSpan < SPAN_THRESHOLD_UP) ? 1000 : 4000;
     int newSpan = currentSpan + increment;
     return qMin(newSpan, SPAN_MAX);
+}
+
+int spanAfterZoom(int currentSpan, bool zoomIn) {
+    return zoomIn ? getNextSpanDown(currentSpan) : getNextSpanUp(currentSpan);
+}
+
+int nextFilterPreset(int currentPreset) {
+    switch (currentPreset) {
+    case 1:
+        return 3;
+    case 3:
+        return 2;
+    case 2:
+        return 1;
+    default:
+        return -1;
+    }
 }
 
 int getNextSpanDown(int currentSpan) {
@@ -136,6 +157,10 @@ qint64 snapFreqToStep(qint64 freq, int stepHz) {
     return (stepHz > 0) ? (freq / stepHz) * stepHz : freq;
 }
 
+int celsiusToFahrenheit(int celsius) {
+    return qRound(celsius * 9.0 / 5.0 + 32.0);
+}
+
 bool isValidIpv4(const QString &s) {
     const QStringList parts = s.split('.');
     if (parts.size() != 4)
@@ -143,11 +168,19 @@ bool isValidIpv4(const QString &s) {
     for (const QString &part : parts) {
         if (part.isEmpty())
             return false;
+        // WHY: a leading zero makes the octet ambiguous. inet_aton() and several resolvers read
+        // "010" as OCTAL 8, not 10, so accepting it would let QK4 store an address that another
+        // part of the stack resolves to a different host. A bare "0" is still a valid octet.
+        if (part.size() > 1 && part.startsWith(QLatin1Char('0')))
+            return false;
         bool ok = false;
         const int octet = part.toInt(&ok);
         if (!ok || octet < 0 || octet > 255)
             return false;
-        // toInt accepts a leading '+' / '-'; reject anything non-digit.
+        // toInt accepts a leading '+' / '-'; reject anything non-digit. WHY the two checks are
+        // both needed: QChar::isDigit() is Unicode-aware and would pass non-ASCII digits, while
+        // toInt() is locale-independent and rejects them. Callers arriving through
+        // isValidHostOrIp() are already filtered by an ASCII-only gate, but this is public API.
         for (const QChar c : part) {
             if (!c.isDigit())
                 return false;

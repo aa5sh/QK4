@@ -2,6 +2,9 @@
 #define HARDWARECONTROLLER_H
 
 #include <QObject>
+#include <functional>
+
+#include "hardware/usbdevicelifecycle.h"
 #include <QThread>
 
 class KpodDevice;
@@ -51,11 +54,53 @@ public:
     IambicKeyer *iambicKeyer() const { return m_iambicKeyer; }
     SidetoneGenerator *sidetoneGenerator() const { return m_sidetoneGenerator; }
 
-    void shutdownSidetone();
+    /// Stop every input producer this controller owns — HaliKey, the iambic keyer, the sidetone,
+    /// KPOD and KPOD+ — and join their threads. Idempotent; the destructor calls it too.
+    ///
+    /// WHY this is public rather than left to the destructor, which is where it used to live
+    /// entirely: CONC-001. The HaliKey worker and the sidetone thread both reach
+    /// CwController::kpodPlusActive(), which reads ConnectionController. Qt destroys children in
+    /// CONSTRUCTION order, and ConnectionController is constructed before HardwareController, so it
+    /// was already freed while these threads were still running and still dereferencing it.
+    ///
+    /// The order inside is unchanged and still load-bearing: HaliKey stops paddle events first,
+    /// then the keyer (which produces KZ), then the sidetone (which consumes them). Producers
+    /// before consumers. What changed is only that MainWindow::closeEvent can now run it while
+    /// everything it touches is still alive.
+    void shutdownDevices();
 
+private:
+    /// "HaliKey V1.4" or "HaliKey MIDI", matching the Options dropdown, so a notification and the
+    /// settings page can never disagree about what the operator's device is called.
+    QString halikeyName() const;
+
+    /// Apply one lifecycle event to a device and carry out what the policy decides.
+    ///
+    /// This is the ONLY place either device is opened, closed, or reported to the operator. Before
+    /// it, that was spread across two lambdas per device plus the worker's own presence timer, and
+    /// the worker's copy did not know the "Enable K-Pod" setting existed — which is USB-002.
+    void applyKpod(UsbDeviceLifecycle::Event event);
+    void applyKpodPlus(UsbDeviceLifecycle::Event event);
+
+    UsbDeviceLifecycle::State m_kpodState;
+    UsbDeviceLifecycle::State m_kpodPlusState;
+
+    // Pushes the K4's keyer settings to a freshly opened KPOD+. Held rather than captured in a
+    // lambda so the policy can invoke it on whichever event opens the device.
+    std::function<void()> m_applyKpodPlusConfig;
+
+public:
 signals:
     // KPOD button press → MainWindow dispatches macro
     void macroRequested(const QString &functionId);
+
+    /// The KPOD+ is taking over CW keying, or giving it back.
+    ///
+    /// Emitted from the lifecycle policy's decision to open or close, which is deliberately AHEAD
+    /// of the device actually opening — the ~10-100 ms claim window would otherwise leak paddle
+    /// events into QK4's own sidetone path. Ownership, not detection: a KPOD+ that is plugged in
+    /// but switched off never raises this (USB-003).
+    void kpodPlusOwnsCw(bool owns);
 
     // Hardware error (port open failure, MIDI subsystem error, etc.) → MainWindow
     // shows it on the notification overlay. Currently fed by HalikeyDevice's
@@ -67,7 +112,6 @@ signals:
 private slots:
     void onKpodEncoderRotated(int ticks);
     void onKpodPollError(const QString &error);
-    void onKpodEnabledChanged(bool enabled);
 
 private:
     void onKpodEncoderRotatedWithRocker(int ticks, int rockerPosition);
@@ -77,6 +121,10 @@ private:
     ConnectionController *m_connectionController;
 
     // KPOD USB tuning knob
+    // shutdownDevices() runs once. closeEvent calls it, and so does the destructor for the paths
+    // that never reach closeEvent — a fatal error, or a window that was never shown.
+    bool m_devicesShutDown = false;
+
     KpodDevice *m_kpodDevice;
 
     // KPOD+ USB keyer device (libusb, vendor-specific class)

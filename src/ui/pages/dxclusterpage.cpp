@@ -229,10 +229,11 @@ DxClusterPage::DxClusterPage(DxClusterController *controller, QWidget *parent)
     fontLabel->setStyleSheet(K4Styles::Dialog::formLabel());
     fontLabel->setFixedWidth(100);
     m_spotFontSizeSpin = new QSpinBox(this);
+    m_spotFontSizeSpin->setStyleSheet(K4Styles::Dialog::spinBox());
     m_spotFontSizeSpin->setRange(K4Styles::Dimensions::FontSizeSpotMin, K4Styles::Dimensions::FontSizeSpotMax);
     m_spotFontSizeSpin->setSingleStep(1);
     m_spotFontSizeSpin->setSuffix(" px");
-    m_spotFontSizeSpin->setFixedWidth(70);
+    m_spotFontSizeSpin->setFixedWidth(80);
     m_spotFontSizeSpin->setValue(RadioSettings::instance()->dxClusterSpotFontSize());
     connect(m_spotFontSizeSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
             [](int value) { RadioSettings::instance()->setDxClusterSpotFontSize(value); });
@@ -426,6 +427,10 @@ void DxClusterPage::saveEntry() {
 void DxClusterPage::removeEntry() {
     int row = m_clusterList->currentRow();
     if (row >= 0) {
+        // WHY first: the controller keys live connections by list row. Removing the entry shifts
+        // every later row up, so their connections have to move with them (and this one closes).
+        if (m_controller)
+            m_controller->removeCluster(row);
         RadioSettings::instance()->removeDxCluster(row);
         populateClusterList();
         updateFormState();

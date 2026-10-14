@@ -47,7 +47,12 @@ public:
     // and stays open for the lifetime of the K4 connection, so subsequent PTT presses don't
     // pay the OS audio backend renegotiation cost (200 ms – 1.5 s on PipeWire/CoreAudio/WASAPI).
     // openMic() is idempotent. closeMic() is only called from teardown paths (stop(), device
-    // swap) — never per-PTT. The TX send-gate lives in AudioController::onMicrophoneFrame.
+    // swap) — never per-PTT. The TX send-gate is the m_pttActive check in bufferAndEmitTxFrames().
+    //
+    // Both sentences above were false until AUD-001 was fixed: stop() did not call closeMic(), and
+    // the gate it named lived in an AudioController method that no longer exists. They are stated
+    // here as a contract, so if stop() stops honouring it again the comment is the thing that is
+    // wrong rather than the thing that is trusted.
     Q_INVOKABLE void openMic();
     Q_INVOKABLE void closeMic();
     Q_INVOKABLE void flushMicBuffer(); // Called on PTT-on edge so a partial-frame tail from
@@ -57,6 +62,9 @@ public:
     // Channel volume controls (applied at playback time for instant response)
     void setMainVolume(float volume);
     void setSubVolume(float volume);
+    // Boost above the MAIN/SUB sliders, 0 to +12 dB in 3 dB steps (Options -> Audio Output). Above
+    // 0 dB the output also goes through RxOutputStage's soft limiter.
+    void setRxBoostDb(int db);
     float mainVolume() const { return m_mainVolume.load(std::memory_order_relaxed); }
     float subVolume() const { return m_subVolume.load(std::memory_order_relaxed); }
 
@@ -74,10 +82,29 @@ public:
     void setFrameSamples(int samples); // 240, 480, 720, or 1440
     int frameSamples() const { return m_frameSamples.load(std::memory_order_relaxed); }
 
-    // TX encode mode (0=EM0 RAW32, 1=EM1 S16, 2=EM2 Opus int, 3=EM3 Opus float).
-    // Atomic so the audio-thread encode path reads it lock-free.
+    // TX encode mode (0=RAW S32LE (24-bit), 1=RAW S16LE, 2/3=Opus (same bitstream, int vs float decode)). See
+    // audio/rawaudioformat.h for the RAW wire scales. Atomic so the audio-thread encode path reads it lock-free.
     void setEncodeMode(int mode);
     int encodeMode() const { return m_encodeMode.load(std::memory_order_relaxed); }
+
+    // Where TX audio comes from.
+    //
+    // WHY this must exist alongside any remote PTT: setPttActive() opens the microphone, so a TCI
+    // client keying the radio without a source selector would transmit whatever the room hears.
+    // The two sources are mutually exclusive, never mixed.
+    enum class TxSource { Microphone = 0, Tci = 1 };
+    void setTxSource(TxSource source);
+    TxSource txSource() const { return static_cast<TxSource>(m_txSource.load(std::memory_order_relaxed)); }
+
+    // Feed 48 kHz mono Float32 from a TCI client. Ignored unless the TX source is Tci.
+    //
+    // Passes through m_tciTxGain - its OWN level, not the microphone's. WSJT-X transmits at or near
+    // full scale, so without an operator-facing level this drives the K4 far too hard, as it did on
+    // the first on-air test. It shared m_micGain for a while, which fixed the overdrive but created
+    // a second problem: the curve is cubic, so a position calibrated for a microphone is far too
+    // low for a line-level digital source and vice versa. There is no single position that serves
+    // both, so there are now two controls.
+    Q_INVOKABLE void feedTciTxAudio(const QByteArray &f32Mono48k);
 
     // PTT gate for the TX encode path. Setting to true on PTT-on edge also
     // opens the mic (if needed) and flushes any partial-frame tail from the
@@ -89,6 +116,11 @@ public:
     // Microphone settings
     Q_INVOKABLE void setMicGain(float gain); // 0.0 to 1.0
     float micGain() const { return m_micGain.load(std::memory_order_relaxed); }
+
+    // The same 0.0-1.0 slider position and the same cubic curve as setMicGain, applied to audio
+    // from a TCI client instead of from the sound card. See feedTciTxAudio.
+    Q_INVOKABLE void setTciTxGain(float gain); // 0.0 to 1.0
+    float tciTxGain() const { return m_tciTxGain.load(std::memory_order_relaxed); }
 
     Q_INVOKABLE void setMicDevice(const QString &deviceId);
     QString micDeviceId() const;
@@ -123,22 +155,82 @@ private slots:
 
 private:
     bool setupAudioOutput();
+    // Tear down and rebuild the output sink for the current device, and put the feed timer in
+    // the matching state. Every path that changes the output device goes through this.
+    void rebuildOutput();
     bool setupAudioInput();
 
-    // Resample 48kHz Float32 samples to 12kHz (4:1 decimation with averaging).
-    // Reads from input48k, writes into the pre-allocated m_resampleBuf12k
-    // member and returns a const reference to it. Avoids per-poll allocation.
-    const QByteArray &resample48kTo12k(const QByteArray &input48k);
+    // Shared tail of both TX sources: take 12 kHz Float32, apply `gain`, buffer as S16, and emit
+    // whole SL-tier frames while PTT is asserted. Audio thread only.
+    void bufferAndEmitTxFrames(const QByteArray &pcm12k, float gain);
+
+    // Decimate Float32 samples to the K4's 12 kHz by `factor` (averaging), writing into the
+    // pre-allocated m_resampleBuf12k member and returning a const reference to it. Avoids per-poll
+    // allocation. The microphone passes the factor for the rate its device actually opened at (see
+    // audio/audiodecimator.h); TCI passes a fixed 4, because TCI audio is always 48 kHz.
+    const QByteArray &resampleTo12k(const QByteArray &input, int factor);
+
+    // The microphone's ACTUAL capture rate, taken from the device rather than demanded of it.
+    // 0 until a device has been opened. See setupAudioInput().
+    int m_micSampleRate = 0;
+    int m_micDecimationFactor = 0;
 
     // Encode + packetize one captured S16LE mono frame and emit txPacketReady.
     // Runs on the audio thread, called from onMicDataReady when PTT is active.
-    void encodeAndSendFrame(const QByteArray &s16leMonoFrame, int frameSamples, int encodeMode);
+    void encodeAndSendFrame(const QByteArray &f32MonoFrame, int frameSamples, int encodeMode);
+
+    // Report what one TX frame actually put on the wire, under qk4.audio.tx.
+    // See the WHY at the call site in encodeAndSendFrame.
+    void logTxFrameDiagnostic(const QByteArray &f32MonoFrame, const QByteArray &wireData, int frameSamples,
+                              int encodeMode) const;
+
+    // Frames between qk4.audio.tx reports during a transmission. The first frame of
+    // every transmission is always reported; this throttles the rest.
+    static constexpr int TX_DIAG_FRAME_INTERVAL = 50;
+
+    // Mic-silence watchdog. A microphone that opens successfully and then delivers nothing looks
+    // exactly like a quiet room from everywhere downstream, so PTT lights the indicator, the gate
+    // opens, and the operator transmits nothing while believing they are on the air. That is
+    // INT-005, and it stayed undiagnosed because the read path treats an empty read as normal -
+    // which it is, most of the time. These make the difference between "no data this poll" and
+    // "no data at all since the operator keyed" observable. Audio thread only.
+    // How long a keyed transmitter may produce no microphone data before we say so. Long enough
+    // that ordinary buffer starvation never trips it, short enough that the operator learns within
+    // one over rather than after the contact.
+    static constexpr qint64 MIC_SILENCE_WARN_MS = 500;
+    qint64 m_firstEmptyPollMs = 0;
+    bool m_micSilenceReported = false;
+
+    // Loudest mic sample since PTT engaged, tracked across EVERY frame while qk4.audio.tx is on.
+    // WHY: reporting only the throttled frames' own peaks made short transmissions unreadable -
+    // a brief over keys, logs frame 0 (still silence, before the operator speaks) and ends before
+    // frame 50, so the log showed a near-zero peak next to a high ALC reading. The running peak
+    // is what a level measurement actually needs. Audio-thread only, like m_txSequence.
+    float m_txPeakSinceKey = 0.0f;
 
     // Apply MX routing + volume + balance to a raw [main, sub] interleaved packet
     void applyMixAndVolume(QByteArray &packet);
 
+    // qk4.audio.rx accumulator, reported and reset once a second of audio. Audio-thread only.
+    struct RxLevelStats {
+        int frames = 0;
+        double sumSqMain = 0.0;
+        double sumSqSub = 0.0;
+        float peakMain = 0.0f;
+        float peakSub = 0.0f;
+        float peakOut = 0.0f; // before the clamp or limiter, so it can read above 0 dBFS
+        int clipped = 0;      // samples over full scale before that stage: clipped at 0 dB, rounded off when boosted
+    };
+    RxLevelStats m_rxStats;
+    void reportRxLevels(float mainVol, float subVol, float boost);
+
     // Audio output format: 12kHz stereo Float32 (K4 RX audio, L=Main R=Sub)
     QAudioFormat m_outputFormat;
+
+    // True between start() and stop(): the engine is meant to be producing RX audio. Distinct from
+    // "a sink exists", because the sink can fail to open and must still be retried on the next
+    // device change. rebuildOutput() is the only thing that acts on it.
+    bool m_outputRunning = false;
 
     // Audio input format: 48kHz mono Float32 (native macOS rate, resampled to 12kHz)
     QAudioFormat m_inputFormat;
@@ -160,6 +252,7 @@ private:
     // Channel volume controls (0.0 to 1.0)
     std::atomic<float> m_mainVolume{1.0f};
     std::atomic<float> m_subVolume{1.0f};
+    std::atomic<float> m_rxBoostGain{1.0f};
 
     // SUB RX mute state (true = sub muted, sub channel is silent)
     std::atomic<bool> m_subMuted{true}; // Starts muted (SUB RX is off at startup)
@@ -175,6 +268,9 @@ private:
 
     // Microphone gain control
     std::atomic<float> m_micGain{0.25f}; // Default 25% (macOS mic input is typically hot)
+    // Default 25% slider -> 0.015625x, set so an injected signal keeps the K4's ALC at or below 5.
+    // See kTciTxGainDefault. Same number as m_micGain's default by coincidence, not by derivation.
+    std::atomic<float> m_tciTxGain{0.015625f};
 
     // Audio throughput: 12kHz × 2ch × sizeof(float) = 96,000 bytes/sec = 96 bytes/ms
     static constexpr int BYTES_PER_MS = 96;
@@ -194,6 +290,8 @@ private:
     quint8 m_txSequence = 0;              // Audio-thread-only — no atomic needed
     std::atomic<int> m_encodeMode{3};     // EM3 (Opus float) default
     std::atomic<bool> m_pttActive{false}; // TX gate; read on every mic frame
+    // TxSource as an int so it is lock-free from the audio thread.
+    std::atomic<int> m_txSource{static_cast<int>(TxSource::Microphone)};
 
     // Microphone frame buffering for Opus encoding
     // Buffer accumulates S16LE samples at 12kHz until we have a complete frame.
@@ -206,10 +304,9 @@ private:
     // capacity.
     int m_micReadOffset = 0;
 
-    // Pre-allocated scratch for resample48kTo12k. Sized to INPUT_BUFFER_SIZE/4
-    // bytes (the 4:1 decimation ratio means 12kHz output is 1/4 the 48kHz input
-    // size; INPUT_BUFFER_SIZE bytes of 48kHz Float32 = INPUT_BUFFER_SIZE/16
-    // samples = INPUT_BUFFER_SIZE/16 * 4 bytes of 12kHz output = INPUT_BUFFER_SIZE/4).
+    // Pre-allocated scratch for resampleTo12k. Sized to the full INPUT_BUFFER_SIZE because the
+    // decimation factor depends on the capture device: a 48 kHz mic decimates 4:1, an AirPods Pro
+    // at 24 kHz decimates 2:1, and a 12 kHz device would pass through unchanged.
     QByteArray m_resampleBuf12k;
 
     // Timer for polling microphone data (more reliable than readyRead signal)

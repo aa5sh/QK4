@@ -1,5 +1,11 @@
 #include "cwcontroller.h"
 
+#include <QLoggingCategory>
+
+// Defined in hardware/iambickeyer.cpp. The gate below belongs with the keyer trace, not in a
+// category of its own — a reader following CW needs both in one stream.
+Q_DECLARE_LOGGING_CATEGORY(cwKeyer)
+
 #include "audio/sidetonegenerator.h"
 #include "connectioncontroller.h"
 #include "hardware/halikeydevice.h"
@@ -8,6 +14,7 @@
 #include "models/radiostate.h"
 #include "network/tcpclient.h"
 #include "settings/radiosettings.h"
+#include "utils/radioutils.h"
 
 CwController::CwController(RadioState *radioState, ConnectionController *connection, IambicKeyer *keyer,
                            SidetoneGenerator *sidetone, HalikeyDevice *halikey, KpodPlusDevice *kpodPlus,
@@ -48,8 +55,8 @@ CwController::CwController(RadioState *radioState, ConnectionController *connect
         // members would otherwise introduce a silent race with no call-site warning.
         QMetaObject::invokeMethod(m_sidetone, "setKeyerSpeed", Qt::QueuedConnection, Q_ARG(int, wpm));
         QMetaObject::invokeMethod(m_keyer, "setSpeed", Qt::QueuedConnection, Q_ARG(int, wpm));
-        // Sync element length with K4 server
-        int ditMs = 1200 / wpm;
+        // Sync element length with K4 server — same conversion the local keyer and sidetone use.
+        int ditMs = RadioUtils::ditMsForWpm(wpm);
         m_connection->sendCAT(QString("KZL%1;").arg(ditMs, 2, 10, QChar('0')));
         // K4 is the source of truth — mirror the speed onto the KPOD+ keyer.
         if (m_kpodPlus->isPolling())
@@ -88,20 +95,13 @@ CwController::CwController(RadioState *radioState, ConnectionController *connect
     m_cachedMode.store(static_cast<int>(m_radioState->mode()), std::memory_order_release);
     connect(m_radioState, &RadioState::modeChanged, this, [this](RadioState::Mode mode) {
         m_cachedMode.store(static_cast<int>(mode), std::memory_order_release);
-        // V1.4 mode-transition cleanup: if a paddle/PTT was rising-edge-captured before
-        // the transition, fire the matching up event to the OLD destination so neither
-        // the IambicKeyer nor MainWindow gets stuck in a half-pressed state. CAS ensures
-        // the falling-edge handler doesn't also clean up (whichever fires first wins).
-        int dest = m_v14PttDestination.load(std::memory_order_acquire);
-        if (dest != V14PttNone) {
-            if (m_v14PttDestination.compare_exchange_strong(dest, V14PttNone, std::memory_order_acq_rel)) {
-                if (dest == V14PttDitPaddle) {
-                    m_keyer->setDitPaddle(false);
-                } else if (dest == V14PttPtt) {
-                    emit pttRequested(false);
-                }
-            }
-        }
+
+        // Release both levers on any mode change. The line handler gates them on CW, so a lever
+        // held across the transition would otherwise stay set on the keyer with no further event
+        // to clear it — and would still be down on the next entry into CW.
+        const bool inCw = (mode == RadioState::CW || mode == RadioState::CW_R);
+        if (!inCw)
+            m_keyer->setPaddleState(false, false);
     });
 
     // Device-type fan-out: mirror for the V1.4 PTT demux below + the keyer's hold
@@ -181,77 +181,36 @@ CwController::CwController(RadioState *radioState, ConnectionController *connect
     // to stop when the keyer goes idle.
 
     // =========================================================================
-    // HaliKey paddle → keyer (ZERO-LATENCY DirectConnection)
+    // HaliKey lines → keyer (ZERO-LATENCY DirectConnection)
     // =========================================================================
-    // HaliKey MIDI sends note 20 (dit) + note 31 (PTT) together on every Tip-to-Sleeve closure.
-    // In CW mode: forward dit to keyer, ignore PTT (TX handled by KZ commands).
-    // In voice mode: forward PTT to MainWindow, suppress dit (no keying in SSB/AM/FM).
+    // Direct on the HaliKey worker thread (invariant 1). Both levers reach the keyer in a single
+    // call from a single sample, which is what stops a released squeeze from being seen
+    // half-applied — the case that appended an element the operator never keyed. See
+    // IambicKeyer::setPaddleState.
+    //
+    // Line → lever mapping differs by transport. V1.4 serial firmware reports the dit lever on CTS
+    // (which `lineStateChanged` carries as `ptt`), while MIDI has a dedicated dit line. Neither
+    // transport keys PTT from a footswitch any more — see the header's "Footswitch PTT: REMOVED".
     connect(
-        m_halikey, &HalikeyDevice::ditStateChanged, this,
-        [this](bool pressed) {
-            // Suppress HaliKey dit when KPOD+ keyer owns the CW path
-            if (kpodPlusActive())
-                return;
-            auto mode = static_cast<RadioState::Mode>(m_cachedMode.load(std::memory_order_acquire));
-            if (mode == RadioState::CW || mode == RadioState::CW_R) {
-                m_keyer->setDitPaddle(pressed);
-            }
-            // In voice/data modes, dit is suppressed — PTT signal handles TX
-        },
-        Qt::DirectConnection);
-    connect(
-        m_halikey, &HalikeyDevice::dahStateChanged, this,
-        [this](bool pressed) {
-            if (kpodPlusActive())
-                return;
-            m_keyer->setDahPaddle(pressed);
-        },
-        Qt::DirectConnection);
-
-    // HaliKey PTT → MainWindow (voice/data modes) or paddle dit (CW mode, V1.4 only).
-    // WHY: V1.4 serial firmware can't distinguish foot pedal from paddle dit lever — both
-    // drive CTS. We demux by mode here: in CW the CTS edge is treated as the dit-paddle
-    // press, in voice it's the foot pedal → PTT. The MIDI variant has a distinct note for
-    // the pedal so its CW behavior stays mode-gated to silence (no spurious dit injection).
-    connect(
-        m_halikey, &HalikeyDevice::pttStateChanged, this,
-        [this](bool active) {
+        m_halikey, &HalikeyDevice::lineStateChanged, this,
+        [this](bool dit, bool dah, bool ptt) {
             const bool isV14 = m_cachedIsV14.load(std::memory_order_acquire);
-            if (active) {
-                // RISING EDGE: pick a destination based on current mode and remember it,
-                // so the falling edge (or a mid-press mode change) can fire the matching
-                // up event to the SAME destination — even if the mode flipped meanwhile.
-                auto mode = static_cast<RadioState::Mode>(m_cachedMode.load(std::memory_order_acquire));
-                const bool inCw = (mode == RadioState::CW || mode == RadioState::CW_R);
-                if (inCw && isV14) {
-                    // KPOD+ owns the keyer? Drop and don't capture a destination — the
-                    // matching falling edge will see V14PttNone and also drop.
-                    if (kpodPlusActive())
-                        return;
-                    m_v14PttDestination.store(V14PttDitPaddle, std::memory_order_release);
-                    m_keyer->setDitPaddle(true);
-                } else if (!inCw) {
-                    m_v14PttDestination.store(V14PttPtt, std::memory_order_release);
-                    emit pttRequested(true);
-                }
-                // (MIDI variant in CW falls through silently — its dit comes via note 20,
-                // not via the PTT line, so a PTT rising edge here is the foot pedal which
-                // shouldn't key in CW.)
-            } else {
-                // FALLING EDGE: dispatch to whatever destination captured the rising edge.
-                // CAS ensures the mode-change cleanup handler doesn't also fire — only one
-                // of (mode-change, falling-edge) wins, and the other sees V14PttNone.
-                int dest = m_v14PttDestination.load(std::memory_order_acquire);
-                if (dest == V14PttNone)
-                    return;
-                if (m_v14PttDestination.compare_exchange_strong(dest, V14PttNone, std::memory_order_acq_rel)) {
-                    if (dest == V14PttDitPaddle) {
-                        m_keyer->setDitPaddle(false);
-                    } else if (dest == V14PttPtt) {
-                        emit pttRequested(false);
-                    }
-                }
-            }
+            const auto mode = static_cast<RadioState::Mode>(m_cachedMode.load(std::memory_order_acquire));
+            const bool inCw = (mode == RadioState::CW || mode == RadioState::CW_R);
+
+            // WHY the KPOD+ gate is a TERM here and not an early return at the top of the handler:
+            // as a term it keeps the lever output a pure function of (sample, mode, transport,
+            // gate), so a
+            // lever held across a gate rise is released by the very next edge instead of staying
+            // latched on the keyer until the gate clears - and then emitting KZ nobody keyed.
+            const bool gated = kpodPlusActive();
+
+            // Both levers are gated on CW together. Keying the radio from a paddle in SSB/AM/FM is
+            // never wanted, and letting one lever through outside CW also left its state set on the
+            // keyer going back into CW.
+            const bool ditLever = !gated && inCw && (isV14 ? ptt : dit);
+            const bool dahLever = !gated && inCw && dah;
+            m_keyer->setPaddleState(ditLever, dahLever);
         },
         Qt::DirectConnection);
 
@@ -267,24 +226,31 @@ CwController::CwController(RadioState *radioState, ConnectionController *connect
 
     // Stop keyer when HaliKey disconnects (prevents runaway keying
     // if paddle was held when disconnected — Note Off never arrives)
-    connect(m_halikey, &HalikeyDevice::disconnected, this,
-            [this]() { QMetaObject::invokeMethod(m_keyer, "stop", Qt::QueuedConnection); });
+    connect(m_halikey, &HalikeyDevice::disconnected, this, [this]() {
+        // Both levers down, explicitly: IambicKeyer::stop() is guarded on the keyer not being
+        // Idle, so it leaves m_phys untouched when nothing was being sent, and a lever held at
+        // unplug would still read as down on the next entry into CW.
+        m_keyer->setPaddleState(false, false);
+        QMetaObject::invokeMethod(m_keyer, "stop", Qt::QueuedConnection);
+    });
 
     // =========================================================================
     // KPOD+ keyer-active gate + EP02 keyer data routing
     // =========================================================================
-    // The KPOD+ owns the entire CW chain when present. The gate is set on
-    // deviceInfoReady (KPOD+ detected) rather than deviceConnected (open
-    // succeeded) so the ~10-100 ms open window doesn't leak paddle events to
-    // the local sidetone path.
-    connect(m_kpodPlus, &KpodPlusDevice::deviceConnected, this,
-            [this]() { m_connection->setKpodPlusKeyerActive(true); });
-    connect(m_kpodPlus, &KpodPlusDevice::deviceDisconnected, this,
-            [this]() { m_connection->setKpodPlusKeyerActive(false); });
-    connect(m_kpodPlus, &KpodPlusDevice::deviceInfoReady, this, [this]() {
-        if (m_kpodPlus->isDetected())
-            m_connection->setKpodPlusKeyerActive(true);
-    });
+    // The gate is now driven by HardwareController, which owns the lifecycle policy and is the only
+    // thing that knows whether the KPOD+ is actually going to run. MainWindow wires
+    // HardwareController::kpodPlusOwnsCw to setKpodPlusGate().
+    //
+    // WHY it is not wired to the device's own signals here any more — USB-003. The gate used to go
+    // up on deviceInfoReady whenever isDetected(), which is DETECTION, not ownership. A KPOD+
+    // plugged in with "Enable K-Pod" unchecked therefore suppressed QK4's own keyer while itself
+    // doing nothing: with a HaliKey attached that is no CW from either source, and the Options page
+    // said "KPOD+ keyer is active" the whole time. Seen in a bench log as `detected: true` followed
+    // by `gate UP` with no `startPolling` anywhere near it.
+    //
+    // The early raise that comment defended is preserved, and is now honest: the policy raises it
+    // when it DECIDES to open, which is still ahead of the ~10-100 ms open window, but only ever
+    // when the device is really about to take over.
 
     // EP02 keyer data → straight to the I/O thread.
     //
@@ -297,9 +263,39 @@ CwController::CwController(RadioState *radioState, ConnectionController *connect
 }
 
 CwController::~CwController() {
-    // Sever all signal connections before HardwareController tears down the
-    // devices these handlers reference. CONVENTIONS Rule 11.
+    // CONVENTIONS Rule 11.
+    //
+    // This used to claim it ran "before HardwareController tears down the devices these handlers
+    // reference". It does not: HardwareController is constructed first, and Qt destroys children in
+    // construction order, so it is already gone by the time this runs. That belief is part of what
+    // made CONC-001 look safe.
+    //
+    // What actually protects these handlers is MainWindow::closeEvent calling
+    // HardwareController::shutdownDevices(), which stops the HaliKey worker, the keyer and the
+    // sidetone while ConnectionController - which kpodPlusActive() dereferences - is still alive.
+    // The disconnect below is the second line of defence, not the first.
     disconnect(this);
+}
+
+void CwController::setKpodPlusGate(bool active) {
+    // The single most useful line in a CW bench log: it says who is generating the elements. While
+    // the gate is up QK4's own keyer still runs but its KZ output and sidetone are suppressed, so a
+    // log without this cannot distinguish "the KPOD+ is keying correctly" from "both are keying and
+    // one of them is inaudible".
+    qCInfo(cwKeyer) << "KPOD+ keyer gate"
+                    << (active ? "UP - the KPOD+ owns CW; local KZ and sidetone suppressed"
+                               : "DOWN - QK4's own keyer owns CW again");
+    // Order is load-bearing. The release store has to be visible to the HaliKey worker's acquire
+    // load BEFORE the levers are forced down, or an edge landing between the two lines recomputes
+    // them with the gate still clear and sets them straight back.
+    m_connection->setKpodPlusKeyerActive(active);
+    if (active) {
+        // A lever held when the KPOD+ takes over stays down on the keyer otherwise, and surfaces
+        // as KZ nobody keyed once the KPOD+ is unplugged again. Unconditional rather than
+        // edge-detected: the store is idempotent and cannot produce an element with the gate
+        // already set, and an edge check here is one more thing to get wrong.
+        m_keyer->setPaddleState(false, false);
+    }
 }
 
 bool CwController::kpodPlusActive() const {

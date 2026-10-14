@@ -15,8 +15,19 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
+# Tests only: configure the unit tests and stop before the app, so only the Qt modules the tests
+# link - all of them in qtbase - need to exist. WHY: the weekly ThreadSanitizer job builds Qt itself
+# with -sanitize thread (a distro Qt hides its own locking from TSan and every cross-thread queued
+# call reports as a race), and building Multimedia, ShaderTools, SerialPort and Svg too would cost
+# hours for modules no test uses.
+option(QK4_TESTS_ONLY "Configure only the unit tests (no app); needs just qtbase" OFF)
+
 # Core Qt components (GuiPrivate handled separately for cross-platform compatibility)
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets Network Multimedia ShaderTools Gui SerialPort Svg Test)
+if(QK4_TESTS_ONLY)
+    find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Network Test)
+else()
+    find_package(Qt6 REQUIRED COMPONENTS Core Widgets Network Multimedia ShaderTools Gui SerialPort Svg Test)
+endif()
 
 # GuiPrivate is needed for QRhi access but may not have CMake config on all platforms
 if(APPLE)
@@ -77,6 +88,12 @@ else()
     pkg_check_modules(LIBUDEV REQUIRED libudev)
     pkg_check_modules(LIBUSB REQUIRED libusb-1.0>=1.0.21)
 endif()
+
+if(QK4_TESTS_ONLY)
+    enable_testing()
+    add_subdirectory(tests)
+    return()
+endif()
 set(SOURCES
     src/main.cpp
     src/mainwindow.cpp
@@ -90,6 +107,7 @@ set(SOURCES
     src/controllers/textdecodecontroller.cpp
     src/controllers/statusbarcontroller.cpp
     src/controllers/menucontroller.cpp
+    src/controllers/tcicontroller.cpp
     src/controllers/antennaconfigcontroller.cpp
     src/controllers/featuremenucontroller.cpp
     src/controllers/popupmanager.cpp
@@ -111,22 +129,37 @@ set(SOURCES
     src/controllers/rightsidecontroller.cpp
     src/controllers/memorybuttonscontroller.cpp
     src/controllers/cwcontroller.cpp
+    src/controllers/transmitcontroller.cpp
     src/network/tcpclient.cpp
     src/network/protocol.cpp
     src/network/networkmetrics.cpp
     src/network/kpa1500client.cpp
+    src/network/kpa1500antennas.cpp
     src/network/dxclusterclient.cpp
     src/network/catserver.cpp
     src/network/catframes.cpp
+    src/network/cwmacro.cpp
     src/network/catpushbroadcaster.cpp
     src/network/k4discovery.cpp
+    src/network/websocketframe.cpp
+    src/network/websocketserver.cpp
+    src/network/tciprotocol.cpp
+    src/network/tciaudioframe.cpp
+    src/network/tciserver.cpp
+    src/network/tciserverstate.cpp
+    src/network/tciaudiobridge.cpp
+    src/dsp/audioupsampler.cpp
     src/audio/audioengine.cpp
     src/audio/opusdecoder.cpp
     src/audio/opusencoder.cpp
     src/audio/sidetonegenerator.cpp
     src/dsp/panadapter_rhi.cpp
     src/dsp/minipan_rhi.cpp
+    src/dsp/bandplanstrip.cpp
+    src/dsp/spectrumscale.cpp
+    src/dsp/waterfallgeometry.cpp
     src/settings/radiosettings.cpp
+    src/settings/interfacescale.cpp
     src/models/radiostate.cpp
     src/models/radiostate/antennastate.cpp
     src/models/radiostate/audioeffectsstate.cpp
@@ -161,9 +194,11 @@ set(SOURCES
     src/ui/dialogs/optionsdialog.cpp
     src/ui/pages/aboutpage.cpp
     src/ui/pages/stationpage.cpp
+    src/ui/pages/displaypage.cpp
     src/ui/pages/audioinputpage.cpp
     src/ui/pages/audiooutputpage.cpp
     src/ui/pages/rigcontrolpage.cpp
+    src/ui/pages/tciserverpage.cpp
     src/ui/pages/cwkeyerpage.cpp
     src/ui/pages/kpodpage.cpp
     src/ui/pages/kpa1500page.cpp
@@ -265,6 +300,7 @@ set(HEADERS
     src/dsp/panadapter_rhi.h
     src/dsp/minipan_rhi.h
     src/settings/radiosettings.h
+    src/settings/interfacescale.h
     src/models/radiostate.h
     src/models/radiostate/antennastate.h
     src/models/radiostate/datacontrolstate.h
@@ -296,6 +332,7 @@ set(HEADERS
     src/ui/dialogs/optionsdialog.h
     src/ui/pages/aboutpage.h
     src/ui/pages/stationpage.h
+    src/ui/pages/displaypage.h
     src/ui/pages/audioinputpage.h
     src/ui/pages/audiooutputpage.h
     src/ui/pages/rigcontrolpage.h
@@ -326,6 +363,7 @@ set(HEADERS
     src/ui/widgets/notificationwidget.h
     src/ui/styling/k4styles.h
     src/ui/styling/k4constants.h
+    src/utils/windowfit.h
     src/ui/popups/k4popupbase.h
     src/ui/widgets/kpa1500minipanel.h
     src/ui/overlays/sidecontroloverlay.h
@@ -477,6 +515,8 @@ qt_add_resources(${PROJECT_NAME} "icons"
     PREFIX "/"
     BASE "resources"
     FILES
+        resources/icons/arrow-down.svg
+        resources/icons/arrow-up.svg
         resources/icons/globe.svg
         resources/icons/help.svg
 )

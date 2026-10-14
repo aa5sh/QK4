@@ -5,6 +5,7 @@
 #include <rhi/qrhi.h>
 #include <QColor>
 #include <QElapsedTimer>
+#include <QSize>
 #include <QTimer>
 #include <QVector>
 #include <memory>
@@ -56,8 +57,8 @@ public:
     void setNotchFilter(bool enabled, int pitchHz);
     void setCursorVisible(bool visible);
 
-    // Band-plan overlay strip (top of panadapter): a band-name header row plus a sub-mode
-    // segment row with optional digital calling-frequency markers. Segments/markers are
+    // Band-plan overlay strip (top of panadapter): one row of mode segments with the band name as a
+    // tag, hatched past the band edge, plus digital calling-frequency markers. Segments/markers are
     // absolute-frequency; the strip re-maps to the freq axis on pan/zoom.
     void setBandPlan(const QString &bandName, const QVector<BandPlan::BandSegment> &segments,
                      const QVector<BandPlan::BandMarker> &markers);
@@ -118,6 +119,10 @@ private:
     // Data processing
     void decompressBins(const QByteArray &bins, QVector<float> &out);
     void updateWaterfallData();
+
+    // Diagnostics — no rendering effect. Gated on the qk4.pan.diag category being debug-enabled.
+    void logTierCrossing(qint32 oldSampleRate, qint32 newSampleRate, qint32 newTierSpanHz);
+    void logRenderGeometry(const QSize &outputSize);
 
     // Coordinate helpers
     float normalizeDb(float db);
@@ -201,16 +206,44 @@ private:
     qint32 m_lastTierSampleRate = 0; // Detect tier transitions to reset EMA
     int m_waterfallTierBinCount = 0; // Bin count written to current waterfall row
     float m_waterfallTierSpanHz = 0; // Tier span for current waterfall data
-    // Waterfall data - sized for 4K/HiDPI displays
-    // Memory: 4096 × 480 × 1 byte = ~1.9 MB (trivial for modern GPUs)
-    static constexpr int BASE_WATERFALL_HISTORY = 480;
+    // Waterfall storage. Rows stored and rows shown are deliberately different numbers: the visible
+    // count tracks the waterfall's height in device pixels so a row is always one pixel tall, which
+    // is what keeps it sharp at any window size. A fixed count stretched to fit, and every row was
+    // bilinear-blended across as many screen pixels as the window was tall — measured at 3.05 px
+    // per row full screen, against the ~1.25 the old constant was hand-tuned for.
+    //
+    // Storage is allocated once at the maximum and never resized, so growing the window costs two
+    // uniforms rather than a texture rebuild, and reveals history captured while it was small
+    // instead of stretching what is already on screen.
+    //
+    // Memory: 4096 × 2048 × 1 byte = ~8.4 MB. Only the centred 1024 texels of each row are ever
+    // sampled — the radio always sends 1024 bins, they are written 1:1 into the middle, and the
+    // shader samples at exact texel centres — so width past that is alignment headroom, not
+    // resolution. 8192 was measured and produced bit-identical output for twice the memory.
+    static constexpr int MAX_WATERFALL_HISTORY = 2048;
+    static constexpr int MIN_VISIBLE_ROWS = 64;
     static constexpr int BASE_TEXTURE_WIDTH = 4096;
     int m_textureWidth = BASE_TEXTURE_WIDTH;
-    int m_waterfallHistory = BASE_WATERFALL_HISTORY;
+    int m_waterfallHistory = MAX_WATERFALL_HISTORY; // rows stored (ring size)
+    int m_visibleRows = MAX_WATERFALL_HISTORY;      // rows drawn; follows waterfall pixel height
     int m_waterfallWriteRow = 0;
     QVector<quint8> m_waterfallData;
     bool m_waterfallNeedsUpdate = false;
     bool m_waterfallNeedsFullClear = false;
+    // Tier span each stored row was captured at. Diagnostic only: the waterfall is cleared on a
+    // tier change, so every stored row shares the current tier and the renderer needs no per-row
+    // value. Kept because it reports how much history a crossing is about to discard.
+    QVector<float> m_rowTierSpanHz;
+    // Last render-target size reported by the geometry diagnostic, so it logs on change not per frame.
+    QSize m_lastLoggedOutputSize;
+    float m_lastLoggedSpectrumRatio = -1.0f;
+    bool m_geometryLoggedWithBins = false;
+    // Last logged gap between the radio's reported noise floor and our own minimum bin, so the
+    // calibration check reports on change rather than every frame.
+    float m_lastLoggedCalibDelta = 0.0f;
+    float m_calibDelta = 0.0f;
+    int m_calibSamples = 0;
+    bool m_calibLogged = false;
 
     // Color LUT (256 RGBA entries) - for waterfall
     QVector<quint8> m_colorLUT;
@@ -219,7 +252,6 @@ private:
 
     // Frequency info
     qint64 m_centerFreq = 0;
-    qint32 m_sampleRate = 192000;
     float m_noiseFloor = -130.0f;
     qint64 m_tunedFreq = 0;
     int m_filterBw = 2400;
@@ -234,7 +266,6 @@ private:
     float m_minDb = -138.0f;
     float m_maxDb = -58.0f;
     float m_spectrumRatio = 0.30f;
-    float m_smoothedBaseline = 0.0f;
     bool m_gridEnabled = true;
     int m_refLevel = -110;
     int m_scale = 75; // 10-150, default 75 (neutral)

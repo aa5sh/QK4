@@ -1648,7 +1648,7 @@ private slots:
         QCOMPARE(rs.spanHzB(), 25000);
     }
 
-    // --- #MP / #MP$ (mini-pan enabled, via handleBoolPairVal) ---
+    // --- #MP / #MP$ (mini-pan enabled) ---
     void testMiniPanAEnabledParses() {
         RadioState rs;
         QSignalSpy spy(&rs, &RadioState::miniPanAEnabledChanged);
@@ -1661,6 +1661,72 @@ private slots:
         RadioState rs;
         rs.parseCATCommand("#MP$1;");
         QCOMPARE(rs.miniPanBEnabled(), true);
+    }
+
+    // Replays a capture of the mini-pan being toggled on the radio's front panel. The radio
+    // sends each toggle, then re-sends SB plus the #MP/#MP$ pair; the VFO view follows these
+    // signals, so each receiver must emit exactly once per real change and never for the other.
+    void testMiniPanFrontPanelToggleSequence() {
+        RadioState rs;
+        QSignalSpy spyA(&rs, &RadioState::miniPanAEnabledChanged);
+        QSignalSpy spyB(&rs, &RadioState::miniPanBEnabledChanged);
+
+        rs.parseCATCommand("#MP1;");
+        QCOMPARE(spyA.count(), 1);
+        QCOMPARE(spyA.last().at(0).toBool(), true);
+
+        rs.parseCATCommand("#MP0;");
+        rs.parseCATCommand("SB1;");
+        rs.parseCATCommand("#MP0;");
+        rs.parseCATCommand("#MP$-1;");
+        QCOMPARE(spyA.count(), 2);
+        QCOMPARE(spyA.last().at(0).toBool(), false);
+        QCOMPARE(spyB.count(), 0);
+
+        rs.parseCATCommand("#MP$1;");
+        rs.parseCATCommand("SB3;");
+        rs.parseCATCommand("#MP0;");
+        rs.parseCATCommand("#MP$1;");
+        QCOMPARE(spyB.count(), 1);
+        QCOMPARE(spyB.last().at(0).toBool(), true);
+        QCOMPARE(rs.miniPanBEnabled(), true);
+        QCOMPARE(spyA.count(), 2);
+
+        rs.parseCATCommand("#MP$0;");
+        rs.parseCATCommand("SB1;");
+        rs.parseCATCommand("#MP0;");
+        rs.parseCATCommand("#MP$0;");
+        QCOMPARE(spyB.count(), 2);
+        QCOMPARE(spyB.last().at(0).toBool(), false);
+        QCOMPARE(spyA.count(), 2);
+    }
+
+    // -1 means the radio will not show that mini-pan; it must close an open one.
+    void testMiniPanUnavailableClosesOpenMiniPan() {
+        RadioState rs;
+        rs.parseCATCommand("#MP1;");
+        rs.parseCATCommand("#MP$1;");
+        QSignalSpy spyA(&rs, &RadioState::miniPanAEnabledChanged);
+        QSignalSpy spyB(&rs, &RadioState::miniPanBEnabledChanged);
+        rs.parseCATCommand("#MP-1;");
+        rs.parseCATCommand("#MP$-1;");
+        QCOMPARE(rs.miniPanAEnabled(), false);
+        QCOMPARE(rs.miniPanBEnabled(), false);
+        QCOMPARE(spyA.count(), 1);
+        QCOMPARE(spyB.count(), 1);
+    }
+
+    void testMiniPanReopensAfterReset() {
+        RadioState rs;
+        rs.parseCATCommand("#MP1;");
+        rs.parseCATCommand("#MP$1;");
+        rs.reset();
+        QSignalSpy spyA(&rs, &RadioState::miniPanAEnabledChanged);
+        QSignalSpy spyB(&rs, &RadioState::miniPanBEnabledChanged);
+        rs.parseCATCommand("#MP1;");
+        rs.parseCATCommand("#MP$1;");
+        QCOMPARE(spyA.count(), 1);
+        QCOMPARE(spyB.count(), 1);
     }
 
     // Idempotence sample: the big chain above all uses the same pattern;
@@ -1890,7 +1956,7 @@ private slots:
     // MX (audio mix routing: "<L>.<R>" with A/B/AB/-A components).
     // =========================================================================
 
-    // --- LO (Line Out: LOlllrrrm; lll=left 0-40, rrr=right 0-40, m=mode) ---
+    // --- LO (Line Out: LOlllrrrm; lll=left 0-50, rrr=right 0-50, m=mode) ---
     void testLineOutParses() {
         RadioState rs;
         QSignalSpy spy(&rs, &RadioState::lineOutChanged);
@@ -1899,6 +1965,27 @@ private slots:
         QCOMPARE(rs.lineOutRight(), 30);
         QCOMPARE(rs.lineOutRightEqualsLeft(), false);
         QCOMPARE(spy.count(), 1);
+    }
+
+    // #86: a K4D at R38 reports up to 50. Anything above the old 40 was dropped whole, leaving
+    // QK4 showing a stale level.
+    void testLineOutAcceptsFullRange() {
+        RadioState rs;
+        rs.parseCATCommand("LO0160151;");
+        QSignalSpy spy(&rs, &RadioState::lineOutChanged);
+        rs.parseCATCommand("LO0500151;"); // captured from the radio with the panel at 50
+        QCOMPARE(rs.lineOutLeft(), 50);
+        QCOMPARE(rs.lineOutRight(), 15);
+        QCOMPARE(rs.lineOutRightEqualsLeft(), true);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    void testLineOutSetterClampsToMax() {
+        RadioState rs;
+        rs.setLineOutLeft(60);
+        rs.setLineOutRight(50);
+        QCOMPARE(rs.lineOutLeft(), 50);
+        QCOMPARE(rs.lineOutRight(), 50);
     }
 
     void testLineOutRightEqualsLeftFlag() {
@@ -1921,7 +2008,7 @@ private slots:
         RadioState rs;
         rs.parseCATCommand("LO020030M;");
         QSignalSpy spy(&rs, &RadioState::lineOutChanged);
-        rs.parseCATCommand("LO050030M;"); // left=50 > 40
+        rs.parseCATCommand("LO051030M;"); // left=51 > 50
         QCOMPARE(spy.count(), 0);
         QCOMPARE(rs.lineOutLeft(), 20); // unchanged
     }

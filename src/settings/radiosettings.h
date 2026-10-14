@@ -42,11 +42,20 @@ struct RadioEntry {
     QString host;
     QString password; // Password (used as PSK when TLS enabled)
     quint16 port;
-    bool useTls = false;      // Use TLS/PSK encryption (port 9204)
-    QString identity;         // TLS-PSK identity (optional, empty = default)
-    int encodeMode = 3;       // Audio encode mode: 0=RAW32, 1=RAW16, 2=Opus Int, 3=Opus Float (default)
+    bool useTls = false; // Use TLS/PSK encryption (port 9204)
+    QString identity;    // TLS-PSK identity (optional, empty = default)
+    // Audio encode mode. See docs/k4-protocol-quirks.md -> "Audio encode modes EM0-EM3".
+    int encodeMode =
+        3; // 0=RAW S32LE (24-bit), 1=RAW S16LE, 2/3=Opus (same bitstream, int vs float decode); EM3 default
     int streamingLatency = 3; // Remote streaming audio latency: 0-7 (default 3)
     int displayFps = 15;      // Display FPS: 12-30 (default 15, good balance for large monitors)
+
+    // Connect to this radio automatically when QK4 starts.
+    //
+    // AT MOST ONE radio may have this set. The rule is enforced in RadioSettings rather than in
+    // the dialog, because settings can also be edited by hand or restored from a backup, and a
+    // second flagged radio would make startup depend on list order.
+    bool connectAtStartup = false;
 
     bool operator==(const RadioEntry &other) const {
         return name == other.name && host == other.host && port == other.port;
@@ -60,6 +69,18 @@ public:
     static RadioSettings *instance();
 
     QVector<RadioEntry> radios() const;
+
+    // The radio to connect to at startup, or -1 if none is flagged. Returns the FIRST flagged
+    // entry; setConnectAtStartupRadio keeps that unique, and load() repairs a file that is not.
+    int connectAtStartupIndex() const;
+
+    // Index of the saved radio with this name, or -1. Case-insensitive, because the name is typed
+    // on a command line or into a desktop shortcut, where matching the stored capitalisation
+    // exactly is a needless way to fail.
+    int indexOfRadioNamed(const QString &name) const;
+
+    // Flags one radio and clears every other. Pass -1 to disable auto-connect entirely.
+    void setConnectAtStartupRadio(int index);
     void addRadio(const RadioEntry &radio);
     void removeRadio(int index);
     void updateRadio(int index, const RadioEntry &radio);
@@ -101,6 +122,29 @@ public:
     void setCatServerEnabled(bool enabled);
     quint16 catServerPort() const;
     void setCatServerPort(quint16 port);
+
+    // TCI server settings (WebSocket server carrying both CAT and audio for WSJT-X and friends).
+    // Off by default: an always-on listener would change behaviour for every user, and TCI is
+    // additive - the CAT server on 9299 keeps working untouched.
+    bool tciServerEnabled() const;
+    void setTciServerEnabled(bool enabled);
+    quint16 tciServerPort() const;
+    void setTciServerPort(quint16 port);
+    // Audio is the expensive half and CAT-only is a legitimate configuration, so it is separately
+    // switchable. Defaults on, because carrying audio is the reason the TCI server exists.
+    bool tciAudioEnabled() const;
+    void setTciAudioEnabled(bool enabled);
+    // Transmit level for audio arriving FROM a TCI client, separate from Mic Gain.
+    //
+    // WHY SEPARATE: both feed the same encoder, but a microphone and a digital-mode program are
+    // nowhere near the same level - WSJT-X sends at or near full scale. Sharing one control meant a
+    // slider calibrated for one overdrove or starved the other, with no position that served both.
+    int tciTxGain() const;
+    void setTciTxGain(int value); // 0-100, default 25
+
+    // RX playback boost above the MAIN/SUB sliders, in dB: 0, 3, 6, 9 or 12 (default 0).
+    int rxAudioBoostDb() const;
+    void setRxAudioBoostDb(int db);
 
     // Macro settings
     QMap<QString, MacroEntry> macros() const;
@@ -162,6 +206,25 @@ public:
     bool bandPlanOverlayEnabled() const;
     void setBandPlanOverlayEnabled(bool enabled);
 
+    // Status-bar temperature unit. Display-only: the warn/critical thresholds stay in Celsius,
+    // so a given heatsink temperature keeps its colour whichever unit is shown.
+    bool temperatureInFahrenheit() const;
+    void setTemperatureInFahrenheit(bool fahrenheit);
+
+    // Interface scale, in percent: one of kInterfaceScales, or kInterfaceScaleAuto to fit the
+    // screen. Qt reads the scale once, before QApplication exists, so a change applies at the next
+    // launch — see startupInterfaceScale() and settings/interfacescale.h.
+    static constexpr int kInterfaceScaleAuto = 0;
+    static constexpr int kInterfaceScales[] = {75, 80, 90, 100, 110, 125};
+    int interfaceScale() const;
+    void setInterfaceScale(int percent);
+    // The factor Auto last fitted to the screen, 0.5 to 1.0.
+    double autoScaleFactor() const;
+    void setAutoScaleFactor(double factor);
+    // The factor to start with, read before QApplication exists and so without this singleton —
+    // from the same store, spelled the same way.
+    static double startupInterfaceScale(bool *isAuto = nullptr);
+
 signals:
     void radiosChanged();
     void kpodEnabledChanged(bool enabled);
@@ -173,6 +236,11 @@ signals:
     void speakerDeviceChanged(const QString &deviceId);
     void catServerEnabledChanged(bool enabled);
     void catServerPortChanged(quint16 port);
+    void tciServerEnabledChanged(bool enabled);
+    void tciServerPortChanged(quint16 port);
+    void tciAudioEnabledChanged(bool enabled);
+    void tciTxGainChanged(int value);
+    void rxAudioBoostDbChanged(int db);
     void macrosChanged();
     void halikeyEnabledChanged(bool enabled);
     void halikeyPortNameChanged(const QString &portName);
@@ -184,6 +252,8 @@ signals:
     void kpodPlusSettingsChanged();
     void iaruRegionChanged(int region);
     void bandPlanOverlayEnabledChanged(bool enabled);
+    void temperatureInFahrenheitChanged(bool fahrenheit);
+    void interfaceScaleChanged(int percent);
 
 private:
     explicit RadioSettings(QObject *parent = nullptr);
@@ -204,6 +274,11 @@ private:
     // CAT Server settings
     bool m_catServerEnabled = false;
     quint16 m_catServerPort = 9299;
+
+    // TCI server settings. 50001 is the TCI convention and what WSJT-X defaults to.
+    bool m_tciServerEnabled = false;
+    quint16 m_tciServerPort = 50001;
+    bool m_tciAudioEnabled = true;
 
     // HaliKey settings
     QString m_halikeyPortName;

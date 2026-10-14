@@ -42,8 +42,9 @@ private:
     RadioState *m_radioState;
     QHash<QTcpSocket *, int> m_clientAiModes;
 
-    bool m_lastNB = false;
-    bool m_lastNR = false;
+    QByteArray m_lastNB;
+    QByteArray m_lastNR;
+    QByteArray m_lastVX;
     int m_lastAGC = -1;
     bool m_processingCacheInitialized = false;
 };

@@ -1,9 +1,13 @@
 #include "audioengine.h"
+#include "audio/audiodecimator.h"       // capture-rate decimation
+#include "audio/audiodeviceselection.h" // which device a stream belongs on
 #include "audio/audiologging.h"
-#include "audio/opusdecoder.h" // NORMALIZE_16BIT constant
 #include "audio/opusencoder.h"
-#include "network/protocol.h" // buildAudioPacket
-#include "utils/radioutils.h" // RX jitter-buffer watermarks
+#include "audio/rawaudioformat.h" // EM0/EM1 wire format
+#include "audio/rxoutputstage.h"  // RX boost + soft limiter
+#include "network/protocol.h"     // buildAudioPacket
+#include "utils/radioutils.h"     // RX jitter-buffer watermarks
+#include <QDateTime>
 #include <QMediaDevices>
 #include <QAudioDevice>
 #include <QDebug>
@@ -25,8 +29,10 @@ AudioEngine::AudioEngine(QObject *parent)
     m_outputFormat.setChannelCount(2);
     m_outputFormat.setSampleFormat(QAudioFormat::Float);
 
-    // Input format: Use native 48kHz for microphone capture (most hardware supports this)
-    // We'll resample to 12kHz before encoding for K4 TX
+    // Input format TEMPLATE. Only the channel count and sample format are ours to choose; the
+    // SAMPLE RATE here is a placeholder that setupAudioInput() overwrites with whatever the chosen
+    // device actually runs at. Demanding a fixed rate is what broke Bluetooth microphones - see
+    // audio/audiodecimator.h for the measurement.
     m_inputFormat.setSampleRate(48000);
     m_inputFormat.setChannelCount(1);
     m_inputFormat.setSampleFormat(QAudioFormat::Float);
@@ -41,13 +47,17 @@ AudioEngine::AudioEngine(QObject *parent)
     connect(m_feedTimer, &QTimer::timeout, this, &AudioEngine::feedAudioDevice);
 
     // Pre-size hot-path buffers so the per-poll / per-frame paths reuse capacity.
-    // m_micBuffer holds 12kHz S16LE samples queued up to one max frame (SL7 = 1440
-    // samples = 2880 bytes); 2× that gives headroom for partial frames + the next
-    // poll's data before we compact. m_resampleBuf12k holds 48kHz→12kHz output
-    // for one poll cycle (INPUT_BUFFER_SIZE = 19200 bytes of 48kHz Float32 → 4800
-    // bytes of 12kHz Float32). m_feedBatch is dimensioned for ~4 packets per cycle.
-    m_micBuffer.reserve(2 * 1440 * sizeof(qint16));
-    m_resampleBuf12k.reserve(INPUT_BUFFER_SIZE / 4);
+    //
+    // m_micBuffer holds 12 kHz Float32 samples queued up to one max frame (SL7 = 1440 samples);
+    // 2x that gives headroom for partial frames plus the next poll's data before we compact.
+    // It became Float32 when quantisation moved to the wire format - sizing it as S16 would
+    // silently halve the headroom and reallocate on the audio thread every poll.
+    //
+    // m_resampleBuf12k holds one poll cycle of decimator output. The decimation factor is no
+    // longer fixed at 4 - a 12 kHz capture device would pass through 1:1 - so this is sized for
+    // the worst case, which is the whole input buffer.
+    m_micBuffer.reserve(2 * 1440 * static_cast<int>(sizeof(float)));
+    m_resampleBuf12k.reserve(INPUT_BUFFER_SIZE);
     m_feedBatch.reserve(4);
 
     // WHY setupAudioInput() is deferred until the first openMic() call:
@@ -75,19 +85,52 @@ AudioEngine::~AudioEngine() {
 }
 
 bool AudioEngine::start() {
-    bool outputOk = setupAudioOutput(); // also flushes the queue + re-arms prebuffering
-
-    if (outputOk) {
-        m_feedTimer->start();
-    }
+    m_outputRunning = true;
+    rebuildOutput();
 
     // Audio input setup deferred to the first openMic() call (first PTT press) to avoid
     // triggering the macOS mic permission dialog during connection — see ctor comment.
 
-    return outputOk;
+    return m_audioSink != nullptr;
+}
+
+// Tear the output sink down and build it again for whatever device is currently selected, then
+// put the feed timer in the matching state.
+//
+// WHY every path goes through here rather than calling setupAudioOutput() directly: recovery.
+// setOutputDevice() and onSystemDefaultOutputChanged() both used to rebuild only `if (m_audioSink)`,
+// so if the FIRST attempt failed there was no sink, and every later attempt was skipped by that
+// guard — the audio output was dead for the life of the process and no device change could revive
+// it. The feed timer made it worse: it was started only by start(), so even a sink that did get
+// built afterwards was never fed.
+//
+// That is not hypothetical. Launch with a virtual loopback device selected, have it refuse the
+// 12 kHz format below, then pick the real speakers in Options: nothing happens, and nothing says
+// why. Found on the bench, 2026-09-18.
+void AudioEngine::rebuildOutput() {
+    if (m_feedTimer) {
+        m_feedTimer->stop();
+    }
+    if (m_audioSink) {
+        m_audioSink->stop();
+        delete m_audioSink;
+        m_audioSink = nullptr;
+        m_audioSinkDevice = nullptr;
+    }
+
+    // Called during construction too, before the engine is meant to be producing anything.
+    if (!m_outputRunning) {
+        return;
+    }
+
+    if (setupAudioOutput()) { // also flushes the queue + re-arms prebuffering
+        m_feedTimer->start();
+    }
 }
 
 void AudioEngine::stop() {
+    m_outputRunning = false;
+
     // Stop feed timer and clear jitter buffer
     if (m_feedTimer) {
         m_feedTimer->stop();
@@ -104,6 +147,28 @@ void AudioEngine::stop() {
     if (m_micPollTimer) {
         m_micPollTimer->stop();
     }
+
+    // AUD-001. Transmit state belongs to the connection and must not outlive it.
+    //
+    // This function used to clear none of the three. The consequences were not theoretical:
+    //
+    //   m_micEnabled survived as a lie — true, with m_audioSource about to be deleted below. The
+    //   next setMicDevice() reads it as `wasOpen` and calls openMic(), so changing the microphone
+    //   in Options REOPENED THE MICROPHONE WHILE DISCONNECTED and re-armed the poll timer. A
+    //   hot-plugged USB or Bluetooth device rewrites that setting by itself (AUD-002), so it did
+    //   not even need the operator to touch anything.
+    //
+    //   m_pttActive survived, so a disconnect while keyed came back up on reconnect with the
+    //   encode gate already open, streaming the room at a radio nobody had keyed.
+    //
+    //   m_txSource survived, so a connection dropped while a TCI client held the transmitter left
+    //   the engine gated to Tci, and the operator's next PTT transmitted silence.
+    //
+    // closeMic() rather than a bare store, because it also stops the poll timer and drops the
+    // partial frame — the same teardown the header has always claimed happened here.
+    m_pttActive.store(false, std::memory_order_release);
+    m_txSource.store(static_cast<int>(TxSource::Microphone), std::memory_order_release);
+    closeMic();
 
     if (m_audioSink) {
         m_audioSink->stop();
@@ -148,9 +213,31 @@ bool AudioEngine::setupAudioOutput() {
     }
 
     if (!outputDevice.isFormatSupported(m_outputFormat)) {
-        qCWarning(qk4Audio) << "AudioEngine: 12kHz output format not supported by device";
+        // No fallback yet: QK4 asks for the K4's native 12 kHz and takes no for an answer. Virtual
+        // loopback drivers are commonly fixed at 44.1/48 kHz and land here, which means NO RX AUDIO
+        // AT ALL from that device - not quiet audio, none. Say which device and what was asked for,
+        // because the operator's next move is to pick a different one in Options and nothing else
+        // in the UI tells them that.
+        // One formatted string rather than a chain: Homebrew's clang-format 18 and CI's apt
+        // clang-format-18 disagree about where to wrap a chain that reaches the 120-column limit,
+        // so a chain here passes locally and fails CI. See CLAUDE.md -> Lint.
+        qCWarning(qk4Audio,
+                  "AudioEngine: output device %s does not support %d Hz %d ch float - NO RX AUDIO from it. "
+                  "Choose a different output device in Options.",
+                  qUtf8Printable(outputDevice.description()), m_outputFormat.sampleRate(),
+                  m_outputFormat.channelCount());
         return false;
     }
+
+    // Logged on success for the same reason as the input side: which device we actually opened is
+    // not recoverable from anywhere else, and on Bluetooth it decides whether the microphone can
+    // work at all. A2DP (stereo playback) and HFP (microphone live) are mutually exclusive on one
+    // Bluetooth device, so a sink held open on a headset can keep the OS from completing the
+    // profile switch its own microphone needs.
+    const QAudioFormat outPreferred = outputDevice.preferredFormat();
+    qCDebug(qk4Audio, "AudioEngine: output device \"%s\" prefers %d Hz %d ch; we request %d Hz %d ch Float",
+            qUtf8Printable(outputDevice.description()), outPreferred.sampleRate(), outPreferred.channelCount(),
+            m_outputFormat.sampleRate(), m_outputFormat.channelCount());
 
     m_activeOutputDeviceId = outputDevice.id();
     m_audioSink = new QAudioSink(outputDevice, m_outputFormat, this);
@@ -164,7 +251,8 @@ bool AudioEngine::setupAudioOutput() {
         return false;
     }
 
-    // Volume is always 1.0 — actual volume control is in the K4's AG command
+    // Always 1.0: QK4's volume is applied per sample in applyMixAndVolume (the MAIN/SUB sliders).
+    // The K4's AG is the radio's own speaker and does not reach this stream.
     m_audioSink->setVolume(1.0f);
 
     // WHY: every sink (re)build must re-arm prebuffering and drop any backlog. setupAudioOutput()
@@ -201,13 +289,49 @@ bool AudioEngine::setupAudioInput() {
         return false;
     }
 
-    if (!inputDevice.isFormatSupported(m_inputFormat)) {
-        qCWarning(qk4Audio) << "AudioEngine: 48kHz input format not supported by device";
+    // Capture at the rate the DEVICE reports, not one of our choosing.
+    //
+    // WHY (INT-005): asking for a fixed 48 kHz is what broke Bluetooth microphones. An AirPods Pro
+    // runs at 24 kHz in HFP; Qt's isFormatSupported() says 48 kHz is fine for it, the stream opens
+    // without error, and then delivers NOTHING - measured, twice, alternating formats to rule out a
+    // warm-up effect (tools/audio_device_probe.cpp). The device's own preferred rate is the only
+    // one it can be trusted to actually produce.
+    //
+    // Channels and sample format are still ours to pick: mono Float captured cleanly on every
+    // device probed, including one whose preferredFormat() was stereo Int16.
+    const QAudioFormat preferred = inputDevice.preferredFormat();
+    QAudioFormat format = m_inputFormat;
+    format.setSampleRate(preferred.sampleRate());
+
+    if (!AudioDecimator::isSupportedRate(format.sampleRate())) {
+        // Rational resampling (16 kHz -> 12 kHz is 4:3, 44.1 kHz is 147:40) is not implemented yet.
+        // Say so plainly and name the rate: silence with no explanation is what made INT-005 take
+        // months to diagnose, and a device we cannot use should not look like a broken radio.
+        qCWarning(qk4Audio,
+                  "AudioEngine: input device \"%s\" runs at %d Hz, which is not a multiple of %d Hz - "
+                  "QK4 cannot resample it yet, so there would be NO TX AUDIO. Choose a different "
+                  "microphone in Options.",
+                  qUtf8Printable(inputDevice.description()), format.sampleRate(), AudioDecimator::OUTPUT_RATE);
         return false;
     }
 
+    if (!inputDevice.isFormatSupported(format)) {
+        qCWarning(qk4Audio,
+                  "AudioEngine: input device \"%s\" refused %d Hz %d ch float - NO TX AUDIO from it. "
+                  "It reports %d..%d Hz. Choose a different microphone in Options.",
+                  qUtf8Printable(inputDevice.description()), format.sampleRate(), format.channelCount(),
+                  inputDevice.minimumSampleRate(), inputDevice.maximumSampleRate());
+        return false;
+    }
+
+    m_micSampleRate = format.sampleRate();
+    m_micDecimationFactor = AudioDecimator::factorFor(m_micSampleRate);
+    qCDebug(qk4Audio, "AudioEngine: mic device \"%s\" prefers %d Hz %d ch; capturing at %d Hz mono Float, %d:1 to %d",
+            qUtf8Printable(inputDevice.description()), preferred.sampleRate(), preferred.channelCount(),
+            m_micSampleRate, m_micDecimationFactor, AudioDecimator::OUTPUT_RATE);
+
     m_activeMicDeviceId = inputDevice.id();
-    m_audioSource = new QAudioSource(inputDevice, m_inputFormat, this);
+    m_audioSource = new QAudioSource(inputDevice, format, this);
     m_audioSource->setBufferSize(INPUT_BUFFER_SIZE);
 
     // Don't start mic by default - user must enable
@@ -341,8 +465,15 @@ void AudioEngine::applyMixAndVolume(QByteArray &packet) {
     int sampleCount = totalFloats / 2;
 
     // Load atomic/guarded values once per packet (not per sample)
-    const float mainVol = m_mainVolume.load(std::memory_order_relaxed);
-    const float subVol = m_subVolume.load(std::memory_order_relaxed);
+    // The boost multiplies the sliders, so a saved slider position means what it always did.
+    const float boost = m_rxBoostGain.load(std::memory_order_relaxed);
+    const float mainVol = m_mainVolume.load(std::memory_order_relaxed) * boost;
+    const float subVol = m_subVolume.load(std::memory_order_relaxed) * boost;
+    // WHY only when boosted: at 0 dB the output is exactly what it was before the boost existed
+    // (hard clamp), and the radio's stream - scaled to full scale by the decoder - does not exceed
+    // it on its own. The boost is what pushes peaks over the top, so the boost brings the limiter.
+    const bool limit = boost > 1.0f;
+    auto finish = [limit](float v) { return limit ? RxOutputStage::softLimit(v) : qBound(-1.0f, v, 1.0f); };
     const bool subMuted = m_subMuted.load(std::memory_order_relaxed);
     const int balMode = m_balanceMode.load(std::memory_order_relaxed);
     const int balOffset = m_balanceOffset.load(std::memory_order_relaxed);
@@ -361,16 +492,34 @@ void AudioEngine::applyMixAndVolume(QByteArray &packet) {
         balRightGain = qBound(0.0f, (50.0f + balOffset) / 50.0f, 1.0f);
     }
 
+    const bool measure = qk4AudioRx().isDebugEnabled();
+    auto measureIn = [&](float mainSample, float subSample) {
+        m_rxStats.sumSqMain += static_cast<double>(mainSample) * mainSample;
+        m_rxStats.sumSqSub += static_cast<double>(subSample) * subSample;
+        m_rxStats.peakMain = qMax(m_rxStats.peakMain, std::fabs(mainSample));
+        m_rxStats.peakSub = qMax(m_rxStats.peakSub, std::fabs(subSample));
+        ++m_rxStats.frames;
+    };
+    auto measureOut = [&](float left, float right) {
+        const float peak = qMax(std::fabs(left), std::fabs(right));
+        m_rxStats.peakOut = qMax(m_rxStats.peakOut, peak);
+        m_rxStats.clipped += (std::fabs(left) > 1.0f) + (std::fabs(right) > 1.0f);
+    };
+
     for (int i = 0; i < sampleCount; i++) {
         float mainSample = samples[i * 2];    // Left channel (Main RX / VFO A)
         float subSample = samples[i * 2 + 1]; // Right channel (Sub RX / VFO B)
+        if (measure)
+            measureIn(mainSample, subSample);
 
         // Step 1: SUB RX off — both channels get main audio only, sub slider has no effect
         // BL balance still applies (L/R gain is independent of SUB RX state)
         if (subMuted) {
             float s = mainSample * mainVol;
-            samples[i * 2] = qBound(-1.0f, s * balLeftGain, 1.0f);
-            samples[i * 2 + 1] = qBound(-1.0f, s * balRightGain, 1.0f);
+            if (measure)
+                measureOut(s * balLeftGain, s * balRightGain);
+            samples[i * 2] = finish(s * balLeftGain);
+            samples[i * 2 + 1] = finish(s * balRightGain);
             continue;
         }
 
@@ -390,10 +539,28 @@ void AudioEngine::applyMixAndVolume(QByteArray &packet) {
             right *= balRightGain;
         }
 
-        // Step 4: Clamp
-        samples[i * 2] = qBound(-1.0f, left, 1.0f);
-        samples[i * 2 + 1] = qBound(-1.0f, right, 1.0f);
+        // Step 4: Clamp, or soft-limit when boosted
+        if (measure)
+            measureOut(left, right);
+        samples[i * 2] = finish(left);
+        samples[i * 2 + 1] = finish(right);
     }
+
+    if (measure && m_rxStats.frames >= m_outputFormat.sampleRate())
+        reportRxLevels(mainVol / boost, subVol / boost, boost);
+}
+
+void AudioEngine::reportRxLevels(float mainVol, float subVol, float boost) {
+    auto dbfs = [](double v) { return v > 0.0 ? 20.0 * std::log10(v) : -999.0; };
+    const double n = static_cast<double>(m_rxStats.frames);
+    qCDebug(qk4AudioRx,
+            "RX 1s: main peak %.1f rms %.1f dBFS | sub peak %.1f rms %.1f dBFS | out peak %.1f dBFS over-FS %d | "
+            "sliders main %.2f sub %.2f boost %+.0f dB (%s)",
+            dbfs(m_rxStats.peakMain), dbfs(std::sqrt(m_rxStats.sumSqMain / n)), dbfs(m_rxStats.peakSub),
+            dbfs(std::sqrt(m_rxStats.sumSqSub / n)), dbfs(m_rxStats.peakOut), m_rxStats.clipped,
+            static_cast<double>(mainVol), static_cast<double>(subVol), dbfs(boost),
+            boost > 1.0f ? "soft-limited" : "clamped");
+    m_rxStats = RxLevelStats{};
 }
 
 void AudioEngine::openMic() {
@@ -413,9 +580,19 @@ void AudioEngine::openMic() {
 
     m_audioSourceDevice = m_audioSource->start();
     if (!m_audioSourceDevice) {
-        qCWarning(qk4Audio) << "AudioEngine: Failed to start microphone device";
+        qCWarning(qk4Audio, "AudioEngine: failed to start microphone device (QAudioSource error %d) - NO TX AUDIO",
+                  static_cast<int>(m_audioSource->error()));
         return;
     }
+
+    // The format the source actually runs at, which need not be the one we asked for: Qt's FFmpeg
+    // backend resamples, so a request can succeed against a device whose hardware rate is quite
+    // different. Logging it distinguishes "we are getting what we asked for" from "the backend is
+    // quietly converting", and the frame-level qk4.audio.tx peaks then say whether any audio is
+    // actually arriving.
+    const QAudioFormat actual = m_audioSource->format();
+    qCDebug(qk4Audio, "AudioEngine: mic started at %d Hz %d ch, buffer %lld bytes", actual.sampleRate(),
+            actual.channelCount(), static_cast<long long>(m_audioSource->bufferSize()));
 
     m_micEnabled.store(true, std::memory_order_relaxed);
     // Use timer-based polling instead of readyRead signal
@@ -442,31 +619,48 @@ void AudioEngine::flushMicBuffer() {
     m_micReadOffset = 0;
 }
 
-const QByteArray &AudioEngine::resample48kTo12k(const QByteArray &input48k) {
-    // Simple 4:1 decimation with averaging filter (48kHz / 4 = 12kHz).
-    // Writes into the pre-allocated m_resampleBuf12k member; resize() at the
-    // pre-reserved capacity is alloc-free.
-    const float *inputSamples = reinterpret_cast<const float *>(input48k.constData());
-    int inputCount = input48k.size() / sizeof(float);
-    int outputCount = inputCount / 4;
-    const int outputBytes = outputCount * static_cast<int>(sizeof(float));
+const QByteArray &AudioEngine::resampleTo12k(const QByteArray &input, int factor) {
+    // Writes into the pre-allocated m_resampleBuf12k member; resize() at the pre-reserved
+    // capacity is alloc-free.
+    const float *inputSamples = reinterpret_cast<const float *>(input.constData());
+    const int inputCount = static_cast<int>(input.size() / sizeof(float));
+    const int outputCount = AudioDecimator::outputSampleCount(inputCount, factor);
 
-    m_resampleBuf12k.resize(outputBytes);
-    float *output = reinterpret_cast<float *>(m_resampleBuf12k.data());
-
-    for (int i = 0; i < outputCount; i++) {
-        // Average 4 samples for simple low-pass filtering
-        int srcIdx = i * 4;
-        float sum = 0.0f;
-        int count = 0;
-        for (int j = 0; j < 4 && (srcIdx + j) < inputCount; j++) {
-            sum += inputSamples[srcIdx + j];
-            count++;
-        }
-        output[i] = (count > 0) ? (sum / count) : 0.0f;
-    }
-
+    m_resampleBuf12k.resize(outputCount * static_cast<int>(sizeof(float)));
+    AudioDecimator::decimate(inputSamples, inputCount, factor, reinterpret_cast<float *>(m_resampleBuf12k.data()));
     return m_resampleBuf12k;
+}
+
+void AudioEngine::setTxSource(TxSource source) {
+    const int previous = m_txSource.exchange(static_cast<int>(source), std::memory_order_release);
+    if (previous == static_cast<int>(source)) {
+        return;
+    }
+    // Whatever is half-buffered belongs to the old source; carrying it across would splice two
+    // unrelated streams into one transmission.
+    //
+    // WHY queued rather than a direct call: m_micBuffer and m_micReadOffset are plain members owned
+    // by the audio thread, and this setter is called from whichever thread owns the PTT decision.
+    // Only the atomic above may be written from here.
+    QMetaObject::invokeMethod(this, "flushMicBuffer", Qt::QueuedConnection);
+}
+
+void AudioEngine::feedTciTxAudio(const QByteArray &f32Mono48k) {
+    // Ignored unless TCI owns the transmitter. A stale frame arriving after the operator took the
+    // microphone back must not reach the radio.
+    if (txSource() != TxSource::Tci || f32Mono48k.isEmpty()) {
+        return;
+    }
+    // WHY a fixed factor, not the microphone's: TCI audio is 48 kHz whatever device the mic opened
+    // on. The mic's factor is 2 for a 24 kHz headset (twice the samples: wrong pitch and timing)
+    // and 0 if the mic failed to open (silence).
+    static constexpr int TCI_DECIMATION_FACTOR = AudioDecimator::factorFor(48000);
+    const QByteArray &data12k = resampleTo12k(f32Mono48k, TCI_DECIMATION_FACTOR);
+    // The TCI level, NOT the microphone's. An operator-facing level is required here rather than
+    // optional - WSJT-X sends at or near full scale and drove the K4 far too hard without one -
+    // but it has to be its own, because the cubic curve puts a microphone and a line-level digital
+    // source in completely different parts of the slider.
+    bufferAndEmitTxFrames(data12k, m_tciTxGain.load(std::memory_order_relaxed));
 }
 
 void AudioEngine::onMicDataReady() {
@@ -475,31 +669,72 @@ void AudioEngine::onMicDataReady() {
 
     QByteArray data48k = m_audioSourceDevice->readAll();
     if (data48k.isEmpty()) {
-        // No data available yet - this is normal, just wait for next poll
+        // An empty read is normal between polls. Silence that PERSISTS while the operator is
+        // keying is not - see the watchdog members for why this is worth distinguishing.
+        if (m_pttActive.load(std::memory_order_acquire) && txSource() == TxSource::Microphone) {
+            const qint64 now = QDateTime::currentMSecsSinceEpoch();
+            if (m_firstEmptyPollMs == 0) {
+                m_firstEmptyPollMs = now;
+            } else if (!m_micSilenceReported && now - m_firstEmptyPollMs > MIC_SILENCE_WARN_MS) {
+                m_micSilenceReported = true;
+                const QAudioFormat actual = m_audioSource ? m_audioSource->format() : QAudioFormat();
+                qCWarning(qk4Audio,
+                          "AudioEngine: microphone has delivered NO audio for %lld ms while transmitting - "
+                          "the device opened but is producing nothing, so nothing is going on the air. "
+                          "Device \"%s\" running at %d Hz %d ch, QAudioSource state %d error %d. "
+                          "Bluetooth headsets are the usual cause: they must switch to HFP for the "
+                          "microphone, which cannot happen while a stereo (A2DP) playback stream is open "
+                          "on the same device - ours is on \"%s\".",
+                          static_cast<long long>(now - m_firstEmptyPollMs),
+                          qUtf8Printable(m_activeMicDeviceId.isEmpty() ? QByteArray("(default)") : m_activeMicDeviceId),
+                          actual.sampleRate(), actual.channelCount(),
+                          m_audioSource ? static_cast<int>(m_audioSource->state()) : -1,
+                          m_audioSource ? static_cast<int>(m_audioSource->error()) : -1,
+                          qUtf8Printable(m_activeOutputDeviceId.isEmpty() ? QByteArray("(default)")
+                                                                          : m_activeOutputDeviceId));
+            }
+        }
+        return;
+    }
+    m_firstEmptyPollMs = 0;
+    m_micSilenceReported = false;
+
+    // WHY drain but discard when TCI owns TX: the QAudioSource stays open across the whole
+    // connection (see openMic), so its buffer has to keep being emptied or it overruns. What must
+    // not happen is the room being transmitted while a TCI client holds the transmitter.
+    if (txSource() != TxSource::Microphone) {
         return;
     }
 
     // Resample from 48kHz to 12kHz (writes into pre-allocated member buffer)
-    const QByteArray &data12k = resample48kTo12k(data48k);
+    // The factor for the rate the microphone actually opened at, NOT assumed - see
+    // audio/audiodecimator.h.
+    const QByteArray &data12k = resampleTo12k(data48k, m_micDecimationFactor);
+    bufferAndEmitTxFrames(data12k, m_micGain.load(std::memory_order_relaxed));
+}
 
-    // Convert Float32 to S16LE, apply gain, and buffer for frame-based emission
-    const float *floatData = reinterpret_cast<const float *>(data12k.constData());
-    int floatSamples = data12k.size() / sizeof(float);
+void AudioEngine::bufferAndEmitTxFrames(const QByteArray &pcm12k, float gain) {
+    // Apply mic gain and buffer as Float32 for frame-based emission.
+    //
+    // WHY the buffer stays float. This used to quantise to S16 here, before the wire format was
+    // even chosen, which discarded bits in proportion to the gain: at a 30% mic slider only ~10.8
+    // bits survived, and quiet audio landed on a handful of codes. Undithered error at that depth
+    // correlates with the signal, so it is harmonic distortion, not noise — on the bench it was a
+    // tonal buzz on dead air that disappeared entirely once the gain was raised. Quantising once,
+    // at the wire format, is what encodeAndSendFrame now does.
+    const float *floatData = reinterpret_cast<const float *>(pcm12k.constData());
+    int floatSamples = pcm12k.size() / sizeof(float);
 
-    const float gain = m_micGain.load(std::memory_order_relaxed);
-
-    // Convert Float32 to S16LE with gain applied (cubic curve already baked into m_micGain)
     for (int i = 0; i < floatSamples; i++) {
-        float sample = qBound(-1.0f, floatData[i] * gain, 1.0f);
-        qint16 s16Sample = static_cast<qint16>(sample * 32767.0f);
-        m_micBuffer.append(reinterpret_cast<const char *>(&s16Sample), sizeof(qint16));
+        const float sample = qBound(-1.0f, floatData[i] * gain, 1.0f);
+        m_micBuffer.append(reinterpret_cast<const char *>(&sample), sizeof(float));
     }
 
     // Emit complete frames (size matches SL tier: 240/480/720/1440 samples).
     // m_micReadOffset advances per emitted frame instead of remove(0, n)'s O(N)
     // memmove on every poll. We compact only when the offset has grown past
     // half the buffer's size — keeps amortized work O(1) per frame.
-    const int frameBytes = m_frameSamples.load(std::memory_order_relaxed) * static_cast<int>(sizeof(qint16));
+    const int frameBytes = m_frameSamples.load(std::memory_order_relaxed) * static_cast<int>(sizeof(float));
     const int frameSamples = m_frameSamples.load(std::memory_order_relaxed);
     const bool pttActive = m_pttActive.load(std::memory_order_acquire);
     const int encodeMode = m_encodeMode.load(std::memory_order_relaxed);
@@ -520,54 +755,108 @@ void AudioEngine::onMicDataReady() {
     }
 }
 
-void AudioEngine::encodeAndSendFrame(const QByteArray &s16leMonoFrame, int frameSamples, int encodeMode) {
-    // Runs on the audio thread. Translates the captured S16LE mono frame into
+void AudioEngine::encodeAndSendFrame(const QByteArray &f32MonoFrame, int frameSamples, int encodeMode) {
+    // Runs on the audio thread. Translates the captured Float32 mono frame into
     // the K4 wire format and emits txPacketReady. PR 12 moved this logic out
     // of AudioController::onMicrophoneFrame (which ran on the main thread)
     // so a busy GUI event loop no longer stalls voice TX packet emission.
+    //
+    // Quantisation happens HERE and nowhere earlier, so each mode gets the full depth its wire
+    // format allows: 24 bits for EM0, 16 for EM1, and none at all for the Opus modes.
     QByteArray audioData;
+    const float *samples = reinterpret_cast<const float *>(f32MonoFrame.constData());
+    const int sampleCount = static_cast<int>(f32MonoFrame.size() / sizeof(float));
 
     switch (encodeMode) {
-    case 0: // EM0 — RAW 32-bit float stereo
-    {
-        const qint16 *samples = reinterpret_cast<const qint16 *>(s16leMonoFrame.constData());
-        const int sampleCount = s16leMonoFrame.size() / static_cast<int>(sizeof(qint16));
-        audioData.resize(sampleCount * 2 * static_cast<int>(sizeof(float))); // Stereo output
-        float *output = reinterpret_cast<float *>(audioData.data());
-        for (int i = 0; i < sampleCount; i++) {
-            const float normalized = static_cast<float>(samples[i]) * OpusDecoder::NORMALIZE_16BIT;
-            output[i * 2] = normalized;     // Left = Main
-            output[i * 2 + 1] = normalized; // Right = Sub (duplicate)
-        }
+    case 0: // EM0 — RAW S32LE stereo, 24-bit. See audio/rawaudioformat.h.
+        audioData.resize(RawAudioFormat::em0BytesFor(sampleCount));
+        RawAudioFormat::encodeEm0(samples, sampleCount, reinterpret_cast<unsigned char *>(audioData.data()));
         break;
-    }
 
     case 1: // EM1 — RAW 16-bit S16LE stereo
-    {
-        const qint16 *samples = reinterpret_cast<const qint16 *>(s16leMonoFrame.constData());
-        const int sampleCount = s16leMonoFrame.size() / static_cast<int>(sizeof(qint16));
-        audioData.resize(sampleCount * 2 * static_cast<int>(sizeof(qint16))); // Stereo output
-        qint16 *output = reinterpret_cast<qint16 *>(audioData.data());
-        for (int i = 0; i < sampleCount; i++) {
-            output[i * 2] = samples[i];     // Left = Main
-            output[i * 2 + 1] = samples[i]; // Right = Sub (duplicate)
-        }
+        audioData.resize(RawAudioFormat::em1BytesFor(sampleCount));
+        RawAudioFormat::encodeEm1(samples, sampleCount, reinterpret_cast<unsigned char *>(audioData.data()));
         break;
-    }
 
     case 2: // EM2 — Opus int
     case 3: // EM3 — Opus float
     default:
+        // Opus takes float natively, so these never quantise.
         if (m_opusEncoder)
-            audioData = m_opusEncoder->encode(s16leMonoFrame, frameSamples);
+            audioData = m_opusEncoder->encodeFloat(f32MonoFrame, frameSamples);
         break;
     }
 
     if (audioData.isEmpty())
         return;
 
+    // WHY: EM0 and EM1 put raw samples on the wire, so a wrong container format is silent
+    // here and only wrong at the radio - nothing QK4 can hear distinguishes it from a dead
+    // mic. This records what actually left the machine. The per-sample scan is why the
+    // category is off by default and why every frame after a transmission's first is
+    // throttled; on the RT audio thread this is not free.
+    if (qk4AudioTx().isDebugEnabled()) {
+        // Scan every frame so the running peak is a true maximum, but only emit on the throttle.
+        for (int i = 0; i < sampleCount; i++)
+            m_txPeakSinceKey = qMax(m_txPeakSinceKey, std::fabs(samples[i]));
+
+        if (m_txSequence == 0 || m_txSequence % TX_DIAG_FRAME_INTERVAL == 0)
+            logTxFrameDiagnostic(f32MonoFrame, audioData, frameSamples, encodeMode);
+    }
+
     QByteArray packet = Protocol::buildAudioPacket(audioData, m_txSequence++, encodeMode, frameSamples);
     emit txPacketReady(packet);
+}
+
+void AudioEngine::logTxFrameDiagnostic(const QByteArray &f32MonoFrame, const QByteArray &wireData, int frameSamples,
+                                       int encodeMode) const {
+    const float *in = reinterpret_cast<const float *>(f32MonoFrame.constData());
+    const int inCount = static_cast<int>(f32MonoFrame.size() / sizeof(float));
+    float framePeak = 0.0f;
+    for (int i = 0; i < inCount; i++)
+        framePeak = qMax(framePeak, std::fabs(in[i]));
+
+    // dBFS rather than raw counts: the TX path is float end to end now, and a level in dB is
+    // comparable across encode modes whose containers have different full scales.
+    auto dbfs = [](float v) { return v > 0.0f ? 20.0 * std::log10(static_cast<double>(v)) : -999.0; };
+
+    // The peak is measured AFTER the gain, so a quiet frame is otherwise ambiguous between a quiet
+    // room and a turned-down slider - an ambiguity that cost a bench cycle on 2026-09-19. Report
+    // both the effective gain and the slider position it came from: both setters cube the slider,
+    // so the cube root recovers exactly what the operator set.
+    //
+    // WHICH gain is named matters now that there are two. This function encodes frames from both
+    // sources, so reporting m_micGain unconditionally would have made a TCI bench log describe a
+    // control that had nothing to do with the level being measured.
+    const bool fromTci = txSource() == TxSource::Tci;
+    const double gain = static_cast<double>((fromTci ? m_tciTxGain : m_micGain).load(std::memory_order_relaxed));
+    const double slider = std::cbrt(gain) * 100.0;
+    qCDebug(qk4AudioTx,
+            "TX frame: EM%d seq=%u frameSamples=%d peak=%.1f dBFS peak-since-key=%.1f dBFS "
+            "(%s slider %.0f%% -> gain %.4f) wire-payload=%d",
+            encodeMode, static_cast<unsigned>(m_txSequence), frameSamples, dbfs(framePeak), dbfs(m_txPeakSinceKey),
+            fromTci ? "TCI TX" : "mic", slider, gain, static_cast<int>(wireData.size()));
+
+    if (encodeMode != 0)
+        return;
+
+    // WHY: report the EM0 payload against the format's known full scale. AUD-003 survived
+    // because nothing QK4 can hear tells a wrong container apart from a dead mic - the bytes
+    // are only wrong at the radio. A number here makes a future format mistake obvious in a
+    // bench log instead of an opinion about how the monitor sounded.
+    const unsigned char *bytes = reinterpret_cast<const unsigned char *>(wireData.constData());
+    const int words = static_cast<int>(wireData.size() / 4);
+    qint64 wirePeak = 0;
+    for (int i = 0; i < words; i++) {
+        quint32 raw = static_cast<quint32>(bytes[i * 4]);
+        raw |= static_cast<quint32>(bytes[i * 4 + 1]) << 8;
+        raw |= static_cast<quint32>(bytes[i * 4 + 2]) << 16;
+        raw |= static_cast<quint32>(bytes[i * 4 + 3]) << 24;
+        wirePeak = qMax(wirePeak, qAbs(static_cast<qint64>(static_cast<qint32>(raw))));
+    }
+    const double fullScale = static_cast<double>(RawAudioFormat::EM0_FULL_SCALE);
+    qCDebug(qk4AudioTx, "  EM0 wire peak=%lld S32LE = %.4f of the %.0f full scale", static_cast<long long>(wirePeak),
+            static_cast<double>(wirePeak) / fullScale, fullScale);
 }
 
 void AudioEngine::setEncodeMode(int mode) {
@@ -579,8 +868,9 @@ void AudioEngine::setPttActive(bool active) {
     // main thread, so this method body runs on the audio thread.
     m_pttActive.store(active, std::memory_order_release);
     if (active) {
-        m_txSequence = 0; // Restart sequence counter for each transmission
-        openMic();        // Idempotent — see openMic() WHY comment
+        m_txSequence = 0;     // Restart sequence counter for each transmission
+        m_txPeakSinceKey = 0; // qk4.audio.tx running peak is per transmission
+        openMic();            // Idempotent — see openMic() WHY comment
         // Flush partial-frame tail from previous transmission so it can't leak
         // into this one's first frame.
         m_micBuffer.clear();
@@ -592,6 +882,10 @@ void AudioEngine::setPttActive(bool active) {
 
 void AudioEngine::setMainVolume(float volume) {
     m_mainVolume.store(qBound(0.0f, volume, 1.0f), std::memory_order_relaxed);
+}
+
+void AudioEngine::setRxBoostDb(int db) {
+    m_rxBoostGain.store(RxOutputStage::boostGain(db), std::memory_order_relaxed);
 }
 
 void AudioEngine::setSubVolume(float volume) {
@@ -621,6 +915,18 @@ void AudioEngine::setMicGain(float gain) {
     // e.g., 40% slider → 0.064x gain, 70% → 0.343x, 100% → 1.0x (unity)
     float cubic = gain * gain * gain;
     m_micGain.store(qBound(0.0f, cubic, 1.0f), std::memory_order_relaxed);
+    // Recorded so a bench log shows slider moves between transmissions, not only during them.
+    qCDebug(qk4AudioTx, "mic slider %.0f%% -> gain %.4f", static_cast<double>(gain) * 100.0,
+            static_cast<double>(cubic));
+}
+
+void AudioEngine::setTciTxGain(float gain) {
+    // Identical curve to setMicGain, deliberately: the two controls behave the same way so a
+    // position means the same thing on both, even though the useful range differs by source.
+    const float cubic = gain * gain * gain;
+    m_tciTxGain.store(qBound(0.0f, cubic, 1.0f), std::memory_order_relaxed);
+    qCDebug(qk4AudioTx, "TCI TX slider %.0f%% -> gain %.4f", static_cast<double>(gain) * 100.0,
+            static_cast<double>(cubic));
 }
 
 void AudioEngine::setFrameSamples(int samples) {
@@ -669,34 +975,45 @@ QList<QPair<QString, QString>> AudioEngine::availableInputDevices() {
 }
 
 void AudioEngine::setOutputDevice(const QString &deviceId) {
-    if (m_selectedOutputDeviceId != deviceId) {
-        m_selectedOutputDeviceId = deviceId;
-
-        // Restart audio output with the new device if currently running
-        if (m_audioSink) {
-            m_audioSink->stop();
-            delete m_audioSink;
-            m_audioSink = nullptr;
-            m_audioSinkDevice = nullptr;
-
-            setupAudioOutput();
-        }
+    if (m_selectedOutputDeviceId == deviceId) {
+        return;
     }
+    m_selectedOutputDeviceId = deviceId;
+
+    // Unconditionally, NOT `if (m_audioSink)`. Picking a working device in Options is exactly how
+    // an operator recovers from a device that could not be opened, so the one case that most needs
+    // to rebuild is the one where there is nothing to tear down.
+    rebuildOutput();
 }
 
 void AudioEngine::onSystemDefaultInputChanged() {
-    // Only follow the OS default when the user hasn't pinned a specific device.
-    if (!m_selectedMicDeviceId.isEmpty())
-        return;
-    // Nothing built yet — the next openMic() resolves the current default fresh.
-    if (!m_audioSource)
-        return;
-    const QString newDefault = QMediaDevices::defaultAudioInput().id();
-    if (newDefault.isEmpty() || newDefault == m_activeMicDeviceId)
-        return; // effective default unchanged
+    // Fires when the device LIST changes, not only when the default moves - which is what lets a
+    // pinned device be reclaimed the moment it reappears. See audio/audiodeviceselection.h.
+    bool pinnedPresent = false;
+    if (!m_selectedMicDeviceId.isEmpty()) {
+        for (const QAudioDevice &d : QMediaDevices::audioInputs()) {
+            if (d.id() == m_selectedMicDeviceId) {
+                pinnedPresent = true;
+                break;
+            }
+        }
+    }
 
-    // Rebuild the source on the new default, preserving the open/closed state.
-    bool wasOpen = m_micEnabled.load(std::memory_order_relaxed);
+    const auto decision = AudioDeviceSelection::onDeviceListChanged(
+        m_selectedMicDeviceId.toStdString(), m_activeMicDeviceId.toStdString(),
+        QMediaDevices::defaultAudioInput().id().toStdString(), pinnedPresent, m_audioSource != nullptr);
+
+    // WHY logged either way: a handler that never runs and a handler that runs and declines to act
+    // are indistinguishable from outside, which cost a bench session on 2026-09-19.
+    qCDebug(qk4Audio, "AudioEngine: input device list changed (selection=\"%s\", active=\"%s\") -> %s",
+            m_selectedMicDeviceId.isEmpty() ? "system default" : qUtf8Printable(m_selectedMicDeviceId),
+            qUtf8Printable(m_activeMicDeviceId), decision.reason);
+
+    if (decision.action != AudioDeviceSelection::Action::SwitchTo)
+        return;
+
+    // Rebuild the source on the chosen device, preserving the open/closed state.
+    const bool wasOpen = m_micEnabled.load(std::memory_order_relaxed);
     if (wasOpen)
         closeMic();
     delete m_audioSource;
@@ -706,19 +1023,34 @@ void AudioEngine::onSystemDefaultInputChanged() {
 }
 
 void AudioEngine::onSystemDefaultOutputChanged() {
-    if (!m_selectedOutputDeviceId.isEmpty())
-        return;
-    if (!m_audioSink)
-        return; // output not started yet — start() will resolve the current default
-    const QString newDefault = QMediaDevices::defaultAudioOutput().id();
-    if (newDefault.isEmpty() || newDefault == m_activeOutputDeviceId)
+    bool pinnedPresent = false;
+    if (!m_selectedOutputDeviceId.isEmpty()) {
+        for (const QAudioDevice &d : QMediaDevices::audioOutputs()) {
+            if (d.id() == m_selectedOutputDeviceId) {
+                pinnedPresent = true;
+                break;
+            }
+        }
+    }
+
+    // With no sink we are in the failed state, and any list change is a chance to get out of it -
+    // so `haveStream` is reported as true only when one exists, and the no-sink case is handled
+    // below by rebuilding regardless of the decision.
+    const auto decision = AudioDeviceSelection::onDeviceListChanged(
+        m_selectedOutputDeviceId.toStdString(), m_activeOutputDeviceId.toStdString(),
+        QMediaDevices::defaultAudioOutput().id().toStdString(), pinnedPresent, m_audioSink != nullptr);
+
+    qCDebug(qk4Audio, "AudioEngine: output device list changed (selection=\"%s\", active=\"%s\") -> %s",
+            m_selectedOutputDeviceId.isEmpty() ? "system default" : qUtf8Printable(m_selectedOutputDeviceId),
+            qUtf8Printable(m_activeOutputDeviceId), decision.reason);
+
+    if (!m_outputRunning)
+        return; // not producing output yet - start() will resolve the current default
+
+    if (m_audioSink && decision.action != AudioDeviceSelection::Action::SwitchTo)
         return;
 
-    m_audioSink->stop();
-    delete m_audioSink;
-    m_audioSink = nullptr;
-    m_audioSinkDevice = nullptr;
-    setupAudioOutput();
+    rebuildOutput();
 }
 
 QString AudioEngine::outputDeviceId() const {

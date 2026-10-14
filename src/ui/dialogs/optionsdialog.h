@@ -12,21 +12,25 @@ class RadioState;
 class AudioController;
 class HardwareController;
 class CatServer;
+class TciController;
 class KPA1500Client;
 class DxClusterController;
 class AboutPage;
 class StationPage;
+class DisplayPage;
 class AudioInputPage;
 class AudioOutputPage;
 class RigControlPage;
+class TciServerPage;
 class CwKeyerPage;
 class KpodPage;
 class Kpa1500Page;
 class DxClusterPage;
 
 /**
- * @brief Tabbed Options dialog. Left QListWidget drives a QStackedWidget holding the 8 option
- *        pages (About, Audio Input/Output, Rig Control, CW Keyer, KPOD, KPA1500, DX Cluster).
+ * @brief Tabbed Options dialog. Left QListWidget drives a QStackedWidget holding the option
+ *        pages (About, Station, Display, Audio Input/Output, Rig Control, TCI Server, CW Keyer,
+ *        KPOD, KPA1500, DX Cluster).
  *        Pages are lazy-constructed on first tab activation via @c ensurePageCreated.
  */
 class OptionsDialog : public QDialog {
@@ -36,9 +40,11 @@ public:
     enum Page {
         PageAbout = 0,
         PageStation,
+        PageDisplay,
         PageAudioInput,
         PageAudioOutput,
         PageRigControl,
+        PageTciServer,
         PageCwKeyer,
         PageKpod,
         PageKpa1500,
@@ -47,8 +53,9 @@ public:
     };
 
     explicit OptionsDialog(RadioState *radioState, AudioController *audioController,
-                           HardwareController *hardwareController, CatServer *catServer, KPA1500Client *kpa1500Client,
-                           DxClusterController *dxClusterController, QWidget *parent = nullptr);
+                           HardwareController *hardwareController, CatServer *catServer, TciController *tciController,
+                           KPA1500Client *kpa1500Client, DxClusterController *dxClusterController,
+                           QWidget *parent = nullptr);
     ~OptionsDialog();
 
 protected:
@@ -63,6 +70,7 @@ private:
     RadioState *m_radioState;
     AudioController *m_audioController;
     HardwareController *m_hardwareController;
+    TciController *m_tciController = nullptr;
     CatServer *m_catServer;
     KPA1500Client *m_kpa1500Client;
     DxClusterController *m_dxClusterController;
@@ -74,8 +82,10 @@ private:
     // Page widgets
     AboutPage *m_aboutPage = nullptr;
     StationPage *m_stationPage = nullptr;
+    DisplayPage *m_displayPage = nullptr;
     AudioInputPage *m_audioInputPage = nullptr;
     AudioOutputPage *m_audioOutputPage = nullptr;
+    TciServerPage *m_tciServerPage = nullptr;
     RigControlPage *m_rigControlPage = nullptr;
     CwKeyerPage *m_cwKeyerPage = nullptr;
     KpodPage *m_kpodPage = nullptr;

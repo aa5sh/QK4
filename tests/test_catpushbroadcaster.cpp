@@ -27,6 +27,11 @@ private slots:
     void testTwoClientsDifferentAiModes();
     void testCompoundProcessingDiff();
     void testRitXitCompoundEmitsAllThree();
+    void testPushPowerCarriesRangeLetter();
+    void testPushBandwidthInTenHertzUnits();
+    void testPushNoiseBlankerLevelChange();
+    void testPushNoiseReductionLevelChange();
+    void testPushVoxOnlyForTheCurrentMode();
 
 private:
     struct SocketPair {
@@ -149,6 +154,88 @@ void TestCatPushBroadcaster::testPushFrequencyOnRadioStateChange() {
     QCOMPARE(received, QByteArray("FA00014074000;"));
 }
 
+// #134. Without the letter a subscriber reads 0.6 W as 6 W, and XVTR milliwatts could not be pushed
+// at all - they were skipped for exactly that reason.
+void TestCatPushBroadcaster::testPushPowerCarriesRangeLetter() {
+    auto pair = makeSocketPair();
+    m_broadcaster->addClient(pair.serverSide);
+    m_broadcaster->setClientAiMode(pair.serverSide, 2);
+
+    m_radioState->parseCATCommand("PC006L;");
+    QCoreApplication::processEvents();
+    QCOMPARE(waitForBytes(pair.clientSide, 7), QByteArray("PC006L;"));
+
+    m_radioState->parseCATCommand("PC050X;");
+    QCoreApplication::processEvents();
+    QCOMPARE(waitForBytes(pair.clientSide, 7), QByteArray("PC050X;"));
+}
+
+// #134. A subscriber was pushed BW3000; for a 3000 Hz filter, which reads as 30 kHz.
+void TestCatPushBroadcaster::testPushBandwidthInTenHertzUnits() {
+    auto pair = makeSocketPair();
+    m_broadcaster->addClient(pair.serverSide);
+    m_broadcaster->setClientAiMode(pair.serverSide, 2);
+
+    m_radioState->parseCATCommand("BW0300;");
+    QCoreApplication::processEvents();
+    QCOMPARE(waitForBytes(pair.clientSide, 7), QByteArray("BW0300;"));
+}
+
+// #134. Only on/off was compared, so a level change - which the radio reports - never reached a
+// subscriber. Captured NB0301 is level 03, off, filter 1.
+void TestCatPushBroadcaster::testPushNoiseBlankerLevelChange() {
+    m_radioState->parseCATCommand("NB0301;");
+    QCoreApplication::processEvents(); // seeds the cache
+
+    auto pair = makeSocketPair();
+    m_broadcaster->addClient(pair.serverSide);
+    m_broadcaster->setClientAiMode(pair.serverSide, 2);
+
+    m_radioState->parseCATCommand("NB0501;");
+    QCoreApplication::processEvents();
+    QCOMPARE(waitForBytes(pair.clientSide, 7), QByteArray("NB0501;"));
+}
+
+// #134. Same as NB: a level change never reached a subscriber, and the frame was NR0/NR1.
+void TestCatPushBroadcaster::testPushNoiseReductionLevelChange() {
+    m_radioState->parseCATCommand("NR050;");
+    QCoreApplication::processEvents(); // seeds the cache
+
+    auto pair = makeSocketPair();
+    m_broadcaster->addClient(pair.serverSide);
+    m_broadcaster->setClientAiMode(pair.serverSide, 2);
+
+    m_radioState->parseCATCommand("NR070;");
+    QCoreApplication::processEvents();
+    QCOMPARE(waitForBytes(pair.clientSide, 6), QByteArray("NR070;"));
+}
+
+// #134. A VOX change in another mode group pushed VX1 - VOX on - to a client in DATA, where it
+// was off. Only the current mode's group is reported now.
+void TestCatPushBroadcaster::testPushVoxOnlyForTheCurrentMode() {
+    m_radioState->parseCATCommand("MD6;");
+    m_radioState->parseCATCommand("VXD0;");
+    QCoreApplication::processEvents();
+
+    auto pair = makeSocketPair();
+    m_broadcaster->addClient(pair.serverSide);
+    m_broadcaster->setClientAiMode(pair.serverSide, 2);
+
+    m_radioState->parseCATCommand("VXC1;"); // CW group: not the current mode
+    QCoreApplication::processEvents();
+    QElapsedTimer timer;
+    timer.start();
+    while (timer.elapsed() < 100) {
+        pair.clientSide->waitForReadyRead(20);
+        QCoreApplication::processEvents();
+    }
+    QCOMPARE(pair.clientSide->bytesAvailable(), qint64(0));
+
+    m_radioState->parseCATCommand("VXD1;"); // DATA group: the current mode
+    QCoreApplication::processEvents();
+    QCOMPARE(waitForBytes(pair.clientSide, 5), QByteArray("VXD1;"));
+}
+
 void TestCatPushBroadcaster::testPollingClientReceivesNothing() {
     auto pair = makeSocketPair();
     m_broadcaster->addClient(pair.serverSide);
@@ -208,8 +295,8 @@ void TestCatPushBroadcaster::testCompoundProcessingDiff() {
     m_radioState->parseCATCommand("NB050;");
     QCoreApplication::processEvents();
 
-    QByteArray received = waitForBytes(pair.clientSide, 4);
-    QCOMPARE(received, QByteArray("NB0;"));
+    QByteArray received = waitForBytes(pair.clientSide, 7);
+    QCOMPARE(received, QByteArray("NB0500;"));
 }
 
 void TestCatPushBroadcaster::testRitXitCompoundEmitsAllThree() {

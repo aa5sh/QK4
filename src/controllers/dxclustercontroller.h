@@ -30,6 +30,9 @@ public:
     void connectCluster(int index, const QString &host, quint16 port, const QString &callsign);
     void disconnectCluster(int index);
     void disconnectAll();
+    // The saved cluster at `index` was removed from the list: close its connection, and move every
+    // later connection down one so each stays keyed by its entry's new row.
+    void removeCluster(int index);
     DxClusterClient::ConnectionState clusterState(int index) const;
     bool isAnyConnected() const;
 
@@ -53,7 +56,13 @@ private slots:
 
 private:
     DxClusterInstance &ensureInstance(int index);
+    // The current key of `client`, or -1 once its instance is gone. Signal handlers look the index
+    // up at delivery rather than capturing it, because removeCluster() renumbers instances.
+    int indexOf(const DxClusterClient *client) const;
     void destroyInstance(int index);
+    // Drops the spots that came from the cluster at `index`, leaving every other cluster's intact.
+    // A spot both clusters reported is held once, under whichever reported it last.
+    void clearSpotsFrom(int index);
     void pruneExpiredSpots();
 
     QMap<int, DxClusterInstance> m_instances;

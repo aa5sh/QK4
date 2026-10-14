@@ -145,6 +145,12 @@ MenuOverlayWidget::MenuOverlayWidget(MenuModel *model, QWidget *parent) : QWidge
     setupUi();
 
     connect(m_model, &MenuModel::menuValueChanged, this, &MenuOverlayWidget::onMenuValueChanged);
+
+    // The row widgets hold raw MenuItem * into the model's map. On disconnect MenuController
+    // clears that map, so they have to go with it — otherwise the next ME update after a
+    // reconnect walks m_itemWidgets and dereferences freed memory. Reopening the menu
+    // repopulates from the new items.
+    connect(m_model, &MenuModel::modelCleared, this, &MenuOverlayWidget::clearItemWidgets);
 }
 
 void MenuOverlayWidget::setupUi() {
@@ -334,13 +340,18 @@ void MenuOverlayWidget::onSearchTextChanged(const QString &text) {
     populateItems();
 }
 
-void MenuOverlayWidget::populateItems() {
-    // Clear existing
+void MenuOverlayWidget::clearItemWidgets() {
     for (auto *widget : m_itemWidgets) {
         m_listLayout->removeWidget(widget);
         delete widget;
     }
     m_itemWidgets.clear();
+    m_selectedIndex = 0;
+    m_editMode = false;
+}
+
+void MenuOverlayWidget::populateItems() {
+    clearItemWidgets();
 
     // Add menu items (filtered if search is active)
     QVector<MenuItem *> items =
@@ -661,15 +672,16 @@ void MenuOverlayWidget::updateNormButton() {
     }
 
     MenuItem *item = m_itemWidgets[m_selectedIndex]->menuItem();
-    bool isDefault = (item->currentValue == item->defaultValue);
-
-    if (isDefault) {
-        // Grey - value is at default
-        m_normBtn->setStyleSheet(normBtnDefault);
-    } else {
-        // White/bright - value differs from default
-        m_normBtn->setStyleSheet(normBtnActive);
+    if (item->isReadOnly()) {
+        // NORM cannot change a read-only item, so it must not light up for one either
+        m_normBtn->setStyleSheet(normBtnDisabled);
+        return;
     }
+
+    // Lit when the item IS at its default - NORM reads "this is the normal setting". Pressing it on
+    // an item that is not sets the default, and the value change re-runs this and lights it.
+    const bool isDefault = (item->currentValue == item->defaultValue);
+    m_normBtn->setStyleSheet(isDefault ? normBtnActive : normBtnDefault);
 }
 
 void MenuOverlayWidget::onMenuValueChanged(int menuId, int newValue) {

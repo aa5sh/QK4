@@ -43,29 +43,40 @@ DxClusterInstance &DxClusterController::ensureInstance(int index) {
         inst.client->moveToThread(inst.thread);
         inst.thread->start();
 
-        // Wire signals with index captured
-        connect(inst.client, &DxClusterClient::stateChanged, this, [this, index](DxClusterClient::ConnectionState s) {
-            if (m_instances.contains(index))
-                m_instances[index].state = s;
-            // When a cluster disconnects, purge all spots and refresh overlay
-            if (s == DxClusterClient::Disconnected) {
-                m_spots.clear();
-                emit spotsUpdated();
-            }
+        // Wire signals by client, not by index: removeCluster() renumbers instances, so the index a
+        // handler reports is looked up when the signal arrives. A signal still queued from a client
+        // whose instance has been destroyed finds no index and is dropped.
+        DxClusterClient *client = inst.client;
+        connect(inst.client, &DxClusterClient::stateChanged, this, [this, client](DxClusterClient::ConnectionState s) {
+            const int index = indexOf(client);
+            if (index < 0)
+                return;
+            m_instances[index].state = s;
+            // Only this cluster's spots: the others are still connected and still current.
+            if (s == DxClusterClient::Disconnected)
+                clearSpotsFrom(index);
             emit clusterStateChanged(index, s);
         });
-        connect(inst.client, &DxClusterClient::errorOccurred, this,
-                [this, index](const QString &error) { emit clusterError(index, error); });
-        connect(inst.client, &DxClusterClient::rawLineReceived, this, [this, index](const QString &line) {
-            if (m_instances.contains(index)) {
-                auto &buf = m_instances[index].consoleBuffer;
-                buf.append(line);
-                while (buf.size() > DxClusterInstance::MAX_CONSOLE_LINES)
-                    buf.removeFirst();
-            }
+        connect(inst.client, &DxClusterClient::errorOccurred, this, [this, client](const QString &error) {
+            const int index = indexOf(client);
+            if (index >= 0)
+                emit clusterError(index, error);
+        });
+        connect(inst.client, &DxClusterClient::rawLineReceived, this, [this, client](const QString &line) {
+            const int index = indexOf(client);
+            if (index < 0)
+                return;
+            auto &buf = m_instances[index].consoleBuffer;
+            buf.append(line);
+            while (buf.size() > DxClusterInstance::MAX_CONSOLE_LINES)
+                buf.removeFirst();
             emit clusterLineReceived(index, line);
         });
-        connect(inst.client, &DxClusterClient::spotReceived, this, [this](const DxSpot &spot) {
+        connect(inst.client, &DxClusterClient::spotReceived, this, [this, client](const DxSpot &received) {
+            DxSpot spot = received;
+            spot.clusterIndex = indexOf(client);
+            if (spot.clusterIndex < 0)
+                return; // queued from a cluster that has since been removed
             qCDebug(netDxCluster) << "Spot received:" << spot.spottedCall << spot.frequencyHz << spot.mode;
             // Deduplicate: same callsign within 500 Hz replaces older entry
             for (int i = 0; i < m_spots.size(); ++i) {
@@ -131,7 +142,33 @@ void DxClusterController::disconnectCluster(int index) {
     // WHY: clear spots synchronously so the overlay updates immediately. The async lambda on
     // stateChanged is unreliable here — setState() is a no-op when the socket already
     // self-disconnected (server kick / idle timeout), leaving stale spots on screen.
-    clearSpots();
+    clearSpotsFrom(index);
+}
+
+int DxClusterController::indexOf(const DxClusterClient *client) const {
+    for (auto it = m_instances.constBegin(); it != m_instances.constEnd(); ++it) {
+        if (it.value().client == client)
+            return it.key();
+    }
+    return -1;
+}
+
+void DxClusterController::removeCluster(int index) {
+    destroyInstance(index); // closes and deletes its connection, if it had one
+
+    // The removed cluster's spots must not outlive it. Purged here rather than on its stateChanged,
+    // which is dropped: the client is already gone when that signal is delivered.
+    clearSpotsFrom(index);
+
+    // Every later entry moved up a row in the saved list; move its connection, and its spots, with it.
+    QMap<int, DxClusterInstance> renumbered;
+    for (auto it = m_instances.constBegin(); it != m_instances.constEnd(); ++it)
+        renumbered.insert(it.key() > index ? it.key() - 1 : it.key(), it.value());
+    m_instances = renumbered;
+    for (DxSpot &spot : m_spots) {
+        if (spot.clusterIndex > index)
+            --spot.clusterIndex;
+    }
 }
 
 void DxClusterController::disconnectAll() {
@@ -188,6 +225,15 @@ void DxClusterController::clearSpots() {
         m_spots.clear();
         emit spotsUpdated();
     }
+}
+
+void DxClusterController::clearSpotsFrom(int index) {
+    const auto removed = std::remove_if(m_spots.begin(), m_spots.end(),
+                                        [index](const DxSpot &spot) { return spot.clusterIndex == index; });
+    if (removed == m_spots.end())
+        return;
+    m_spots.erase(removed, m_spots.end());
+    emit spotsUpdated();
 }
 
 void DxClusterController::onAgingTimer() {

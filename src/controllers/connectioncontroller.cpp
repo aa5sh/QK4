@@ -23,7 +23,6 @@ ConnectionController::ConnectionController(RadioState *radioState, QObject *pare
     connect(m_tcpClient, &TcpClient::stateChanged, this, &ConnectionController::onStateChanged);
     connect(m_tcpClient, &TcpClient::errorOccurred, this, &ConnectionController::connectionError);
     connect(m_tcpClient, &TcpClient::authenticated, this, &ConnectionController::radioReady);
-    connect(m_tcpClient, &TcpClient::authenticationFailed, this, &ConnectionController::authFailed);
 
     // Re-emit Protocol signals so callers don't need tcpClient()->protocol() chains
     auto *protocol = m_tcpClient->protocol();
@@ -60,15 +59,18 @@ void ConnectionController::connectToRadio(const RadioEntry &radio) {
 
     // Load startup macro so TcpClient can send it before RDY (state dump reflects changes)
     MacroEntry startupMacro = RadioSettings::instance()->macro(MacroIds::Startup);
-    if (!startupMacro.command.isEmpty()) {
-        QString forbidden = MacroIds::checkForbiddenStartupCommand(startupMacro.command);
+    QString macroToSend = startupMacro.command;
+    if (!macroToSend.isEmpty()) {
+        QString forbidden = MacroIds::checkForbiddenStartupCommand(macroToSend);
         if (!forbidden.isEmpty()) {
             qWarning() << "Startup macro blocked: contains forbidden command" << forbidden;
-        } else {
-            QMetaObject::invokeMethod(m_tcpClient, "setStartupMacro", Qt::QueuedConnection,
-                                      Q_ARG(QString, startupMacro.command));
+            macroToSend.clear();
         }
     }
+    // WHY on every attempt, even when empty: TcpClient only clears its copy after sending it on a
+    // successful auth. A macro queued for an attempt that failed would otherwise survive into the
+    // next one and run although the operator has since removed or changed it.
+    QMetaObject::invokeMethod(m_tcpClient, "setStartupMacro", Qt::QueuedConnection, Q_ARG(QString, macroToSend));
 
     qCDebug(qk4Connection) << "Connecting to" << radio.host << ":" << radio.port
                            << (radio.useTls ? "(TLS/PSK)" : "(unencrypted)") << "encodeMode:" << radio.encodeMode

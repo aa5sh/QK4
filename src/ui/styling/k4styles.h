@@ -290,6 +290,9 @@ const QString &comboBox();
 /// Full line edit styling (dark bg, focus border)
 const QString &lineEdit();
 
+/// Full spin box styling (dark bg, focus border, drawn step arrows)
+const QString &spinBox();
+
 /// Checkbox with indicator sizing (enabled)
 const QString &checkBox();
 
@@ -303,6 +306,10 @@ const QString &actionButton();
 const QString &actionButtonSmall();
 
 } // namespace Dialog
+
+/// App-wide fallback for every form control, installed once in main(). A control that sets its own
+/// stylesheet still wins; one that forgets gets the K4 look instead of the operating system's theme.
+const QString &applicationStyleSheet();
 
 } // namespace K4Styles
 

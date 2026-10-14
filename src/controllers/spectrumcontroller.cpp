@@ -44,6 +44,12 @@ void SpectrumController::clearDisplays() {
         m_panadapterA->clear();
     if (m_panadapterB)
         m_panadapterB->clear();
+    // WHY: RadioState::reset() clears the mini-pan flags without emitting, so a mini-pan left open
+    // here would survive a reconnect whose RDY dump reports #MP0 (false → false, no signal).
+    if (m_vfoA)
+        m_vfoA->showNormal();
+    if (m_vfoB)
+        m_vfoB->showNormal();
 }
 
 void SpectrumController::setAmplitudeUnits(bool useSUnits) {
@@ -137,26 +143,26 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
                            .arg(K4Styles::Dimensions::FontSizePopup);
 
     // Main panadapter (A) buttons
-    m_spanDownBtn = new QPushButton("-", m_panadapterA);
-    m_spanDownBtn->setStyleSheet(btnStyle);
-    m_spanDownBtn->setFixedSize(K4Styles::Dimensions::ButtonHeightSmall, K4Styles::Dimensions::ButtonHeightMini);
+    m_zoomOutBtn = new QPushButton("-", m_panadapterA);
+    m_zoomOutBtn->setStyleSheet(btnStyle);
+    m_zoomOutBtn->setFixedSize(K4Styles::Dimensions::ButtonHeightSmall, K4Styles::Dimensions::ButtonHeightMini);
 
-    m_spanUpBtn = new QPushButton("+", m_panadapterA);
-    m_spanUpBtn->setStyleSheet(btnStyle);
-    m_spanUpBtn->setFixedSize(K4Styles::Dimensions::ButtonHeightSmall, K4Styles::Dimensions::ButtonHeightMini);
+    m_zoomInBtn = new QPushButton("+", m_panadapterA);
+    m_zoomInBtn->setStyleSheet(btnStyle);
+    m_zoomInBtn->setFixedSize(K4Styles::Dimensions::ButtonHeightSmall, K4Styles::Dimensions::ButtonHeightMini);
 
     m_centerBtn = new QPushButton("C", m_panadapterA);
     m_centerBtn->setStyleSheet(btnStyle);
     m_centerBtn->setFixedSize(K4Styles::Dimensions::ButtonHeightSmall, K4Styles::Dimensions::ButtonHeightMini);
 
     // Sub panadapter (B) buttons
-    m_spanDownBtnB = new QPushButton("-", m_panadapterB);
-    m_spanDownBtnB->setStyleSheet(btnStyle);
-    m_spanDownBtnB->setFixedSize(K4Styles::Dimensions::ButtonHeightSmall, K4Styles::Dimensions::ButtonHeightMini);
+    m_zoomOutBtnB = new QPushButton("-", m_panadapterB);
+    m_zoomOutBtnB->setStyleSheet(btnStyle);
+    m_zoomOutBtnB->setFixedSize(K4Styles::Dimensions::ButtonHeightSmall, K4Styles::Dimensions::ButtonHeightMini);
 
-    m_spanUpBtnB = new QPushButton("+", m_panadapterB);
-    m_spanUpBtnB->setStyleSheet(btnStyle);
-    m_spanUpBtnB->setFixedSize(K4Styles::Dimensions::ButtonHeightSmall, K4Styles::Dimensions::ButtonHeightMini);
+    m_zoomInBtnB = new QPushButton("+", m_panadapterB);
+    m_zoomInBtnB->setStyleSheet(btnStyle);
+    m_zoomInBtnB->setFixedSize(K4Styles::Dimensions::ButtonHeightSmall, K4Styles::Dimensions::ButtonHeightMini);
 
     m_centerBtnB = new QPushButton("C", m_panadapterB);
     m_centerBtnB->setStyleSheet(btnStyle);
@@ -187,12 +193,12 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
 
     // Position buttons (will be repositioned in resizeEvent of panadapter)
     // Triangle layout: C centered above, - and + below (bottom-right)
-    m_spanDownBtn->move(m_panadapterA->width() - 70, m_panadapterA->height() - 45);
-    m_spanUpBtn->move(m_panadapterA->width() - 35, m_panadapterA->height() - 45);
+    m_zoomOutBtn->move(m_panadapterA->width() - 70, m_panadapterA->height() - 45);
+    m_zoomInBtn->move(m_panadapterA->width() - 35, m_panadapterA->height() - 45);
     m_centerBtn->move(m_panadapterA->width() - 52, m_panadapterA->height() - 73);
 
-    m_spanDownBtnB->move(m_panadapterB->width() - 70, m_panadapterB->height() - 45);
-    m_spanUpBtnB->move(m_panadapterB->width() - 35, m_panadapterB->height() - 45);
+    m_zoomOutBtnB->move(m_panadapterB->width() - 70, m_panadapterB->height() - 45);
+    m_zoomInBtnB->move(m_panadapterB->width() - 35, m_panadapterB->height() - 45);
     m_centerBtnB->move(m_panadapterB->width() - 52, m_panadapterB->height() - 73);
 
     // VFO indicators at bottom-left corner, flush with edges
@@ -202,18 +208,18 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
     m_mouseVfoIndicatorB->move(K4Styles::Dimensions::VfoIndicatorWidth, m_panadapterB->height() - 44);
 
     // Span adjustment for Main: K4 span steps
-    connect(m_spanDownBtn, &QPushButton::clicked, this, [this]() {
+    connect(m_zoomOutBtn, &QPushButton::clicked, this, [this]() {
         int currentSpan = m_radioState->spanHz();
-        int newSpan = RadioUtils::getNextSpanDown(currentSpan); // - decreases span
+        int newSpan = RadioUtils::spanAfterZoom(currentSpan, false); // - zooms out: wider span
         if (newSpan != currentSpan) {
             m_radioState->setSpanHz(newSpan);
             m_connectionController->sendCAT(QString("#SPN%1;").arg(newSpan));
         }
     });
 
-    connect(m_spanUpBtn, &QPushButton::clicked, this, [this]() {
+    connect(m_zoomInBtn, &QPushButton::clicked, this, [this]() {
         int currentSpan = m_radioState->spanHz();
-        int newSpan = RadioUtils::getNextSpanUp(currentSpan); // + increases span
+        int newSpan = RadioUtils::spanAfterZoom(currentSpan, true); // + zooms in: narrower span
         if (newSpan != currentSpan) {
             m_radioState->setSpanHz(newSpan);
             m_connectionController->sendCAT(QString("#SPN%1;").arg(newSpan));
@@ -223,18 +229,18 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
     connect(m_centerBtn, &QPushButton::clicked, this, [this]() { m_connectionController->sendCAT("FC;"); });
 
     // Span adjustment for Sub: uses $ suffix for Sub RX commands
-    connect(m_spanDownBtnB, &QPushButton::clicked, this, [this]() {
+    connect(m_zoomOutBtnB, &QPushButton::clicked, this, [this]() {
         int currentSpan = m_radioState->spanHzB();
-        int newSpan = RadioUtils::getNextSpanDown(currentSpan); // - decreases span
+        int newSpan = RadioUtils::spanAfterZoom(currentSpan, false); // - zooms out: wider span
         if (newSpan != currentSpan) {
             m_radioState->setSpanHzB(newSpan);
             m_connectionController->sendCAT(QString("#SPN$%1;").arg(newSpan));
         }
     });
 
-    connect(m_spanUpBtnB, &QPushButton::clicked, this, [this]() {
+    connect(m_zoomInBtnB, &QPushButton::clicked, this, [this]() {
         int currentSpan = m_radioState->spanHzB();
-        int newSpan = RadioUtils::getNextSpanUp(currentSpan); // + increases span
+        int newSpan = RadioUtils::spanAfterZoom(currentSpan, true); // + zooms in: narrower span
         if (newSpan != currentSpan) {
             m_radioState->setSpanHzB(newSpan);
             m_connectionController->sendCAT(QString("#SPN$%1;").arg(newSpan));
@@ -353,6 +359,21 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
             int specH = static_cast<int>(m_panadapterB->height() * m_panadapterB->spectrumRatio());
             m_spotOverlayB->setGeometry(0, 0, m_panadapterB->width(), specH);
         }
+    });
+    // WHY: the K4 pushes #MP / #MP$ whenever the mini-pan is toggled on the radio itself, and
+    // reports -1 (treated as off) when it withdraws one. The VFO view follows the radio's state
+    // so a front-panel toggle opens/closes ours too; our own clicks go through the same path.
+    connect(m_radioState, &RadioState::miniPanAEnabledChanged, this, [this](bool enabled) {
+        if (enabled)
+            m_vfoA->showMiniPan();
+        else
+            m_vfoA->showNormal();
+    });
+    connect(m_radioState, &RadioState::miniPanBEnabledChanged, this, [this](bool enabled) {
+        if (enabled)
+            m_vfoB->showMiniPan();
+        else
+            m_vfoB->showNormal();
     });
     connect(m_radioState, &RadioState::averagingChanged, this, [this](int level) {
         m_panadapterA->setAveraging(level);
@@ -801,8 +822,8 @@ bool SpectrumController::eventFilter(QObject *watched, QEvent *event) {
 
         // Position buttons at lower right, above the frequency label bar (20px)
         // Triangle layout: C centered above, - and + below
-        m_spanDownBtn->move(w - 70, h - 45);
-        m_spanUpBtn->move(w - 35, h - 45);
+        m_zoomOutBtn->move(w - 70, h - 45);
+        m_zoomInBtn->move(w - 35, h - 45);
         m_centerBtn->move(w - 52, h - 73);
 
         // VFO indicator at bottom-left corner
@@ -825,8 +846,8 @@ bool SpectrumController::eventFilter(QObject *watched, QEvent *event) {
 
         // Position B buttons at lower right, above the frequency label bar (20px)
         // Triangle layout: C centered above, - and + below
-        m_spanDownBtnB->move(w - 70, h - 45);
-        m_spanUpBtnB->move(w - 35, h - 45);
+        m_zoomOutBtnB->move(w - 70, h - 45);
+        m_zoomInBtnB->move(w - 35, h - 45);
         m_centerBtnB->move(w - 52, h - 73);
 
         // VFO indicator at bottom-left corner

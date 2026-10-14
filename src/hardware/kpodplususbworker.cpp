@@ -398,6 +398,53 @@ void KpodPlusUsbWorker::releaseHandle() {
     }
 }
 
+void KpodPlusUsbWorker::discardBufferedKeying() {
+    // Read EP02 dry and throw the result away, BEFORE the handle reaches the EP02 reader.
+    //
+    // The KPOD+ runs its own keyer. While QK4 has the device closed it keeps reading the paddle,
+    // keeps generating elements and keeps them in its own buffer — a USB interrupt-IN endpoint holds
+    // data until the host asks for it, and nobody was asking. Reopening then delivered the whole
+    // backlog as fast as the host could read it.
+    //
+    // Reproduced on the bench, 2026-09-18: enable, key, DISABLE, key five characters, wait 47 s,
+    // re-enable. Two frames arrived 1 ms apart, the second carrying four dahs plus a letter space
+    // and a pause, and the radio transmitted them. The live-keying signature is a 4-byte payload
+    // every ~114 ms; a near-full 28-byte frame can only be a drained backlog.
+    //
+    // WHY discard rather than pace them out: they are elements the operator keyed up to a minute
+    // ago, at a moment when QK4 was deliberately not listening to this device. Transmitting them
+    // late is wrong at any speed, and silence is the safe failure. Their sidetone already told them
+    // what they sent; the radio is the part that must not act on it.
+    //
+    // Runs on the USB worker thread, before handleOpened publishes the handle, so the EP02 reader
+    // cannot be competing for the endpoint. Bounded twice — by a short timeout and by a frame count
+    // — so a device that never returns TIMEOUT cannot stall the open.
+    if (!m_handle) {
+        return;
+    }
+    constexpr int kDrainTimeoutMs = 20; // long enough for a queued frame, short enough not to stall
+    constexpr int kMaxDrainFrames = 64; // 64 x 32 B is far more than the device can hold
+    unsigned char scratch[32];
+    int frames = 0;
+    int bytes = 0;
+    for (; frames < kMaxDrainFrames; ++frames) {
+        int transferred = 0;
+        const int rc =
+            libusb_interrupt_transfer(m_handle, 0x82, scratch, sizeof(scratch), &transferred, kDrainTimeoutMs);
+        if (rc != 0 || transferred <= 0) {
+            break; // TIMEOUT is the expected exit: nothing left to read
+        }
+        bytes += transferred;
+    }
+    if (frames > 0) {
+        // Warning, not debug. This is the operator's sending being thrown away, and if it happens
+        // when they did not expect it that is worth finding in a log without knowing to enable a
+        // category first.
+        qCWarning(hwKpodPlus) << "KPOD+ discarded" << frames << "buffered keyer frame(s)," << bytes
+                              << "bytes, queued by the device while QK4 had it closed. They are not sent.";
+    }
+}
+
 void KpodPlusUsbWorker::openDevice() {
     if (m_handle) {
         return;
@@ -409,6 +456,7 @@ void KpodPlusUsbWorker::openDevice() {
     resetDecoderState();
     queryOpenDeviceInfo(&m_info);
     emit deviceInfoReady(m_info);
+    discardBufferedKeying();
     emit handleOpened(reinterpret_cast<quintptr>(m_handle));
     if (m_pollTimer && !m_pollTimer->isActive())
         m_pollTimer->start();
@@ -511,8 +559,15 @@ void KpodPlusUsbWorker::onPresenceTimer() {
     if (!m_devicePresent && now) {
         m_devicePresent = true;
         m_info = probe;
+        // REPORT ONLY. This used to call openDevice() here, and that was USB-002: every enable
+        // check in the app lives in HardwareController, so a worker that opens the device itself
+        // bypasses the operator's "Enable K-Pod" setting entirely. Plugging in a KPOD+ with the box
+        // unchecked opened it, polled it, raised the CW gate and announced that it owned keying.
+        //
+        // Detection is a fact about the world and belongs here. Whether to ACT on it is policy, and
+        // policy has one owner - see hardware/usbdevicelifecycle.h. The hidapi KPOD has always had
+        // this shape; this makes the KPOD+ match it.
         emit deviceInfoReady(m_info);
-        openDevice();
     } else if (m_devicePresent && !now) {
         m_devicePresent = false;
         // Reset cached info before closeDevice() so the façade's m_info
@@ -521,8 +576,10 @@ void KpodPlusUsbWorker::onPresenceTimer() {
         // even after the user pulls the cable.
         m_info = KpodPlusDeviceInfo{};
         emit deviceInfoReady(m_info);
+        // closeDevice() already emits deviceRemoved when this close ended a live session. Emitting
+        // it again here was the second of the two removals every unplug produced, and duplicates
+        // are what defeated the one-shot "expected stop" flag downstream.
         closeDevice();
-        emit deviceRemoved();
     }
 }
 
@@ -626,6 +683,12 @@ void KpodPlusEp02Worker::run() {
     // timeout served only to check m_running, which we'd hit at worst once per
     // timeout window — 100 ms is plenty for clean shutdown perception.
     constexpr int kEp02TimeoutMs = 100;
+    // USB-008 backoff. 5 ms is long enough to stop a spin and far shorter than one CW element, so
+    // a transient costs no keying. 20 in a row at that rate is ~100 ms of failure — comfortably a
+    // real fault rather than a blip.
+    constexpr int kErrorBackoffMs = 5;
+    constexpr int kMaxConsecutiveErrors = 20;
+    int consecutiveErrors = 0;
 
     while (m_running.load(std::memory_order_relaxed)) {
         libusb_device_handle *h = m_handle.load(std::memory_order_acquire);
@@ -643,9 +706,14 @@ void KpodPlusEp02Worker::run() {
             // the same mutex before libusb_close) waits for any in-flight transfer to
             // finish before the handle is freed. Bounded by the kEp02TimeoutMs timeout.
             std::lock_guard<std::mutex> lock(m_transferMutex);
-            // Re-check handle after acquiring the lock; releaseHandle may have just cleared
-            // it via setDeviceHandle(0). Avoids an unnecessary syscall with a stale h.
-            if (!m_handle.load(std::memory_order_acquire))
+            // USB-010. Re-read the handle under the lock and TRANSFER ON THAT, not on the copy
+            // taken before it. The old code re-checked the atomic and then passed the stale local
+            // `h` to libusb, which defeats the whole point of the re-check: a close-then-reopen in
+            // the window between the two reads left `h` pointing at a freed handle and the transfer
+            // used it. Re-checking a value you then do not use is worse than not checking, because
+            // it reads as protection.
+            h = m_handle.load(std::memory_order_acquire);
+            if (!h)
                 continue;
             rc = libusb_interrupt_transfer(h, 0x82, buffer, sizeof(buffer), &transferred, kEp02TimeoutMs);
         }
@@ -677,6 +745,26 @@ void KpodPlusEp02Worker::run() {
             // the device tried to send more than 32 bytes in a single transfer and
             // the host truncated — i.e. the smoking gun for "we dropped a KZ batch."
             qCWarning(hwKpodPlus) << "KZ EP02 unexpected rc:" << libusb_error_name(rc) << "transferred=" << transferred;
+
+            // USB-008. Back off before retrying. This branch used to fall straight back into the
+            // loop, so a persistent non-transient error (PIPE, OVERFLOW, INTERRUPTED) spun this
+            // thread at 100 % — and it runs at HighPriority precisely because CW timing depends on
+            // it, so the starvation lands on the keyer and the sidetone. A short sleep costs
+            // nothing on the transient case, which is the common one.
+            //
+            // Escalate rather than sleep forever: a run of them means the endpoint is not coming
+            // back, and pretending otherwise leaves the operator with silent paddles and a warning
+            // they have to know to look for.
+            if (++consecutiveErrors >= kMaxConsecutiveErrors) {
+                emit transferError(
+                    QStringLiteral("EP02 failed %1 times in a row; giving up on this handle").arg(consecutiveErrors));
+                m_handle.store(nullptr, std::memory_order_release);
+                consecutiveErrors = 0;
+            } else {
+                QThread::msleep(kErrorBackoffMs);
+            }
+            continue;
         }
+        consecutiveErrors = 0; // any good read clears the run
     }
 }

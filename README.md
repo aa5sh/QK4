@@ -4,7 +4,7 @@ A cross-platform desktop application for remote control of Elecraft K4 radios ov
 
 [![Release](https://img.shields.io/github/v/release/mikeg-dal/QK4?include_prereleases)](https://github.com/mikeg-dal/QK4/releases)
 [![Build](https://github.com/mikeg-dal/QK4/actions/workflows/release.yml/badge.svg)](https://github.com/mikeg-dal/QK4/actions/workflows/release.yml)
-[![CI](https://github.com/mikeg-dal/QK4/actions/workflows/ci.yml/badge.svg)](https://github.com/mikeg-dal/QK4/actions/workflows/ci.yml)
+[![CI](https://github.com/mikeg-dal/QK4/actions/workflows/ci-checks.yml/badge.svg)](https://github.com/mikeg-dal/QK4/actions/workflows/ci-checks.yml)
 
 ## Supported Platforms
 
@@ -229,4 +229,16 @@ src/
 
 ## License
 
-This project is licensed under the [GNU General Public License v3.0](LICENSE).
+QK4 — Remote control application for Elecraft K4 radios
+Copyright (C) 2025-2026 Mike Garcia — KF5O
+
+This program is free software: you can redistribute it and/or modify it under the terms of the
+[GNU General Public License](LICENSE) as published by the Free Software Foundation, either version 3
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with this program. If not,
+see <https://www.gnu.org/licenses/>.

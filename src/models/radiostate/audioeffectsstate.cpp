@@ -172,7 +172,8 @@ void handleLO(AudioEffectsState &state, RadioState &owner, const QString &cmd) {
     int right = cmd.mid(5, 3).toInt(&okR);
     int modeVal = cmd.mid(8, 1).toInt();
 
-    if (okL && okR && left >= 0 && left <= 40 && right >= 0 && right <= 40) {
+    if (okL && okR && left >= 0 && left <= AudioEffectsState::LineOutMax && right >= 0 &&
+        right <= AudioEffectsState::LineOutMax) {
         bool changed = false;
         if (left != state.lineOutLeft) {
             state.lineOutLeft = left;
@@ -506,7 +507,7 @@ void setTxEqBands(AudioEffectsState &state, RadioState &owner, const QVector<int
 }
 
 void setLineOutLeft(AudioEffectsState &state, RadioState &owner, int level) {
-    level = qBound(0, level, 40);
+    level = qBound(0, level, AudioEffectsState::LineOutMax);
     if (level != state.lineOutLeft) {
         state.lineOutLeft = level;
         emit owner.lineOutChanged();
@@ -514,7 +515,7 @@ void setLineOutLeft(AudioEffectsState &state, RadioState &owner, int level) {
 }
 
 void setLineOutRight(AudioEffectsState &state, RadioState &owner, int level) {
-    level = qBound(0, level, 40);
+    level = qBound(0, level, AudioEffectsState::LineOutMax);
     if (level != state.lineOutRight) {
         state.lineOutRight = level;
         emit owner.lineOutChanged();

@@ -11,6 +11,13 @@
 Q_LOGGING_CATEGORY(catTx, "CAT.TX")
 Q_LOGGING_CATEGORY(netTcp, "net.tcp")
 
+// ConnectFailure::Phase mirrors ConnectionState rather than reusing it, so connect_failure.h - and
+// the test that links it alone - stays clear of QSslSocket. These keep the two from drifting.
+static_assert(static_cast<int>(ConnectFailure::Phase::Disconnected) == TcpClient::Disconnected);
+static_assert(static_cast<int>(ConnectFailure::Phase::Connecting) == TcpClient::Connecting);
+static_assert(static_cast<int>(ConnectFailure::Phase::Authenticating) == TcpClient::Authenticating);
+static_assert(static_cast<int>(ConnectFailure::Phase::Connected) == TcpClient::Connected);
+
 TcpClient::TcpClient(QObject *parent)
     : QObject(parent), m_socket(new QSslSocket(this)), m_protocol(new Protocol(this)), m_authTimer(new QTimer(this)),
       m_connectTimer(new QTimer(this)), m_pingTimer(new QTimer(this)), m_retryTimer(new QTimer(this)),
@@ -70,7 +77,7 @@ TcpClient::TcpClient(QObject *parent)
             sendCAT(K4Protocol::Commands::READY);              // Triggers comprehensive state dump
             sendCAT(K4Protocol::Commands::ENABLE_K4_MODE);     // Enable advanced K4 protocol mode
             sendCAT(K4Protocol::Commands::ENABLE_LONG_ERRORS); // Request long format error messages
-            // Set audio encode mode (0=RAW32, 1=RAW16, 2=Opus Int, 3=Opus Float)
+            // Set audio encode mode (0=RAW S32LE (24-bit), 1=RAW S16LE, 2/3=Opus (same bitstream, int vs float decode))
             qCDebug(netTcp) << "Sending:" << QString("EM%1;").arg(m_encodeMode);
             sendCAT(QString("EM%1;").arg(m_encodeMode));
             // Set streaming audio latency (0-7, higher values for high-latency connections)
@@ -105,12 +112,13 @@ void TcpClient::connectToHost(const QString &host, quint16 port, const QString &
     m_port = port;
     m_password = password; // Also used as PSK when TLS enabled
     m_useTls = useTls;
-    m_identity = identity;                 // TLS-PSK identity (optional)
-    m_encodeMode = encodeMode;             // Audio encode mode (0=RAW32, 1=RAW16, 2=Opus Int, 3=Opus Float)
+    m_identity = identity;     // TLS-PSK identity (optional)
+    m_encodeMode = encodeMode; // 0=RAW S32LE (24-bit), 1=RAW S16LE, 2/3=Opus (same bitstream, int vs float decode)
     m_streamingLatency = streamingLatency; // Remote streaming audio latency (0-7)
     m_authResponseReceived = false;
 
     m_retryCount = 0;
+    ++m_attemptId;
     setState(Connecting);
 
     // Resolve .local (mDNS) hostnames before connecting — Qt's SSL socket
@@ -119,14 +127,16 @@ void TcpClient::connectToHost(const QString &host, quint16 port, const QString &
     // The context-object overload of lookupHost() cancels if `this` is destroyed.
     if (m_host.endsWith(QStringLiteral(".local"), Qt::CaseInsensitive)) {
         qCDebug(netTcp) << "Resolving mDNS hostname:" << m_host;
-        QHostInfo::lookupHost(m_host, this, [this](const QHostInfo &info) {
-            // Guard: user may have disconnected while resolution was in flight
-            if (m_state.load(std::memory_order_acquire) != Connecting)
+        QHostInfo::lookupHost(m_host, this, [this, attempt = m_attemptId, name = m_host](const QHostInfo &info) {
+            // WHY the attempt id and not just the state: switching radios while this lookup is in
+            // flight starts a new attempt that is ALSO Connecting. Without the id, this answer for
+            // the previous radio would overwrite m_host and connect the new attempt to the old radio.
+            if (attempt != m_attemptId || m_state.load(std::memory_order_acquire) != Connecting)
                 return;
 
             if (info.error() != QHostInfo::NoError || info.addresses().isEmpty()) {
-                qCWarning(netTcp) << "mDNS resolution failed for" << m_host << ":" << info.errorString();
-                emit errorOccurred(QString("Could not resolve %1: %2").arg(m_host, info.errorString()));
+                qCWarning(netTcp) << "mDNS resolution failed for" << name << ":" << info.errorString();
+                emit errorOccurred(QString("Could not resolve %1: %2").arg(name, info.errorString()));
                 setState(Disconnected);
                 return;
             }
@@ -141,7 +151,7 @@ void TcpClient::connectToHost(const QString &host, quint16 port, const QString &
             if (resolved.isEmpty()) {
                 resolved = info.addresses().first().toString();
             }
-            qCDebug(netTcp) << "Resolved" << m_host << "to" << resolved;
+            qCDebug(netTcp) << "Resolved" << name << "to" << resolved;
             m_host = resolved;
             attemptConnection();
         });
@@ -155,6 +165,12 @@ void TcpClient::attemptConnection() {
     qCDebug(netTcp) << "attemptConnection host=" << m_host << "port=" << m_port << "tls=" << m_useTls
                     << "socketState=" << m_socket->state()
                     << "thread=" << reinterpret_cast<quintptr>(QThread::currentThread());
+
+    // WHY here, which every attempt and every retry passes through: a session that ended mid-packet
+    // leaves its header in the parser, and the new session's first bytes - the auth reply - would be
+    // read as the rest of that packet. A stale header announcing a large payload makes the parser
+    // wait for bytes that never come, and the reconnect times out in authentication.
+    m_protocol->reset();
 
     if (m_useTls) {
         // Log OpenSSL version Qt is using (first attempt only)
@@ -226,6 +242,7 @@ void TcpClient::disconnectFromHost() {
     m_retryTimer->stop();
     stopPingTimer();
     m_authTimer->stop();
+    ++m_attemptId; // anything still in flight for the attempt being ended is now stale
 
     if (m_socket->state() != QAbstractSocket::UnconnectedState) {
         // Send graceful disconnect command
@@ -348,16 +365,31 @@ void TcpClient::onSocketEncrypted() {
     // Note: For TLS/PSK, no additional password auth needed - data flows immediately
 }
 
+// Kind::None is the ordinary case - a clean close, or a timer that lost its race - and says nothing.
+void TcpClient::reportFailure(ConnectFailure::Event event, ConnectFailure::Phase phase,
+                              const QString &socketErrorText) {
+    const ConnectFailure::Result result =
+        ConnectFailure::classify(event, phase, m_authResponseReceived, m_host, m_port, socketErrorText);
+    if (result.kind != ConnectFailure::Kind::None)
+        emit errorOccurred(result.message);
+}
+
 void TcpClient::onSocketDisconnected() {
     qCDebug(netTcp) << "Socket disconnected (was state=" << m_state.load(std::memory_order_acquire)
                     << "authReceived=" << m_authResponseReceived << ")";
     stopPingTimer();
     m_authTimer->stop();
+    m_protocol->reset(); // nothing after this belongs to the session that just ended
 
-    if (m_state.load(std::memory_order_acquire) == Authenticating && !m_authResponseReceived) {
-        emit authenticationFailed();
-        emit errorOccurred("Authentication failed - connection closed by radio");
-    }
+    // WHY this no longer says "authentication failed" (see connect_failure.h for the full reasoning):
+    // with the radio powered off, macOS reports the connect() failure while Qt emits connected()
+    // anyway, so QK4 enters Authenticating, writes the auth hash into a dead socket and lands here —
+    // indistinguishable from a password the K4 refused. TCP cannot rescue the distinction either:
+    // the discriminator would be whether the connection truly reached ESTABLISHED, and in exactly
+    // this failure both socket signals lie the same way — connected() fires when it has not, and the
+    // error arrives as RemoteHostClosedError, which normally means it had.
+    const auto phase = static_cast<ConnectFailure::Phase>(m_state.load(std::memory_order_acquire));
+    reportFailure(ConnectFailure::Event::SocketClosed, phase);
 
     setState(Disconnected);
 }
@@ -395,11 +427,15 @@ void TcpClient::onSocketError(QAbstractSocket::SocketError error) {
         return;
     }
 
-    if (stateNow == Authenticating) {
-        emit authenticationFailed();
-    }
+    // One diagnostic line carrying everything that tells the failure modes apart, because the
+    // user-visible message deliberately cannot: which phase we reached, what the socket called it,
+    // and whether the radio had ever answered. Verified against the radio: a wrong password on 9204
+    // makes the K4 send its ServerHello and then drop TCP with no TLS alert, so the socket error is
+    // indistinguishable from a host that went away.
+    qCWarning(netTcp) << "Connect attempt failed: phase=" << stateNow << "socketError=" << error << "port=" << m_port
+                      << "tls=" << m_useTls << "everAnswered=" << m_authResponseReceived << "detail=" << errorMsg;
 
-    emit errorOccurred(errorMsg);
+    reportFailure(ConnectFailure::Event::SocketError, static_cast<ConnectFailure::Phase>(stateNow), errorMsg);
     setState(Disconnected);
 }
 
@@ -425,7 +461,9 @@ void TcpClient::onPreSharedKeyAuthenticationRequired(QSslPreSharedKeyAuthenticat
 void TcpClient::onConnectTimeout() {
     if (m_state.load(std::memory_order_acquire) == Connecting) {
         qCDebug(netTcp) << "Connection timeout - failed to establish" << (m_useTls ? "TLS" : "TCP") << "connection";
-        emit errorOccurred("Connection timed out - radio unreachable");
+        // Verified: with nothing at the address, the socket reports neither connected() nor an
+        // error - it simply stays in ConnectingState. This timer is the only thing that speaks.
+        reportFailure(ConnectFailure::Event::ConnectTimeout, ConnectFailure::Phase::Connecting);
         m_socket->abort();
         setState(Disconnected);
     }
@@ -433,9 +471,12 @@ void TcpClient::onConnectTimeout() {
 
 void TcpClient::onAuthTimeout() {
     if (m_state.load(std::memory_order_acquire) == Authenticating && !m_authResponseReceived) {
-        qCDebug(netTcp) << "Authentication timeout";
-        emit authenticationFailed();
-        emit errorOccurred("Authentication timeout - no response from radio");
+        // Distinct from the closed-socket case above: something is there and holding the connection
+        // open without answering. Still not attributable to the password - the K4 has no way to
+        // tell us it refused one - so the message names the port as well.
+        qCWarning(netTcp) << "Connect attempt failed: phase=Authenticating, socket still up, no data"
+                          << "port=" << m_port << "tls=" << m_useTls;
+        reportFailure(ConnectFailure::Event::AuthTimeout, ConnectFailure::Phase::Authenticating);
         disconnectFromHost();
     }
 }

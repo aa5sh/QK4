@@ -3,7 +3,7 @@
 > **Purpose:** if something is broken in the UI, find the owning controller here first.
 > Each entry maps a user-visible feature → the controller that owns it → the file path.
 
-Last updated: architectural endgame refactor — RightSideController, MemoryButtonsController, CwController added (29 controllers).
+Last updated: TransmitController added — one owner of transmit (31 controllers).
 
 ---
 
@@ -13,6 +13,7 @@ Last updated: architectural endgame refactor — RightSideController, MemoryButt
 |---|---|---|
 | "My KPA1500 amp isn't showing status" | KPA1500UiController | `src/controllers/kpa1500uicontroller.cpp` |
 | "The KPA1500 mini panel buttons don't work" | KPA1500UiController | same |
+| "KPA1500 ANT button doesn't reach sub-antennas / LCD shows the wrong antenna" | KPA1500UiController → KPA1500Client::selectNextAntenna / antennaConnector | `src/network/kpa1500client.cpp`, `src/network/kpa1500antennas.cpp` |
 | "Mode popup won't open / wrong VFO" | ModePopupController | `src/controllers/modepopupcontroller.cpp` |
 | "Mode label shows wrong text (AFSK, DATA-A, +)" | ModeLabelController | `src/controllers/modelabelcontroller.cpp` |
 | "VFO frequency display off by RIT offset" | VfoFrequencyController | `src/controllers/vfofrequencycontroller.cpp` |
@@ -30,10 +31,13 @@ Last updated: architectural endgame refactor — RightSideController, MemoryButt
 | "Antenna label text (TX / RX Main / RX Sub) wrong" | AntennaDisplayController | `src/controllers/antennadisplaycontroller.cpp` |
 | "Antenna config popup (ANT CFG button) not working" | AntennaConfigController | `src/controllers/antennaconfigcontroller.cpp` |
 | "Filter indicator shape / position wrong" | FilterIndicatorWidget (Direct Observation — no controller) | `src/ui/widgets/filterindicatorwidget.cpp` |
+| "Clicking FIL1/2/3 under a VFO doesn't change the filter preset" | RightSideController::cycleFilterPreset | `src/controllers/rightsidecontroller.cpp` |
 | "Side panel knob values (BW/SHFT, power, mic gain) wrong" | SideControlDisplayController | `src/controllers/sidecontroldisplaycontroller.cpp` |
 | "Side panel shows CW knobs (WPM/PITCH) instead of voice (MIC/CMP) or vice versa" | SideControlDisplayController | same |
 | "Side panel scroll wheels (WPM/Power/BW/HI/LO/RFGain/etc.) wrong" | SideControlScrollController | `src/controllers/sidecontrolscrollcontroller.cpp` |
 | "Right side panel button (PRE/NB/NR/NTCH/FIL/AB/REV/SPOT/MODE/PF1-4/RATE/LOCK/SUB) wrong" | RightSideController | `src/controllers/rightsidecontroller.cpp` |
+| "Clicking a frequency digit doesn't change the tuning rate (underline)" | VfoFrequencyController::setTuningRateFromDigit | `src/controllers/vfofrequencycontroller.cpp` |
+| "FREQ ENT doesn't open frequency entry / opens it on the wrong VFO" | RightSideController (frequencyEntryRequested) → VfoFrequencyController::toggleFrequencyEntry | `src/controllers/vfofrequencycontroller.cpp` |
 | "Memory buttons M1-M4 / REC / STORE / RCL left/right click wrong" | MemoryButtonsController | `src/controllers/memorybuttonscontroller.cpp` |
 | "B-SET label visibility wrong (still showing SPLIT when B-SET on)" | VfoRowIndicatorController | `src/controllers/vforowindicatorcontroller.cpp` |
 | "Side panel BW/SHFT color wrong on Sub-RX active (B-SET)" | SideControlDisplayController | `src/controllers/sidecontroldisplaycontroller.cpp` |
@@ -46,16 +50,26 @@ Last updated: architectural endgame refactor — RightSideController, MemoryButt
 | "Connection to K4 / status indicator wrong" | ConnectionController + MainWindow::updateConnectionState | `src/controllers/connectioncontroller.cpp` + `src/mainwindow.cpp` |
 | "Top status bar label / KPA1500 badge wrong" | StatusBarController | `src/controllers/statusbarcontroller.cpp` |
 | "Audio (RX/TX, PTT) not working" | AudioController | `src/controllers/audiocontroller.cpp` |
+| "Radio stays keyed after I stop transmitting" | TransmitController | `src/controllers/transmitcontroller.cpp` (decision: `src/models/transmitowner.h`) |
+| "PTT indicator lit but nothing is transmitting (or the reverse)" | TransmitController | same |
+| "WSJT-X keyed while I was already transmitting" | TransmitController | same |
 | "KPOD knob / KPOD+ / HaliKey device not detected" | HardwareController | `src/controllers/hardwarecontroller.cpp` |
-| "CW keying / paddle / sidetone / V1.4 PTT demux wrong" | CwController | `src/controllers/cwcontroller.cpp` |
+| "Enable K-Pod does nothing / device opens with the box unchecked" | HardwareController, applying `src/hardware/usbdevicelifecycle.h` | same |
+| "Unplugging a K-Pod raised two popups, or unchecking the box raised one" | same — effects come from state EDGES | same |
+| "CW keying / paddle / sidetone wrong" | CwController | `src/controllers/cwcontroller.cpp` |
+| "My foot pedal on the HaliKey does nothing" | Withdrawn on purpose — see the note in `src/controllers/cwcontroller.h` | n/a |
 | "Spectrum / panadapter / click-tune not working" | SpectrumController | `src/controllers/spectrumcontroller.cpp` |
+| "VFO mini-pan doesn't follow the radio's MINI-PAN button" / "mini-pan stuck open after reconnect" | SpectrumController | `src/controllers/spectrumcontroller.cpp` |
 | "DX cluster spots not appearing / cluster connect fail" | DxClusterController | `src/controllers/dxclustercontroller.cpp` |
+| "Removed a cluster and another shows the wrong status / opens twice" | DxClusterController (`removeCluster`), DxClusterPage | `src/controllers/dxclustercontroller.cpp`, `src/ui/pages/dxclusterpage.cpp` |
+| "WSJT-X / QLog / RumLogNG over TCI: no connect, no audio, PTT or CW wrong" | TciController | `src/controllers/tcicontroller.cpp` (server: `src/network/tciserver.cpp`) |
+| "TCI Server options tab status or client list wrong" | TciServerPage | `src/ui/pages/tciserverpage.cpp` |
 
 ---
 
 ## What's still in MainWindow (and why)
 
-MainWindow is now ~1,800 LOC. What remains is genuinely MainWindow responsibility:
+MainWindow is now ~1,460 LOC. What remains is genuinely MainWindow responsibility:
 
 - **Widget construction** — `setupUi()` and `setupVfoSection()` build the window layout tree. This is MainWindow's job; controllers observe widgets they don't own.
 - **Setup helpers** — `setupControllers()`, `setupNotificationWidget()`, `setupConnectionWiring()`, `setupRadioStateWiring()`, `setupSpectrumDataRouting()`, `setupHardwareController()`, `setupCatServer()`, `setupMenuBar()`. Construction orchestration.
@@ -67,17 +81,19 @@ MainWindow is now ~1,800 LOC. What remains is genuinely MainWindow responsibilit
 
 ---
 
-## The 29 controllers at a glance
+## The 30 controllers at a glance
 
 Grouped by concern:
 
 ### Core (exist before refactor)
 - **ConnectionController** — TCP connection state machine, network I/O thread, CAT send
-- **AudioController** — audio engine, Opus codecs, PTT, audio thread
+- **AudioController** — audio engine, Opus codecs, the PTT gate, audio thread
+- **TransmitController** — the single owner of "are we transmitting". Every producer (PTT button, XMIT, Esc, CAT client, TCI client, and the radio itself) asks it instead of writing the audio gate and the indicator directly. Records HOW each transmission was keyed so the release is the exact inverse. Esc is not a release: `operatorStop()` also always sends the K4's CW abort (`KY<04>;RX;`), because a KY macro or TCI `cw_macros` is keyed from the radio's buffer and never reaches the arbiter (#173). Decision logic is header-only in `src/models/transmitowner.h` and unit-tested standalone.
 - **SpectrumController** — panadapters, spectrum data routing, click-tune, passband overlays
-- **HardwareController** — constructs + owns KPOD, KPOD+, HaliKey, IambicKeyer, SidetoneGenerator + their threads; KPOD tuning-knob → CAT; device-config push; signal forwarding
-- **CwController** — CW keying orchestration across the HardwareController-owned devices: IambicKeyer↔CAT/sidetone wiring, HaliKey paddle/PTT handlers, V1.4 PTT demux, KPOD+ keyer-active gate. See `cwcontroller.h` for the threading-invariant doc.
+- **HardwareController** — constructs + owns KPOD, KPOD+, HaliKey, IambicKeyer, SidetoneGenerator + their threads; KPOD tuning-knob → CAT; device-config push; signal forwarding. **Sole owner of USB device lifecycle policy**: holds one `UsbDeviceLifecycle::State` per device and applies the returned effects. The workers report arrival and loss; they do not decide to open. It also emits `kpodPlusOwnsCw(bool)` from that state, which is what the CW gate follows — detection is not ownership.
+- **CwController** — CW keying orchestration across the HardwareController-owned devices: IambicKeyer↔CAT/sidetone wiring, the single HaliKey line handler (both levers passed to the keyer as one sample), V1.4 pedal demux, KPOD+ keyer-active gate. Paddle input is gated on CW/CW_R for both levers, and both are released on any mode change. See `cwcontroller.h` for the threading-invariant doc.
 - **DxClusterController** — DX cluster client (multi-instance; spot cache)
+- **TciController** — TCI 2.0 server for external apps: owns the TCI thread, `TciServer` and `TciAudioBridge`; maps client SETs to `CatFrames`, pushes `RadioState` snapshots to the server, routes TCI PTT/TX audio to `AudioController`. See `docs/tci-server-design.md`.
 
 ### Popup-family
 - **PopupManager** — owns 14 popups: band, display, Fn, macro dialog, 3 button rows (Main/Sub/Tx), RX EQ, TX EQ, line in/out, mic input/config, VOX, SSB BW, keying weight, software list. Also wires RX-row button label state observers.

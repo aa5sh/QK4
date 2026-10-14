@@ -1,5 +1,9 @@
 #include "panadapter_rhi.h"
+#include "dsp/bandplanstrip.h"
+#include "dsp/spectrumscale.h"
+#include "dsp/waterfallgeometry.h"
 #include "panadapter_constants.h"
+#include "dashgeometry.h"
 #include "rhi_utils.h"
 #include "ui/styling/k4styles.h"
 #include <QLoggingCategory>
@@ -8,10 +12,49 @@
 #include <QPainterPath>
 #include <QResizeEvent>
 #include <QtMath>
+#include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <utility>
 
 Q_LOGGING_CATEGORY(qk4Dsp, "qk4.dsp")
+
+// Waterfall diagnostics: tier-boundary crossings and render geometry. Enable with
+//     QT_LOGGING_RULES="qk4.pan.diag.debug=true"
+//
+// WHY the explicit QtWarningMsg: Q_LOGGING_CATEGORY defaults severityLevel to QtDebugMsg, so a
+// bare declaration would print this for every user on every span change. The other categories in
+// this project omit the level and describe themselves as off by default, which is not what Qt
+// does.
+Q_LOGGING_CATEGORY(qk4PanDiag, "qk4.pan.diag", QtWarningMsg)
+
+namespace {
+
+// Stretch a spectrum curve to a different bin count, keeping its shape across the frequency axis.
+// Used when the bin count changes under an EMA that must not be interrupted.
+QVector<float> resampleLinear(const QVector<float> &src, int dstSize) {
+    if (src.isEmpty() || dstSize <= 0)
+        return QVector<float>(qMax(0, dstSize), 0.0f);
+    if (src.size() == dstSize)
+        return src;
+
+    QVector<float> out(dstSize);
+    if (src.size() == 1) {
+        out.fill(src[0]);
+        return out;
+    }
+    const float step = static_cast<float>(src.size() - 1) / static_cast<float>(qMax(1, dstSize - 1));
+    for (int i = 0; i < dstSize; ++i) {
+        const float pos = i * step;
+        const int lo = qBound(0, static_cast<int>(pos), src.size() - 1);
+        const int hi = qMin(lo + 1, src.size() - 1);
+        const float frac = pos - lo;
+        out[i] = src[lo] * (1.0f - frac) + src[hi] * frac;
+    }
+    return out;
+}
+
+} // namespace
 
 // Transparent overlay widget for dBm/S-unit scale labels
 class DbmScaleOverlay : public QWidget {
@@ -51,66 +94,38 @@ protected:
         painter.setFont(scaleFont);
         painter.setPen(Qt::white);
 
-        const int labelCount = 9; // Keep 9 divisions for grid alignment
-        const float dbRange = m_maxDb - m_minDb;
         const int leftMargin = 4;
         const int h = height();
 
         QFontMetrics fm(scaleFont);
-        int textHeight = fm.height();
+        const int textHeight = fm.height();
 
-        for (int i = 0; i < labelCount; ++i) {
-            // Skip top and bottom labels for breathing room
-            if (i == 0 || i == labelCount - 1)
-                continue;
+        // WHY labels are placed by value rather than by dividing the widget: S-units sit at fixed
+        // dBm (S9 = -73, 6 dB apart), which does not divide the display range. Sampling even
+        // divisions and naming whichever S-unit was nearest skipped some and, once clamped at the
+        // ends, printed S1 at two different heights. SpectrumScale emits only values that genuinely
+        // fall inside the window, already spaced far enough apart to read.
+        const auto labels = SpectrumScale::labelsFor(m_minDb, m_maxDb, m_useSUnits, h, textHeight);
 
-            float dbValue = m_maxDb - (static_cast<float>(i) / 8.0f) * dbRange;
-            int yPos = h * i / 8;
+        for (const auto &label : labels) {
+            const float frac = SpectrumScale::normalizedForDb(label.dbm, m_minDb, m_maxDb);
+            const int yPos = static_cast<int>(std::lround((1.0f - frac) * h));
 
             // Skip labels that would fall under the band-plan strip.
             if (yPos < m_topReserved)
                 continue;
+            // Keep the text fully on the widget at both ends.
+            if (yPos < textHeight / 2 || yPos > h - textHeight / 3)
+                continue;
 
-            QString label;
-            if (m_useSUnits) {
-                label = dbmToSUnits(dbValue);
-            } else {
-                label = QString("%1 dBm").arg(static_cast<int>(dbValue));
-            }
-
-            // Vertically center on grid line
-            int textY = yPos + textHeight / 3;
-
-            painter.drawText(leftMargin, textY, label);
+            // A tick, because labels no longer coincide with the grid: the grid is a fixed-size
+            // cell pattern and these sit at physical dBm values, so the two only align by accident.
+            painter.drawLine(0, yPos, 3, yPos);
+            painter.drawText(leftMargin, yPos + textHeight / 3, label.text);
         }
     }
 
 private:
-    // Convert dBm to S-unit string
-    // S9 = -73 dBm, each S-unit below is 6 dB
-    QString dbmToSUnits(float dbm) const {
-        const float s9Dbm = -73.0f;
-        const float dbPerSUnit = 6.0f;
-
-        if (dbm >= s9Dbm) {
-            // Above S9: show as S9+XX
-            int dbOver = static_cast<int>(std::round(dbm - s9Dbm));
-            if (dbOver == 0) {
-                return "S9";
-            }
-            return QString("S9+%1").arg(dbOver);
-        } else {
-            // Below S9: calculate S-unit (S1-S9)
-            float sUnits = 9.0f + (dbm - s9Dbm) / dbPerSUnit;
-            int sValue = static_cast<int>(std::round(sUnits));
-            if (sValue < 1)
-                sValue = 1;
-            if (sValue > 9)
-                sValue = 9;
-            return QString("S%1").arg(sValue);
-        }
-    }
-
     float m_minDb = -138.0f;
     float m_maxDb = -58.0f;
     bool m_useSUnits = false;
@@ -228,18 +243,12 @@ private:
     QString m_mode = "USB";
 };
 
-// Band-plan strip across the top of the panadapter. Two rows: a band-name header
-// (green) on top, and a sub-mode segment row (CW/Data/Phone/Beacon/All, translucent,
-// left-aligned labels) with optional digital calling-frequency marker ticks (FT8/FT4/
-// WSPR...). Self-contained like FrequencyScaleOverlay; re-maps on pan/zoom.
+// Band-plan strip across the top of the panadapter: one row of mode segments with the band name
+// pinned as a tag, hatched where the screen runs past the band edge, and calling-frequency marker
+// ticks. Placement is decided by BandPlanStrip::layout; this only paints it.
 class BandPlanOverlay : public QWidget {
 public:
-    static constexpr int kBandRowH = 16;
-    static constexpr int kModeRowH = 18;
-    static constexpr int kTotalH = kBandRowH + kModeRowH;
-    // The strip spans the full width to the left edge; the dBm scale separately skips any
-    // S-unit label that would fall under the strip (setTopReserved), so no inset is needed.
-    static constexpr int kLeftInset = 0;
+    static constexpr int kStripH = 18;
 
     BandPlanOverlay(QWidget *parent = nullptr) : QWidget(parent) {
         setAttribute(Qt::WA_TransparentForMouseEvents);
@@ -259,119 +268,88 @@ public:
     }
 
 protected:
-    // Map an absolute frequency to a pixel X using the same CW dial-offset convention as
-    // the frequency-scale overlay, so segments line up with the labels below.
-    int freqToX(qint64 freqHz, int w) const {
+    // Frequency at the left edge, using the same CW dial-offset convention as the frequency-scale
+    // overlay so segments line up with the labels below.
+    qint64 viewStartHz() const {
         qint64 effectiveCenter = m_centerFreq;
         if (m_mode == "CW")
             effectiveCenter = m_centerFreq + static_cast<qint64>(m_ifShift) * 10;
         else if (m_mode == "CW-R")
             effectiveCenter = m_centerFreq - static_cast<qint64>(m_ifShift) * 10;
-        const qint64 startFreq = effectiveCenter - m_spanHz / 2;
-        double n = static_cast<double>(freqHz - startFreq) / static_cast<double>(m_spanHz);
-        return qRound(qBound(0.0, n, 1.0) * w);
+        return effectiveCenter - m_spanHz / 2;
     }
 
     void paintEvent(QPaintEvent *) override {
         if (m_spanHz <= 0 || m_segments.isEmpty())
             return;
 
-        QPainter painter(this);
-        painter.setRenderHint(QPainter::TextAntialiasing);
         const int w = width();
-        const int inset = kLeftInset; // leave the dBm scale column on the left clear
-        if (w <= inset)
-            return;
-
+        const int h = height();
         QFont labelFont = K4Styles::Fonts::dataFont(K4Styles::Dimensions::FontSizeSmall, QFont::Bold);
         QFont markerFont = K4Styles::Fonts::dataFont(K4Styles::Dimensions::FontSizeTiny, QFont::Bold);
-        QFontMetrics fm(labelFont);
-        QFontMetrics mfm(markerFont);
+        const QFontMetrics fm(labelFont);
+        const QFontMetrics mfm(markerFont);
 
-        // Track occupied label x-ranges so segment labels and marker labels don't overlap.
-        QVector<QPair<int, int>> occupied;
-        auto fits = [&](int left, int right) {
-            if (left < inset || right > w)
-                return false;
-            for (const auto &r : occupied)
-                if (left < r.second && right > r.first)
-                    return false;
-            return true;
-        };
+        const BandPlanStrip::Layout strip = BandPlanStrip::layout(
+            m_segments, m_markers, m_bandName, viewStartHz(), m_spanHz, w,
+            [&fm](const QString &text) { return fm.horizontalAdvance(text); },
+            [&mfm](const QString &text) { return mfm.horizontalAdvance(text); });
 
-        // --- Band-name header row (green) — spans only the band's extent, clipped to the
-        // dBm inset, so it lines up with the sub-mode segments and never bleeds outside the
-        // band (e.g. no "40m" green left of 7.000). ---
-        const int bandX1 = qMax(freqToX(m_segments.first().startHz, w), inset);
-        const int bandX2 = qMin(freqToX(m_segments.last().endHz, w), w);
-        if (bandX2 > bandX1) {
-            QColor bandFill = QColor(K4Styles::Colors::BandPlanBand);
-            bandFill.setAlpha(180);
-            painter.fillRect(QRect(bandX1, 0, bandX2 - bandX1, kBandRowH), bandFill);
-            if (!m_bandName.isEmpty()) {
-                painter.setFont(labelFont);
-                painter.setPen(Qt::white);
-                painter.drawText(QRect(bandX1 + 4, 0, bandX2 - bandX1 - 8, kBandRowH), Qt::AlignVCenter | Qt::AlignLeft,
-                                 m_bandName);
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::TextAntialiasing);
+
+        for (int i = 0; i < strip.blocks.size(); ++i) {
+            const BandPlanStrip::Block &b = strip.blocks[i];
+            const QRect rect(b.x1, 0, b.x2 - b.x1, h);
+            if (b.kind == BandPlanStrip::BlockKind::Segment) {
+                QColor fill = BandPlan::modeColor(b.mode);
+                fill.setAlpha(120); // translucent so the spectrum shows through
+                painter.fillRect(rect, fill);
+            } else {
+                QColor fill(K4Styles::Colors::BandPlanOutOfBand);
+                fill.setAlpha(200);
+                painter.fillRect(rect, fill);
+                painter.fillRect(rect, QBrush(QColor(255, 255, 255, 40), Qt::BDiagPattern));
             }
-        }
-
-        // --- Sub-mode segment row ---
-        const int modeY = kBandRowH;
-        painter.setFont(labelFont);
-        for (const BandPlan::BandSegment &s : m_segments) {
-            int x1 = qMax(freqToX(s.startHz, w), inset); // clip the left edge to the inset
-            int x2 = freqToX(s.endHz, w);
-            if (x2 <= x1)
-                continue;
-
-            QRect rect(x1, modeY, x2 - x1, kModeRowH);
-            QColor fill = BandPlan::modeColor(s.mode);
-            fill.setAlpha(150); // translucent so the spectrum shows through
-            painter.fillRect(rect, fill);
-
-            // Light divider at the section's left boundary so sub-sections read distinctly.
-            if (x1 > inset + 1) {
+            // WHY a divider as well as a colour change: the labels and these lines carry the
+            // boundaries, so the strip still reads for a red-green colour-blind operator.
+            if (i > 0) {
                 painter.setPen(QColor(255, 255, 255, 70));
-                painter.drawLine(x1, modeY, x1, modeY + kModeRowH);
-            }
-
-            const QString label = BandPlan::modeLabel(s.mode);
-            const int lw = fm.horizontalAdvance(label);
-            const int lx = x1 + 4;
-            if (x2 - x1 >= lw + 8 && fits(lx, lx + lw)) {
-                painter.setPen(Qt::white);
-                painter.drawText(QRect(lx, modeY, lw + 2, kModeRowH), Qt::AlignVCenter | Qt::AlignLeft, label);
-                occupied.append({lx, lx + lw});
+                painter.drawLine(b.x1, 0, b.x1, h);
             }
         }
 
-        // --- Digital calling-frequency markers (US region): point designators ---
-        // A bright hairline + a small downward caret marks the exact spot, so the label
-        // reads as a point, not a section.
+        painter.setFont(labelFont);
+        if (strip.tag.visible) {
+            const QRect tagRect(strip.tag.x, 0, strip.tag.width, h);
+            painter.fillRect(tagRect, QColor(K4Styles::Colors::BandPlanTag));
+            painter.setPen(Qt::white);
+            painter.drawText(tagRect, Qt::AlignCenter, m_bandName);
+        }
+
+        for (const BandPlanStrip::Label &label : strip.labels) {
+            const bool outOfBand = strip.blocks[label.block].kind == BandPlanStrip::BlockKind::OutOfBand;
+            painter.setPen(outOfBand ? QColor(K4Styles::Colors::TextGray) : QColor(Qt::white));
+            painter.drawText(QRect(label.x, 0, label.width + 2, h), Qt::AlignVCenter | Qt::AlignLeft, label.text);
+        }
+
+        // Calling-frequency markers: a hairline and a small downward caret mark the exact spot, so
+        // the label reads as a point rather than a section.
         painter.setFont(markerFont);
-        for (const BandPlan::BandMarker &m : m_markers) {
-            int x = freqToX(m.freqHz, w);
-            if (x <= inset || x >= w)
-                continue; // off-screen or under the dBm column
-
+        for (const BandPlanStrip::Marker &m : strip.markers) {
             painter.setPen(QPen(QColor(255, 255, 255, 220), 1));
-            painter.drawLine(x, modeY, x, modeY + kModeRowH);
+            painter.drawLine(m.x, 0, m.x, h);
 
-            // Downward caret at the top of the mode row, centered on the line.
             QPainterPath caret;
-            caret.moveTo(x - 3.0, modeY + 0.5);
-            caret.lineTo(x + 3.0, modeY + 0.5);
-            caret.lineTo(x, modeY + 4.5);
+            caret.moveTo(m.x - 3.0, 0.5);
+            caret.lineTo(m.x + 3.0, 0.5);
+            caret.lineTo(m.x, 4.5);
             caret.closeSubpath();
             painter.fillPath(caret, QColor(255, 255, 255, 235));
 
-            const int lw = mfm.horizontalAdvance(m.name);
-            const int lx = x + 4;
-            if (fits(lx, lx + lw)) {
+            if (m.labelVisible) {
                 painter.setPen(Qt::white);
-                painter.drawText(QRect(lx, modeY, lw + 2, kModeRowH), Qt::AlignVCenter | Qt::AlignLeft, m.name);
-                occupied.append({lx, lx + lw});
+                painter.drawText(QRect(m.labelX, 0, m.labelWidth + 2, h), Qt::AlignVCenter | Qt::AlignLeft, m.name);
             }
         }
     }
@@ -446,12 +424,12 @@ void PanadapterRhiWidget::updateBandPlanOverlay() {
         return;
     const bool active = m_bandPlanVisible && !m_bandPlanSegments.isEmpty();
     if (m_dbmScaleOverlay)
-        m_dbmScaleOverlay->setTopReserved(active ? BandPlanOverlay::kTotalH : 0);
+        m_dbmScaleOverlay->setTopReserved(active ? BandPlanOverlay::kStripH : 0);
     if (!active) {
         m_bandPlanOverlay->hide();
         return;
     }
-    m_bandPlanOverlay->setGeometry(0, 0, width(), BandPlanOverlay::kTotalH);
+    m_bandPlanOverlay->setGeometry(0, 0, width(), BandPlanOverlay::kStripH);
     m_bandPlanOverlay->setData(m_centerFreq, m_spanHz, m_ifShift, m_mode, m_bandPlanName, m_bandPlanSegments,
                                m_bandPlanMarkers);
     m_bandPlanOverlay->show();
@@ -563,11 +541,13 @@ void PanadapterRhiWidget::initialize(QRhiCommandBuffer *cb) {
 
     // Use fixed texture sizes - GPU bilinear filtering handles scaling to display size
     m_textureWidth = BASE_TEXTURE_WIDTH;
-    m_waterfallHistory = BASE_WATERFALL_HISTORY;
+    m_waterfallHistory = MAX_WATERFALL_HISTORY;
 
     // Allocate waterfall data buffer
     m_waterfallData.resize(m_textureWidth * m_waterfallHistory);
     m_waterfallData.fill(0);
+    m_rowTierSpanHz.resize(m_waterfallHistory);
+    m_rowTierSpanHz.fill(0.0f);
 
     // Load shaders from compiled .qsb resources
     m_spectrumFillVert = RhiUtils::loadShader(":/shaders/src/dsp/shaders/spectrum_fill.vert.qsb");
@@ -612,16 +592,17 @@ void PanadapterRhiWidget::initialize(QRhiCommandBuffer *cb) {
                                       QRhiSampler::ClampToEdge, QRhiSampler::Repeat));
     m_sampler->create();
 
-    // Waterfall quad (static)
-    float tMax = static_cast<float>(m_waterfallHistory - 1) / m_waterfallHistory;
+    // Waterfall quad (static). Texcoord t spans the full 0..1 and the vertex shader scales it by
+    // visibleFraction, so changing how many rows are on screen costs a uniform rather than a
+    // rebuilt vertex buffer on the render path.
     float waterfallQuad[] = {
         // position (x, y), texcoord (s, t)
         -1.0f, -1.0f, 0.0f, 0.0f, // bottom-left
         1.0f,  -1.0f, 1.0f, 0.0f, // bottom-right
-        1.0f,  1.0f,  1.0f, tMax, // top-right
+        1.0f,  1.0f,  1.0f, 1.0f, // top-right
         -1.0f, -1.0f, 0.0f, 0.0f, // bottom-left
-        1.0f,  1.0f,  1.0f, tMax, // top-right
-        -1.0f, 1.0f,  0.0f, tMax  // top-left
+        1.0f,  1.0f,  1.0f, 1.0f, // top-right
+        -1.0f, 1.0f,  0.0f, 1.0f  // top-left
     };
     m_waterfallVbo.reset(m_rhi->newBuffer(QRhiBuffer::Immutable, QRhiBuffer::VertexBuffer, sizeof(waterfallQuad)));
     m_waterfallVbo->create();
@@ -637,7 +618,8 @@ void PanadapterRhiWidget::initialize(QRhiCommandBuffer *cb) {
     m_overlayVbo->create();
 
     // Create uniform buffers
-    m_waterfallUniformBuffer.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 32));
+    m_waterfallUniformBuffer.reset(
+        m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, sizeof(RhiUtils::WaterfallUniforms)));
     m_waterfallUniformBuffer->create();
 
     m_overlayUniformBuffer.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 32));
@@ -679,7 +661,8 @@ void PanadapterRhiWidget::initialize(QRhiCommandBuffer *cb) {
     m_markerUniformBuffer->create();
 
     // Separate buffers for notch to avoid conflicts with grid (which shares overlay buffers)
-    m_notchVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, 1200 * sizeof(float)));
+    m_notchVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer,
+                                      PanadapterConstants::MaxDashFloats * sizeof(float)));
     m_notchVbo->create();
 
     m_notchUniformBuffer.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 32));
@@ -706,23 +689,27 @@ void PanadapterRhiWidget::initialize(QRhiCommandBuffer *cb) {
     m_txMarkerUniformBuffer->create();
 
     // RTTY mark/space tone line buffers (primary VFO)
-    m_rttyMarkVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, 1200 * sizeof(float)));
+    m_rttyMarkVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer,
+                                         PanadapterConstants::MaxDashFloats * sizeof(float)));
     m_rttyMarkVbo->create();
     m_rttyMarkUniformBuffer.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 32));
     m_rttyMarkUniformBuffer->create();
 
-    m_rttySpaceVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, 1200 * sizeof(float)));
+    m_rttySpaceVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer,
+                                          PanadapterConstants::MaxDashFloats * sizeof(float)));
     m_rttySpaceVbo->create();
     m_rttySpaceUniformBuffer.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 32));
     m_rttySpaceUniformBuffer->create();
 
     // RTTY mark/space tone line buffers (secondary VFO)
-    m_secRttyMarkVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, 1200 * sizeof(float)));
+    m_secRttyMarkVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer,
+                                            PanadapterConstants::MaxDashFloats * sizeof(float)));
     m_secRttyMarkVbo->create();
     m_secRttyMarkUniformBuffer.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 32));
     m_secRttyMarkUniformBuffer->create();
 
-    m_secRttySpaceVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, 1200 * sizeof(float)));
+    m_secRttySpaceVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer,
+                                             PanadapterConstants::MaxDashFloats * sizeof(float)));
     m_secRttySpaceVbo->create();
     m_secRttySpaceUniformBuffer.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 32));
     m_secRttySpaceUniformBuffer->create();
@@ -935,14 +922,14 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
     const float spectrumHeight = h * m_spectrumRatio;
     const float waterfallHeight = h - spectrumHeight;
 
-    // WHY: when the band-plan strip is shown it occupies the top kTotalH logical px of the
+    // WHY: when the band-plan strip is shown it occupies the top kStripH logical px of the
     // spectrum. Stop the per-VFO overlays (passband fills, center/TX markers, RTTY dashes) at
     // its lower edge so they read as bounded by the banner instead of bleeding under the
-    // translucent strip and looking clipped. kTotalH is logical; scale to the physical render
+    // translucent strip and looking clipped. kStripH is logical; scale to the physical render
     // surface. Banner off -> overlayTop is 0 and the overlays span the full spectrum as before.
     const bool bandPlanActive = m_bandPlanVisible && !m_bandPlanSegments.isEmpty();
     const float overlayTop =
-        bandPlanActive ? static_cast<float>(BandPlanOverlay::kTotalH) * static_cast<float>(devicePixelRatioF()) : 0.0f;
+        bandPlanActive ? static_cast<float>(BandPlanOverlay::kStripH) * static_cast<float>(devicePixelRatioF()) : 0.0f;
 
     QRhiResourceUpdateBatch *rub = m_rhi->nextResourceUpdateBatch();
 
@@ -965,38 +952,43 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
         m_waterfallNeedsUpdate = false;
     }
 
-    // Update waterfall uniform buffer with bin parameters
-    float scrollOffset = static_cast<float>(m_waterfallWriteRow) / m_waterfallHistory;
+    // One stored row per device pixel of waterfall height, so a row is never stretched across
+    // several pixels and blended with its neighbours. Clamped to what is actually stored: past
+    // that the old stretching returns, which the qk4.pan.diag geometry line reports as pxPerRow
+    // climbing above 1.
+    m_visibleRows = WaterfallGeometry::visibleRowsFor(waterfallHeight, m_waterfallHistory, MIN_VISIBLE_ROWS);
+
+    // Logged here rather than earlier in the frame: the geometry line reports pxPerRow, which is
+    // only meaningful once the visible row count for this frame has been chosen.
+    if (qk4PanDiag().isDebugEnabled())
+        logRenderGeometry(outputSize);
+
+    // Show the newest m_visibleRows rows, ending one short of the row being written.
+    //
+    // WHY visibleFraction has no -1: the in-flight guard lives entirely in oldestVisible, which
+    // starts the window m_visibleRows back from the write head so the top pixel lands on
+    // m_waterfallWriteRow - 1. Carrying a second -1 in the fraction compressed the rows into one
+    // slot fewer than there are pixels, which the shader's V snap turns from a half-row drift into
+    // a real defect: the top pixel resolves to writeRow - 2, the newest complete row is never
+    // drawn, and one row is skipped outright.
+    const int oldestVisible =
+        WaterfallGeometry::oldestVisibleRow(m_waterfallWriteRow, m_visibleRows, m_waterfallHistory);
+    const float scrollOffset = WaterfallGeometry::scrollOffsetFor(oldestVisible, m_waterfallHistory);
+    const float visibleFraction = WaterfallGeometry::visibleFractionFor(m_visibleRows, m_waterfallHistory);
+
     // Use full tier bin count for waterfall (matches what updateWaterfallData writes)
     float binCount = m_waterfallTierBinCount > 0   ? static_cast<float>(m_waterfallTierBinCount)
                      : m_currentSpectrum.isEmpty() ? static_cast<float>(m_textureWidth)
                                                    : static_cast<float>(m_currentSpectrum.size());
     float tierSpanHz = m_waterfallTierSpanHz > 0 ? m_waterfallTierSpanHz : static_cast<float>(m_spanHz);
     float spanHz = static_cast<float>(m_spanHz);
-    struct {
-        float scrollOffset;
-        float binCount;
-        float textureWidth;
-        float tierSpanHz;
-        float spanHz;
-        float padding[3];
-    } waterfallUniforms = {scrollOffset, binCount, static_cast<float>(m_textureWidth), tierSpanHz, spanHz, {0, 0, 0}};
+    // Layout comes from RhiUtils so it cannot drift from the shaders or from the mini-pan.
+    RhiUtils::WaterfallUniforms waterfallUniforms = {
+        scrollOffset, binCount,        static_cast<float>(m_textureWidth),     tierSpanHz,
+        spanHz,       visibleFraction, static_cast<float>(m_waterfallHistory), 0.0f};
     rub->updateDynamicBuffer(m_waterfallUniformBuffer.get(), 0, sizeof(waterfallUniforms), &waterfallUniforms);
 
-    // Calculate smoothed baseline for spectrum normalization
     if (!m_currentSpectrum.isEmpty()) {
-        float frameMinNormalized = 1.0f;
-        for (int i = 0; i < m_currentSpectrum.size(); ++i) {
-            float normalized = normalizeDb(m_currentSpectrum[i]);
-            if (normalized < frameMinNormalized)
-                frameMinNormalized = normalized;
-        }
-        const float baselineAlpha = 0.05f;
-        if (m_smoothedBaseline < 0.001f)
-            m_smoothedBaseline = frameMinNormalized;
-        else
-            m_smoothedBaseline = baselineAlpha * frameMinNormalized + (1.0f - baselineAlpha) * m_smoothedBaseline;
-
         // Upload raw spectrum bins to 1D texture - GPU shader does bilinear interpolation
         int specSize = m_currentSpectrum.size();
         int offset = (m_textureWidth - specSize) / 2;
@@ -1004,11 +996,14 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
         // Reuse member vector to avoid per-frame heap allocation
         m_normalizedSpectrum.resize(m_textureWidth);
         std::fill(m_normalizedSpectrum.begin(), m_normalizedSpectrum.end(), 0.0f);
-        for (int i = 0; i < specSize; ++i) {
-            float normalized = normalizeDb(m_currentSpectrum[i]);
-            float adjusted = qMax(0.0f, normalized - m_smoothedBaseline);
-            m_normalizedSpectrum[offset + i] = adjusted * 0.95f;
-        }
+        // WHY nothing is subtracted here: this used to remove a smoothed per-frame minimum, an
+        // automatic noise-floor tracker, before scaling by 0.95. It moved the trace by ~20% of the
+        // chart height depending on band noise, so a signal's height depended on conditions rather
+        // than on its strength, and no dBm or S-unit label could be correct. REF and SCALE define
+        // the window; the radio owns them, including in auto-reference mode where it adjusts REF
+        // itself and reports it. Height is now a pure function of dBm.
+        for (int i = 0; i < specSize; ++i)
+            m_normalizedSpectrum[offset + i] = SpectrumScale::normalizedForDb(m_currentSpectrum[i], m_minDb, m_maxDb);
 
         QRhiTextureSubresourceUploadDescription specDataUpload(m_normalizedSpectrum.constData(),
                                                                m_normalizedSpectrum.size() * sizeof(float));
@@ -1258,9 +1253,6 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
 
             // Secondary VFO RTTY mark/space dashed lines
             if ((secIsAfskA || secIsFskD) && m_fskMarkTone > 0) {
-                float dashLen = PanadapterConstants::DashLengthPx;
-                float gapLen = PanadapterConstants::DashGapPx;
-                float stride = dashLen + gapLen;
                 float lineWidth = PanadapterConstants::RttyDashLineWidth;
 
                 auto drawSecRttyLine = [&](qint64 toneFreq, QRhiBuffer *vbo, QRhiBuffer *ubo,
@@ -1270,11 +1262,7 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
                         return;
 
                     QVector<float> verts;
-                    for (float y = overlayTop; y < spectrumHeight; y += stride) {
-                        float yEnd = qMin(y + dashLen, spectrumHeight);
-                        verts << toneX << y << toneX + lineWidth << y << toneX + lineWidth << yEnd << toneX << y
-                              << toneX + lineWidth << yEnd << toneX << yEnd;
-                    }
+                    DashGeometry::appendDashedVerticalLine(verts, toneX, lineWidth, overlayTop, spectrumHeight);
 
                     QRhiResourceUpdateBatch *rub = m_rhi->nextResourceUpdateBatch();
                     rub->updateDynamicBuffer(vbo, 0, verts.size() * sizeof(float), verts.constData());
@@ -1403,9 +1391,6 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
 
             // Draw primary VFO RTTY mark/space dashed lines
             if ((isAfskA || isFskD) && m_fskMarkTone > 0) {
-                float dashLen = PanadapterConstants::DashLengthPx;
-                float gapLen = PanadapterConstants::DashGapPx;
-                float stride = dashLen + gapLen;
                 float lineWidth = PanadapterConstants::RttyDashLineWidth;
 
                 auto drawRttyLine = [&](qint64 toneFreq, QRhiBuffer *vbo, QRhiBuffer *ubo,
@@ -1415,11 +1400,7 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
                         return;
 
                     QVector<float> verts;
-                    for (float y = overlayTop; y < spectrumHeight; y += stride) {
-                        float yEnd = qMin(y + dashLen, spectrumHeight);
-                        verts << toneX << y << toneX + lineWidth << y << toneX + lineWidth << yEnd << toneX << y
-                              << toneX + lineWidth << yEnd << toneX << yEnd;
-                    }
+                    DashGeometry::appendDashedVerticalLine(verts, toneX, lineWidth, overlayTop, spectrumHeight);
 
                     QRhiResourceUpdateBatch *rub = m_rhi->nextResourceUpdateBatch();
                     rub->updateDynamicBuffer(vbo, 0, verts.size() * sizeof(float), verts.constData());
@@ -1575,16 +1556,8 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
                 if (inBounds) {
                     // Draw as dotted line (dashed segments with gaps)
                     float notchWidth = PanadapterConstants::MarkerLineWidth;
-                    float dashLen = PanadapterConstants::DashLengthPx;
-                    float gapLen = PanadapterConstants::DashGapPx;
-                    float stride = dashLen + gapLen;
                     QVector<float> notchVerts;
-                    for (float y = overlayTop; y < spectrumHeight; y += stride) {
-                        float yEnd = qMin(y + dashLen, spectrumHeight);
-                        // Two triangles per dash segment
-                        notchVerts << notchX << y << notchX + notchWidth << y << notchX + notchWidth << yEnd << notchX
-                                   << y << notchX + notchWidth << yEnd << notchX << yEnd;
-                    }
+                    DashGeometry::appendDashedVerticalLine(notchVerts, notchX, notchWidth, overlayTop, spectrumHeight);
 
                     QRhiResourceUpdateBatch *notchRub = m_rhi->nextResourceUpdateBatch();
                     notchRub->updateDynamicBuffer(m_notchVbo.get(), 0, notchVerts.size() * sizeof(float),
@@ -1622,7 +1595,6 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
 void PanadapterRhiWidget::updateSpectrum(const QByteArray &payload, int binsOffset, int binCount, qint64 centerFreq,
                                          qint32 sampleRate, float noiseFloor) {
     m_centerFreq = centerFreq;
-    m_sampleRate = sampleRate;
     m_noiseFloor = noiseFloor;
 
     // Zero-copy view into payload's bin data
@@ -1640,6 +1612,23 @@ void PanadapterRhiWidget::updateSpectrum(const QByteArray &payload, int binsOffs
 
     // Reset tier EMA on tier transition to avoid cross-tier blending
     if (sampleRate != m_lastTierSampleRate) {
+        if (qk4PanDiag().isDebugEnabled())
+            logTierCrossing(m_lastTierSampleRate, sampleRate, tierSpanHz);
+
+        // WHY the waterfall is discarded here: stored rows hold raw bins whose width is the tier
+        // they were captured at, but the shader windows every row with a single tierSpanHz. Rows
+        // from the previous tier would be redrawn at the new tier's scale, silently moving every
+        // signal in the history sideways. Clearing costs the visible history (~40 s at 12 fps) and
+        // is only paid when the radio actually changes tier, which is rarer than changing span.
+        // The alternative, keeping the rows and windowing each by its own tier, is truthful but
+        // leaves the older rows covering less than the display width — rejected as a look-and-feel
+        // call, not a correctness one.
+        if (m_lastTierSampleRate > 0) {
+            m_waterfallData.fill(0);
+            m_rowTierSpanHz.fill(0.0f);
+            m_waterfallNeedsFullClear = true;
+        }
+
         m_tierSpectrum = m_tierRawSpectrum;
         m_lastTierSampleRate = sampleRate;
     } else if (m_tierSpectrum.size() != m_tierRawSpectrum.size()) {
@@ -1666,12 +1655,66 @@ void PanadapterRhiWidget::updateSpectrum(const QByteArray &payload, int binsOffs
 
     decompressBins(binsToUse, m_rawSpectrum);
 
-    if (m_currentSpectrum.size() != m_rawSpectrum.size()) {
+    // WHY resample instead of reassigning: the cropped bin count is spanHz * totalBins / tierSpanHz,
+    // so it changes on every span change and every tier crossing. Dropping the smoothed curve there
+    // put one raw, unsmoothed frame on screen, which reads as a visible flash against an EMA running
+    // at attack 0.52 / decay 0.34. The frequency axis is unchanged across that boundary — old and
+    // new both cover spanHz about the same centre, only the resolution differs — so the smoothed
+    // curve carries over correctly once stretched to the new bin count, and smoothing continues
+    // uninterrupted.
+    if (m_currentSpectrum.isEmpty()) {
         m_currentSpectrum = m_rawSpectrum;
     } else {
+        if (m_currentSpectrum.size() != m_rawSpectrum.size())
+            m_currentSpectrum = resampleLinear(m_currentSpectrum, m_rawSpectrum.size());
         for (int i = 0; i < m_rawSpectrum.size(); ++i) {
             float alpha = (m_rawSpectrum[i] > m_currentSpectrum[i]) ? attackAlpha : decayAlpha;
             m_currentSpectrum[i] = alpha * m_rawSpectrum[i] + (1.0f - alpha) * m_currentSpectrum[i];
+        }
+    }
+
+    // The radio reports the noise floor it measured, in the same dBm the bins are meant to be in
+    // once RhiUtils::K4_DBM_OFFSET is applied. Comparing the two is a free check that the offset is
+    // right — a systematic gap means every dBm and S-unit on the scale is off by that much. Logged
+    // only when the disagreement changes, so it stays quiet while the calibration holds.
+    if (qk4PanDiag().isDebugEnabled() && !m_rawSpectrum.isEmpty()) {
+        // Raw bins, not the smoothed curve: the EMA's fast-attack/slow-decay asymmetry biases the
+        // result upward and would be read as a calibration error. The median is the meaningful
+        // comparison — with signals sparse across the span, most bins are noise, whereas the single
+        // lowest bin is the deepest downward excursion of that noise and sits well below any floor
+        // statistic the radio would report.
+        QVector<float> sorted = m_rawSpectrum;
+        std::sort(sorted.begin(), sorted.end());
+        const float medianDbm = sorted[sorted.size() / 2];
+        // 5th percentile, not the outright minimum: the lowest single bin is the deepest downward
+        // excursion of the noise and moves several dB frame to frame, which made this line fire
+        // over a thousand times in one session. A low percentile tracks the same floor without the
+        // jitter.
+        const float minDbm = sorted[sorted.size() / 20];
+        // Track the minimum, not the median: measured against a live band the min lands within a
+        // few dB of the radio's reported floor, while the median runs ~20 dB higher because most
+        // bins hold signal rather than noise. The min is therefore the calibration signal and the
+        // median is context — keying the log on the min keeps it quiet unless the offset is wrong,
+        // instead of chattering as band activity moves the median.
+        // Smoothed before comparing: calibration error is a standing offset, so only a sustained
+        // move is worth a line. Per-frame variation is band noise, not the constant drifting.
+        const float delta = minDbm - m_noiseFloor;
+        m_calibDelta = (m_calibSamples == 0) ? delta : 0.02f * delta + 0.98f * m_calibDelta;
+        ++m_calibSamples;
+
+        // One line once the average has settled, then only on a sustained change. Reporting the
+        // settled value even when it is small is the point: a silent check cannot be told apart
+        // from a broken one, and "offset +0.6 dB" is the evidence that the constant is right.
+        const bool settled = m_calibSamples == 120;
+        const bool drifted = m_calibLogged && std::abs(m_calibDelta - m_lastLoggedCalibDelta) >= 2.0f;
+        if (settled || drifted) {
+            m_calibLogged = true;
+            m_lastLoggedCalibDelta = m_calibDelta;
+            qCDebug(
+                qk4PanDiag, "%s",
+                qPrintable(QString::asprintf("CALIB       radio floor %.1f dBm  raw min %.1f  raw median %.1f  "
+                                             "smoothed offset %+.1f dB  (K4_DBM_OFFSET %.0f)",
+                                             m_noiseFloor, minDbm, medianDbm, m_calibDelta, RhiUtils::K4_DBM_OFFSET)));
         }
     }
 
@@ -1702,6 +1745,11 @@ void PanadapterRhiWidget::updateWaterfallData() {
     // Clear row (zeros outside bin region = no signal)
     std::memset(&m_waterfallData[row * m_textureWidth], 0, m_textureWidth);
 
+    // Record which tier this row holds. The renderer applies one tierSpanHz to every row, so this
+    // is what makes it measurable how many on-screen rows are being windowed at the wrong scale.
+    if (row >= 0 && row < m_rowTierSpanHz.size())
+        m_rowTierSpanHz[row] = m_waterfallTierSpanHz;
+
     // Copy raw bins (no interpolation - GPU handles it)
     for (int i = 0; i < specSize; ++i) {
         float normalized = normalizeDb(source[i]);
@@ -1710,12 +1758,94 @@ void PanadapterRhiWidget::updateWaterfallData() {
     }
 }
 
+void PanadapterRhiWidget::logTierCrossing(qint32 oldSampleRate, qint32 newSampleRate, qint32 newTierSpanHz) {
+    // The first packet after construction or reset moves the tier from 0, which is initialization
+    // rather than a crossing: there is no history to rescale and no meaningful ratio. Logging it
+    // would put two misleading "rescaleFactor 0x" lines in front of every real measurement.
+    if (oldSampleRate <= 0)
+        return;
+
+    const float oldTierSpanHz = static_cast<float>(oldSampleRate) * 1000.0f;
+
+    // How many rows already on screen were captured at a tier other than the one about to become
+    // current. Those rows keep their old bins but get windowed with the new tier span, so this is
+    // the count of rows the next frame will draw at the wrong frequency scale.
+    int staleRows = 0;
+    for (float rowSpan : std::as_const(m_rowTierSpanHz)) {
+        if (rowSpan > 0.0f && !qFuzzyCompare(rowSpan, static_cast<float>(newTierSpanHz)))
+            ++staleRows;
+    }
+
+    const float spanRatioBefore =
+        oldTierSpanHz > 0.0f ? qMin(1.0f, static_cast<float>(m_spanHz) / oldTierSpanHz) : 0.0f;
+    const float spanRatioAfter = newTierSpanHz > 0 ? qMin(1.0f, static_cast<float>(m_spanHz) / newTierSpanHz) : 0.0f;
+    const float rescaleFactor = oldTierSpanHz > 0.0f ? static_cast<float>(newTierSpanHz) / oldTierSpanHz : 0.0f;
+
+    qCDebug(qk4PanDiag).nospace() << "TIER CROSS  sampleRate " << oldSampleRate << "->" << newSampleRate
+                                  << " kHz  tierSpan " << static_cast<qint32>(oldTierSpanHz) << "->" << newTierSpanHz
+                                  << " Hz  rescaleFactor " << rescaleFactor << "x  span " << m_spanHz
+                                  << " Hz  spanRatio " << spanRatioBefore << "->" << spanRatioAfter << "  writeRow "
+                                  << m_waterfallWriteRow << "  staleRows " << staleRows << "/" << m_waterfallHistory
+                                  << "  (EMA reset this frame: trace may flash independently)";
+}
+
+void PanadapterRhiWidget::logRenderGeometry(const QSize &outputSize) {
+    if (outputSize.isEmpty())
+        return;
+
+    // The first size is settled before any PAN packet arrives, so a size-change-only trigger would
+    // report the horizontal figures as zero and never revisit them. Allow exactly one repeat once
+    // bin data exists, so pxPerBin is answered without logging every frame.
+    // The split ratio is draggable (0.1..0.9), and it scales the waterfall's share of the height,
+    // so it moves pxPerRow further than resizing the window does. Treat a ratio change as a
+    // geometry change or the most direct control over the artifact would go unrecorded.
+    const bool haveBins = m_waterfallTierSpanHz > 0.0f && m_waterfallTierBinCount > 0;
+    const bool sameGeometry =
+        outputSize == m_lastLoggedOutputSize && qFuzzyCompare(m_spectrumRatio, m_lastLoggedSpectrumRatio);
+    if (sameGeometry && (m_geometryLoggedWithBins || !haveBins))
+        return;
+    m_lastLoggedOutputSize = outputSize;
+    m_lastLoggedSpectrumRatio = m_spectrumRatio;
+    m_geometryLoggedWithBins = haveBins;
+
+    const float waterfallHeightPx = static_cast<float>(outputSize.height()) * (1.0f - m_spectrumRatio);
+    const float pxPerRow = m_visibleRows > 0 ? waterfallHeightPx / m_visibleRows : 0.0f;
+
+    // Rows follow pixel height now, so anything but ~1.0 means a clamp bit: the window is either
+    // taller than the stored rows or shorter than MIN_VISIBLE_ROWS.
+    const char *verdict = pxPerRow <= 1.05f ? "1:1"
+                          : pxPerRow < 2.0f ? "above 1:1, clamped by stored rows"
+                                            : "well above 1:1, blur returning";
+
+    const float visibleBins = m_waterfallTierSpanHz > 0.0f
+                                  ? static_cast<float>(m_waterfallTierBinCount) *
+                                        qMin(1.0f, static_cast<float>(m_spanHz) / m_waterfallTierSpanHz)
+                                  : 0.0f;
+    const float pxPerBin = visibleBins > 0.0f ? static_cast<float>(outputSize.width()) / visibleBins : 0.0f;
+
+    // WHY a formatted string and not a chain of <<: a long operator<< chain sitting near the
+    // column limit is wrapped differently by different clang-format 18 builds, so CI's apt binary
+    // rejected what the Homebrew one accepted. One asprintf has no wrapping decision to disagree
+    // about, and reads better besides.
+    qCDebug(qk4PanDiag, "%s",
+            qPrintable(QString::asprintf("GEOMETRY    output %dx%d px  dpr %g  spectrumRatio %g  "
+                                         "waterfall %.1f px  rows %d/%d visible/stored  "
+                                         "pxPerRow %.4f (%s)  visibleBins %.0f  pxPerBin %.2f",
+                                         outputSize.width(), outputSize.height(), devicePixelRatioF(), m_spectrumRatio,
+                                         waterfallHeightPx, m_visibleRows, m_waterfallHistory, pxPerRow, verdict,
+                                         visibleBins, pxPerBin)));
+}
+
 float PanadapterRhiWidget::normalizeDb(float db) {
-    // WHY: Only the lower bound is clamped. Bins stronger than m_maxDb intentionally return
-    // values > 1.0 so the spectrum-fill shader (peakY = 1.0 - value) lets the trace climb to
-    // the chart's top edge instead of flat-topping at (1.0 - baseline) * 0.95. The waterfall
-    // byte-cast path re-clamps via qBound(0, ..., 255), so it stays safe.
-    return qMax(0.0f, (db - m_minDb) / (m_maxDb - m_minDb));
+    // One implementation for the spectrum trace, the waterfall and the scale labels. They disagreed
+    // before — the labels described a plain dBm axis while the trace had a drifting noise-floor
+    // offset applied — so the axis could not be read. Routing all three through the same function
+    // is what keeps them honest.
+    //
+    // Only the lower bound is clamped: bins stronger than m_maxDb return > 1.0 so the spectrum-fill
+    // shader (peakY = 1.0 - value) lets the trace climb to the chart's top edge instead of
+    // flat-topping. The waterfall byte-cast path re-clamps via qBound(0, ..., 255), so it stays safe.
+    return SpectrumScale::normalizedForDb(db, m_minDb, m_maxDb);
 }
 
 float PanadapterRhiWidget::freqToNormalized(qint64 freq) {
@@ -1836,6 +1966,7 @@ void PanadapterRhiWidget::clear() {
     m_rawSpectrum.clear();
     m_waterfallWriteRow = 0;
     m_waterfallData.fill(0);
+    m_rowTierSpanHz.fill(0.0f);
     m_waterfallNeedsFullClear = true;
 
     // Reset all radio state to header defaults.

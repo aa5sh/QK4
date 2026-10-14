@@ -7,6 +7,7 @@
 #include <QThread>
 #include <QTimer>
 #include <atomic>
+#include "connect_failure.h"
 #include "protocol.h"
 
 class TcpClient : public QObject {
@@ -28,8 +29,8 @@ public:
      * @param useTls  Select the encrypted transport (TLS + PSK on port 9204).
      * @param identity PSK identity. Only used in TLS mode; empty is accepted.
      * @param encodeMode Opus encode profile sent to the K4 in the startup macro.
-     *                   Valid range: 0 = RAW32, 1 = RAW16, 2 = Opus Int, 3 = Opus Float (default).
-     *                   Values outside 0-3 are undefined.
+     *                   Valid range: 0=RAW S32LE (24-bit), 1=RAW S16LE, 2/3=Opus (same bitstream, int vs float decode).
+     * EM3 is the default. Values outside 0-3 are undefined.
      * @param streamingLatency SL tier (audio packet bundling). Valid range 0–7; there are four
      *                   distinct tiers — 20/40/60/120 ms per packet, verified in
      *                   `memory/k4-streaming-latency.md`. Default 3 ≈ 40 ms.
@@ -69,8 +70,13 @@ signals:
     void disconnected();
     void errorOccurred(const QString &error);
     void authenticated();
-    void authenticationFailed();
     void latencyChanged(int ms);
+
+private:
+    // Classifies a failed connection attempt and emits errorOccurred() if it amounts to one.
+    // The decision itself lives in connect_failure.h so it can be tested without a socket.
+    void reportFailure(ConnectFailure::Event event, ConnectFailure::Phase phase,
+                       const QString &socketErrorText = QString());
 
 private slots:
     void onSocketConnected();
@@ -99,6 +105,9 @@ private:
     QTimer *m_pingTimer;
     QTimer *m_retryTimer;
     int m_retryCount = 0;
+    // Bumped by every connectToHost() and disconnectFromHost(), so an asynchronous step started for
+    // one attempt (the mDNS lookup) can tell that it has since been replaced. I/O thread only.
+    quint64 m_attemptId = 0;
 
     QString m_host;
     quint16 m_port;

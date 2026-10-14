@@ -1,9 +1,11 @@
 #include "ui/dialogs/optionsdialog.h"
 #include "ui/pages/aboutpage.h"
 #include "ui/pages/stationpage.h"
+#include "ui/pages/displaypage.h"
 #include "ui/pages/audioinputpage.h"
 #include "ui/pages/audiooutputpage.h"
 #include "ui/pages/rigcontrolpage.h"
+#include "ui/pages/tciserverpage.h"
 #include "ui/pages/cwkeyerpage.h"
 #include "ui/pages/kpodpage.h"
 #include "ui/pages/kpa1500page.h"
@@ -14,11 +16,11 @@
 #include <QHBoxLayout>
 
 OptionsDialog::OptionsDialog(RadioState *radioState, AudioController *audioController,
-                             HardwareController *hardwareController, CatServer *catServer, KPA1500Client *kpa1500Client,
-                             DxClusterController *dxClusterController, QWidget *parent)
+                             HardwareController *hardwareController, CatServer *catServer, TciController *tciController,
+                             KPA1500Client *kpa1500Client, DxClusterController *dxClusterController, QWidget *parent)
     : QDialog(parent), m_radioState(radioState), m_audioController(audioController),
-      m_hardwareController(hardwareController), m_catServer(catServer), m_kpa1500Client(kpa1500Client),
-      m_dxClusterController(dxClusterController) {
+      m_hardwareController(hardwareController), m_catServer(catServer), m_tciController(tciController),
+      m_kpa1500Client(kpa1500Client), m_dxClusterController(dxClusterController) {
     setWindowModality(Qt::ApplicationModal);
     setupUi();
 }
@@ -53,9 +55,11 @@ void OptionsDialog::setupUi() {
     m_tabList->setFixedWidth(K4Styles::Dimensions::TabListWidth);
     m_tabList->addItem("About");
     m_tabList->addItem("Station");
+    m_tabList->addItem("Display");
     m_tabList->addItem("Audio Input");
     m_tabList->addItem("Audio Output");
     m_tabList->addItem("Rig Control");
+    m_tabList->addItem("TCI Server");
     m_tabList->addItem("HaliKey");
     m_tabList->addItem("K-Pod");
     m_tabList->addItem("KPA1500");
@@ -114,6 +118,10 @@ void OptionsDialog::ensurePageCreated(int index) {
         m_stationPage = new StationPage(this);
         page = m_stationPage;
         break;
+    case PageDisplay:
+        m_displayPage = new DisplayPage(this);
+        page = m_displayPage;
+        break;
     case PageAudioInput:
         m_audioInputPage = new AudioInputPage(m_audioController, this);
         page = m_audioInputPage;
@@ -125,6 +133,10 @@ void OptionsDialog::ensurePageCreated(int index) {
     case PageRigControl:
         m_rigControlPage = new RigControlPage(m_catServer, this);
         page = m_rigControlPage;
+        break;
+    case PageTciServer:
+        m_tciServerPage = new TciServerPage(m_tciController, m_audioController, this);
+        page = m_tciServerPage;
         break;
     case PageCwKeyer:
         m_cwKeyerPage = new CwKeyerPage(m_hardwareController->halikeyDevice(), this);
@@ -171,6 +183,10 @@ void OptionsDialog::refreshPage(int index) {
     case PageRigControl:
         if (m_rigControlPage)
             m_rigControlPage->refresh();
+        break;
+    case PageTciServer:
+        if (m_tciServerPage)
+            m_tciServerPage->refresh();
         break;
     case PageCwKeyer:
         if (m_cwKeyerPage)

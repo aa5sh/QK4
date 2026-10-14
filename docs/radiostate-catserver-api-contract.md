@@ -7,7 +7,7 @@ Phase 1 RadioState subsystem split — every getter listed below must remain on
 same signature and the same semantics.
 
 The regression gate is `tests/test_catserver.cpp` (33 test cases). `test_catserver`
-is pinned in the CI build target list (`.github/workflows/ci.yml`) so any
+is pinned in the CI build target list (`.github/workflows/ci-checks.yml`) so any
 break of this contract fails the build.
 
 ## Getters consumed by CatServer
@@ -27,18 +27,25 @@ commit that introduced this contract:
 | `ritEnabled()` | `bool` | `RT`, `IF` |
 | `xitEnabled()` | `bool` | `XT`, `IF` |
 | `ritXitOffset()` | `int` | `IF` (offset field) |
-| `rfPower()` | `double` | `PC` |
-| `isQrpMode()` | `bool` | `PC` (L/H/X flag) |
+| `rfPower()` | `double` | `PC`, `PCX` |
+| `powerRange()` | `LevelsState::PowerRange` | `PC`, `PCX` (range letter L/H/X, as the radio sends it) |
 | `agcSpeed()` | `RadioState::AGCSpeed` | `GT` |
 | `keyerSpeed()` | `int` | `KS` |
-| `noiseBlankerEnabled()` | `bool` | `NB` |
-| `noiseReductionEnabled()` | `bool` | `NR` |
-| `voxEnabled()` | `bool` (rollup) | `VX` |
+| `noiseBlankerLevel()` / `noiseBlankerEnabled()` / `noiseBlankerFilterWidth()` | `int`, `bool`, `int` | `NB` (`NB0301`) |
+| `noiseReductionLevel()` / `noiseReductionEnabled()` | `int`, `bool` | `NR` (`NR050`) |
+| `mode()` + `voxCW()` / `voxVoice()` / `voxData()` | `Mode`, `bool` | `VX` (the current mode's group, as the radio answers it: `VXD0`) |
 | `filterBandwidth()` | `int` | `BW` |
 | `dataSubMode()` | `int` | `DT` |
 | `optionModules()` | `QString` | `OM` |
 | `diversityEnabled()` | `bool` | `DV` |
 | `sMeter()` | `double` | `SM` |
+| `squelchLevel()` / `squelchLevelB()` | `int` | `SQ` / `SQ$` (no answer while -1) |
+| `rfGain()` / `rfGainB()` | `int` | `RG` / `RG$` (`RG-00`; no answer while unset) |
+| `ritXitOffsetB()`, `ritEnabledB()`, `agcSpeedB()`, the `…B()` NB / NR getters, `filterBandwidthB()`, `dataSubModeB()` | | `RO$`, `RT$`, `GT$`, `NB$`, `NR$`, `BW$`, `DT$` (main frame with `$` after the prefix) |
+
+`AG` / `AG$` read no getter. The radio does not report AF gain when the knob moves, so a stored
+value would be stale, and CatServer asks the radio instead (`radioQueryRequested`, answered through
+`onRadioResponse`). #134.
 
 ## Phase 1 rules
 

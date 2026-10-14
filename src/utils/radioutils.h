@@ -22,9 +22,31 @@ constexpr int SPAN_MAX = 368000;
 constexpr int SPAN_THRESHOLD_UP = 144000;
 constexpr int SPAN_THRESHOLD_DOWN = 140000;
 
+// K4 keyer speed range. The manual gives "from 8 to 100 WPM" and the KS command documents the
+// same, so a speed outside it cannot come from the radio.
+constexpr int KEYER_WPM_MIN = 8;
+constexpr int KEYER_WPM_MAX = 100;
+
+/// Dit unit length in ms for a keyer speed, clamped to the K4's range.
+///
+/// WHY this is shared rather than written out at each site: three places derive an element length
+/// from the speed — the local iambic keyer's element clock, the sidetone's PCM block length, and
+/// the KZL element length sent to the K4 — and they have to agree exactly. They did not: the
+/// sidetone clamped to 5-60 WPM while the keyer clamped not at all, so above 60 WPM the sidetone
+/// built longer blocks than the keyer's element interval and fell further behind on every element,
+/// with no recovery until keying stopped. One conversion, one clamp, no drift.
+inline int ditMsForWpm(int wpm) {
+    return 1200 / qBound(KEYER_WPM_MIN, wpm, KEYER_WPM_MAX);
+}
+
 /// Convert VT tuning step index (0-5) to Hz.
 /// Returns 1000 Hz for out-of-range values.
 int tuningStepToHz(int step);
+
+/// VT tuning step for a frequency-display digit, counted from the right (0 = 1 Hz digit).
+/// Digits 0-4 (1 Hz to 10 kHz) map to VT0-VT4; any other digit returns -1 because the K4 has no
+/// tuning step above 10 kHz (VT5 wraps back to 100 Hz).
+int tuningStepForDigit(int digitFromRight);
 
 /// Convert frequency (Hz) to K4 band number (0=160m ... 10=6m, 16=XVTR).
 /// Returns -1 for out-of-band frequencies.
@@ -37,6 +59,14 @@ int getNextSpanUp(int currentSpan);
 /// Get next span step down (zoom in) from current span in Hz.
 /// Clamps at SPAN_MIN.
 int getNextSpanDown(int currentSpan);
+
+/// Span after one zoom step: zooming in narrows the span (getNextSpanDown), zooming out widens it
+/// (getNextSpanUp). The one place that decides which way a + or - span control goes.
+int spanAfterZoom(int currentSpan, bool zoomIn);
+
+/// Next K4 filter preset when cycling like the front panel: 1 -> 3 -> 2 -> 1.
+/// Returns -1 for anything outside 1-3 (preset not known yet).
+int nextFilterPreset(int currentPreset);
 
 /// Build an 8-band EQ CAT command string (e.g., "RE+00-02+04..." or "TE+00...").
 /// prefix is "RE" (RX) or "TE" (TX), bands must have exactly 8 values in [-16, +16].
@@ -103,10 +133,15 @@ QString fixedTuneSetCommand(FixedTuneMode mode);
 /// land on the same step boundary the dimmed-digit display indicates.
 qint64 snapFreqToStep(qint64 freq, int stepHz);
 
+/// Convert a Celsius reading to Fahrenheit, rounded to the nearest degree.
+/// Display-only: warning/critical thresholds stay in Celsius so a given physical
+/// temperature keeps its colour whichever unit is shown.
+int celsiusToFahrenheit(int celsius);
+
 /// True if s is a strictly-valid dotted IPv4 address: exactly 4 dot-separated
-/// octets, each parseable 0-255. Rejects "192.168.1", "192.168.100.500",
-/// "1.2.3.4.5". (QHostAddress is NOT used here — it leniently accepts partial
-/// forms like "192.168.1" as 192.168.0.1.)
+/// octets, each parseable 0-255, none with a leading zero. Rejects "192.168.1",
+/// "192.168.100.500", "1.2.3.4.5", "010.0.0.1". (QHostAddress is NOT used here —
+/// it leniently accepts partial forms like "192.168.1" as 192.168.0.1.)
 bool isValidIpv4(const QString &s);
 
 /// True if s is a valid host the K4 connection layer can use: a strict IPv4,

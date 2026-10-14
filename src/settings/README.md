@@ -6,6 +6,8 @@
 
 - `radiosettings.{cpp,h}` — Radio profiles, DX cluster list, KPA1500 config, audio device preferences, UI geometry. Includes password obfuscation helpers.
 
+- `interfacescale.{cpp,h}` — `InterfaceScale::` namespace. Applies the saved interface scale through `QT_SCALE_FACTOR` before `QApplication` exists (never overriding one the operator set), fits Auto to the screen with at most one silent relaunch per launch, and relaunches for Options → Display → Restart Now only after the main window has shut down, so the new instance never races the old one for the CAT/TCI ports or USB devices.
+
 ## Scope
 
 Every persisted value on disk goes through here. Adding a setting:

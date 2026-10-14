@@ -1,4 +1,11 @@
-name: CI
+name: CI · Checks
+
+run-name: >-
+  ${{ github.event_name == 'pull_request'
+      && format('PR #{0} → {1}: {2}', github.event.pull_request.number, github.base_ref, github.event.pull_request.title)
+      || github.event_name == 'push'
+      && format('{0}: {1}', github.ref_name, github.event.head_commit.message)
+      || format('{0} ({1})', github.ref_name, github.event_name) }}
 
 on:
   push:
@@ -19,31 +26,48 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Install clang-format
-        # Pinned major so the formatting baseline can't shift when the runner
-        # image's default clang-format changes. Bumping this requires a
-        # repo-wide reformat commit first.
-        run: sudo apt-get install -y clang-format-18
+        # Pinned to an EXACT patch version, from PyPI's prebuilt LLVM binaries.
+        #
+        # WHY not apt. `clang-format-18` pins only the major, so the patch version moved with the
+        # runner image while developers ran whatever their platform's 18.x was. clang-format's
+        # line-breaking heuristics change between patch releases, so a file could be correctly
+        # formatted locally and rejected here - with no way to reproduce the failure except by
+        # guessing at the wrapping. The documented workaround was to hand-write long expressions as
+        # one formatted string to avoid giving the two versions anything to disagree about, which
+        # is a constraint on the source rather than a fix.
+        #
+        # The PyPI package ships the same upstream LLVM build for macOS and Linux, so this is
+        # byte-identical to a developer's pinned 18.1.8: verified across every file in src/ and
+        # tests/ against Homebrew's 18.1.8, zero differences.
+        #
+        # Bumping this requires a repo-wide reformat commit first. scripts/check-format.sh follows
+        # this line on its own; a major bump also moves the llvm@18 path in CONVENTIONS.md.
+        #
+        # KEEP THE `clang-format==<version>` SHAPE: scripts/check-format.sh parses this exact line
+        # to learn which version to demand locally, rather than carrying its own copy of the number.
+        run: pipx install clang-format==18.1.8
 
       - name: Check formatting
         run: |
-          find src tests -name '*.cpp' -o -name '*.h' | xargs clang-format-18 --dry-run --Werror
+          clang-format --version
+          find src tests -name '*.cpp' -o -name '*.h' | xargs clang-format --dry-run --Werror
 
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Install Qt 6 and dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y qt6-base-dev qt6-base-private-dev \
             qt6-multimedia-dev qt6-serialport-dev qt6-svg-dev \
-            qt6-shadertools-dev \
+            qt6-shadertools-dev qt6-qpa-plugins \
             libopus-dev libhidapi-dev libusb-1.0-0-dev libssl-dev libudev-dev libasound2-dev
 
       - name: Configure CMake
@@ -68,19 +92,19 @@ jobs:
     # and UB that unit tests would otherwise miss. Post-refactor
     # (Phase 5.4) decision: keep it. Cost is one Ubuntu job + ~2 min;
     # it catches a bug class regular tests miss.
-    # Scheduled deep runs (including TSan) live in sanitizers.yml.
+    # Scheduled deep runs (including TSan) live in scheduled-sanitizers.yml.
     name: Sanitizer Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Install Qt 6 and dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y qt6-base-dev qt6-base-private-dev \
             qt6-multimedia-dev qt6-serialport-dev qt6-svg-dev \
-            qt6-shadertools-dev \
+            qt6-shadertools-dev qt6-qpa-plugins \
             libopus-dev libhidapi-dev libusb-1.0-0-dev libssl-dev libudev-dev libasound2-dev
 
       - name: Configure CMake (sanitizers on for tests)

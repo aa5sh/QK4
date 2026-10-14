@@ -124,14 +124,15 @@ constexpr const char *ChartSeriesRtt = VfoACyan;        // RTT trace (cyan)
 constexpr const char *ChartSeriesJitter = AccentAmber;  // jitter trace (amber)
 constexpr const char *ChartSeriesBuffer = MeterIdLight; // buffer trace (soft sage green)
 
-// Band-plan overlay colors. Mode-segment fills (rendered translucent over the spectrum)
-// plus the band-name header row.
-constexpr const char *BandPlanCw = "#CB3B45";     // CW / Morse (crimson red)
-constexpr const char *BandPlanData = "#E0852F";   // Digital / data (RTTY, PSK, FT8...) orange
-constexpr const char *BandPlanPhone = "#6E83A6";  // SSB / phone (voice) slate blue
-constexpr const char *BandPlanBeacon = "#AB47BC"; // Beacons (exclusive) purple
-constexpr const char *BandPlanAll = "#90A4AE";    // All modes share (CW/data/phone) blue-grey
-constexpr const char *BandPlanBand = "#4E9A52";   // Band-name header row (green)
+// Band-plan overlay colors. Mode-segment fills (rendered translucent over the spectrum), the
+// out-of-band fill under its hatching, and the band-name tag.
+constexpr const char *BandPlanCw = "#CB3B45";        // CW / Morse (crimson red)
+constexpr const char *BandPlanData = "#E0852F";      // Digital / data (RTTY, PSK, FT8...) orange
+constexpr const char *BandPlanPhone = "#6E83A6";     // SSB / phone (voice) slate blue
+constexpr const char *BandPlanBeacon = "#AB47BC";    // Beacons (exclusive) purple
+constexpr const char *BandPlanAll = "#90A4AE";       // All modes share (CW/data/phone) blue-grey
+constexpr const char *BandPlanOutOfBand = "#3A3A3A"; // Past the band edge (under the hatch)
+constexpr const char *BandPlanTag = "#0F0F0F";       // Band-name tag ("20m")
 } // namespace Colors
 
 namespace Dimensions {
@@ -244,6 +245,12 @@ constexpr int ChartScaleTickLen = 5;        // Length of the left-edge scale tic
 // =============================================================================
 constexpr int VfoIndicatorWidth = 34;  // VFO A/B label width on panadapter
 constexpr int VfoIndicatorHeight = 30; // VFO A/B label height on panadapter
+
+// Under each VFO's frequency: the multifunction meter OR the mini-pan, then the feature row (AGC, PRE,
+// ATT, NB, NR, NTCH, APF), which stays visible either way. Panel + 2 px layout spacing + row = 150,
+// the height the meter-or-mini-pan block had when the feature row was hidden by the mini-pan.
+constexpr int VfoPanelHeight = 130;     // Meter (5 bars) or mini-pan; both pages of the VFO's stack
+constexpr int VfoFeatureRowHeight = 18; // The feature indicator row below it
 
 // =============================================================================
 // Dialog Dimensions

@@ -33,26 +33,31 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     connect(m_kpodDevice, &KpodDevice::buttonHeld, this,
             [this](int buttonNum) { emit macroRequested(QString("K-pod.%1H").arg(buttonNum)); });
 
-    // Auto-start polling when device arrives
-    connect(m_kpodDevice, &KpodDevice::deviceConnected, this, [this]() {
-        if (RadioSettings::instance()->kpodEnabled() && !m_kpodDevice->isPolling()) {
-            m_kpodDevice->startPolling();
-        }
-    });
-
-    // Settings: KPOD enable/disable
-    connect(RadioSettings::instance(), &RadioSettings::kpodEnabledChanged, this,
-            &HardwareController::onKpodEnabledChanged);
-
-    // WHY: KpodDevice::detectDevice() is deferred to the first event-loop tick (see
-    // kpoddevice.cpp constructor note) to keep the 400ms hid_open_path retry off the
-    // main thread at startup. isDetected() is false at this point; the deviceInfoReady
-    // signal fires after detection completes and is the correct point to auto-start
-    // polling if the user had KPOD enabled.
+    // Lifecycle → policy. Detection is a fact the device reports; what to DO about it is decided
+    // in one place (hardware/usbdevicelifecycle.h) for both devices.
+    //
+    // WHY deviceInfoReady rather than deviceConnected for detection: KpodDevice::detectDevice() is
+    // deferred to the first event-loop tick (see kpoddevice.cpp) to keep the 400 ms hid_open_path
+    // retry off the main thread at startup, so isDetected() is false at construction and this signal
+    // is the first honest answer.
+    //
+    // deviceDisconnected is deliberately NOT mapped to an event. It fires both when the cable is
+    // pulled and when WE called stopPolling, with no way to tell them apart — while an actual
+    // removal already arrives here as deviceInfoReady with isDetected() false. Feeding it in as a
+    // loss would mark a device "gone" that is still plugged in.
     connect(m_kpodDevice, &KpodDevice::deviceInfoReady, this, [this]() {
-        if (RadioSettings::instance()->kpodEnabled() && m_kpodDevice->isDetected() && !m_kpodDevice->isPolling()) {
-            m_kpodDevice->startPolling();
-        }
+        applyKpod(m_kpodDevice->isDetected() ? UsbDeviceLifecycle::Event::Detected : UsbDeviceLifecycle::Event::Lost);
+    });
+    connect(m_kpodDevice, &KpodDevice::deviceConnected, this,
+            [this]() { applyKpod(UsbDeviceLifecycle::Event::Opened); });
+
+    // Settings: one checkbox governs both devices.
+    m_kpodState.enabled = RadioSettings::instance()->kpodEnabled();
+    m_kpodPlusState.enabled = m_kpodState.enabled;
+    connect(RadioSettings::instance(), &RadioSettings::kpodEnabledChanged, this, [this](bool enabled) {
+        const auto ev = enabled ? UsbDeviceLifecycle::Event::Enabled : UsbDeviceLifecycle::Event::Disabled;
+        applyKpod(ev);
+        applyKpodPlus(ev);
     });
 
     // =========================================================================
@@ -95,32 +100,14 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     // Auto-start polling on device arrival. The KPOD+ keyer-active gate +
     // EP02 keyer-data routing are wired by CwController, which observes the
     // same deviceConnected / deviceInfoReady signals independently.
-    connect(m_kpodPlusDevice, &KpodPlusDevice::deviceConnected, this, [this, applyKpodPlusConfig]() {
-        if (RadioSettings::instance()->kpodEnabled() && !m_kpodPlusDevice->isPolling()) {
-            m_kpodPlusDevice->startPolling();
-            applyKpodPlusConfig();
-        }
+    m_applyKpodPlusConfig = applyKpodPlusConfig;
+    connect(m_kpodPlusDevice, &KpodPlusDevice::deviceInfoReady, this, [this]() {
+        applyKpodPlus(m_kpodPlusDevice->isDetected() ? UsbDeviceLifecycle::Event::Detected
+                                                     : UsbDeviceLifecycle::Event::Lost);
     });
-
-    // Auto-start on detection at startup
-    connect(m_kpodPlusDevice, &KpodPlusDevice::deviceInfoReady, this, [this, applyKpodPlusConfig]() {
-        if (RadioSettings::instance()->kpodEnabled() && m_kpodPlusDevice->isDetected() &&
-            !m_kpodPlusDevice->isPolling()) {
-            m_kpodPlusDevice->startPolling();
-            applyKpodPlusConfig();
-        }
-    });
-
-    // KPOD enable/disable also controls KPOD+
-    connect(RadioSettings::instance(), &RadioSettings::kpodEnabledChanged, this, [this](bool enabled) {
-        if (enabled) {
-            if (m_kpodPlusDevice->isDetected() && !m_kpodPlusDevice->isPolling()) {
-                m_kpodPlusDevice->startPolling();
-            }
-        } else {
-            m_kpodPlusDevice->stopPolling();
-        }
-    });
+    connect(m_kpodPlusDevice, &KpodPlusDevice::deviceConnected, this,
+            [this]() { applyKpodPlus(UsbDeviceLifecycle::Event::Opened); });
+    // The enable handler is shared with the KPOD above — one checkbox, both devices.
 
     // =========================================================================
     // HaliKey CW paddle device — device type injected here so HalikeyDevice
@@ -183,27 +170,94 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     // connect/disconnect — lives on CwController (constructed by MainWindow
     // immediately after this controller). See cwcontroller.h.
 
-    // Surface HaliKey port-open failures to the user via NotificationWidget. Without
-    // this connect, openPort() failures (nonexistent serial port, busy MIDI device,
-    // permission denied) were silently swallowed.
-    connect(m_halikeyDevice, &HalikeyDevice::connectionError, this,
-            [this](const QString &error) { emit hardwareError(QStringLiteral("HaliKey: %1").arg(error)); });
+    // =========================================================================
+    // Device notifications — one policy for all four devices
+    // =========================================================================
+    // Only the HaliKey used to reach NotificationWidget. The KPOD and KPOD+ announced their arrival
+    // and departure to a label on the Options page and nowhere else, so a KPOD+ that vanished
+    // mid-session said nothing at all — despite taking the whole CW chain with it, because it owns
+    // keying while attached and QK4's keyer is gated off behind it.
+    //
+    // Each message names the device the operator recognises, and says what STOPPED WORKING rather
+    // than what failed internally. "KPOD+ disconnected" is not actionable on its own; "CW keying
+    // has returned to QK4's keyer" tells them why the paddle now feels different.
+    //
+    // WHY pollError is NOT wired to a popup: it comes from a polling loop and can repeat at the
+    // poll rate. A popup per failed poll would bury the screen. It stays a log line, now naming
+    // which device produced it.
+
+    // connectionError only, NOT disconnected. An unplug raises both - the worker's error handler
+    // calls closePort(), which emits disconnected(), and then emits connectionError - so wiring
+    // both would pop two notifications for one event. disconnected() also fires on a deliberate
+    // close (changing the port, or quitting), which deserves no notification at all.
+    connect(m_halikeyDevice, &HalikeyDevice::connectionError, this, [this](const QString &error) {
+        emit hardwareError(QStringLiteral("%1: %2 — paddle keying has stopped.").arg(halikeyName(), error));
+    });
+
+    // The KPOD/KPOD+ notifications are raised by applyKpod()/applyKpodPlus() from the policy's
+    // Effects, not from deviceDisconnected. That signal cannot distinguish a pulled cable from our
+    // own stopPolling(), and it arrives twice per unplug on both devices — which is exactly what
+    // defeated the one-shot "expected stop" flag this replaces.
 }
 
-void HardwareController::shutdownSidetone() {
-    // Synchronous sidetone sink teardown — required from MainWindow::closeEvent
-    // so QAudioSink is destroyed while the event loop is still alive, not
-    // during libc atexit (which races PipeWire's RT worker on Linux).
-    if (m_sidetoneGenerator && m_sidetoneThread && m_sidetoneThread->isRunning()) {
-        QMetaObject::invokeMethod(m_sidetoneGenerator, "stop", Qt::BlockingQueuedConnection);
+void HardwareController::applyKpod(UsbDeviceLifecycle::Event event) {
+    const UsbDeviceLifecycle::Effects e = UsbDeviceLifecycle::apply(m_kpodState, event);
+    if (e.open)
+        m_kpodDevice->startPolling();
+    if (e.close)
+        m_kpodDevice->stopPolling();
+    if (e.notifyDisconnected)
+        emit hardwareError(QStringLiteral("KPOD disconnected — the tuning knob and its buttons have stopped."));
+}
+
+void HardwareController::applyKpodPlus(UsbDeviceLifecycle::Event event) {
+    const UsbDeviceLifecycle::Effects e = UsbDeviceLifecycle::apply(m_kpodPlusState, event);
+    if (e.open) {
+        // Raise the CW gate BEFORE the open, not after: claiming the interface takes 10-100 ms and
+        // a paddle event landing in that window would reach QK4's own keyer and sidetone.
+        emit kpodPlusOwnsCw(true);
+        m_kpodPlusDevice->startPolling();
+        // WHY the config push belongs HERE and not on deviceConnected: the old handler guarded on
+        // !isPolling(), which m_polling had already made false by the time the signal arrived, so
+        // the push never ran and the device kept whatever WPM and pitch it was last given
+        // (USB-006). It also never ran on re-enable. Pushing from the policy's open decision covers
+        // both, and is safe despite the open being asynchronous: startPolling() and every setter
+        // queue to the SAME worker thread, and Qt delivers queued events in order, so openDevice
+        // has run before the first config command is handled.
+        if (m_applyKpodPlusConfig)
+            m_applyKpodPlusConfig();
     }
+    if (e.close) {
+        m_kpodPlusDevice->stopPolling();
+        emit kpodPlusOwnsCw(false);
+    }
+    if (e.notifyConnected)
+        emit hardwareError(QStringLiteral("KPOD+ connected — it now owns CW keying."));
+    if (e.notifyDisconnected)
+        emit hardwareError(QStringLiteral("KPOD+ disconnected — CW keying has returned to QK4's keyer."));
 }
 
-HardwareController::~HardwareController() {
-    disconnect(this);
+QString HardwareController::halikeyName() const {
+    // RadioSettings is the only place that knows which transport is configured; HalikeyDevice is
+    // constructed from the same value. Named for the operator, matching the Options dropdown, so a
+    // notification and the settings page cannot disagree about what the device is called.
+    return RadioSettings::instance()->halikeyDeviceType() == 1 ? QStringLiteral("HaliKey MIDI")
+                                                               : QStringLiteral("HaliKey V1.4");
+}
+
+void HardwareController::shutdownDevices() {
+    if (m_devicesShutDown) {
+        return;
+    }
+    m_devicesShutDown = true;
+
     // Shutdown order: HaliKey → Keyer → Sidetone → KPOD/KPOD+
     // HaliKey stops paddle events first, then keyer (producer of KZ commands) stops
     // before sidetone (the audio consumer) is torn down.
+    //
+    // The sidetone teardown is synchronous and has to happen while the event loop is still alive:
+    // destroying a QAudioSink from libc atexit races PipeWire's RT worker on Linux and segfaults
+    // in pw_stream_dequeue_buffer.
 
     if (m_halikeyDevice) {
         m_halikeyDevice->closePort();
@@ -215,6 +269,8 @@ HardwareController::~HardwareController() {
         m_keyerThread->wait(2000);
     }
     delete m_iambicKeyer; // No parent, must delete manually
+    m_iambicKeyer = nullptr;
+    m_keyerThread = nullptr; // child of this; Qt deletes it, but never join it twice
 
     if (m_sidetoneThread) {
         QMetaObject::invokeMethod(m_sidetoneGenerator, "stop", Qt::BlockingQueuedConnection);
@@ -222,14 +278,21 @@ HardwareController::~HardwareController() {
         m_sidetoneThread->wait(2000);
     }
     delete m_sidetoneGenerator; // No parent, must delete manually
+    m_sidetoneGenerator = nullptr;
+    m_sidetoneThread = nullptr;
 
-    if (m_kpodPlusDevice) {
-        m_kpodPlusDevice->stopPolling();
-    }
+    // Through the policy, so the close is silent: the window is going away and there is nobody
+    // left to tell that a device disconnected.
+    applyKpodPlus(UsbDeviceLifecycle::Event::ShuttingDown);
+    applyKpod(UsbDeviceLifecycle::Event::ShuttingDown);
+}
 
-    if (m_kpodDevice) {
-        m_kpodDevice->stopPolling();
-    }
+HardwareController::~HardwareController() {
+    disconnect(this);
+    // Normally a no-op: MainWindow::closeEvent has already run this, which is the whole point —
+    // doing it here for the first time is what CONC-001 was. Still called, because a fatal error
+    // or a window that was never shown reaches the destructor without a closeEvent.
+    shutdownDevices();
 }
 
 // =============================================================================
@@ -238,6 +301,16 @@ HardwareController::~HardwareController() {
 
 void HardwareController::onKpodEncoderRotated(int ticks) {
     if (!m_connectionController->isConnected()) {
+        return;
+    }
+    // USB-007. isConnected() goes true when the socket authenticates, which is BEFORE the RDY dump
+    // that carries the radio's actual frequencies. A knob turn in that window read vfoA() at its 0
+    // sentinel and sent FA for a near-zero frequency - the radio obeyed and jumped off band. The
+    // `newFreq > 0` guard below does not catch it, because ticks x step is itself positive.
+    //
+    // Waiting for a real frequency is the honest condition: until the K4 has told us where it is,
+    // QK4 has nothing to tune relative to.
+    if (m_radioState->vfoA() == 0) {
         return;
     }
     onKpodEncoderRotatedWithRocker(ticks, static_cast<int>(m_kpodDevice->rockerPosition()));
@@ -293,15 +366,8 @@ void HardwareController::onKpodEncoderRotatedWithRocker(int ticks, int rockerPos
 }
 
 void HardwareController::onKpodPollError(const QString &error) {
-    qCWarning(qk4Hardware) << "KPOD error:" << error;
-}
-
-void HardwareController::onKpodEnabledChanged(bool enabled) {
-    if (enabled) {
-        if (m_kpodDevice->isDetected()) {
-            m_kpodDevice->startPolling();
-        }
-    } else {
-        m_kpodDevice->stopPolling();
-    }
+    // Deliberately a log line and not a notification: this arrives from a polling loop and can
+    // repeat at the poll rate, so a popup per occurrence would bury the screen. The user-visible
+    // signal for "the device is gone" is the deviceDisconnected notification, which fires once.
+    qCWarning(qk4Hardware) << "KPOD/KPOD+ poll error:" << error;
 }

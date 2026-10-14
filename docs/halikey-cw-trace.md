@@ -56,7 +56,7 @@ TX@...    [ KZ ; ]                                            ← characterSpace
 ```
 
 Wire output (extract just the `TX@` lines): `KZP0420; KZ-; KZ.; KZ-; KZ ;` —
-which is one of the worked examples in `memory/kz-protocol.md`.
+whose command forms are tabulated in `docs/k4-protocol-quirks.md` → "KZ keying protocol".
 
 ## What an "extra dit" looks like
 
@@ -127,6 +127,35 @@ the lines unconditionally each tick, so every transition is caught within one po
 regardless of driver event support. (Bounce defense is the same count-based
 `DEBOUNCE_COUNT` filter on all three platforms; the 8 ms hold gate in `IambicKeyer` is the
 secondary defense.)
+
+## Extra elements: the split-release signature
+
+Symptom reported by operators: an occasional element nobody sent, heard in the sidetone, on the
+wire, or both. Sidetone and the KZ stream share one trigger (`IambicKeyer::elementStarted`), so an
+extra element in either means an extra `enterElement()` — always a keyer-side fault, never the
+sidetone generator.
+
+The cause was that the paddle levers reached the keyer as two independent events. Releasing a
+squeeze then straddled an element boundary: the timer sampled with one lever still down, the
+"both released" guard missed, and the cross-paddle branch appended an element. In Iambic A that is
+always wrong — A must stop at the element boundary.
+
+Signature to look for in `cw.keyer.debug`:
+
+```
+KEYER@... [TIMER fired wasDit=1] liveD=0 liveA=1 latchD=0 latchA=1 squeezed=1 mode=A → cross-paddle dit→dah
+```
+
+`squeezed=1` with `mode=A` and exactly one of `liveD`/`liveA` still 1, taking a `cross-paddle`
+branch instead of `squeeze-release IambicA → idle`, followed by an element the operator did not
+key. Cross-check the `hw.halikey` `lines` entries either side of it: two entries a millisecond or
+two apart, each dropping one lever, is a release that was delivered split.
+
+This cannot happen on the serial variant any more — `readPinState()` samples every line at once and
+that sample now travels intact to `IambicKeyer::setPaddleState`, which writes both levers in one
+store. The MIDI variant sends one note per lever, so a squeeze release is genuinely two messages
+there; the keyer always sees a coherent pair, but the two messages can still land either side of a
+boundary. If the signature above reappears, it should only ever be on MIDI.
 
 ## Disabling cleanly
 
