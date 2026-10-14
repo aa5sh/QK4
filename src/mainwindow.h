@@ -94,8 +94,12 @@ private slots:
 private:
     QString m_startupRadioOverride;
 
+    // WHY: the width the window has always opened at. Height is whatever the layout needs.
+    static constexpr int kPreferredWidth = 1340;
+
     void setupMenuBar();
     void setupUi();
+    void sizeToScreen();
     void setupVfoSection(QWidget *parent);
 
     void setupControllers();

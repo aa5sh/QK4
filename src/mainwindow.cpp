@@ -29,6 +29,7 @@
 #include "ui/widgets/vforowwidget.h"
 #include "ui/widgets/filterindicatorwidget.h"
 #include "ui/styling/k4styles.h"
+#include "utils/windowfit.h"
 #include "controllers/antennaconfigcontroller.h"
 #include "controllers/antennadisplaycontroller.h"
 #include "controllers/textdecodecontroller.h"
@@ -58,7 +59,9 @@
 #include <QMouseEvent>
 #include <QMoveEvent>
 #include <QCloseEvent>
+#include <QScreen>
 #include <QShortcut>
+#include <QStyle>
 
 Q_LOGGING_CATEGORY(qk4Main, "qk4.main")
 
@@ -104,6 +107,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
     setupUi();
     m_popupManager->setVfos(m_vfoA, m_vfoB);
     setupMenuBar();
+    sizeToScreen();
 
     // ESC — halt all transmission regardless of which child widget has focus.
     // QShortcut fires at window scope; keyPressEvent only fires when the window frame itself has focus.
@@ -553,10 +557,17 @@ void MainWindow::setupMenuBar() {
     helpMenu->addAction(aboutAction);
 }
 
+void MainWindow::sizeToScreen() {
+    // WHY: no setMinimumSize here. A top-level window with a layout takes its minimum from that
+    // layout, menu bar included — a hand-written minimum drifts out of step with the widgets and,
+    // when smaller, lets the layout squeeze controls into each other (see utils/windowfit.h).
+    const QRect available = screen()->availableGeometry();
+    const QSize size = WindowFit::initialWindowSize(minimumSizeHint(), QSize(kPreferredWidth, 0), available.size());
+    setGeometry(QStyle::alignedRect(Qt::LeftToRight, Qt::AlignCenter, size, available));
+}
+
 void MainWindow::setupUi() {
     setWindowTitle("QK4");
-    setMinimumSize(1340, 840);
-    resize(1340, 840); // Default to minimum size on launch
 
     // WHY: WA_NativeWindow is not set here.
     // Qt 6.10.1 bug on macOS Tahoe: WA_NativeWindow forces native window creation

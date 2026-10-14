@@ -517,6 +517,30 @@ target_link_libraries(test_formcontroltheme Qt6::Core Qt6::Gui Qt6::Widgets Qt6:
 add_test(NAME FormControlThemeTests COMMAND test_formcontroltheme)
 set_tests_properties(FormControlThemeTests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
+# Main-window sizing - pure logic on sizes, no screen needed.
+add_executable(test_windowfit test_windowfit.cpp)
+target_include_directories(test_windowfit PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_windowfit Qt6::Core Qt6::Test)
+add_test(NAME WindowFitTests COMMAND test_windowfit)
+
+# Left side panel at its minimum size - nothing may overlap, offscreen.
+add_executable(test_sidecontrolpanel
+    test_sidecontrolpanel.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/widgets/sidecontrolpanel.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/widgets/dualcontrolbutton.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/overlays/sidecontroloverlay.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/overlays/monoverlay.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/overlays/baloverlay.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/styling/k4styles.cpp
+    ${CMAKE_SOURCE_DIR}/src/utils/wheelaccumulator.cpp
+    ${CMAKE_SOURCE_DIR}/src/settings/radiosettings.cpp
+)
+target_include_directories(test_sidecontrolpanel PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_compile_definitions(test_sidecontrolpanel PRIVATE QK4_VERSION="test")
+target_link_libraries(test_sidecontrolpanel Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Test)
+add_test(NAME SideControlPanelLayoutTests COMMAND test_sidecontrolpanel)
+set_tests_properties(SideControlPanelLayoutTests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 # Capture-rate decimation — pure logic, no audio device needed.
 add_executable(test_audiodecimator test_audiodecimator.cpp)
 target_include_directories(test_audiodecimator PRIVATE ${CMAKE_SOURCE_DIR}/src)

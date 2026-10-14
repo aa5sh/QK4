@@ -359,6 +359,7 @@ set(HEADERS
     src/ui/widgets/notificationwidget.h
     src/ui/styling/k4styles.h
     src/ui/styling/k4constants.h
+    src/utils/windowfit.h
     src/ui/popups/k4popupbase.h
     src/ui/widgets/kpa1500minipanel.h
     src/ui/overlays/sidecontroloverlay.h
