@@ -50,7 +50,9 @@ inline double fitScale(QSize required, QSize available, double currentScale) {
     // WHY: the epsilon absorbs floating-point error so an exact fit at a step (0.75 computed as
     // 0.7499999) is not rounded down a whole step.
     const double steps = std::floor(currentScale * ratio / kScaleStep + 1e-9);
-    return std::clamp(steps * kScaleStep, kMinScale, kMaxScale);
+    // WHY: steps x 0.05 lands a hair off the decimal (14 x 0.05 = 0.7000000000000001), which is what
+    // gets saved and shown. Rounding to whole percent gives the double nearest the step itself.
+    return std::clamp(std::round(steps * kScaleStep * 100.0) / 100.0, kMinScale, kMaxScale);
 }
 
 } // namespace WindowFit

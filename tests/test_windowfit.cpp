@@ -5,6 +5,7 @@
 #include "utils/windowfit.h"
 
 #include <QTest>
+#include <QVariant>
 
 namespace {
 
@@ -65,6 +66,15 @@ private slots:
     }
 
     void exactFitAtAStepIsNotRoundedDown() { QCOMPARE(WindowFit::fitScale({1000, 1000}, {750, 750}, 1.0), 0.75); }
+
+    void factorIsSavedAsItsDecimal() {
+        // QSettings writes the shortest text that round-trips. 14 x 0.05 computed directly is
+        // 0.7000000000000001, which is what the preferences file showed before.
+        for (int percent = 50; percent <= 100; percent += 5) {
+            const double s = WindowFit::fitScale({1000, 1000}, {percent * 10, percent * 10}, 1.0);
+            QCOMPARE(QVariant(s).toString(), QString::number(percent / 100.0));
+        }
+    }
 
     void clampedAtTheFloor() { QCOMPARE(WindowFit::fitScale(kRequired, {400, 300}, 1.0), WindowFit::kMinScale); }
 
