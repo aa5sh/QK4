@@ -1,5 +1,5 @@
 #include "audioengine.h"
-#include "audio/audiodecimator.h"       // capture-rate decimation
+#include "audio/audiodecimator.h"       // legacy TCI decimation
 #include "audio/audiodeviceselection.h" // which device a stream belongs on
 #include "audio/audiologging.h"
 #include "audio/opusencoder.h"
@@ -28,14 +28,6 @@ AudioEngine::AudioEngine(QObject *parent)
     m_outputFormat.setSampleRate(12000);
     m_outputFormat.setChannelCount(2);
     m_outputFormat.setSampleFormat(QAudioFormat::Float);
-
-    // Input format TEMPLATE. Only the channel count and sample format are ours to choose; the
-    // SAMPLE RATE here is a placeholder that setupAudioInput() overwrites with whatever the chosen
-    // device actually runs at. Demanding a fixed rate is what broke Bluetooth microphones - see
-    // audio/audiodecimator.h for the measurement.
-    m_inputFormat.setSampleRate(48000);
-    m_inputFormat.setChannelCount(1);
-    m_inputFormat.setSampleFormat(QAudioFormat::Float);
 
     // Timers are children of AudioEngine so moveToThread() moves them too
     m_micPollTimer = new QTimer(this);
@@ -300,40 +292,32 @@ bool AudioEngine::setupAudioInput() {
     // Channels and sample format are still ours to pick: mono Float captured cleanly on every
     // device probed, including one whose preferredFormat() was stereo Int16.
     const QAudioFormat preferred = inputDevice.preferredFormat();
-    QAudioFormat format = m_inputFormat;
+    QAudioFormat format;
+    format.setChannelCount(1);
+    format.setSampleFormat(QAudioFormat::Float);
     format.setSampleRate(preferred.sampleRate());
 
-    if (!AudioDecimator::isSupportedRate(format.sampleRate())) {
-        // Rational resampling (16 kHz -> 12 kHz is 4:3, 44.1 kHz is 147:40) is not implemented yet.
-        // Say so plainly and name the rate: silence with no explanation is what made INT-005 take
-        // months to diagnose, and a device we cannot use should not look like a broken radio.
-        qCWarning(qk4Audio,
-                  "AudioEngine: input device \"%s\" runs at %d Hz, which is not a multiple of %d Hz - "
-                  "QK4 cannot resample it yet, so there would be NO TX AUDIO. Choose a different "
-                  "microphone in Options.",
-                  qUtf8Printable(inputDevice.description()), format.sampleRate(), AudioDecimator::OUTPUT_RATE);
+    // Keep the proven preferred-rate mono Float request (including 24 kHz AirPods).
+    // Fall back to native PCM for devices that cannot supply that representation.
+    if (!inputDevice.isFormatSupported(format))
+        format = preferred;
+    if (!format.isValid() || !inputDevice.isFormatSupported(format)) {
+        qCWarning(qk4Audio) << "AudioEngine: unsupported microphone format" << format;
         return false;
     }
-
-    if (!inputDevice.isFormatSupported(format)) {
-        qCWarning(qk4Audio,
-                  "AudioEngine: input device \"%s\" refused %d Hz %d ch float - NO TX AUDIO from it. "
-                  "It reports %d..%d Hz. Choose a different microphone in Options.",
-                  qUtf8Printable(inputDevice.description()), format.sampleRate(), format.channelCount(),
-                  inputDevice.minimumSampleRate(), inputDevice.maximumSampleRate());
-        return false;
-    }
-
-    m_micSampleRate = format.sampleRate();
-    m_micDecimationFactor = AudioDecimator::factorFor(m_micSampleRate);
-    qCDebug(qk4Audio, "AudioEngine: mic device \"%s\" prefers %d Hz %d ch; capturing at %d Hz mono Float, %d:1 to %d",
-            qUtf8Printable(inputDevice.description()), preferred.sampleRate(), preferred.channelCount(),
-            m_micSampleRate, m_micDecimationFactor, AudioDecimator::OUTPUT_RATE);
+    qCInfo(qk4Audio) << "AudioEngine: mic device" << inputDevice.description()
+                     << "id" << inputDevice.id() << "preferred" << preferred
+                     << "requested" << format;
 
     m_activeMicDeviceId = inputDevice.id();
     m_audioSource = new QAudioSource(inputDevice, format, this);
     m_audioSource->setBufferSize(INPUT_BUFFER_SIZE);
 
+    connect(m_audioSource, &QAudioSource::stateChanged, this, [this](QAudio::State state) {
+        if (m_micEnabled.load() && (state == QAudio::StoppedState || state == QAudio::SuspendedState))
+            failMicrophone(QStringLiteral("unexpected capture interruption (state %1, error %2)")
+                           .arg(state).arg(m_audioSource->error()));
+    });
     // Don't start mic by default - user must enable
     return true;
 }
@@ -573,15 +557,16 @@ void AudioEngine::openMic() {
     // permission dialog during connection (which would deadlock; see ctor comment).
     if (!m_audioSource) {
         if (!setupAudioInput()) {
-            qCWarning(qk4Audio) << "AudioEngine: Failed to setup audio input";
+            failMicrophone(QStringLiteral("failed to initialize audio input"));
             return;
         }
     }
 
     m_audioSourceDevice = m_audioSource->start();
-    if (!m_audioSourceDevice) {
+    if (!m_audioSourceDevice || m_audioSource->error() != QAudio::NoError) {
         qCWarning(qk4Audio, "AudioEngine: failed to start microphone device (QAudioSource error %d) - NO TX AUDIO",
                   static_cast<int>(m_audioSource->error()));
+        failMicrophone(QStringLiteral("failed to start microphone"));
         return;
     }
 
@@ -591,13 +576,38 @@ void AudioEngine::openMic() {
     // quietly converting", and the frame-level qk4.audio.tx peaks then say whether any audio is
     // actually arriving.
     const QAudioFormat actual = m_audioSource->format();
-    qCDebug(qk4Audio, "AudioEngine: mic started at %d Hz %d ch, buffer %lld bytes", actual.sampleRate(),
-            actual.channelCount(), static_cast<long long>(m_audioSource->bufferSize()));
+    qCInfo(qk4Audio) << "AudioEngine: opened capture format" << actual;
+    if (actual.channelCount() < 1 || actual.channelCount() > 2 ||
+        actual.sampleFormat() == QAudioFormat::Unknown || !m_micResampler.configure(actual.sampleRate())) {
+        failMicrophone(QStringLiteral("unsupported actual capture format"));
+        return;
+    }
+    m_inputFormat = actual;
+    m_capturePending.clear();
+    m_firstEmptyPollMs = 0;
+    m_micSilenceReported = false;
+    qCInfo(qk4Audio) << "AudioEngine: microphone initialized; actual" << actual
+                     << "resampler" << actual.sampleRate() << "-> 12000 Hz";
 
     m_micEnabled.store(true, std::memory_order_relaxed);
     // Use timer-based polling instead of readyRead signal
     // (readyRead doesn't fire reliably on all platforms).
     m_micPollTimer->start();
+}
+
+void AudioEngine::failMicrophone(const QString &reason) {
+    qCWarning(qk4Audio) << "AudioEngine:" << reason;
+    const bool keyed = txSource() == TxSource::Microphone && m_pttActive.exchange(false);
+    m_micEnabled.store(false);
+    m_micPollTimer->stop();
+    if (m_audioSource)
+        m_audioSource->stop();
+    m_audioSourceDevice = nullptr;
+    m_micBuffer.clear();
+    m_micReadOffset = 0;
+    m_capturePending.clear();
+    if (keyed)
+        emit microphoneFailed(); // Gate is already closed before the controller sends RX.
 }
 
 void AudioEngine::closeMic() {
@@ -667,8 +677,8 @@ void AudioEngine::onMicDataReady() {
     if (!m_audioSourceDevice || !m_micEnabled.load(std::memory_order_relaxed))
         return;
 
-    QByteArray data48k = m_audioSourceDevice->readAll();
-    if (data48k.isEmpty()) {
+    QByteArray captured = m_audioSourceDevice->readAll();
+    if (captured.isEmpty()) {
         // An empty read is normal between polls. Silence that PERSISTS while the operator is
         // keying is not - see the watchdog members for why this is worth distinguishing.
         if (m_pttActive.load(std::memory_order_acquire) && txSource() == TxSource::Microphone) {
@@ -693,6 +703,9 @@ void AudioEngine::onMicDataReady() {
                           qUtf8Printable(m_activeOutputDeviceId.isEmpty() ? QByteArray("(default)")
                                                                           : m_activeOutputDeviceId));
             }
+            if (now - m_firstEmptyPollMs > 2000) {
+                failMicrophone(QStringLiteral("no microphone data for 2 seconds while keyed"));
+            }
         }
         return;
     }
@@ -706,11 +719,23 @@ void AudioEngine::onMicDataReady() {
         return;
     }
 
-    // Resample from 48kHz to 12kHz (writes into pre-allocated member buffer)
-    // The factor for the rate the microphone actually opened at, NOT assumed - see
-    // audio/audiodecimator.h.
-    const QByteArray &data12k = resampleTo12k(data48k, m_micDecimationFactor);
-    bufferAndEmitTxFrames(data12k, m_micGain.load(std::memory_order_relaxed));
+    m_capturePending.append(captured);
+    const int bytesPerFrame = m_inputFormat.bytesPerFrame();
+    const int frames = m_capturePending.size() / bytesPerFrame;
+    m_monoCapture.resize(frames);
+    for (int i = 0; i < frames; ++i) {
+        float mono = 0;
+        for (int ch = 0; ch < m_inputFormat.channelCount(); ++ch)
+            mono += m_inputFormat.normalizedSampleValue(m_capturePending.constData() +
+                i * bytesPerFrame + ch * m_inputFormat.bytesPerSample());
+        m_monoCapture[i] = mono / m_inputFormat.channelCount();
+    }
+    m_resampledCapture.clear();
+    m_micResampler.process(m_monoCapture.data(), frames, m_resampledCapture);
+    m_capturePending.remove(0, frames * bytesPerFrame);
+    const QByteArray pcm = QByteArray::fromRawData(reinterpret_cast<const char *>(m_resampledCapture.data()),
+                                                  m_resampledCapture.size() * sizeof(float));
+    bufferAndEmitTxFrames(pcm, m_micGain.load(std::memory_order_relaxed));
 }
 
 void AudioEngine::bufferAndEmitTxFrames(const QByteArray &pcm12k, float gain) {
@@ -804,6 +829,8 @@ void AudioEngine::encodeAndSendFrame(const QByteArray &f32MonoFrame, int frameSa
             logTxFrameDiagnostic(f32MonoFrame, audioData, frameSamples, encodeMode);
     }
 
+    if (m_txSequence == 0)
+        qCInfo(qk4Audio) << "AudioEngine: first TX audio frame EM" << encodeMode << "samples" << frameSamples;
     QByteArray packet = Protocol::buildAudioPacket(audioData, m_txSequence++, encodeMode, frameSamples);
     emit txPacketReady(packet);
 }
@@ -868,6 +895,8 @@ void AudioEngine::setPttActive(bool active) {
     // main thread, so this method body runs on the audio thread.
     m_pttActive.store(active, std::memory_order_release);
     if (active) {
+        m_firstEmptyPollMs = 0;
+        m_micSilenceReported = false;
         m_txSequence = 0;     // Restart sequence counter for each transmission
         m_txPeakSinceKey = 0; // qk4.audio.tx running peak is per transmission
         openMic();            // Idempotent — see openMic() WHY comment

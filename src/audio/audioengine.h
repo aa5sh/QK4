@@ -11,6 +11,7 @@
 #include <QQueue>
 #include <QMutex>
 #include <atomic>
+#include "micresampler.h"
 
 class OpusEncoder;
 
@@ -21,7 +22,7 @@ class OpusEncoder;
  * RX:  decoded 12 kHz stereo Float32 PCM is enqueued from the IO thread via
  *      `enqueueAudio()`, consumed by `feedAudioDevice()` on a 10 ms timer, with MX
  *      routing + volume + balance applied per packet.
- * TX:  48 kHz mono Float32 captured on a 10 ms poll, resampled 4:1 to 12 kHz,
+ * TX:  device-native PCM captured on a 10 ms poll, filtered/resampled to 12 kHz,
  *      framed to the SL-tier sample count, emitted via `microphoneFrame` for the
  *      Opus encoder.
  *
@@ -136,6 +137,9 @@ public:
     static QList<QPair<QString, QString>> availableOutputDevices(); // (id, description)
 
 signals:
+    // Capture failed while microphone PTT was active; the audio gate is already closed.
+    void microphoneFailed();
+
     // Encoded TX packet ready for the wire. Emitted on the audio thread;
     // TcpClient::sendRaw() auto-marshals to the I/O thread. PR 12 moved the
     // encode pipeline here from AudioController (main thread) so a busy GUI
@@ -154,6 +158,7 @@ private slots:
     void onSystemDefaultOutputChanged();
 
 private:
+    friend class TestMicCapture;
     bool setupAudioOutput();
     // Tear down and rebuild the output sink for the current device, and put the feed timer in
     // the matching state. Every path that changes the output device goes through this.
@@ -164,16 +169,13 @@ private:
     // whole SL-tier frames while PTT is asserted. Audio thread only.
     void bufferAndEmitTxFrames(const QByteArray &pcm12k, float gain);
 
-    // Decimate Float32 samples to the K4's 12 kHz by `factor` (averaging), writing into the
-    // pre-allocated m_resampleBuf12k member and returning a const reference to it. Avoids per-poll
-    // allocation. The microphone passes the factor for the rate its device actually opened at (see
-    // audio/audiodecimator.h); TCI passes a fixed 4, because TCI audio is always 48 kHz.
+    // Legacy integer decimator for TCI's fixed 48 kHz stream only.
     const QByteArray &resampleTo12k(const QByteArray &input, int factor);
 
-    // The microphone's ACTUAL capture rate, taken from the device rather than demanded of it.
-    // 0 until a device has been opened. See setupAudioInput().
-    int m_micSampleRate = 0;
-    int m_micDecimationFactor = 0;
+    MicResampler m_micResampler;
+    QByteArray m_capturePending;
+    std::vector<float> m_monoCapture, m_resampledCapture;
+    void failMicrophone(const QString &reason);
 
     // Encode + packetize one captured S16LE mono frame and emit txPacketReady.
     // Runs on the audio thread, called from onMicDataReady when PTT is active.
@@ -232,7 +234,7 @@ private:
     // device change. rebuildOutput() is the only thing that acts on it.
     bool m_outputRunning = false;
 
-    // Audio input format: 48kHz mono Float32 (native macOS rate, resampled to 12kHz)
+    // Actual QAudioSource PCM format, set after opening.
     QAudioFormat m_inputFormat;
 
     // Audio output (speaker)

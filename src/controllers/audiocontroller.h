@@ -93,6 +93,7 @@ public:
     void setTciTxGain(float gain); // 0.0 to 1.0
 
 signals:
+    void microphoneFailed();
     // PTT changed by SOMEBODY - this says nothing about who. Every local unkey in QK4 (the Esc
     // shortcut, the PTT button, the HaliKey PTT line, the side panel, CatServer) funnels through
     // setPttActive, so one signal here reaches all of them; the TCI side needs to know because it

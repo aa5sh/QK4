@@ -68,6 +68,8 @@ AudioController::AudioController(ConnectionController *connController, RadioStat
     connect(m_audioEngine, &AudioEngine::bufferStatus, m_connectionController->networkMetrics(),
             &NetworkMetrics::onBufferStatus);
 
+    connect(m_audioEngine, &AudioEngine::microphoneFailed, this, &AudioController::microphoneFailed);
+
     // TX audio path (PR 12): encode + packetize run on the audio thread; the
     // resulting wire-ready packet goes straight to TcpClient::sendRaw, which
     // auto-marshals from the audio thread to its own IO thread. AutoConnection

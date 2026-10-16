@@ -45,9 +45,16 @@ TransmitController::TransmitController(RadioState *radioState, ConnectionControl
     // sending mic frames, which re-key the radio. transmitStateChanged had three consumers and not
     // one of them touched PTT.
     connect(m_radioState, &RadioState::transmitStateChanged, this, [this](bool transmitting) {
+        qCInfo(txOwner) << "radio state:" << (transmitting ? "TX" : "RX");
         const Owner previous = m_state.owner;
         const bool was = m_state.transmitting();
         apply(TransmitOwner::radioReports(m_state, transmitting), previous, was);
+    });
+
+    connect(m_audio, &AudioController::microphoneFailed, this, [this]() {
+        if (m_state.owner != Owner::TciClient &&
+            (m_state.route == Route::StreamedFromHere || m_state.route == Route::CatKeyedAndStreamed))
+            releaseAll();
     });
 
     // Losing the radio releases whatever was held. AUD-001 was this not happening: the gate

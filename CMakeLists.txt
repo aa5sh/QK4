@@ -293,6 +293,7 @@ set(HEADERS
     src/network/catframes.h
     src/network/catpushbroadcaster.h
     src/network/k4discovery.h
+    src/audio/micresampler.h
     src/audio/audioengine.h
     src/audio/opusdecoder.h
     src/audio/opusencoder.h

@@ -553,6 +553,26 @@ target_include_directories(test_audiodeviceselection PRIVATE ${CMAKE_SOURCE_DIR}
 target_link_libraries(test_audiodeviceselection Qt6::Core Qt6::Test)
 add_test(NAME AudioDeviceSelectionTests COMMAND test_audiodeviceselection)
 
+add_executable(test_micresampler test_micresampler.cpp)
+target_include_directories(test_micresampler PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_micresampler Qt6::Core Qt6::Test)
+add_test(NAME MicResamplerTests COMMAND test_micresampler)
+
+# Capture integration tests need Multimedia; pure DSP tests remain qtbase-only.
+if(NOT TARGET Qt6::Multimedia)
+    find_package(Qt6 QUIET COMPONENTS Multimedia)
+endif()
+if(TARGET Qt6::Multimedia)
+    add_executable(test_miccapture test_miccapture.cpp
+        ${CMAKE_SOURCE_DIR}/src/audio/audioengine.cpp
+        ${CMAKE_SOURCE_DIR}/src/audio/opusencoder.cpp
+        ${CMAKE_SOURCE_DIR}/src/network/protocol.cpp
+        ${CMAKE_SOURCE_DIR}/src/utils/radioutils.cpp)
+    target_include_directories(test_miccapture PRIVATE ${CMAKE_SOURCE_DIR}/src ${OPUS_INCLUDE_DIRS})
+    target_link_libraries(test_miccapture Qt6::Core Qt6::Multimedia Qt6::Network Qt6::Test ${OPUS_LIBRARIES})
+    add_test(NAME MicCaptureTests COMMAND test_miccapture)
+endif()
+
 # Aggregate target: `cmake --build <dir> --target qk4_tests` builds every
 # test_* executable defined above. CI uses this so adding `add_executable(test_foo)`
 # automatically gets the new test built — no parallel maintenance of an explicit
