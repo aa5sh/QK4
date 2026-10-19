@@ -279,11 +279,21 @@ void handleVFB(SpectrumDisplayState &state, RadioState &owner, const QString &cm
 }
 
 void handleAR(SpectrumDisplayState &state, RadioState &owner, const QString &cmd) {
-    // #AR*********A (or M) — last char is the mode.
-    if (cmd.length() < 12)
+    // WHY: the K4 sends #ARaadd±oom — averaging, debounce, signed offset, then 1 (auto) or 0 (manual).
+    // Only the mode is kept: the radio applies the offset to the #REF it publishes (bench 2026-10-19),
+    // so QK4 follows the offset without reading it. See docs/k4-protocol-quirks.md §13.
+    static constexpr int AR_LENGTH = 11;
+    if (cmd.length() != AR_LENGTH)
         return;
-    QChar mode = cmd.at(cmd.length() - 1);
-    int newValue = (mode == 'A') ? 1 : 0;
+    const QChar sign = cmd.at(7);
+    const QChar mode = cmd.at(10);
+    if ((sign != '+' && sign != '-') || (mode != '0' && mode != '1'))
+        return;
+    for (const int i : {3, 4, 5, 6, 8, 9}) {
+        if (!cmd.at(i).isDigit())
+            return;
+    }
+    const int newValue = (mode == '1') ? 1 : 0;
     if (newValue != state.autoRefLevel) {
         state.autoRefLevel = newValue;
         emit owner.autoRefLevelChanged(state.autoRefLevel > 0);

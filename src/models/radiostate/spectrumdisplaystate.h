@@ -45,7 +45,7 @@ struct SpectrumDisplayState {
     int freeze = -1;             // #FRZ 0/1
     int vfoACursor = -1;         // #VFA 0=OFF, 1=ON, 2=AUTO, 3=HIDE
     int vfoBCursor = -1;         // #VFB
-    int autoRefLevel = -1;       // #AR A=auto, M=manual
+    int autoRefLevel = -1;       // #AR last char: 1=auto, 0=manual
     int ddcNbMode = -1;          // #NB$ 0=off, 1=on, 2=auto
     int ddcNbLevel = -1;         // #NBL$ 0-14
 

@@ -1558,11 +1558,13 @@ private slots:
         QCOMPARE(rs.vfoACursor(), 2);
     }
 
-    // --- #AR (auto ref level — checks last char for 'A' = auto) ---
+    // --- #AR (AutoRef: #ARaadd±oom, last char 1 = auto, 0 = manual) ---
+    // The well-formed strings here were sent by a K4D on 2026-10-19. The old tests used an
+    // invented 'A'/'M' ending, so QK4 read every real message as manual and the tests still passed.
     void testAutoRefLevelAuto() {
         RadioState rs;
         QSignalSpy spy(&rs, &RadioState::autoRefLevelChanged);
-        rs.parseCATCommand("#AR-200+050A;"); // ends with 'A' → auto
+        rs.parseCATCommand("#AR1201+041;");
         QCOMPARE(rs.autoRefLevel(), true);
         QCOMPARE(spy.count(), 1);
         QCOMPARE(spy.at(0).at(0).toBool(), true);
@@ -1570,11 +1572,40 @@ private slots:
 
     void testAutoRefLevelManual() {
         RadioState rs;
-        rs.parseCATCommand("#AR-200+050A;"); // auto
+        rs.parseCATCommand("#AR1201+041;");
         QSignalSpy spy(&rs, &RadioState::autoRefLevelChanged);
-        rs.parseCATCommand("#AR-200+050M;"); // manual
+        rs.parseCATCommand("#AR1201+040;");
         QCOMPARE(rs.autoRefLevel(), false);
         QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toBool(), false);
+    }
+
+    void testAutoRefOffsetChangeIsNotAModeChange() {
+        // The radio resends #AR whenever the AutoRef Offset menu moves. Same mode, so no signal.
+        RadioState rs;
+        rs.parseCATCommand("#AR1201+041;");
+        QSignalSpy spy(&rs, &RadioState::autoRefLevelChanged);
+        rs.parseCATCommand("#AR1201+081;");
+        rs.parseCATCommand("#AR1201+031;");
+        QCOMPARE(spy.count(), 0);
+        QCOMPARE(rs.autoRefLevel(), true);
+    }
+
+    void testAutoRefNegativeOffsetParses() {
+        RadioState rs;
+        rs.parseCATCommand("#AR1201-081;");
+        QCOMPARE(rs.autoRefLevel(), true);
+    }
+
+    void testAutoRefMalformedIgnored() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::autoRefLevelChanged);
+        rs.parseCATCommand("#AR-200+050A;"); // the old invented format
+        rs.parseCATCommand("#AR1201+04X;");  // mode is neither 1 nor 0
+        rs.parseCATCommand("#AR1201*041;");  // no offset sign
+        rs.parseCATCommand("#AR12a1+041;");  // non-digit field
+        rs.parseCATCommand("#AR1201+0410;"); // too long
+        QCOMPARE(spy.count(), 0);
     }
 
     void testAutoRefLevelTooShort() {
