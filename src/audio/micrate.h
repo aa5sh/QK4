@@ -52,6 +52,22 @@ inline QString problem(int sampleRate) {
         .arg(sampleRate);
 }
 
+// The other ways setupAudioInput()/openMic() end with no microphone. Each was already a qCWarning;
+// on screen for the same reason as problem() - from the operator's chair every one of them is a PTT
+// button that does nothing.
+inline QString noMicrophone() {
+    return QStringLiteral("QK4 cannot find a microphone, so nothing is being transmitted. Connect "
+                          "one, or choose one in Options > Audio Input.");
+}
+
+// `deviceName` may be empty if the device vanished between opening and starting.
+inline QString micWouldNotOpen(const QString &deviceName) {
+    const QString which = deviceName.isEmpty() ? QStringLiteral("The microphone")
+                                               : QStringLiteral("The microphone \"%1\"").arg(deviceName);
+    return which + QStringLiteral(" would not open, so nothing is being transmitted. Choose a different "
+                                  "microphone in Options > Audio Input.");
+}
+
 // Shown when the microphone is open and transmitting but delivering nothing at all.
 //
 // WHY THIS NAMES A RESTART, which is otherwise a terrible thing to tell an operator: QK4 cannot

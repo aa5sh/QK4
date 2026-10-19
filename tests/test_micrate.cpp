@@ -14,6 +14,7 @@ private slots:
     void aRejectionNamesTheRateAndWhatToSetItTo();
     void anAcceptedRateSaysNothingAtAll();
     void aMissingRateIsRejectedWithoutPrintingZero();
+    void theOtherDeadMicCausesSayWhatToDo();
     void theSilentMicMessageNamesBothCausesAndWhatToDo();
 };
 
@@ -84,6 +85,24 @@ void TestMicRate::aMissingRateIsRejectedWithoutPrintingZero() {
     QVERIFY(!reason.isEmpty());
     QVERIFY2(!reason.contains(QStringLiteral("0 Hz")), qUtf8Printable(reason));
     QVERIFY(!MicRate::problem(-1).isEmpty());
+}
+
+void TestMicRate::theOtherDeadMicCausesSayWhatToDo() {
+    // Both end in "nothing is transmitted", so an operator with a dead PTT recognises them, and
+    // both point at the one setting that fixes them.
+    const QString none = MicRate::noMicrophone();
+    QVERIFY2(none.contains(QStringLiteral("transmitted")), qUtf8Printable(none));
+    QVERIFY2(none.contains(QStringLiteral("Audio Input")), qUtf8Printable(none));
+
+    const QString named = MicRate::micWouldNotOpen(QStringLiteral("Koss SB45"));
+    QVERIFY2(named.contains(QStringLiteral("\"Koss SB45\"")), qUtf8Printable(named));
+    QVERIFY2(named.contains(QStringLiteral("transmitted")), qUtf8Printable(named));
+    QVERIFY2(named.contains(QStringLiteral("Audio Input")), qUtf8Printable(named));
+
+    // A device that vanished has no name to print; the message must not show empty quotes.
+    const QString unnamed = MicRate::micWouldNotOpen(QString());
+    QVERIFY2(!unnamed.contains(QStringLiteral("\"\"")), qUtf8Printable(unnamed));
+    QVERIFY2(unnamed.startsWith(QStringLiteral("The microphone would not open")), qUtf8Printable(unnamed));
 }
 
 QTEST_MAIN(TestMicRate)

@@ -287,6 +287,7 @@ bool AudioEngine::setupAudioInput() {
 
     if (inputDevice.isNull()) {
         qCWarning(qk4Audio) << "AudioEngine: No audio input device available";
+        emit micUnavailable(MicRate::noMicrophone());
         return false;
     }
 
@@ -333,6 +334,7 @@ bool AudioEngine::setupAudioInput() {
                   "It reports %d..%d Hz. Choose a different microphone in Options.",
                   qUtf8Printable(inputDevice.description()), format.sampleRate(), format.channelCount(),
                   inputDevice.minimumSampleRate(), inputDevice.maximumSampleRate());
+        emit micUnavailable(MicRate::micWouldNotOpen(inputDevice.description()));
         return false;
     }
 
@@ -602,6 +604,12 @@ void AudioEngine::openMic() {
     if (!m_audioSourceDevice) {
         qCWarning(qk4Audio, "AudioEngine: failed to start microphone device (QAudioSource error %d) - NO TX AUDIO",
                   static_cast<int>(m_audioSource->error()));
+        QString name;
+        for (const QAudioDevice &device : QMediaDevices::audioInputs()) {
+            if (device.id() == m_activeMicDeviceId)
+                name = device.description();
+        }
+        emit micUnavailable(MicRate::micWouldNotOpen(name));
         return;
     }
 
