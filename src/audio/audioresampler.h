@@ -44,6 +44,18 @@ namespace AudioResampler {
 // further buys numbers nobody can hear.
 inline constexpr int TAPS_PER_PHASE = 64;
 
+// WHY the branch can be longer than TAPS_PER_PHASE: the transition band's width, measured against
+// the OUTPUT rate, shrinks with branch length and grows with M/L - each output sample steps M/L
+// input samples. A fixed branch is therefore ample at 44.1 kHz (M/L = 3.7) and far too short at
+// 176.4 kHz (M/L = 14.7), where an 8 kHz tone came back at -14 dB. Spanning this many output
+// periods keeps the transition the same width at every rate; at 44.1 kHz and below it asks for
+// fewer than TAPS_PER_PHASE, so every rate already measured above is unchanged.
+inline constexpr int OUTPUT_PERIODS_SPANNED = 16;
+
+// Bounds the per-output cost the same way MAX_INTERPOLATION bounds the prototype: 1024 covers
+// rates up to ~750 kHz, and a rate past that is refused rather than run on the transmit path.
+inline constexpr int MAX_TAPS_PER_PHASE = 1024;
+
 // The passband edge, as a fraction of the output Nyquist. The remaining 10% is transition band, so
 // the stopband is fully attenuated by the time aliasing could fold anything back. For a 12 kHz
 // output that puts the corner at 5.4 kHz - well above the ~3 kHz a voice channel uses.
@@ -66,6 +78,21 @@ inline constexpr int gcd(int a, int b) {
 // is turned away instead of stalling the transmit path to build a filter for it.
 inline constexpr int MAX_INTERPOLATION = 320;
 
+inline constexpr int tapsPerPhaseFor(int l, int m) {
+    const int spanned = (OUTPUT_PERIODS_SPANNED * m + l - 1) / l;
+    return spanned > TAPS_PER_PHASE ? spanned : TAPS_PER_PHASE;
+}
+
+// The one rule for whether configure() will accept a pair of rates, so a caller can ask without
+// building a filter - MicRate decides what to tell the operator from this.
+inline constexpr bool canConvert(int inputRate, int outputRate) {
+    if (inputRate <= 0 || outputRate <= 0)
+        return false;
+    const int g = gcd(inputRate, outputRate);
+    const int l = outputRate / g;
+    return l <= MAX_INTERPOLATION && tapsPerPhaseFor(l, inputRate / g) <= MAX_TAPS_PER_PHASE;
+}
+
 // Resamples a stream from one rate to another, holding the filter state ACROSS CALLS.
 //
 // Streaming state is the whole point: audio arrives in blocks whose length has no relationship to
@@ -74,24 +101,19 @@ inline constexpr int MAX_INTERPOLATION = 320;
 // input length on consecutive calls, which is correct and which callers must not assume away.
 class Resampler {
 public:
-    // False if the rates are unusable (non-positive). Any positive pair is supported: the GCD
-    // reduction always yields some L/M.
+    // False when canConvert() refuses the pair. Leaves the resampler unconfigured, so process()
+    // produces nothing and the caller reports the rate as unusable.
     bool configure(int inputRate, int outputRate) {
-        if (inputRate <= 0 || outputRate <= 0)
-            return false;
-
-        const int g = gcd(inputRate, outputRate);
-        const int l = outputRate / g;
-        if (l > MAX_INTERPOLATION) {
-            // Refused rather than built: see MAX_INTERPOLATION. Leaves the resampler unconfigured,
-            // so process() produces nothing and the caller reports the rate as unusable.
+        if (!canConvert(inputRate, outputRate)) {
             m_l = 0;
             m_m = 0;
             return false;
         }
 
-        m_l = l;
+        const int g = gcd(inputRate, outputRate);
+        m_l = outputRate / g;
         m_m = inputRate / g;
+        m_tapsPerPhase = tapsPerPhaseFor(m_l, m_m);
         m_inputRate = inputRate;
         m_outputRate = outputRate;
 
@@ -105,11 +127,12 @@ public:
     int decimation() const { return m_m; }
     int inputRate() const { return m_inputRate; }
     int outputRate() const { return m_outputRate; }
+    int tapsPerPhase() const { return m_tapsPerPhase; }
 
     // Clears the filter history and the phase. Call when the stream restarts - a new transmission,
     // a device change - so the tail of the last one cannot bleed into the start of the next.
     void reset() {
-        m_history.assign(static_cast<size_t>(TAPS_PER_PHASE), 0.0f);
+        m_history.assign(static_cast<size_t>(m_tapsPerPhase), 0.0f);
         m_writePos = 0;
         m_offset = 0;
     }
@@ -132,7 +155,7 @@ public:
         int produced = 0;
         for (int i = 0; i < inputSamples; ++i) {
             m_history[static_cast<size_t>(m_writePos)] = in[i];
-            m_writePos = (m_writePos + 1) % TAPS_PER_PHASE;
+            m_writePos = (m_writePos + 1) % m_tapsPerPhase;
 
             // Every output whose position on the upsampled grid falls within this input sample's
             // span of L. m_offset is that position measured from the current sample's base, so the
@@ -147,22 +170,22 @@ public:
     }
 
 private:
-    // One polyphase branch: every L-th tap, starting at `branch`, against the newest TAPS_PER_PHASE
+    // One polyphase branch: every L-th tap, starting at `branch`, against the newest m_tapsPerPhase
     // input samples. Newest sample pairs with the lowest tap index.
     float filterAt(int branch) const {
         double acc = 0.0;
-        int readPos = (m_writePos - 1 + TAPS_PER_PHASE) % TAPS_PER_PHASE;
-        for (int j = 0; j < TAPS_PER_PHASE; ++j) {
+        int readPos = (m_writePos - 1 + m_tapsPerPhase) % m_tapsPerPhase;
+        for (int j = 0; j < m_tapsPerPhase; ++j) {
             const int tap = branch + j * m_l;
             if (tap < static_cast<int>(m_taps.size()))
                 acc += static_cast<double>(m_taps[static_cast<size_t>(tap)]) * m_history[static_cast<size_t>(readPos)];
-            readPos = (readPos - 1 + TAPS_PER_PHASE) % TAPS_PER_PHASE;
+            readPos = (readPos - 1 + m_tapsPerPhase) % m_tapsPerPhase;
         }
         return static_cast<float>(acc);
     }
 
     void buildPrototype() {
-        const int taps = TAPS_PER_PHASE * m_l;
+        const int taps = m_tapsPerPhase * m_l;
         m_taps.assign(static_cast<size_t>(taps), 0.0f);
 
         // Cutoff on the UPSAMPLED grid, whose rate is inputRate * L. The filter has to remove
@@ -199,6 +222,7 @@ private:
     int m_m = 0;
     int m_inputRate = 0;
     int m_outputRate = 0;
+    int m_tapsPerPhase = TAPS_PER_PHASE;
     int m_writePos = 0;
     int m_offset = 0;
     std::vector<float> m_taps;

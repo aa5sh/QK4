@@ -51,6 +51,7 @@ private slots:
     void aDcInputKeepsItsLevel();
     void aVoiceToneSurvivesAtTheRightFrequency();
     void aToneAboveTheOutputNyquistIsRemovedNotFoldedBack();
+    void aHighRateIsFilteredAsWellAsAFieldRate();
     void blockBoundariesDoNotChangeTheResult();
     void resetClearsTheTail();
     void anUpsamplingRateKeepsItsLevelAndPitch();
@@ -141,6 +142,37 @@ void TestAudioResampler::aToneAboveTheOutputNyquistIsRemovedNotFoldedBack() {
     for (double f = 100.0; f < 5900.0; f += 100.0)
         worst = std::max(worst, amplitudeAt(steady, f, 12000.0));
     QVERIFY2(worst < 0.01, qUtf8Printable(QStringLiteral("out-of-band tone left %1 in the passband").arg(worst)));
+}
+
+void TestAudioResampler::aHighRateIsFilteredAsWellAsAFieldRate() {
+    // 88.2 and 176.4 kHz are not multiples of 12 kHz, so they come here too. With a branch length
+    // fixed at TAPS_PER_PHASE, 176.4 kHz let this tone back at -14 dB: the filter has to grow with
+    // M/L. Same tone, same threshold as the 44.1 kHz case above.
+    for (const int rate : {88200, 176400}) {
+        AudioResampler::Resampler r;
+        QVERIFY(r.configure(rate, 12000));
+        QVERIFY(r.tapsPerPhase() > AudioResampler::TAPS_PER_PHASE);
+
+        const std::vector<float> in = tone(8000.0, rate, rate, 0.5);
+        const std::vector<float> out = runAll(r, in);
+        const std::vector<float> steady(out.begin() + 400, out.end());
+
+        const double alias = amplitudeAt(steady, 4000.0, 12000.0);
+        QVERIFY2(alias < 0.001,
+                 qUtf8Printable(QStringLiteral("%1 Hz: 8 kHz aliased to 4 kHz at amplitude %2").arg(rate).arg(alias)));
+
+        const std::vector<float> voice = runAll(r, tone(3000.0, rate, rate, 0.5));
+        const double at3k = amplitudeAt(std::vector<float>(voice.begin() + 400, voice.end()), 3000.0, 12000.0);
+        QVERIFY2(std::abs(at3k - 0.5) < 0.01,
+                 qUtf8Printable(QStringLiteral("%1 Hz: 3 kHz came out at %2").arg(rate).arg(at3k)));
+    }
+
+    // And the rates already measured keep the branch length they were measured with.
+    AudioResampler::Resampler r;
+    for (const int rate : {8000, 11025, 16000, 22050, 32000, 44100}) {
+        QVERIFY(r.configure(rate, 12000));
+        QCOMPARE(r.tapsPerPhase(), AudioResampler::TAPS_PER_PHASE);
+    }
 }
 
 void TestAudioResampler::blockBoundariesDoNotChangeTheResult() {
