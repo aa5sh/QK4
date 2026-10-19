@@ -454,6 +454,10 @@ void PopupManager::wireDisplayPopup() {
 
     // Ref level +/- (per-VFO, 1 dB step, range -200..60).
     auto adjustRefLevel = [this](int delta) {
+        // WHY: a #REF sent during AutoRef is accepted silently and freezes the radio's tracking while it
+        // still reports AutoRef on (bench 2026-10-19). Same rule as Ctrl+Wheel in SpectrumController.
+        if (m_radioState->autoRefLevel())
+            return;
         const bool vfoA = m_displayPopup->isVfoAEnabled();
         const bool vfoB = m_displayPopup->isVfoBEnabled();
         if (vfoA) {

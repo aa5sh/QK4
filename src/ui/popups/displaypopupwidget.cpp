@@ -186,13 +186,9 @@ QWidget *DisplayPopupWidget::createRefLevelControlPage() {
     connect(m_refLevelControlGroup, &ControlGroupWidget::incrementClicked, this,
             &DisplayPopupWidget::refLevelIncrementRequested);
     connect(m_refLevelControlGroup, &ControlGroupWidget::autoClicked, this, [this]() {
-        // Auto-ref is GLOBAL - affects both VFOs, no suffix needed
-        // K4 doesn't echo #AR commands, so use optimistic update
-        emit catCommandRequested(QString("#AR/;")); // Toggle GLOBAL AUTO/MAN
-
-        // Optimistic local update
-        m_autoRef = !m_autoRef;
-        updateRefLevelControlGroup();
+        // WHY: no optimistic flip. The K4 answers #AR/; at once with the new #AR state, which arrives
+        // through setAutoRefLevel(); guessing here could only disagree with it. AutoRef is global.
+        emit catCommandRequested(QString("#AR/;"));
     });
     layout->addWidget(m_refLevelControlGroup);
 
