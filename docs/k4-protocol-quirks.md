@@ -256,6 +256,49 @@ both on disconnect, because `SpectrumDisplayState::reset()` clears the flags wit
 
 ---
 
+## 13. AutoRef: the radio tracks REF itself, and a client `#REF` freezes it
+
+**Symptom.** The Display popup's AUTO button showed manual after every radio update, and Ctrl+Wheel
+could change REF while AutoRef was on. QK4 had parsed `#AR` against an invented format.
+
+**K4 behavior.** Measured on a K4D on 2026-10-19, once with `RDY;` alone and once with QK4's own
+`RDY;K41;ER1;` start-up. Both gave the same results.
+
+- **Format.** `#ARaadd±oom`: averaging, debounce, signed offset in dB, then `1` (auto) or `0`
+  (manual). Example: `#AR1201+041`. It is not `A`/`M`.
+- **Offset storage.** The AutoRef Offset menu is `ME0050`, stored 0–16 with 8 meaning 0 dB. The
+  front panel shows −8…+8. Each step sends `ME0050.00NN;` and a fresh `#AR`.
+- **`#AR` is pushed.** The radio sends it unprompted on every change, whether from the front panel
+  or from a client's `#AR/;` toggle.
+- **REF is pushed in AutoRef, with the offset already applied.** The radio sends `#REF`, `#HREF` and
+  their `$` forms unprompted as it tracks, in 1 dB steps.
+
+  ```
+  offset +4                #AR1201+041   REF -131/-132
+  offset +4 -> +8          #AR1201+081   REF -140 ... -136   (settles ~4 dB lower)
+  offset +8 -> +4          #AR1201+041   REF -137 ... -132
+  AutoRef off              #AR1201+040   REF updates stop
+  AutoRef on               #AR1201+041   REF -135 ... -132 within ~2 s
+  ```
+
+- **A client `#REF` during AutoRef is silently accepted and freezes tracking.** `#REF-110;` got no
+  reply. `#AR` still read `1`, but REF stayed at −110 against a −132 floor for over 20 s, until
+  AutoRef was toggled off and on.
+
+**QK4 encoding.**
+- `SpectrumDisplayHandlers::handleAR` (`src/models/radiostate/spectrumdisplaystate.cpp`) keeps only
+  the mode. QK4 follows the offset by applying the published `#REF`, so it never reads the offset.
+- `PopupManager`'s REF ± lambda and the two Ctrl+Wheel `refLevelScrolled` handlers in
+  `SpectrumController` do nothing while `RadioState::autoRefLevel()` is true.
+- The AUTO button in `DisplayPopupWidget` sends `#AR/;` and waits for the radio's `#AR` to set its
+  state.
+- Tests: the `testAutoRef*` cases in `tests/test_radiostate.cpp` use the radio's own strings.
+
+**Do not compute REF locally from the PAN noise floor.** The radio already publishes its tracked REF.
+A second tracker in QK4 would move the scale independently of the radio's own screen.
+
+---
+
 ## How to extend this document
 
 Add a new section only when a behavior satisfies **all** of:
