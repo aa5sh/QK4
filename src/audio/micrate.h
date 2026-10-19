@@ -4,32 +4,37 @@
 #include <QString>
 
 #include "audio/audiodecimator.h"
+#include "audio/audioresampler.h"
 
-// What to TELL THE OPERATOR when a microphone runs at a rate QK4 cannot capture from.
+// What to TELL THE OPERATOR when a microphone cannot be captured from.
 //
-// AudioDecimator owns the rule (only exact multiples of 12 kHz); this owns the wording, so the
-// sentence an operator reads is written once and tested, rather than spelled differently in the log
-// and in the Options list.
+// AudioDecimator and AudioResampler own the rule - exact multiples of 12 kHz are decimated, any
+// other rate a device reports is resampled - and this owns the wording, so the sentence an operator
+// reads is written once and tested.
 //
-// WHY THIS EXISTS AT ALL. A device at an unusable rate is not a quiet degradation - it is total.
+// WHY THIS EXISTS AT ALL. A microphone QK4 cannot use is not a quiet degradation - it is total.
 // setupAudioInput() refuses to open it, no mic data is captured, and because a local PTT press keys
 // the K4 by STREAMING AUDIO rather than by sending TX; (TransmitOwner::Route::StreamedFromHere),
 // no audio means the radio never keys. The operator presses PTT and nothing whatever happens.
 //
-// That was reported from the field twice before this existed: once on a Mac Studio whose display
-// microphone ran at 44.1 kHz, where PTT worked over TCI (which captures at a fixed 48 kHz and never
-// consults the microphone) and not otherwise, and once on Windows. The rate was already refused and
-// logged at that point - but only to the log, which nobody sees unless they start the app from a
-// terminal. Detection was never the gap; saying so where the operator is looking was.
+// That was reported from the field (#180, and a Mac Studio whose display microphone ran at
+// 44.1 kHz) when only multiples of 12 kHz were accepted. The refusal was logged, but only to the
+// log, which nobody sees unless they start the app from a terminal. Detection was never the gap;
+// saying so where the operator is looking was.
 //
-// Pure functions over a sample rate, so the wording is unit-testable with no audio device. Qt Core
-// only, no widgets.
+// Pure functions, so the wording is unit-testable with no audio device. Qt Core only, no widgets.
 namespace MicRate {
+
+// The same rule setupAudioInput() applies: decimated if it can be, resampled otherwise.
+inline bool isUsable(int sampleRate) {
+    return AudioDecimator::isSupportedRate(sampleRate) ||
+           AudioResampler::canConvert(sampleRate, AudioDecimator::OUTPUT_RATE);
+}
 
 // Empty when QK4 can capture at this rate. Otherwise a sentence naming the rate, what it breaks,
 // and what to do - in that order, because the operator wants the last part most.
 inline QString problem(int sampleRate) {
-    if (AudioDecimator::isSupportedRate(sampleRate))
+    if (isUsable(sampleRate))
         return QString();
 
     if (sampleRate <= 0) {
@@ -38,17 +43,13 @@ inline QString problem(int sampleRate) {
                               "different microphone.");
     }
 
-    // Named explicitly rather than described as "a multiple of 12000": an operator about to change
-    // a rate in Audio MIDI Setup or Windows Sound needs the number to pick, not the arithmetic.
-    return QStringLiteral("This microphone runs at %1 Hz. QK4 can only capture at 48000, 24000 or "
-                          "12000 Hz, so transmit audio would be silent and PTT would appear to do "
-                          "nothing. Set the device to 48000 Hz and restart QK4, or choose a "
-                          "different microphone.")
+    // Named explicitly: an operator about to change a rate in Audio MIDI Setup or Windows Sound
+    // needs the number they have and the number to pick, not the arithmetic.
+    return QStringLiteral("This microphone runs at %1 Hz, which QK4 cannot convert for the radio, so "
+                          "transmit audio would be silent and PTT would appear to do nothing. Set "
+                          "the device to 48000 Hz and restart QK4, or choose a different "
+                          "microphone.")
         .arg(sampleRate);
-}
-
-inline bool isUsable(int sampleRate) {
-    return AudioDecimator::isSupportedRate(sampleRate);
 }
 
 // Shown when the microphone is open and transmitting but delivering nothing at all.
@@ -97,16 +98,6 @@ inline QString micDeliveringNothing() {
                           "transmitted. If you changed its sample rate, restart QK4 to pick up the "
                           "new rate. If it is a Bluetooth headset, it cannot provide a microphone "
                           "while also playing audio - choose a different device for playback.");
-}
-
-// Appended to a device's name in the Options list, so an unusable device is visibly unusable
-// BEFORE it is chosen. Empty when the device is fine - a usable device gets no decoration.
-inline QString badge(int sampleRate) {
-    if (AudioDecimator::isSupportedRate(sampleRate))
-        return QString();
-    if (sampleRate <= 0)
-        return QStringLiteral("  (unusable rate)");
-    return QStringLiteral("  (%1 Hz - unusable)").arg(sampleRate);
 }
 
 } // namespace MicRate

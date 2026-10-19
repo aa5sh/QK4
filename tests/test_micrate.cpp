@@ -10,11 +10,10 @@ class TestMicRate : public QObject {
 
 private slots:
     void theRatesQk4CanCaptureAreAccepted();
-    void theRatesFromTheFieldReportsAreRejected();
+    void theRatesFromTheFieldReportsAreAccepted();
     void aRejectionNamesTheRateAndWhatToSetItTo();
     void anAcceptedRateSaysNothingAtAll();
     void aMissingRateIsRejectedWithoutPrintingZero();
-    void theBadgeMarksOnlyUnusableDevices();
     void theSilentMicMessageNamesBothCausesAndWhatToDo();
 };
 
@@ -38,28 +37,32 @@ void TestMicRate::theSilentMicMessageNamesBothCausesAndWhatToDo() {
 }
 
 void TestMicRate::theRatesQk4CanCaptureAreAccepted() {
-    // Exact multiples of the K4's 12 kHz TX rate. 24000 is the one that matters in the field: an
-    // AirPods Pro in HFP runs there, and INT-005 was caused by assuming 48000.
+    // Exact multiples of the K4's 12 kHz TX rate, decimated. 24000 is an AirPods Pro in HFP, and
+    // INT-005 was caused by assuming 48000.
     QVERIFY(MicRate::isUsable(48000));
     QVERIFY(MicRate::isUsable(24000));
     QVERIFY(MicRate::isUsable(12000));
     QVERIFY(MicRate::isUsable(96000));
 }
 
-void TestMicRate::theRatesFromTheFieldReportsAreRejected() {
-    // 44100 is the Mac Studio display microphone and the Windows report; 16000 is older AirPods,
-    // called out in audiodecimator.h as needing 4:3 rational resampling.
-    QVERIFY(!MicRate::isUsable(44100));
-    QVERIFY(!MicRate::isUsable(16000));
-    QVERIFY(!MicRate::isUsable(22050));
-    QVERIFY(!MicRate::isUsable(8000));
+void TestMicRate::theRatesFromTheFieldReportsAreAccepted() {
+    // The regression this file exists for. 44100 is #180 and the Mac Studio display microphone;
+    // 16000 and 8000 are Bluetooth headsets in call mode. All were refused before the resampler, and
+    // a message that still called them unusable would send an operator to change a setting that is
+    // fine.
+    for (const int rate : {44100, 16000, 22050, 8000, 11025, 32000, 88200, 176400}) {
+        QVERIFY2(MicRate::isUsable(rate), qUtf8Printable(QString::number(rate)));
+        QVERIFY2(MicRate::problem(rate).isEmpty(), qUtf8Printable(QString::number(rate)));
+    }
 }
 
 void TestMicRate::aRejectionNamesTheRateAndWhatToSetItTo() {
-    const QString reason = MicRate::problem(44100);
+    // 44101 Hz is a rate the resampler declines (see MAX_INTERPOLATION) - the only kind still refused.
+    QVERIFY(!MicRate::isUsable(44101));
+    const QString reason = MicRate::problem(44101);
     QVERIFY(!reason.isEmpty());
     // The rate the operator has, so they can match it to what the OS is showing them.
-    QVERIFY2(reason.contains(QStringLiteral("44100")), qUtf8Printable(reason));
+    QVERIFY2(reason.contains(QStringLiteral("44101")), qUtf8Printable(reason));
     // The rate to change it to. Without this the message says what is wrong and not what to do.
     QVERIFY2(reason.contains(QStringLiteral("48000")), qUtf8Printable(reason));
     // PTT is the symptom that gets reported, so the message has to connect itself to it - otherwise
@@ -81,19 +84,6 @@ void TestMicRate::aMissingRateIsRejectedWithoutPrintingZero() {
     QVERIFY(!reason.isEmpty());
     QVERIFY2(!reason.contains(QStringLiteral("0 Hz")), qUtf8Printable(reason));
     QVERIFY(!MicRate::problem(-1).isEmpty());
-}
-
-void TestMicRate::theBadgeMarksOnlyUnusableDevices() {
-    // A usable device's name is left exactly as the OS gives it.
-    QVERIFY(MicRate::badge(48000).isEmpty());
-    QVERIFY(MicRate::badge(24000).isEmpty());
-
-    const QString badge = MicRate::badge(44100);
-    QVERIFY(!badge.isEmpty());
-    QVERIFY2(badge.contains(QStringLiteral("44100")), qUtf8Printable(badge));
-
-    // Still marked when there is no rate to print.
-    QVERIFY(!MicRate::badge(0).isEmpty());
 }
 
 QTEST_MAIN(TestMicRate)
