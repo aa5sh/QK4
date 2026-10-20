@@ -188,6 +188,12 @@ private:
     // discontinuity. Audio thread only.
     const QByteArray &rationalResampleTo12k(const QByteArray &input);
 
+    // Emit micUnavailable, but only while the microphone is the TX source. setPttActive() opens the
+    // mic on every key-up, TCI included, so without the gate a machine with no usable microphone
+    // told the operator "nothing is being transmitted" on every TCI transmission while TCI audio
+    // was reaching the radio. The qCWarning at each call site still records the fault.
+    void reportMicUnavailable(const QString &reason);
+
     // The microphone's ACTUAL capture rate, taken from the device rather than demanded of it.
     // 0 until a device has been opened. See setupAudioInput().
     int m_micSampleRate = 0;

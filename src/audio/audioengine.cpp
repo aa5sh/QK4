@@ -287,7 +287,7 @@ bool AudioEngine::setupAudioInput() {
 
     if (inputDevice.isNull()) {
         qCWarning(qk4Audio) << "AudioEngine: No audio input device available";
-        emit micUnavailable(MicRate::noMicrophone());
+        reportMicUnavailable(MicRate::noMicrophone());
         return false;
     }
 
@@ -320,7 +320,7 @@ bool AudioEngine::setupAudioInput() {
                       qUtf8Printable(inputDevice.description()), format.sampleRate(), AudioDecimator::OUTPUT_RATE);
             // ...and to the operator, not only to the log. This refusal is total - PTT appears dead -
             // so it is the one audio fault that has to reach the screen.
-            emit micUnavailable(MicRate::problem(format.sampleRate()));
+            reportMicUnavailable(MicRate::problem(format.sampleRate()));
             return false;
         }
         qCInfo(qk4Audio, "AudioEngine: input device \"%s\" runs at %d Hz; resampling %d/%d to %d Hz",
@@ -334,7 +334,7 @@ bool AudioEngine::setupAudioInput() {
                   "It reports %d..%d Hz. Choose a different microphone in Options.",
                   qUtf8Printable(inputDevice.description()), format.sampleRate(), format.channelCount(),
                   inputDevice.minimumSampleRate(), inputDevice.maximumSampleRate());
-        emit micUnavailable(MicRate::micWouldNotOpen(inputDevice.description()));
+        reportMicUnavailable(MicRate::micWouldNotOpen(inputDevice.description()));
         return false;
     }
 
@@ -609,7 +609,7 @@ void AudioEngine::openMic() {
             if (device.id() == m_activeMicDeviceId)
                 name = device.description();
         }
-        emit micUnavailable(MicRate::micWouldNotOpen(name));
+        reportMicUnavailable(MicRate::micWouldNotOpen(name));
         return;
     }
 
@@ -674,6 +674,12 @@ const QByteArray &AudioEngine::rationalResampleTo12k(const QByteArray &input) {
         m_micResampler.process(inputSamples, inputCount, reinterpret_cast<float *>(m_resampleBuf12k.data()));
     m_resampleBuf12k.resize(produced * static_cast<int>(sizeof(float)));
     return m_resampleBuf12k;
+}
+
+void AudioEngine::reportMicUnavailable(const QString &reason) {
+    if (txSource() != TxSource::Microphone)
+        return;
+    emit micUnavailable(reason);
 }
 
 void AudioEngine::setTxSource(TxSource source) {
