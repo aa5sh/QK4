@@ -122,6 +122,16 @@ target_include_directories(test_spectrumscale PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_spectrumscale Qt6::Core Qt6::Test)
 add_test(NAME SpectrumScaleTests COMMAND test_spectrumscale)
 
+add_executable(test_spectrumaveraging test_spectrumaveraging.cpp)
+target_include_directories(test_spectrumaveraging PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_spectrumaveraging Qt6::Core Qt6::Test)
+add_test(NAME SpectrumAveragingTests COMMAND test_spectrumaveraging)
+
+add_executable(test_autoreference test_autoreference.cpp)
+target_include_directories(test_autoreference PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_autoreference Qt6::Core Qt6::Test)
+add_test(NAME AutoReferenceTests COMMAND test_autoreference)
+
 # RFC 6455 framing for the TCI server: length forms, masking, fragment reassembly, size limits.
 add_executable(test_websocketframe test_websocketframe.cpp
     ${CMAKE_SOURCE_DIR}/src/network/websocketframe.cpp

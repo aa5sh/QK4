@@ -1,5 +1,6 @@
 #include "panadapter_rhi.h"
 #include "dsp/bandplanstrip.h"
+#include "dsp/spectrumaveraging.h"
 #include "dsp/spectrumscale.h"
 #include "dsp/waterfallgeometry.h"
 #include "panadapter_constants.h"
@@ -1000,8 +1001,8 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
         // automatic noise-floor tracker, before scaling by 0.95. It moved the trace by ~20% of the
         // chart height depending on band noise, so a signal's height depended on conditions rather
         // than on its strength, and no dBm or S-unit label could be correct. REF and SCALE define
-        // the window; the radio owns them, including in auto-reference mode where it adjusts REF
-        // itself and reports it. Height is now a pure function of dBm.
+        // the window; AutoRef supplies an effective reference from the packet noise floor.
+        // Height is a pure function of dBm.
         for (int i = 0; i < specSize; ++i)
             m_normalizedSpectrum[offset + i] = SpectrumScale::normalizedForDb(m_currentSpectrum[i], m_minDb, m_maxDb);
 
@@ -1605,9 +1606,6 @@ void PanadapterRhiWidget::updateSpectrum(const QByteArray &payload, int binsOffs
     qint32 tierSpanHz = sampleRate * 1000;
     int totalBins = binCount;
 
-    const float attackAlpha = m_attackAlpha;
-    const float decayAlpha = m_decayAlpha;
-
     // === Full-tier path (all bins → waterfall storage) ===
     decompressBins(bins, m_tierRawSpectrum);
 
@@ -1636,8 +1634,7 @@ void PanadapterRhiWidget::updateSpectrum(const QByteArray &payload, int binsOffs
         m_tierSpectrum = m_tierRawSpectrum;
     } else {
         for (int i = 0; i < m_tierRawSpectrum.size(); ++i) {
-            float alpha = (m_tierRawSpectrum[i] > m_tierSpectrum[i]) ? attackAlpha : decayAlpha;
-            m_tierSpectrum[i] = alpha * m_tierRawSpectrum[i] + (1.0f - alpha) * m_tierSpectrum[i];
+            m_tierSpectrum[i] = SpectrumAveraging::update(m_tierSpectrum[i], m_tierRawSpectrum[i], m_averagingLevel);
         }
     }
     m_waterfallTierBinCount = totalBins;
@@ -1658,8 +1655,8 @@ void PanadapterRhiWidget::updateSpectrum(const QByteArray &payload, int binsOffs
 
     // WHY resample instead of reassigning: the cropped bin count is spanHz * totalBins / tierSpanHz,
     // so it changes on every span change and every tier crossing. Dropping the smoothed curve there
-    // put one raw, unsmoothed frame on screen, which reads as a visible flash against an EMA running
-    // at attack 0.52 / decay 0.34. The frequency axis is unchanged across that boundary — old and
+    // put one raw, unsmoothed frame on screen, which reads as a visible flash with display averaging
+    // enabled. The frequency axis is unchanged across that boundary — old and
     // new both cover spanHz about the same centre, only the resolution differs — so the smoothed
     // curve carries over correctly once stretched to the new bin count, and smoothing continues
     // uninterrupted.
@@ -1669,19 +1666,15 @@ void PanadapterRhiWidget::updateSpectrum(const QByteArray &payload, int binsOffs
         if (m_currentSpectrum.size() != m_rawSpectrum.size())
             m_currentSpectrum = resampleLinear(m_currentSpectrum, m_rawSpectrum.size());
         for (int i = 0; i < m_rawSpectrum.size(); ++i) {
-            float alpha = (m_rawSpectrum[i] > m_currentSpectrum[i]) ? attackAlpha : decayAlpha;
-            m_currentSpectrum[i] = alpha * m_rawSpectrum[i] + (1.0f - alpha) * m_currentSpectrum[i];
+            m_currentSpectrum[i] = SpectrumAveraging::update(m_currentSpectrum[i], m_rawSpectrum[i], m_averagingLevel);
         }
     }
 
-    // The radio reports the noise floor it measured, in the same dBm the bins are meant to be in
-    // once RhiUtils::K4_DBM_OFFSET is applied. Comparing the two is a free check that the offset is
-    // right — a systematic gap means every dBm and S-unit on the scale is off by that much. Logged
-    // only when the disagreement changes, so it stays quiet while the calibration holds.
+    // Compare packet statistics with the reported floor without treating either percentile as
+    // an absolute calibration target: noise fluctuations put low bins below the typical floor.
     if (qk4PanDiag().isDebugEnabled() && !m_rawSpectrum.isEmpty()) {
-        // Raw bins, not the smoothed curve: the EMA's fast-attack/slow-decay asymmetry biases the
-        // result upward and would be read as a calibration error. The median is the meaningful
-        // comparison — with signals sparse across the span, most bins are noise, whereas the single
+        // Raw bins avoid comparing a delayed average with the current packet's floor.
+        // With signals sparse across the span, most bins are noise, whereas the single
         // lowest bin is the deepest downward excursion of that noise and sits well below any floor
         // statistic the radio would report.
         QVector<float> sorted = m_rawSpectrum;
@@ -1691,31 +1684,23 @@ void PanadapterRhiWidget::updateSpectrum(const QByteArray &payload, int binsOffs
         // excursion of the noise and moves several dB frame to frame, which made this line fire
         // over a thousand times in one session. A low percentile tracks the same floor without the
         // jitter.
-        const float minDbm = sorted[sorted.size() / 20];
-        // Track the minimum, not the median: measured against a live band the min lands within a
-        // few dB of the radio's reported floor, while the median runs ~20 dB higher because most
-        // bins hold signal rather than noise. The min is therefore the calibration signal and the
-        // median is context — keying the log on the min keeps it quiet unless the offset is wrong,
-        // instead of chattering as band activity moves the median.
-        // Smoothed before comparing: calibration error is a standing offset, so only a sustained
-        // move is worth a line. Per-frame variation is band noise, not the constant drifting.
-        const float delta = minDbm - m_noiseFloor;
+        const float lowPercentileDbm = sorted[sorted.size() / 20];
+        // Smooth the low-percentile difference so transient signals do not flood the log.
+        const float delta = lowPercentileDbm - m_noiseFloor;
         m_calibDelta = (m_calibSamples == 0) ? delta : 0.02f * delta + 0.98f * m_calibDelta;
         ++m_calibSamples;
 
-        // One line once the average has settled, then only on a sustained change. Reporting the
-        // settled value even when it is small is the point: a silent check cannot be told apart
-        // from a broken one, and "offset +0.6 dB" is the evidence that the constant is right.
+        // Report once settled and on sustained changes, so a quiet log still confirms capture.
         const bool settled = m_calibSamples == 120;
         const bool drifted = m_calibLogged && std::abs(m_calibDelta - m_lastLoggedCalibDelta) >= 2.0f;
         if (settled || drifted) {
             m_calibLogged = true;
             m_lastLoggedCalibDelta = m_calibDelta;
-            qCDebug(
-                qk4PanDiag, "%s",
-                qPrintable(QString::asprintf("CALIB       radio floor %.1f dBm  raw min %.1f  raw median %.1f  "
-                                             "smoothed offset %+.1f dB  (K4_DBM_OFFSET %.0f)",
-                                             m_noiseFloor, minDbm, medianDbm, m_calibDelta, RhiUtils::K4_DBM_OFFSET)));
+            qCDebug(qk4PanDiag, "%s",
+                    qPrintable(QString::asprintf("CALIB       radio floor %.1f dBm  raw p05 %.1f  raw median %.1f  "
+                                                 "smoothed p05 delta %+.1f dB  (K4_DBM_OFFSET %.0f)",
+                                                 m_noiseFloor, lowPercentileDbm, medianDbm, m_calibDelta,
+                                                 RhiUtils::K4_DBM_OFFSET)));
         }
     }
 
@@ -1966,8 +1951,7 @@ void PanadapterRhiWidget::clear() {
     m_currentSpectrum.clear();
     m_rawSpectrum.clear();
     m_autoRefEnabled = false;
-    m_autoRefInitialized = false;
-    m_autoRefPendingFrames = 0;
+    m_autoRef = {};
     m_waterfallWriteRow = 0;
     m_waterfallData.fill(0);
     m_rowTierSpanHz.fill(0.0f);
@@ -2014,7 +1998,7 @@ void PanadapterRhiWidget::setRefLevel(int level) {
 }
 
 void PanadapterRhiWidget::setAutoRefSettings(int averaging, int debounce, int offsetDb, bool enabled) {
-    averaging = qBound(1, averaging, 20);
+    averaging = qBound(1, averaging, 30);
     debounce = qBound(1, debounce, 18);
     offsetDb = qBound(-8, offsetDb, 8);
     if (m_autoRefEnabled == enabled && m_autoRefAveraging == averaging && m_autoRefDebounce == debounce &&
@@ -2027,8 +2011,7 @@ void PanadapterRhiWidget::setAutoRefSettings(int averaging, int debounce, int of
     m_autoRefOffsetDb = offsetDb;
     // Start from the next PAN packet instead of blending a new receiver/band with the previous
     // floor. Disabling AutoRef immediately restores the radio's explicit #REF value.
-    m_autoRefInitialized = false;
-    m_autoRefPendingFrames = 0;
+    m_autoRef = {};
     updateDbRangeFromRefAndScale();
     update();
 }
@@ -2048,8 +2031,7 @@ void PanadapterRhiWidget::updateDbRangeFromRefAndScale() {
     // In manual mode #REF is the bottom reference. The K4's AutoRef changes its own display from
     // the noise-floor measurement carried in each PAN packet; it does not continuously publish a
     // matching #REF. Follow that measurement here so the remote panadapter behaves like the radio.
-    const float effectiveRef =
-        (m_autoRefEnabled && m_autoRefInitialized) ? m_autoRefLevel : static_cast<float>(m_refLevel);
+    const float effectiveRef = AutoReference::reference(m_autoRef, m_autoRefEnabled, static_cast<float>(m_refLevel));
     m_minDb = effectiveRef;
     m_maxDb = effectiveRef + static_cast<float>(m_scale);
 
@@ -2057,28 +2039,9 @@ void PanadapterRhiWidget::updateDbRangeFromRefAndScale() {
 }
 
 void PanadapterRhiWidget::updateAutoRefFromNoiseFloor(float noiseFloor) {
-    if (!m_autoRefEnabled || !std::isfinite(noiseFloor) || noiseFloor < -200.0f || noiseFloor > 50.0f)
-        return;
-
-    // aa is the averaging constant: one new sample contributes 1/aa of the running floor. dd is
-    // the debounce interval: publish the accumulated result only after that many PAN frames. A
-    // positive offset places the noise floor above the bottom, so it is subtracted from the floor
-    // to obtain the effective reference level.
-    if (!m_autoRefInitialized) {
-        m_autoRefSmoothedFloor = noiseFloor;
-        m_autoRefLevel = noiseFloor - static_cast<float>(m_autoRefOffsetDb);
-        m_autoRefInitialized = true;
-        m_autoRefPendingFrames = 0;
+    if (AutoReference::update(m_autoRef, noiseFloor, m_autoRefEnabled, m_autoRefAveraging, m_autoRefDebounce,
+                              m_autoRefOffsetDb))
         updateDbRangeFromRefAndScale();
-    } else {
-        const float alpha = 1.0f / static_cast<float>(m_autoRefAveraging);
-        m_autoRefSmoothedFloor = alpha * noiseFloor + (1.0f - alpha) * m_autoRefSmoothedFloor;
-        if (++m_autoRefPendingFrames >= m_autoRefDebounce) {
-            m_autoRefLevel = m_autoRefSmoothedFloor - static_cast<float>(m_autoRefOffsetDb);
-            m_autoRefPendingFrames = 0;
-            updateDbRangeFromRefAndScale();
-        }
-    }
 }
 
 void PanadapterRhiWidget::setSpan(int spanHz) {
@@ -2115,9 +2078,6 @@ void PanadapterRhiWidget::setAveraging(int level) {
     if (m_averagingLevel == level)
         return;
     m_averagingLevel = level;
-    float t = (level - 1) / 19.0f;
-    m_attackAlpha = 0.52f - t * 0.22f; // 0.52 → 0.30
-    m_decayAlpha = 0.34f - t * 0.24f;  // 0.34 → 0.10
 }
 
 // Secondary VFO setters

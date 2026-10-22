@@ -294,7 +294,7 @@ void handleAR(SpectrumDisplayState &state, RadioState &owner, const QString &cmd
     if (cmd.at(7) == '-')
         offset = -offset;
     const QChar mode = cmd.at(10);
-    if (!avgOk || averaging < 1 || averaging > 20 || !debounceOk || debounce < 1 || debounce > 18 || !offsetOk ||
+    if (!avgOk || averaging < 1 || averaging > 30 || !debounceOk || debounce < 1 || debounce > 18 || !offsetOk ||
         offset < -8 || offset > 8 || (mode != '0' && mode != '1'))
         return;
     const int newValue = mode == '1' ? 1 : 0;

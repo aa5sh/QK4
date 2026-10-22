@@ -46,7 +46,7 @@ struct SpectrumDisplayState {
     int vfoACursor = -1;         // #VFA 0=OFF, 1=ON, 2=AUTO, 3=HIDE
     int vfoBCursor = -1;         // #VFB
     int autoRefLevel = -1;       // #AR trailing 1=auto, 0=manual
-    int autoRefAveraging = 1;    // #AR aa: 1-20
+    int autoRefAveraging = 1;    // #AR aa: 1-30
     int autoRefDebounce = 4;     // #AR dd (live firmware permits values beyond older manual's 4-9)
     int autoRefOffset = 0;       // #AR +oo: -8..+8 dB above the display bottom
     int ddcNbMode = -1;          // #NB$ 0=off, 1=on, 2=auto

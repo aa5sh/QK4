@@ -1601,10 +1601,25 @@ private slots:
         QCOMPARE(spy.at(0).at(3).toBool(), true);
     }
 
+    void testAutoRefFullFirmwareAveragingRange() {
+        RadioState rs;
+        QSignalSpy settingsSpy(&rs, &RadioState::autoRefSettingsChanged);
+        for (int averaging : {21, 30}) {
+            rs.parseCATCommand(QString("#AR%1%2+001;").arg(averaging).arg(10));
+            QCOMPARE(rs.autoRefLevel(), true);
+            QVERIFY(!settingsSpy.isEmpty());
+            QCOMPARE(settingsSpy.last().at(0).toInt(), averaging);
+        }
+        QCOMPARE(settingsSpy.count(), 2);
+        rs.parseCATCommand("#AR3010+000;");
+        QCOMPARE(rs.autoRefLevel(), false);
+        QCOMPARE(settingsSpy.last().at(0).toInt(), 30);
+    }
+
     void testAutoRefOutOfRangeIgnored() {
         RadioState rs;
         QSignalSpy spy(&rs, &RadioState::autoRefSettingsChanged);
-        rs.parseCATCommand("#AR2110+001;"); // averaging above 20
+        rs.parseCATCommand("#AR3110+001;"); // averaging above 30
         rs.parseCATCommand("#AR1200+001;"); // debounce below live firmware range
         rs.parseCATCommand("#AR1210+091;"); // offset above +8
         QCOMPARE(spy.count(), 0);
