@@ -541,7 +541,7 @@ void MainWindow::setupMenuBar() {
         if (!m_optionsDialog) {
             m_optionsDialog =
                 new OptionsDialog(m_radioState, m_audioController, m_hardwareController, m_catServer, m_tciController,
-                                  m_kpa1500UiController->client(), m_dxClusterController, this);
+                                  m_kpa1500UiController->client(), m_dxClusterController, m_cwController, this);
         }
         m_optionsDialog->show();
         m_optionsDialog->raise();

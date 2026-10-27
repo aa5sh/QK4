@@ -10,7 +10,7 @@ Tab pages for `OptionsDialog`. Each is a `QWidget` that plugs into the dialog's 
 - `rigcontrolpage` — CAT server config + radio timing.
 - `tciserverpage` — TCI server enable/port, audio on/off, live status and connected-client list. Talks to `TciController`.
 - `audioinputpage` / `audiooutputpage` — device selection + test.
-- `cwkeyerpage` — HaliKey + iambic keyer config.
+- `cwkeyerpage` — HaliKey + iambic keyer config, and the K4's remote key-down delay (KZL, via `CwController::setKeyDownInitialDelay`).
 - `dxclusterpage` — per-cluster host/port/callsign + auto-connect list.
 - `kpa1500page` — KPA1500 host/port config.
 - `kpodpage` — KPOD button bindings + enable.

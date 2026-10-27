@@ -58,6 +58,7 @@ Last updated: TransmitController added — one owner of transmit (31 controllers
 | "Enable K-Pod does nothing / device opens with the box unchecked" | HardwareController, applying `src/hardware/usbdevicelifecycle.h` | same |
 | "Unplugging a K-Pod raised two popups, or unchecking the box raised one" | same — effects come from state EDGES | same |
 | "CW keying / paddle / sidetone wrong" | CwController | `src/controllers/cwcontroller.cpp` |
+| "CW over the network breaks up" / "Key-Down Delay won't change" | CwController (`setKeyDownInitialDelay`, KZL) + CW Keyer page | `src/controllers/cwcontroller.cpp`, `src/ui/pages/cwkeyerpage.cpp` |
 | "My foot pedal on the HaliKey does nothing" | Withdrawn on purpose — see the note in `src/controllers/cwcontroller.h` | n/a |
 | "Spectrum / panadapter / click-tune not working" | SpectrumController | `src/controllers/spectrumcontroller.cpp` |
 | "VFO mini-pan doesn't follow the radio's MINI-PAN button" / "mini-pan stuck open after reconnect" | SpectrumController | `src/controllers/spectrumcontroller.cpp` |

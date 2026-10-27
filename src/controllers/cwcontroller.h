@@ -212,6 +212,10 @@ public:
     /// suppressed. Order is load-bearing; see the implementation.
     void setKpodPlusGate(bool active);
 
+    /// The operator set the K4's remote-keying key-down delay (KZL, 0-1000 ms). Sent, then read
+    /// back, so RadioState holds what the radio took. The only place QK4 writes KZL.
+    void setKeyDownInitialDelay(int ms);
+
     // No signals: pttRequested was the only one, and it went with the footswitch path.
 
 private:

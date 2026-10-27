@@ -273,6 +273,11 @@ CwController::~CwController() {
     disconnect(this);
 }
 
+void CwController::setKeyDownInitialDelay(int ms) {
+    m_connection->sendCAT(QString("KZL%1;").arg(qBound(0, ms, 1000), 4, 10, QChar('0')));
+    m_connection->sendCAT(QStringLiteral("KZL;"));
+}
+
 void CwController::setKpodPlusGate(bool active) {
     // The single most useful line in a CW bench log: it says who is generating the elements. While
     // the gate is up QK4's own keyer still runs but its KZ output and sidetone are suppressed, so a

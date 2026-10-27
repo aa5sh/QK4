@@ -1,13 +1,17 @@
 #include "ui/pages/cwkeyerpage.h"
 #include "ui/styling/k4styles.h"
+#include "controllers/cwcontroller.h"
 #include "hardware/halikeydevice.h"
+#include "models/radiostate.h"
 #include "settings/radiosettings.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFrame>
+#include <QSignalBlocker>
 
-CwKeyerPage::CwKeyerPage(HalikeyDevice *halikeyDevice, QWidget *parent)
-    : QWidget(parent), m_halikeyDevice(halikeyDevice) {
+CwKeyerPage::CwKeyerPage(HalikeyDevice *halikeyDevice, RadioState *radioState, CwController *cwController,
+                         QWidget *parent)
+    : QWidget(parent), m_halikeyDevice(halikeyDevice), m_radioState(radioState), m_cwController(cwController) {
     setStyleSheet(K4Styles::Dialog::pageBackground());
 
     auto *layout = new QVBoxLayout(this);
@@ -170,6 +174,64 @@ CwKeyerPage::CwKeyerPage(HalikeyDevice *halikeyDevice, QWidget *parent)
     sidetoneHelpLabel->setWordWrap(true);
     layout->addWidget(sidetoneHelpLabel);
 
+    auto *line6 = new QFrame(this);
+    line6->setFrameShape(QFrame::HLine);
+    line6->setStyleSheet(K4Styles::Dialog::separator());
+    line6->setFixedHeight(K4Styles::Dimensions::SeparatorHeight);
+    layout->addWidget(line6);
+
+    // Remote keying: the K4's key-down initial delay (KZL). Same control as K4-Companion's "Key Down
+    // Initial Delay": 0-1000 ms in 10 ms steps, showing what the radio holds.
+    auto *remoteLabel = new QLabel("Remote Keying", this);
+    remoteLabel->setStyleSheet(K4Styles::Dialog::sectionHeader());
+    layout->addWidget(remoteLabel);
+
+    auto *delayLayout = new QHBoxLayout();
+    auto *delayLabel = new QLabel("Key-Down Delay:", this);
+    delayLabel->setStyleSheet(K4Styles::Dialog::formLabel());
+    delayLabel->setFixedWidth(K4Styles::Dimensions::FormLabelWidth);
+
+    m_keyDownDelaySlider = new QSlider(Qt::Horizontal, this);
+    m_keyDownDelaySlider->setRange(0, 1000);
+    m_keyDownDelaySlider->setSingleStep(10);
+    m_keyDownDelaySlider->setPageStep(100);
+    m_keyDownDelaySlider->setStyleSheet(
+        K4Styles::sliderHorizontal(K4Styles::Colors::DarkBackground, K4Styles::Colors::AccentAmber));
+
+    m_keyDownDelayValueLabel = new QLabel(this);
+    m_keyDownDelayValueLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
+                                                .arg(K4Styles::Colors::TextWhite)
+                                                .arg(K4Styles::Dimensions::FontSizePopup));
+    m_keyDownDelayValueLabel->setFixedWidth(K4Styles::Dimensions::SliderValueLabelWidth);
+
+    // WHY send on release, not on every value: a drag would otherwise put dozens of KZL SETs on the
+    // wire. Keyboard and click steps arrive with the slider up and are sent at once.
+    connect(m_keyDownDelaySlider, &QSlider::valueChanged, this, [this](int value) {
+        m_keyDownDelayValueLabel->setText(QString("%1 ms").arg(value));
+        if (!m_keyDownDelaySlider->isSliderDown())
+            sendKeyDownDelay();
+    });
+    connect(m_keyDownDelaySlider, &QSlider::sliderReleased, this, &CwKeyerPage::sendKeyDownDelay);
+
+    delayLayout->addWidget(delayLabel);
+    delayLayout->addWidget(m_keyDownDelaySlider, 1);
+    delayLayout->addWidget(m_keyDownDelayValueLabel);
+    layout->addLayout(delayLayout);
+
+    auto *delayHelpLabel =
+        new QLabel("How long the K4 holds a remote key-down before it transmits, so keying sent over "
+                   "the network arrives in time. Raise it if CW breaks up over a slow or busy link; "
+                   "lower it for a quicker start on a fast LAN. Stored in the K4, whose default is "
+                   "80 ms. Applies to HaliKey and KPOD+ keying.",
+                   this);
+    delayHelpLabel->setStyleSheet(K4Styles::Dialog::helpText());
+    delayHelpLabel->setWordWrap(true);
+    layout->addWidget(delayHelpLabel);
+
+    if (m_radioState)
+        connect(m_radioState, &RadioState::keyDownInitialDelayChanged, this, &CwKeyerPage::showKeyDownDelay);
+    showKeyDownDelay(m_radioState ? m_radioState->keyDownInitialDelayMs() : -1);
+
     layout->addStretch();
 
     // Connect to HalikeyDevice signals for status updates
@@ -185,6 +247,26 @@ CwKeyerPage::CwKeyerPage(HalikeyDevice *halikeyDevice, QWidget *parent)
 void CwKeyerPage::refresh() {
     populateCwKeyerPorts();
     updateCwKeyerStatus();
+    showKeyDownDelay(m_radioState ? m_radioState->keyDownInitialDelayMs() : -1);
+}
+
+void CwKeyerPage::showKeyDownDelay(int ms) {
+    const bool known = ms >= 0;
+    m_keyDownDelaySlider->setEnabled(known);
+    if (known) {
+        const QSignalBlocker block(m_keyDownDelaySlider);
+        m_keyDownDelaySlider->setValue(ms);
+    }
+    m_keyDownDelayValueLabel->setText(known ? QString("%1 ms").arg(ms) : QStringLiteral("--"));
+}
+
+void CwKeyerPage::sendKeyDownDelay() {
+    if (!m_cwController || !m_radioState)
+        return;
+    // Snap to the K4's 10 ms steps.
+    const int ms = (m_keyDownDelaySlider->value() + 5) / 10 * 10;
+    if (ms != m_radioState->keyDownInitialDelayMs())
+        m_cwController->setKeyDownInitialDelay(ms);
 }
 
 void CwKeyerPage::populateCwKeyerPorts() {

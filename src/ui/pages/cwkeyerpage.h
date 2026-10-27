@@ -8,6 +8,8 @@
 #include <QSlider>
 
 class HalikeyDevice;
+class RadioState;
+class CwController;
 
 /**
  * @brief OptionsDialog "CW Keyer" tab. Chooses the HaliKey device type (V1.4 / MIDI / etc.) and
@@ -18,7 +20,8 @@ class CwKeyerPage : public QWidget {
     Q_OBJECT
 
 public:
-    explicit CwKeyerPage(HalikeyDevice *halikeyDevice, QWidget *parent = nullptr);
+    CwKeyerPage(HalikeyDevice *halikeyDevice, RadioState *radioState, CwController *cwController,
+                QWidget *parent = nullptr);
 
     void refresh();
 
@@ -30,6 +33,8 @@ private slots:
 private:
     void populateCwKeyerPorts();
     void updateCwKeyerDescription();
+    void showKeyDownDelay(int ms);
+    void sendKeyDownDelay();
 
     HalikeyDevice *m_halikeyDevice;
     QComboBox *m_cwKeyerDeviceTypeCombo = nullptr;
@@ -40,6 +45,10 @@ private:
     QLabel *m_cwKeyerStatusLabel = nullptr;
     QSlider *m_sidetoneVolumeSlider = nullptr;
     QLabel *m_sidetoneVolumeValueLabel = nullptr;
+    RadioState *m_radioState;
+    CwController *m_cwController;
+    QSlider *m_keyDownDelaySlider = nullptr;
+    QLabel *m_keyDownDelayValueLabel = nullptr;
 };
 
 #endif // CWKEYERPAGE_H

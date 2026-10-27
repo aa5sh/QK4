@@ -15,6 +15,7 @@ class CatServer;
 class TciController;
 class KPA1500Client;
 class DxClusterController;
+class CwController;
 class AboutPage;
 class StationPage;
 class DisplayPage;
@@ -55,7 +56,7 @@ public:
     explicit OptionsDialog(RadioState *radioState, AudioController *audioController,
                            HardwareController *hardwareController, CatServer *catServer, TciController *tciController,
                            KPA1500Client *kpa1500Client, DxClusterController *dxClusterController,
-                           QWidget *parent = nullptr);
+                           CwController *cwController, QWidget *parent = nullptr);
     ~OptionsDialog();
 
 protected:
@@ -74,6 +75,7 @@ private:
     CatServer *m_catServer;
     KPA1500Client *m_kpa1500Client;
     DxClusterController *m_dxClusterController;
+    CwController *m_cwController;
     QListWidget *m_tabList;
     QStackedWidget *m_pageStack;
     QMediaDevices *m_mediaDevices;

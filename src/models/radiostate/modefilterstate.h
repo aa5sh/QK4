@@ -31,7 +31,7 @@ struct ModeFilterState {
 
     // KZL: the K4's remote-paddle key-down initial delay, 0-1000 ms (default 80). The radio holds a
     // remote key-down this long before transmitting so later timed key commands arrive in time.
-    // It is the operator's setting; QK4 reads it and never writes it.
+    // It is the operator's setting: QK4 writes it only from the CW Keyer page's Key-Down Delay.
     int keyDownInitialDelayMs = -1;
 
     // Keyer paddle config (KP command): iambic + paddle + weight.

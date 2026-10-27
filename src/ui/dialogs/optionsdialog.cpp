@@ -17,10 +17,11 @@
 
 OptionsDialog::OptionsDialog(RadioState *radioState, AudioController *audioController,
                              HardwareController *hardwareController, CatServer *catServer, TciController *tciController,
-                             KPA1500Client *kpa1500Client, DxClusterController *dxClusterController, QWidget *parent)
+                             KPA1500Client *kpa1500Client, DxClusterController *dxClusterController,
+                             CwController *cwController, QWidget *parent)
     : QDialog(parent), m_radioState(radioState), m_audioController(audioController),
       m_hardwareController(hardwareController), m_catServer(catServer), m_tciController(tciController),
-      m_kpa1500Client(kpa1500Client), m_dxClusterController(dxClusterController) {
+      m_kpa1500Client(kpa1500Client), m_dxClusterController(dxClusterController), m_cwController(cwController) {
     setWindowModality(Qt::ApplicationModal);
     setupUi();
 }
@@ -139,7 +140,7 @@ void OptionsDialog::ensurePageCreated(int index) {
         page = m_tciServerPage;
         break;
     case PageCwKeyer:
-        m_cwKeyerPage = new CwKeyerPage(m_hardwareController->halikeyDevice(), this);
+        m_cwKeyerPage = new CwKeyerPage(m_hardwareController->halikeyDevice(), m_radioState, m_cwController, this);
         page = m_cwKeyerPage;
         break;
     case PageKpod:
