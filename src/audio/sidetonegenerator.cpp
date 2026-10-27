@@ -3,32 +3,20 @@
 #include "audio/sidetonescheduler.h"
 #include <QAudioFormat>
 #include <QMediaDevices>
+#include <QTimer>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#include <limits>
 #include <numeric>
+
+// Sidetone timing, one line per tone onset: how far ahead the block was filled (lead), what was
+// queued ahead of it, and the keying-to-hearing delay the scheduler is holding. Off by default.
+//     QT_LOGGING_RULES="qk4.audio.sidetone.debug=true"
+Q_LOGGING_CATEGORY(qk4Sidetone, "qk4.audio.sidetone")
 
 namespace {
 constexpr double kPi = 3.14159265358979323846; // not M_PI: MSVC hides it behind _USE_MATH_DEFINES
 } // namespace
-
-// The pull-mode source: every read is rendered on the spot by the generator.
-class SidetoneGenerator::Source : public QIODevice {
-public:
-    explicit Source(SidetoneGenerator *owner) : QIODevice(owner), m_owner(owner) {}
-    bool isSequential() const override { return true; }
-    // WHY report plenty available: some pull-mode backends only read what bytesAvailable() admits
-    // to, and a generator always has more to give.
-    qint64 bytesAvailable() const override { return std::numeric_limits<int>::max() + QIODevice::bytesAvailable(); }
-
-protected:
-    qint64 readData(char *data, qint64 maxlen) override { return m_owner->render(data, maxlen); }
-    qint64 writeData(const char *, qint64) override { return -1; }
-
-private:
-    SidetoneGenerator *m_owner;
-};
 
 SidetoneGenerator::SidetoneGenerator(SidetoneScheduler &scheduler, CwKeying::Clock &clock, QObject *parent)
     : QObject(parent), m_scheduler(scheduler), m_clock(clock) {
@@ -111,35 +99,46 @@ void SidetoneGenerator::initAudio() {
     m_keyed = false;
     m_envelope = 0.0;
     m_framesWritten = 0;
+    m_targetQueue = kTargetQueueSeconds;
     m_toneFrequency = 0;
     rebuildTone();
 
     m_audioSink = new QAudioSink(device, format, this);
     m_audioSink->setBufferSize(
         static_cast<qsizetype>(format.bytesForDuration(static_cast<qint64>(kBufferSeconds * 1e6))));
-    m_source = new Source(this);
-    m_source->open(QIODevice::ReadOnly);
     // A new stream: every timing estimate from the old one is void.
     m_scheduler.clear();
-    m_streamActive.store(true, std::memory_order_release);
-    m_audioSink->start(m_source);
-    if (m_audioSink->error() != QAudio::NoError) {
+    m_pushDevice = m_audioSink->start();
+    if (!m_pushDevice || m_audioSink->error() != QAudio::NoError) {
         qCWarning(qk4Audio) << "SidetoneGenerator: Failed to start audio sink:" << m_audioSink->error();
         m_streamActive.store(false, std::memory_order_release);
+        m_pushDevice = nullptr;
     } else {
-        qCInfo(qk4Audio) << "SidetoneGenerator: sidetone on" << device.description() << format;
+        m_streamActive.store(true, std::memory_order_release);
+        if (!m_pumpTimer) {
+            m_pumpTimer = new QTimer(this);
+            m_pumpTimer->setTimerType(Qt::PreciseTimer);
+            m_pumpTimer->setInterval(1);
+            connect(m_pumpTimer, &QTimer::timeout, this, &SidetoneGenerator::pump);
+        }
+        m_pumpTimer->start();
+        pump();
+        qCInfo(qk4Audio) << "SidetoneGenerator: sidetone on" << device.description() << format << "buffer"
+                         << m_audioSink->bufferSize()
+                         << "bytes =" << format.durationForBytes(m_audioSink->bufferSize()) / 1000.0 << "ms";
     }
 }
 
 void SidetoneGenerator::closeAudio() {
     m_streamActive.store(false, std::memory_order_release);
+    if (m_pumpTimer)
+        m_pumpTimer->stop();
+    m_pushDevice = nullptr;
     if (m_audioSink) {
         m_audioSink->stop();
         delete m_audioSink;
         m_audioSink = nullptr;
     }
-    delete m_source;
-    m_source = nullptr;
     m_scheduler.clear();
 }
 
@@ -209,6 +208,11 @@ void SidetoneGenerator::renderBlock(float *out, int frames, double dacTime, doub
         }
         if (!edge)
             break;
+        if (edge->down && !m_keyed)
+            qCDebug(qk4Sidetone).nospace()
+                << "tone on: delay " << m_scheduler.delay() * 1000 << " ms, lag " << m_scheduler.lag() * 1000
+                << " ms, block lead " << (dacTime - now) * 1000 << " ms, queued " << m_lastQueued * 1000
+                << " ms, frame " << edge->offset << "/" << frames;
         m_keyed = edge->down;
         start = end;
     }
@@ -221,63 +225,89 @@ void SidetoneGenerator::renderBlock(float *out, int frames, double dacTime, doub
     }
 }
 
-qint64 SidetoneGenerator::render(char *data, qint64 maxlen) {
-    const int bytesPerFrame = m_format.bytesPerFrame();
-    if (!m_audioSink || bytesPerFrame <= 0 || m_rate <= 0)
-        return 0;
-    const qint64 frames = maxlen / bytesPerFrame;
-    if (frames <= 0)
-        return 0;
-
-    // Play-out time of the first frame rendered now: everything written so far that the device
-    // hasn't played yet is queued ahead of it. The device's own fixed latency beyond that is the
-    // same for every block, which is all the scheduler needs.
-    const double now = m_clock.now();
-    const double played = static_cast<double>(m_audioSink->processedUSecs()) / 1e6;
-    const double written = static_cast<double>(m_framesWritten) / m_rate;
-    const double queued = std::max(0.0, written - played);
-
+void SidetoneGenerator::convert(const float *in, int frames, char *dst) const {
     const int channels = m_format.channelCount();
     const auto sampleFormat = m_format.sampleFormat();
     const int bytesPerSample = m_format.bytesPerSample();
-    m_scratch.resize(static_cast<size_t>(m_blockFrames));
-    qint64 done = 0;
-    while (done < frames) {
-        const int n = static_cast<int>(std::min<qint64>(frames - done, m_blockFrames));
-        const double dac = now + queued + static_cast<double>(done) / m_rate;
-        renderBlock(m_scratch.data(), n, dac, now);
-        char *dst = data + done * bytesPerFrame;
-        for (int i = 0; i < n; ++i) {
-            const float v = m_scratch[static_cast<size_t>(i)];
-            for (int c = 0; c < channels; ++c) {
-                char *p = dst + (static_cast<qint64>(i) * channels + c) * bytesPerSample;
-                switch (sampleFormat) {
-                case QAudioFormat::Float:
-                    std::memcpy(p, &v, sizeof v);
-                    break;
-                case QAudioFormat::Int16: {
-                    const auto s = static_cast<qint16>(std::lround(std::clamp(v, -1.0f, 1.0f) * 32767.0f));
-                    std::memcpy(p, &s, sizeof s);
-                    break;
-                }
-                case QAudioFormat::Int32: {
-                    const auto s = static_cast<qint32>(std::llround(std::clamp(v, -1.0f, 1.0f) * 2147483647.0));
-                    std::memcpy(p, &s, sizeof s);
-                    break;
-                }
-                case QAudioFormat::UInt8: {
-                    const auto s = static_cast<quint8>(std::lround(std::clamp(v, -1.0f, 1.0f) * 127.0f + 128.0f));
-                    std::memcpy(p, &s, sizeof s);
-                    break;
-                }
-                default:
-                    std::memset(p, 0, static_cast<size_t>(bytesPerSample));
-                    break;
-                }
+    for (int i = 0; i < frames; ++i) {
+        const float v = in[i];
+        for (int c = 0; c < channels; ++c) {
+            char *p = dst + (static_cast<qint64>(i) * channels + c) * bytesPerSample;
+            switch (sampleFormat) {
+            case QAudioFormat::Float:
+                std::memcpy(p, &v, sizeof v);
+                break;
+            case QAudioFormat::Int16: {
+                const auto s = static_cast<qint16>(std::lround(std::clamp(v, -1.0f, 1.0f) * 32767.0f));
+                std::memcpy(p, &s, sizeof s);
+                break;
+            }
+            case QAudioFormat::Int32: {
+                const auto s = static_cast<qint32>(std::llround(std::clamp(v, -1.0f, 1.0f) * 2147483647.0));
+                std::memcpy(p, &s, sizeof s);
+                break;
+            }
+            case QAudioFormat::UInt8: {
+                const auto s = static_cast<quint8>(std::lround(std::clamp(v, -1.0f, 1.0f) * 127.0f + 128.0f));
+                std::memcpy(p, &s, sizeof s);
+                break;
+            }
+            default:
+                std::memset(p, 0, static_cast<size_t>(bytesPerSample));
+                break;
             }
         }
-        done += n;
     }
-    m_framesWritten += frames;
-    return frames * bytesPerFrame;
+}
+
+// WHY push, a block at a time, instead of letting the sink pull: in pull mode Qt on macOS asked for
+// up to ~85 ms per read even with a 20 ms buffer, and all of it was queued to play. The scheduler
+// rightly held the delay above the worst of that, so every tone sounded ~100 ms after the paddle.
+// Pushing lets the sidetone decide how far ahead it is: on a 1 ms timer, top the sink up only
+// while less than kTargetQueueSeconds is waiting in it, one 4 ms block per write. The lead then
+// stays between the target and the target plus a block, whatever the backend would have preferred.
+void SidetoneGenerator::pump() {
+    if (!m_audioSink || !m_pushDevice || m_rate <= 0)
+        return;
+    const int bytesPerFrame = m_format.bytesPerFrame();
+    if (bytesPerFrame <= 0)
+        return;
+    const double bytesPerSecond = static_cast<double>(m_format.bytesForDuration(1000000));
+    const qsizetype blockBytes = static_cast<qsizetype>(m_blockFrames) * bytesPerFrame;
+    m_scratch.resize(static_cast<size_t>(m_blockFrames));
+    m_bytes.resize(blockBytes);
+    while (true) {
+        const qsizetype freeBytes = m_audioSink->bytesFree();
+        const double queued = std::max<qsizetype>(0, m_audioSink->bufferSize() - freeBytes) / bytesPerSecond;
+        if (queued >= m_targetQueue || freeBytes < blockBytes)
+            return;
+        // WHY adapt: the device takes audio in its own period (about 11 ms on a Mac mini's
+        // speakers), and a queue shorter than that period runs dry every cycle, which is an
+        // audible dropout. Each time it runs dry, keep one more block queued, up to the sink's
+        // capacity. It settles at the shortest queue this device sustains.
+        if (queued == 0 && m_framesWritten > 0) {
+            const double blockSeconds = static_cast<double>(m_blockFrames) / m_rate;
+            const double cap = m_audioSink->bufferSize() / bytesPerSecond - blockSeconds;
+            if (m_targetQueue + blockSeconds <= cap + 1e-9) {
+                m_targetQueue += blockSeconds;
+                qCInfo(qk4Audio).nospace()
+                    << "SidetoneGenerator: output ran dry, now keeping " << m_targetQueue * 1000 << " ms queued";
+            } else {
+                qCDebug(qk4Sidetone) << "output ran dry at the sink's capacity";
+            }
+        }
+        const double now = m_clock.now();
+        m_lastQueued = queued;
+        // Play-out time of this block's first frame: everything still queued plays first. The
+        // device's own fixed latency beyond that is the same for every block, which is all the
+        // scheduler needs.
+        renderBlock(m_scratch.data(), m_blockFrames, now + queued, now);
+        convert(m_scratch.data(), m_blockFrames, m_bytes.data());
+        const qint64 written = m_pushDevice->write(m_bytes.constData(), blockBytes);
+        if (written < blockBytes) {
+            qCDebug(qk4Sidetone) << "short write" << written << "of" << blockBytes;
+            return;
+        }
+        m_framesWritten += m_blockFrames;
+    }
 }

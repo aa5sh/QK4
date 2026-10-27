@@ -4,8 +4,16 @@
 - `99e4d6e`: keyer, sidetone scheduler and serial poller ported. Dale's 554 recorded runs replay
   byte for byte.
 - Wired into the app: `PaddleKeyer` replaces `IambicKeyer` on the HaliKey path. V1.4 lines and raw
-  MIDI feed it; it sends `KZD`/`KZU`. `SidetoneGenerator` is now a pull-mode output driven by
-  `SidetoneScheduler`, still on its own sink (phase 2 moves it into the RX output). The HaliKey page
+  MIDI feed it; it sends `KZD`/`KZU`. `SidetoneGenerator` is now a paced push-mode output driven by
+  `SidetoneScheduler`, still on its own sink (phase 2 moves it into the RX output). **Bench
+  2026-10-27, Mac mini speakers, HaliKey MIDI: sidetone delay "perfect".** It got there in three
+  steps:
+  - Pull mode held ~100 ms. Qt on macOS asked for up to ~85 ms per read even with a 20 ms buffer,
+    and the scheduler rightly held the delay above that.
+  - Pushing with a fixed 8 ms queue ran dry every ~11 ms device period, which sounded awful.
+  - The queue now starts at 8 ms and rises one 4 ms block per dry-out. It settled at 12 ms and
+    stayed clean.
+  On-air (RF) keying is still to be confirmed by testers on the next release. The HaliKey page
   has the keyer mode, input type, dit memory delay and monitor mute. Threaded test is clean under
   ThreadSanitizer.
 - Serial path follows Dale's too: the V1.4 worker polls every 1 ms on every platform through
@@ -103,7 +111,8 @@ Items 1 and 2 fix what goes on air. Items 3 to 6 fix the feel and the monitoring
 2. **Sidetone in the RX output.** A mixer stage in `AudioEngine`'s output callback calls
    `noteBlockTiming` / `nextKeyEdge` per block, with DAC time = time of fill + frames still
    queued in the sink. Envelope and tone come from Dale (4 ms raised cosine, exact-period table,
-   continuous phase). It needs AudioEngine's output in pull mode. Check that first: it's part of
+   continuous phase). Pull mode is out: on macOS Qt pulls ~85 ms ahead (see Status). Phase 2 needs
+   the same paced, adaptive push that `SidetoneGenerator::pump()` does now. Check that first: it's part of
    the audio path currently being reworked.
 3. **Monitor mute decision** from the bench, then remove or keep the setting.
 

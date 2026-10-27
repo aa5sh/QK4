@@ -18,9 +18,10 @@ class SidetoneScheduler;
  * @brief Local CW sidetone output for the HaliKey keyer. Lives on its own HighPriority thread
  *        (HardwareController's m_sidetoneThread).
  *
- * A pull-mode QAudioSink: each time the device wants audio, the block is rendered on the spot.
- * SidetoneScheduler says where in the block each key edge falls, against the block's play-out
- * time (time of fill plus the audio already queued ahead of it). That places every edge on an
+ * A push-mode QAudioSink topped up on a 1 ms timer, one 4 ms block at a time, only while less than
+ * kTargetQueueSeconds is waiting in it, so the sidetone itself decides how far ahead it renders.
+ * SidetoneScheduler says where in each block a key edge falls, against the block's play-out time
+ * (time of render plus the audio already queued ahead of it). That places every edge on an
  * exact frame, so each tone sounds its true length with a fixed delay. Envelope and tone follow
  * K4-Companion's mix_sidetone (Dale Farnsworth, GPL-3.0): 4 ms raised-cosine rise and fall, an
  * exact-period sine table, continuous phase.
@@ -50,24 +51,21 @@ public:
     // nullopt otherwise. Thread-safe.
     std::optional<double> streamTime() const;
 
-    // Renders `maxlen` bytes of output into `data`. Called by the pull-mode source on the sidetone
-    // thread.
-    qint64 render(char *data, qint64 maxlen);
-
 private:
-    class Source;
-
     void initAudio();
     void closeAudio();
     void onSystemDefaultOutputChanged();
     void rebuildTone();
     void renderBlock(float *out, int frames, double dacTime, double now);
+    void convert(const float *in, int frames, char *dst) const;
+    void pump();
 
     SidetoneScheduler &m_scheduler;
     CwKeying::Clock &m_clock;
 
     QAudioSink *m_audioSink = nullptr;
-    Source *m_source = nullptr;
+    QIODevice *m_pushDevice = nullptr;
+    class QTimer *m_pumpTimer = nullptr;
     QString m_selectedOutputDeviceId;
     QString m_activeOutputDeviceId;          // id of the device the sink was actually opened on
     QMediaDevices *m_mediaDevices = nullptr; // OS device/default-change monitor
@@ -88,17 +86,21 @@ private:
     size_t m_cycleIndex = 0;
     int m_toneFrequency = 0;
     qint64 m_framesWritten = 0;
+    double m_lastQueued = 0;  // diagnostics for qk4.audio.sidetone
+    double m_targetQueue = 0; // adapts upward from kTargetQueueSeconds; see pump()
+    QByteArray m_bytes;
     std::vector<float> m_scratch;
     std::vector<float> m_positions;
 
     static constexpr double kRiseSeconds = .004;
     static constexpr double kFallSeconds = .004;
     static constexpr double kBlockSeconds = .004;
-    // WHY 20 ms: pull mode refills as the device drains, so the buffer is the whole local delay
-    // between "keyed" and "heard". Short enough to key against at speed, and long enough that the
-    // shared-mode backends here (WASAPI, PipeWire, CoreAudio) don't underrun. A bench number, not
-    // a measured one; the scheduler holds whatever delay results constant.
-    static constexpr double kBufferSeconds = .020;
+    // The sink's capacity, and the queue the pump starts from. The queue is the local delay between
+    // "keyed" and "heard" on top of the device's own latency, so it starts low (8 ms) and rises one
+    // block at a time only when the device actually runs dry (pump()). Pull mode, letting Qt
+    // decide, came to ~100 ms on a Mac mini. The capacity bounds how far it can rise.
+    static constexpr double kBufferSeconds = .040;
+    static constexpr double kTargetQueueSeconds = .008;
 };
 
 #endif // SIDETONEGENERATOR_H

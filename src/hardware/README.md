@@ -23,7 +23,7 @@ USB / serial / MIDI device wrappers. Owned by `controllers/hardwarecontroller.cp
 ## Threading
 
 - `PaddleKeyer::run()` on `HardwareController::m_keyerThread` (HighPriority, a `QThread::create` with no event loop: the keyer blocks on its own event queue and sleeps to its deadlines).
-- `SidetoneGenerator` on `HardwareController::m_sidetoneThread` (HighPriority); its pull-mode sink renders on that thread.
+- `SidetoneGenerator` on `HardwareController::m_sidetoneThread` (HighPriority); a 1 ms timer there pushes one 4 ms block at a time, keeping the sink's queue at the shortest level the device sustains (starts at 8 ms, rises a block per dry-out).
 - MIDI paddle edges reach the keyer on RtMidi's own thread; V1.4 edges on the HaliKey worker thread.
 - `HalikeyDevice` has its own `m_workerThread` for platform-worker variants.
 - `KpodDevice` owns `m_hidThread`; all hidapi I/O is on it. On Linux `KpodHidWorker` starts a second thread for the udev hotplug poll.
@@ -70,7 +70,7 @@ closed and switched off.
 
 - **V1.4:** paddle → V1.4 worker's 1 ms poll → `SerialLinePoller` → `HalikeyDevice::paddleChanged` → `CwController::onPaddle` (paddle reversal; DirectConnection) → `PaddleKeyer::paddleEvent`, stamped on arrival.
 - **MIDI:** paddle → RtMidi callback → `HaliKeyMidiSink` → `PaddleKeyer::midiMessage`, stamped by MoMIDI's own clock.
-- **Keyer thread:** `PaddleKeyer::run()` → timed `KZD####` / `KZU####` (and `ML0000` / restore if the monitor mute is on) → `FunctionLink` → `TcpClient::sendCAT` (queued to the I/O thread). Sidetone edges are scheduled on `SidetoneScheduler`, and `SidetoneGenerator`'s pull-mode render places them on exact frames.
+- **Keyer thread:** `PaddleKeyer::run()` → timed `KZD####` / `KZU####` (and `ML0000` / restore if the monitor mute is on) → `FunctionLink` → `TcpClient::sendCAT` (queued to the I/O thread). Sidetone edges are scheduled on `SidetoneScheduler`, and `SidetoneGenerator`'s paced push places them on exact frames.
 
 The keyer keys nothing while CwController holds it inhibited: radio not ready, mode not CW or CW-R, or the KPOD+ owning CW. KPOD+ owns its whole chain: paddle → onboard keyer → its own sidetone → KZ strings forwarded to the K4 untouched.
 
