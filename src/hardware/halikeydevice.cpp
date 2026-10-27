@@ -18,7 +18,12 @@ Q_LOGGING_CATEGORY(hwHalikey, "hw.halikey")
 // into halikey_edge.h for isolated testing) now does just same-direction dedupe.
 using HalikeyEdge::acceptEdge;
 
-HalikeyDevice::HalikeyDevice(int deviceType, QObject *parent) : QObject(parent), m_deviceType(deviceType) {}
+HalikeyDevice::HalikeyDevice(int deviceType, QObject *parent)
+    : QObject(parent), m_midiSink(std::make_shared<HaliKeyMidiSink>()), m_deviceType(deviceType) {}
+
+void HalikeyDevice::setMidiSink(std::function<void(int, int, int, double)> sink) {
+    m_midiSink->set(std::move(sink));
+}
 
 HalikeyDevice::~HalikeyDevice() {
     closePort();
@@ -52,7 +57,7 @@ bool HalikeyDevice::openPort(const QString &portName) {
 
     // Create worker based on injected device type (0 = V1.4, 1 = MIDI)
     if (m_deviceType == 1) {
-        m_worker = new HaliKeyMidiWorker(portName);
+        m_worker = new HaliKeyMidiWorker(portName, m_midiSink);
     } else {
         m_worker = new HaliKeyV14Worker(portName);
     }

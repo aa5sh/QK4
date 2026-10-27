@@ -66,13 +66,19 @@ Sources: every behaviour here was verified by driving a K4/0 server directly ove
 
 ## 5. Iambic latch semantics (internal keyer quirk)
 
-**Symptom.** Brief Iambic-A paddle taps would drop the character if naïve latch handling were used.
+**Symptom.** An iambic keyer that reads its paddles when its own timer fires decides on a state
+the operator may have left milliseconds earlier: a tap is lost, or a released squeeze earns an
+element nobody keyed.
 
-**K4 behavior.** Not a K4 quirk — a keyer-state-machine quirk. Iambic A terminates the character immediately when both paddles are released; Iambic B emits one more element. With atomic paddle state read off the hardware thread, the keyer's element-timer fire can race a paddle-release that already happened.
+**K4 behavior.** Not a K4 quirk — a keyer-state-machine quirk.
 
-**QK4 encoding.**
-- `src/hardware/iambickeyer.cpp::enterElement` (~L96) — clears **only** the just-consumed paddle's latch, preserves the opposite-paddle latch. Long WHY comment there explains the Iambic-A correctness argument.
-- `src/hardware/iambickeyer.h` — class-level Doxygen points readers at this quirk.
+**QK4 encoding (since 2026-10-27).** `src/hardware/paddlekeyer.cpp`, the port of K4-Companion's
+keyer, keeps every paddle edge in a time-stamped history. Each decision reads the paddles *as of
+when it was due* (`paddleTimestamps(asOf)`), and the memories are measured from when the previous
+element was *heard*. Iambic A keeps only the dit memory; Iambic B adds the dah memory, the
+squeeze-release memories and the Dit Memory Delay. The rules are pinned by Dale Farnsworth's 554
+recorded runs (`tests/test_paddlekeyersweeps.cpp`). The latch scheme this section used to
+describe went with `IambicKeyer`.
 
 See section 8 below for the KZ keying protocol that carries these elements to the K4.
 
@@ -116,7 +122,7 @@ Sidebar — not directly a protocol *quirk*, but non-obvious enough to belong he
 | `KZ ;` | letter space |
 | `KZP####;` | pause N ms before the next element (fist preservation) |
 | `KZLnnnn;` | remote paddle **key-down initial delay**, 0–1000 ms, default 80. The K4 holds a remote key-down this long before transmitting, so the timed commands that follow arrive in time: a jitter buffer. **The operator's setting. QK4 reads it from the RDY dump and writes it only when the operator moves Key-Down Delay on the CW Keyer page (`CwController::setKeyDownInitialDelay`).** It is *not* the element length |
-| `KZD####;` / `KZU####;` | raw key-down / key-up for N ms. K4/0 uses this form for real-time paddle forwarding; QK4 does not |
+| `KZD####;` / `KZU####;` | timed key-down / key-up: `KZD` = the gap in ms before this key-down, `KZU` = how long it was down. The K4 replays the intervals behind its `KZL` delay, so network jitter cannot change an element. **QK4's HaliKey keyer sends only these** (since 2026-10-27; K4/0 and K4-Companion do the same) |
 
 **`KZL` was misread until 2026-10-27.** From `0bd443d` QK4 sent `KZL` = 1200 / WPM, two digits,
 on every connect and every speed change, taking it for the element length. That set the K4's
@@ -135,8 +141,9 @@ Undocumented contest behaviour (confirmed by N6TV): inside an element-form strin
 `KZ-.-. --.-  -.;`, one blank is a 3-dit letter space and **two blanks are a 6-dit word space** —
 tighter than the ITU 7-dit default.
 
-QK4 emits these from `IambicKeyer` on its own high-priority thread, wired to the socket in
-`CwController`; see `src/hardware/README.md` for the keying chain.
+QK4's HaliKey keyer (`PaddleKeyer`, its own high-priority thread) sends `KZD`/`KZU`. The element
+forms `KZ.`/`KZ-`/`KZ `/`KZP` reach the K4 only from a KPOD+, whose EP02 strings are forwarded
+untouched. See `src/hardware/README.md` for the keying chain.
 
 ---
 

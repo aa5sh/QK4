@@ -5,6 +5,9 @@
 #include <QObject>
 #include <QString>
 #include <atomic>
+#include <functional>
+#include <memory>
+#include <mutex>
 
 // Shared logging category for HaliKey device + workers. Definition in halikeydevice.cpp.
 Q_DECLARE_LOGGING_CATEGORY(hwHalikey)
@@ -27,6 +30,27 @@ Q_DECLARE_LOGGING_CATEGORY(hwHalikey)
  * ioctl to return so the thread can exit cleanly. The base no-op is correct for variants whose
  * event loops poll `m_running` naturally.
  */
+// Where raw MIDI messages go, called straight from RtMidi's own thread with no hop: the keyer
+// stamps a paddle edge the moment it arrives, so a queued hop would be timing error. Shared
+// between HalikeyDevice (which sets the target) and the MIDI worker (which calls it), and guarded,
+// because the target can be replaced while RtMidi's thread is calling.
+struct HaliKeyMidiSink {
+    using Fn = std::function<void(int status, int note, int velocity, double deltaTime)>;
+    void set(Fn fn) {
+        std::lock_guard lock(mutex);
+        target = std::move(fn);
+    }
+    void call(int status, int note, int velocity, double deltaTime) {
+        std::lock_guard lock(mutex);
+        if (target)
+            target(status, note, velocity, deltaTime);
+    }
+
+private:
+    std::mutex mutex;
+    Fn target;
+};
+
 class HaliKeyWorkerBase : public QObject {
     Q_OBJECT
 

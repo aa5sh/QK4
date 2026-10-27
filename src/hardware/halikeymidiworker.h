@@ -19,7 +19,7 @@ class HaliKeyMidiWorker : public HaliKeyWorkerBase {
     Q_OBJECT
 
 public:
-    explicit HaliKeyMidiWorker(const QString &deviceName, QObject *parent = nullptr);
+    HaliKeyMidiWorker(const QString &deviceName, std::shared_ptr<HaliKeyMidiSink> sink, QObject *parent = nullptr);
     ~HaliKeyMidiWorker() override;
 
     // Closes MIDI port and stops RtMidi callback thread before QThread teardown.
@@ -63,8 +63,10 @@ private:
     // a real line — a transport-shaped signature is worth more than one saved bool.
     bool m_pttState = false;
 
-    // MoMIDI protocol state
-    bool m_momidiDetected = false;
+    std::shared_ptr<HaliKeyMidiSink> m_sink;
+
+    // MoMIDI protocol state. Atomic: the raw sink path reads it on RtMidi's thread.
+    std::atomic<bool> m_momidiDetected{false};
     int m_pendingTimeMsb = 0;
 };
 

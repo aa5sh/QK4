@@ -583,6 +583,56 @@ void RadioSettings::setSidetoneVolume(int value) {
     }
 }
 
+int RadioSettings::halikeyKeyerMode() const {
+    return m_halikeyKeyerMode;
+}
+
+void RadioSettings::setHalikeyKeyerMode(int mode) {
+    mode = qBound(0, mode, 2);
+    if (m_halikeyKeyerMode != mode) {
+        m_halikeyKeyerMode = mode;
+        save();
+        emit halikeyKeyerModeChanged(mode);
+    }
+}
+
+bool RadioSettings::halikeyStraightKey() const {
+    return m_halikeyStraightKey;
+}
+
+void RadioSettings::setHalikeyStraightKey(bool straight) {
+    if (m_halikeyStraightKey != straight) {
+        m_halikeyStraightKey = straight;
+        save();
+        emit halikeyStraightKeyChanged(straight);
+    }
+}
+
+int RadioSettings::halikeyDitMemoryDelay() const {
+    return m_halikeyDitMemoryDelay;
+}
+
+void RadioSettings::setHalikeyDitMemoryDelay(int percent) {
+    percent = qBound(0, percent, 100);
+    if (m_halikeyDitMemoryDelay != percent) {
+        m_halikeyDitMemoryDelay = percent;
+        save();
+        emit halikeyDitMemoryDelayChanged(percent);
+    }
+}
+
+bool RadioSettings::halikeyMuteRadioMonitor() const {
+    return m_halikeyMuteRadioMonitor;
+}
+
+void RadioSettings::setHalikeyMuteRadioMonitor(bool mute) {
+    if (m_halikeyMuteRadioMonitor != mute) {
+        m_halikeyMuteRadioMonitor = mute;
+        save();
+        emit halikeyMuteRadioMonitorChanged(mute);
+    }
+}
+
 // =============================================================================
 // KPOD+ Keyer Settings
 // =============================================================================
@@ -792,6 +842,10 @@ void RadioSettings::load() {
     m_halikeyEnabled = m_settings.value("halikey/enabled", false).toBool();
     m_halikeyDeviceType = m_settings.value("halikey/deviceType", 0).toInt();
     m_sidetoneVolume = m_settings.value("halikey/sidetoneVolume", 30).toInt();
+    m_halikeyKeyerMode = qBound(0, m_settings.value("halikey/keyerMode", 0).toInt(), 2);
+    m_halikeyStraightKey = m_settings.value("halikey/straightKey", false).toBool();
+    m_halikeyDitMemoryDelay = qBound(0, m_settings.value("halikey/ditMemoryDelay", 33).toInt(), 100);
+    m_halikeyMuteRadioMonitor = m_settings.value("halikey/muteRadioMonitor", false).toBool();
 
     // KPOD+ keyer settings
     m_kpodPlusEncodeMode = m_settings.value("kpodPlus/encodeMode", 0).toInt();
@@ -894,6 +948,10 @@ void RadioSettings::save() {
     m_settings.setValue("halikey/enabled", m_halikeyEnabled);
     m_settings.setValue("halikey/deviceType", m_halikeyDeviceType);
     m_settings.setValue("halikey/sidetoneVolume", m_sidetoneVolume);
+    m_settings.setValue("halikey/keyerMode", m_halikeyKeyerMode);
+    m_settings.setValue("halikey/straightKey", m_halikeyStraightKey);
+    m_settings.setValue("halikey/ditMemoryDelay", m_halikeyDitMemoryDelay);
+    m_settings.setValue("halikey/muteRadioMonitor", m_halikeyMuteRadioMonitor);
 
     // KPOD+ keyer settings
     m_settings.setValue("kpodPlus/encodeMode", m_kpodPlusEncodeMode);

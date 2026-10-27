@@ -435,14 +435,6 @@ target_include_directories(test_halikeydevice PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_halikeydevice Qt6::Core Qt6::Test)
 add_test(NAME HalikeyDeviceTests COMMAND test_halikeydevice)
 
-# IambicKeyer state-machine tests — Iambic A/B squeeze behavior, single taps, reversal.
-add_executable(test_iambickeyer test_iambickeyer.cpp
-    ${CMAKE_SOURCE_DIR}/src/hardware/iambickeyer.cpp
-)
-target_include_directories(test_iambickeyer PRIVATE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(test_iambickeyer Qt6::Core Qt6::Test)
-add_test(NAME IambicKeyerTests COMMAND test_iambickeyer)
-
 # PaddleKeyer — port of K4-Companion's keyer (Dale Farnsworth, GPL-3.0). Pure logic on a virtual
 # clock; see tests/paddlekeyersim.h and docs/cw-keyer-port-plan.md.
 set(QK4_PADDLEKEYER_SOURCES
@@ -460,6 +452,12 @@ add_executable(test_paddlekeyer test_paddlekeyer.cpp ${QK4_PADDLEKEYER_SOURCES})
 target_include_directories(test_paddlekeyer PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_paddlekeyer Qt6::Core Qt6::Test)
 add_test(NAME PaddleKeyerTests COMMAND test_paddlekeyer)
+
+add_executable(test_paddlekeyerthreaded test_paddlekeyerthreaded.cpp ${QK4_PADDLEKEYER_SOURCES}
+    ${CMAKE_SOURCE_DIR}/src/hardware/keyerruntime.cpp)
+target_include_directories(test_paddlekeyerthreaded PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_paddlekeyerthreaded Qt6::Core Qt6::Test)
+add_test(NAME PaddleKeyerThreadedTests COMMAND test_paddlekeyerthreaded)
 
 add_executable(test_seriallinepoller test_seriallinepoller.cpp ${CMAKE_SOURCE_DIR}/src/hardware/seriallinepoller.cpp)
 target_include_directories(test_seriallinepoller PRIVATE ${CMAKE_SOURCE_DIR}/src)

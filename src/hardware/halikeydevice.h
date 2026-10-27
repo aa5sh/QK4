@@ -7,8 +7,10 @@
 #include <QString>
 #include <QThread>
 #include <atomic>
+#include <memory>
 
 class HaliKeyWorkerBase;
+struct HaliKeyMidiSink;
 
 struct HaliKeyPortInfo {
     QString portName;
@@ -67,6 +69,10 @@ public:
     static QList<HaliKeyPortInfo> availablePortsDetailed();
     static QStringList availableMidiDevices();
 
+    // Raw MIDI messages, delivered on RtMidi's thread as they arrive (MIDI device type only).
+    // CwController points this at the keyer. Thread-safe; may be set before or after openPort().
+    void setMidiSink(std::function<void(int status, int note, int velocity, double deltaTime)> sink);
+
 signals:
     void connected();
     void disconnected();
@@ -79,6 +85,7 @@ signals:
 private:
     void onRawLines(bool dit, bool dah, bool ptt);
 
+    std::shared_ptr<HaliKeyMidiSink> m_midiSink;
     QThread *m_workerThread = nullptr;
     HaliKeyWorkerBase *m_worker = nullptr;
 

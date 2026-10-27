@@ -6,6 +6,7 @@
 #include "settings/radiosettings.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QCheckBox>
 #include <QFrame>
 #include <QSignalBlocker>
 
@@ -126,6 +127,77 @@ CwKeyerPage::CwKeyerPage(HalikeyDevice *halikeyDevice, RadioState *radioState, C
     line3->setStyleSheet(K4Styles::Dialog::separator());
     line3->setFixedHeight(K4Styles::Dimensions::SeparatorHeight);
     layout->addWidget(line3);
+
+    // Keyer section: the PaddleKeyer settings (port of K4-Companion's keyer).
+    auto *keyerLabel = new QLabel("Keyer", this);
+    keyerLabel->setStyleSheet(K4Styles::Dialog::sectionHeader());
+    layout->addWidget(keyerLabel);
+
+    auto addRow = [this, layout](const QString &label, QWidget *field, QWidget *trailing = nullptr) {
+        auto *row = new QHBoxLayout();
+        auto *l = new QLabel(label, this);
+        l->setStyleSheet(K4Styles::Dialog::formLabel());
+        l->setFixedWidth(K4Styles::Dimensions::FormLabelWidth);
+        row->addWidget(l);
+        row->addWidget(field, 1);
+        if (trailing)
+            row->addWidget(trailing);
+        layout->addLayout(row);
+    };
+
+    auto *modeCombo = new QComboBox(this);
+    modeCombo->setStyleSheet(K4Styles::Dialog::comboBox());
+    modeCombo->addItem("Follow K4 (Iambic A / B)", 0);
+    modeCombo->addItem("Plain Iambic (no memory)", 1);
+    modeCombo->addItem("Ultimatic", 2);
+    modeCombo->setCurrentIndex(qBound(0, RadioSettings::instance()->halikeyKeyerMode(), 2));
+    connect(modeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [modeCombo](int index) {
+        RadioSettings::instance()->setHalikeyKeyerMode(modeCombo->itemData(index).toInt());
+    });
+    addRow("Keyer Mode:", modeCombo);
+
+    auto *inputCombo = new QComboBox(this);
+    inputCombo->setStyleSheet(K4Styles::Dialog::comboBox());
+    inputCombo->addItem("Paddles", false);
+    inputCombo->addItem("Straight key / external keyer", true);
+    inputCombo->setCurrentIndex(RadioSettings::instance()->halikeyStraightKey() ? 1 : 0);
+    connect(inputCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [inputCombo](int index) {
+        RadioSettings::instance()->setHalikeyStraightKey(inputCombo->itemData(index).toBool());
+    });
+    addRow("Input:", inputCombo);
+
+    auto *ditMemSlider = new QSlider(Qt::Horizontal, this);
+    ditMemSlider->setRange(0, 100);
+    ditMemSlider->setValue(RadioSettings::instance()->halikeyDitMemoryDelay());
+    ditMemSlider->setStyleSheet(
+        K4Styles::sliderHorizontal(K4Styles::Colors::DarkBackground, K4Styles::Colors::AccentAmber));
+    auto *ditMemValue = new QLabel(QString("%1%").arg(ditMemSlider->value()), this);
+    ditMemValue->setStyleSheet(QString("color: %1; font-size: %2px;")
+                                   .arg(K4Styles::Colors::TextWhite)
+                                   .arg(K4Styles::Dimensions::FontSizePopup));
+    ditMemValue->setFixedWidth(K4Styles::Dimensions::SliderValueLabelWidth);
+    connect(ditMemSlider, &QSlider::valueChanged, this, [ditMemValue](int value) {
+        ditMemValue->setText(QString("%1%").arg(value));
+        RadioSettings::instance()->setHalikeyDitMemoryDelay(value);
+    });
+    addRow("Dit Memory Delay:", ditMemSlider, ditMemValue);
+
+    auto *muteCheck = new QCheckBox("Mute the K4's CW monitor while keying", this);
+    muteCheck->setStyleSheet(K4Styles::Dialog::checkBox());
+    muteCheck->setChecked(RadioSettings::instance()->halikeyMuteRadioMonitor());
+    connect(muteCheck, &QCheckBox::toggled, this,
+            [](bool on) { RadioSettings::instance()->setHalikeyMuteRadioMonitor(on); });
+    layout->addWidget(muteCheck);
+
+    auto *keyerHelpLabel =
+        new QLabel("Iambic A or B follows the K4's own keyer setting. Dit Memory Delay applies to Iambic B: a dit "
+                   "tapped in the first part of a dah is ignored rather than remembered, which stops unwanted extra "
+                   "dits from a quick squeeze. 33% is the tested default. Mute the K4's monitor only if you hear the "
+                   "radio's sidetone come back late through the receive audio.",
+                   this);
+    keyerHelpLabel->setStyleSheet(K4Styles::Dialog::helpText());
+    keyerHelpLabel->setWordWrap(true);
+    layout->addWidget(keyerHelpLabel);
 
     // Separator line
     auto *line5 = new QFrame(this);

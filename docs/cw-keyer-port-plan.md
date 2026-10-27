@@ -1,8 +1,17 @@
 # CW keyer port: K4-Companion's keyer into QK4
 
-**Status:** phase 1 in progress. 2026-10-27: the keyer, sidetone scheduler and serial poller
-are ported and all four suites pass, including the byte-for-byte replay of Dale's 554 recorded
-runs. Not yet wired into the app.
+**Status:** phase 1 code complete, **not yet bench-tested** (2026-10-27).
+- `99e4d6e`: keyer, sidetone scheduler and serial poller ported. Dale's 554 recorded runs replay
+  byte for byte.
+- Wired into the app: `PaddleKeyer` replaces `IambicKeyer` on the HaliKey path. V1.4 lines and raw
+  MIDI feed it; it sends `KZD`/`KZU`. `SidetoneGenerator` is now a pull-mode output driven by
+  `SidetoneScheduler`, still on its own sink (phase 2 moves it into the RX output). The HaliKey page
+  has the keyer mode, input type, dit memory delay and monitor mute. Threaded test is clean under
+  ThreadSanitizer.
+- Deferred: `SerialLinePoller` is not wired. The V1.4 worker's existing per-platform loops (1–2 ms
+  confirm) still feed the keyer, which keeps its hardware-verified Windows/Linux behaviour. The
+  catch is that a **serial straight key has no 20 ms debounce yet**, so contact bounce could key
+  short extra elements. A MIDI straight key is debounced by its firmware.
 **Source:** Dale Farnsworth's [K4-Companion](https://github.com/DaleFarnsworth/K4-Companion),
 commit `040f711` (v2.2), GPL-3.0, the same licence as QK4. Ported files carry an SPDX header and
 credit him.

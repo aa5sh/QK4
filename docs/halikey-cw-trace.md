@@ -1,5 +1,13 @@
 # Tracing the HaliKey → KZ CW pipeline
 
+> **Partly historical (2026-10-27).** `IambicKeyer` has been replaced by `PaddleKeyer`, a port of
+> K4-Companion's keyer that sends timed `KZD####`/`KZU####` (`docs/cw-keyer-port-plan.md`). The
+> `cat.tx` trace below still works and now shows those commands with their send times, which is
+> the useful part for a bench log: each `KZU` carries the element length that goes on the air, and
+> each `KZD` the gap before it. The `cw.keyer` state-machine lines (`[ELEM start …]`,
+> `[TIMER fired …]`) no longer exist; that category now carries only the KPOD+ gate line. Read the
+> rest as the record of how the old keyer was traced.
+
 A diagnostic recipe for investigating CW-keyer reports such as "extra dits at high
 speed" on HaliKey (MIDI or V1.4). Captures the path from physical paddle edge through
 the IambicKeyer state machine to the `KZ` bytes that hit the K4 over TLS.

@@ -117,6 +117,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
         // Unconditional, whoever holds it — including nobody. This is the operator's last resort:
         // it releases rather than asking, and always sends the K4's CW abort, because a KY macro
         // or a TCI cw_macros is keyed from the radio's own buffer and the arbiter never sees it.
+        if (m_cwController)
+            m_cwController->stopKeying();
         m_transmitController->operatorStop();
     });
 
@@ -372,15 +374,16 @@ void MainWindow::setupSpectrumDataRouting() {
 }
 
 void MainWindow::setupHardwareController() {
-    // Hardware controller owns KPOD, HaliKey, IambicKeyer, SidetoneGenerator and their threads
+    // Hardware controller owns KPOD, HaliKey, PaddleKeyer, SidetoneGenerator and their threads
     m_hardwareController = new HardwareController(m_radioState, m_connectionController, this);
 
     // CW controller wires the CW signal graph across the HardwareController-owned
     // devices. Constructed immediately after so the devices exist; takes them by
     // injected pointer. See cwcontroller.h.
-    m_cwController = new CwController(m_radioState, m_connectionController, m_hardwareController->iambicKeyer(),
-                                      m_hardwareController->sidetoneGenerator(), m_hardwareController->halikeyDevice(),
-                                      m_hardwareController->kpodPlusDevice(), this);
+    m_cwController =
+        new CwController(m_radioState, m_connectionController, m_hardwareController->paddleKeyer(),
+                         m_hardwareController->keyerLink(), m_hardwareController->sidetoneGenerator(),
+                         m_hardwareController->halikeyDevice(), m_hardwareController->kpodPlusDevice(), this);
 
     // Who owns CW keying. HardwareController decides it from the device lifecycle policy — plugged
     // in AND switched on AND about to run — and CwController acts on it by suppressing QK4's own

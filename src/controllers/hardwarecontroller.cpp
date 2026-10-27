@@ -1,8 +1,10 @@
 #include "hardwarecontroller.h"
 #include "audio/sidetonegenerator.h"
+#include "audio/sidetonescheduler.h"
 #include "connectioncontroller.h"
 #include "hardware/halikeydevice.h"
-#include "hardware/iambickeyer.h"
+#include "hardware/keyerruntime.h"
+#include "hardware/paddlekeyer.h"
 #include "hardware/kpoddevice.h"
 #include "hardware/kpodplusdevice.h"
 #include "models/radiostate.h"
@@ -119,9 +121,15 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
 
     // =========================================================================
     // Sidetone generator (dedicated thread for low-latency audio feedback)
-    // MUST be created BEFORE IambicKeyer signal connections that use it
+    // The keyer below refers to the scheduler; the generator owns the clock the scheduler reads.
     // =========================================================================
-    m_sidetoneGenerator = new SidetoneGenerator(nullptr);
+    m_keyerClock = std::make_unique<SteadyKeyerClock>();
+    m_keyerLink = std::make_unique<FunctionLink>();
+    m_sidetoneScheduler = std::make_unique<SidetoneScheduler>(*m_keyerClock, nullptr);
+    m_unmuteTimer = new QtOneShotTimer(this);
+
+    m_sidetoneGenerator = new SidetoneGenerator(*m_sidetoneScheduler, *m_keyerClock, nullptr);
+    m_sidetoneScheduler->setStreamTimeSource([sg = m_sidetoneGenerator]() { return sg->streamTime(); });
     m_sidetoneThread = new QThread(this);
     m_sidetoneThread->setObjectName("Sidetone");
     m_sidetoneGenerator->moveToThread(m_sidetoneThread);
@@ -156,19 +164,23 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     // Sidetone CW frequency + keyer-speed wiring lives on CwController.
 
     // =========================================================================
-    // Iambic keyer state machine (HighPriority thread for CW element timing).
-    // Constructed + thread-managed here; all CW signal wiring is on CwController.
+    // Paddle keyer (HighPriority thread for CW element timing).
+    // Constructed + thread-managed here; all CW wiring is on CwController.
     // =========================================================================
-    m_iambicKeyer = new IambicKeyer(nullptr);
-    m_keyerThread = new QThread(this);
+    m_paddleKeyer = std::make_unique<PaddleKeyer>(*m_keyerClock, *m_keyerLink, *m_sidetoneScheduler, *m_unmuteTimer);
+    // Nothing is keyed until CwController lifts this: the radio must be ready, in CW, and the
+    // KPOD+ not owning CW.
+    m_paddleKeyer->setInhibited(true);
+    m_keyerThread = QThread::create([keyer = m_paddleKeyer.get()]() { keyer->run(); });
+    m_keyerThread->setParent(this);
     m_keyerThread->setObjectName("Keyer");
-    m_iambicKeyer->moveToThread(m_keyerThread);
+    // WHY HighPriority: every element boundary is a sleep on this thread; a preempted wake is a late
+    // decision (the keyer learns and subtracts a steady overrun, not a random one).
     m_keyerThread->start(QThread::HighPriority);
 
-    // All CW signal wiring — keyer init, RadioState observers, IambicKeyer →
-    // CAT/sidetone, HaliKey paddle/PTT demux, keyer enable/disable on
-    // connect/disconnect — lives on CwController (constructed by MainWindow
-    // immediately after this controller). See cwcontroller.h.
+    // All CW wiring — keyer configuration from RadioState and settings, HaliKey lines and MIDI →
+    // keyer, the keyer's link to the K4, inhibit on mode/connection/KPOD+ — lives on CwController
+    // (constructed by MainWindow immediately after this controller). See cwcontroller.h.
 
     // =========================================================================
     // Device notifications — one policy for all four devices
@@ -263,13 +275,18 @@ void HardwareController::shutdownDevices() {
         m_halikeyDevice->closePort();
     }
 
+    // close() releases whatever is keyed (an open straight-key KZD gets its KZU) and posts Close,
+    // which ends run(). The keyer object outlives its thread; it's destroyed with this controller.
+    //
+    // WHY the link is cleared only after the join: close() may still have a KZU to send (a straight
+    // key held at quit). Dropping it would leave the K4 keyed. ConnectionController is still alive
+    // here (CONC-001), so the send is safe.
     if (m_keyerThread) {
-        QMetaObject::invokeMethod(m_iambicKeyer, "stop", Qt::BlockingQueuedConnection);
-        m_keyerThread->quit();
-        m_keyerThread->wait(2000);
+        m_paddleKeyer->close();
+        if (!m_keyerThread->wait(2000))
+            qCWarning(qk4Hardware) << "keyer thread did not stop within 2 s";
+        m_keyerLink->setSender(nullptr);
     }
-    delete m_iambicKeyer; // No parent, must delete manually
-    m_iambicKeyer = nullptr;
     m_keyerThread = nullptr; // child of this; Qt deletes it, but never join it twice
 
     if (m_sidetoneThread) {

@@ -18,6 +18,11 @@ using CwKeying::pyRound;
 SidetoneScheduler::SidetoneScheduler(CwKeying::Clock &clock, StreamTimeFn streamTime)
     : m_clock(clock), m_streamTime(std::move(streamTime)) {}
 
+void SidetoneScheduler::setStreamTimeSource(StreamTimeFn streamTime) {
+    std::lock_guard lock(m_mutex);
+    m_streamTime = std::move(streamTime);
+}
+
 void SidetoneScheduler::setEnabled(bool enabled) {
     std::lock_guard lock(m_mutex);
     m_enabled = enabled;

@@ -372,12 +372,20 @@ void PaddleKeyer::run() {
     }
 }
 
+// WHY wait first and dispatch after: the mode in force is the one when the event arrives, not the
+// one when the thread started waiting. K4-Companion gets the same by closing and reopening its
+// keyer whenever straight keying is switched (set_device_type).
 PaddleKeyer::Event PaddleKeyer::processNextEvent() {
+    const PaddleEventItem item = popEvent();
+    if (item.event == Event::Close)
+        return item.event;
     if (m_straightKeying)
-        return sendStraightKey();
-    if (mode() == Mode::Ultimatic)
-        return sendUltimatic();
-    return sendIambic();
+        sendStraightKey(item);
+    else if (mode() == Mode::Ultimatic)
+        sendUltimatic();
+    else
+        sendIambic();
+    return item.event;
 }
 
 long long PaddleKeyer::straightKeyMs(double seconds) const {
@@ -387,10 +395,7 @@ long long PaddleKeyer::straightKeyMs(double seconds) const {
     return std::max<long long>(ms, m_sidetone.minimumSidetoneMs());
 }
 
-PaddleKeyer::Event PaddleKeyer::sendStraightKey() {
-    const PaddleEventItem item = popEvent();
-    if (!m_straightKeying || item.event == Event::Close)
-        return item.event;
+void PaddleKeyer::sendStraightKey(const PaddleEventItem &item) {
     const double timestamp = item.timestamp;
     if (item.event == Event::DitDown) {
         long long ms;
@@ -418,7 +423,6 @@ PaddleKeyer::Event PaddleKeyer::sendStraightKey() {
             delayedUnmuteSidetoneMonitor(delay);
         }
     }
-    return item.event;
 }
 
 PaddleKeyer::Stamps PaddleKeyer::paddleTimestamps(std::optional<double> asOf) const {
@@ -462,11 +466,8 @@ PaddleKeyer::Stamps PaddleKeyer::paddleTimestamps(std::optional<double> asOf) co
     return {r[0], r[1], r[2], r[3]};
 }
 
-PaddleKeyer::Event PaddleKeyer::sendIambic() {
-    const PaddleEventItem item = popEvent();
+void PaddleKeyer::sendIambic() {
     const Mode mode = this->mode();
-    if (mode == Mode::Ultimatic || item.event == Event::Close)
-        return item.event;
     double ditUpMemoryDelay;
     {
         std::lock_guard lock(m_configMutex);
@@ -505,13 +506,9 @@ PaddleKeyer::Event PaddleKeyer::sendIambic() {
         return std::nullopt;
     };
     sendBurst(choose);
-    return item.event;
 }
 
-PaddleKeyer::Event PaddleKeyer::sendUltimatic() {
-    const PaddleEventItem item = popEvent();
-    if (mode() != Mode::Ultimatic || item.event == Event::Close)
-        return item.event;
+void PaddleKeyer::sendUltimatic() {
     auto choose = [this](Element, std::optional<double>, std::optional<double>, std::optional<double> asOf) -> Element {
         const Stamps t = paddleTimestamps(asOf);
         const bool dit = t.ditDown > t.ditUp;
@@ -525,7 +522,6 @@ PaddleKeyer::Event PaddleKeyer::sendUltimatic() {
         return std::nullopt;
     };
     sendBurst(choose);
-    return item.event;
 }
 
 void PaddleKeyer::sendBurst(const Chooser &choose) {

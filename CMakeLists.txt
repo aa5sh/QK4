@@ -153,6 +153,7 @@ set(SOURCES
     src/audio/opusdecoder.cpp
     src/audio/opusencoder.cpp
     src/audio/sidetonegenerator.cpp
+    src/audio/sidetonescheduler.cpp
     src/dsp/panadapter_rhi.cpp
     src/dsp/minipan_rhi.cpp
     src/dsp/bandplanstrip.cpp
@@ -243,7 +244,8 @@ set(SOURCES
     src/hardware/halikeyworkerbase.cpp
     src/hardware/halikeyv14worker.cpp
     src/hardware/halikeymidiworker.cpp
-    src/hardware/iambickeyer.cpp
+    src/hardware/paddlekeyer.cpp
+    src/hardware/keyerruntime.cpp
     third_party/rtmidi/RtMidi.cpp
 )
 
@@ -297,6 +299,7 @@ set(HEADERS
     src/audio/opusdecoder.h
     src/audio/opusencoder.h
     src/audio/sidetonegenerator.h
+    src/audio/sidetonescheduler.h
     src/dsp/panadapter_rhi.h
     src/dsp/minipan_rhi.h
     src/settings/radiosettings.h
@@ -378,7 +381,9 @@ set(HEADERS
     src/hardware/halikeyworkerbase.h
     src/hardware/halikeyv14worker.h
     src/hardware/halikeymidiworker.h
-    src/hardware/iambickeyer.h
+    src/hardware/paddlekeyer.h
+    src/hardware/keyertiming.h
+    src/hardware/keyerruntime.h
 )
 
 if(UNIX AND NOT APPLE)

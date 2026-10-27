@@ -34,6 +34,9 @@ public:
 
     SidetoneScheduler(CwKeying::Clock &clock, StreamTimeFn streamTime);
 
+    // The stream clock, once the output that owns it exists. Replaces the constructor's.
+    void setStreamTimeSource(StreamTimeFn streamTime);
+
     void setEnabled(bool enabled);
     bool isEnabled() const;
 

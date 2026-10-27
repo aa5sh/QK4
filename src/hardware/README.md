@@ -14,16 +14,17 @@ USB / serial / MIDI device wrappers. Owned by `controllers/hardwarecontroller.cp
 - `kpodplususbworker.{cpp,h}` — owns the libusb context and handle for KPOD+, running all libusb I/O on its own QThread. Open/close and parameter setters are dispatched from the main thread as slots. Its pure command builders and decoders are covered by `test_kpodplususbworker`.
 - `kpodudevworker.{cpp,h}` — Linux-only udev poll loop for KPOD hotplug detection, wired to `QThread::started` and run until `stop()`.
 - `halikeyv14worker.{cpp,h}` — V1.4 hardware-protocol worker (serial). One `monitorLoop()` with three platform branches: `TIOCMIWAIT` + confirming re-read on Linux, 1 ms high-resolution-timer poll of `GetCommModemStatus` on Windows, 500 µs `usleep` poll of `TIOCMGET` on macOS. `DEBOUNCE_COUNT=2` on all three.
-- `halikeymidiworker.{cpp,h}` — MIDI-variant worker. Notes 20 = dit, 21 = dah, 31 = PTT. Implements the MoMIDI extended protocol (CC ch 0 = version detect; CC elsewhere = timing MSB; note velocity = timing LSB). **The MoMIDI timestamps are parsed but currently discarded** — `m_pendingTimeMsb` is never read, and the worker emits plain `bool` edges.
-- `iambickeyer.{cpp,h}` — Iambic A/B CW keyer state machine. `HighPriority` thread, atomic paddle state. Being replaced by `paddlekeyer` (see `docs/cw-keyer-port-plan.md`).
+- `halikeymidiworker.{cpp,h}` — MIDI-variant worker. Notes 20 = dit, 21 = dah, 31 = PTT (ignored). Every raw message also goes straight from RtMidi's thread to the `HaliKeyMidiSink` that `HalikeyDevice::setMidiSink` sets. CwController points it at `PaddleKeyer::midiMessage`, which decodes MoMIDI's own time stamps (note velocity = ms since the previous event, CC/poly aftertouch on channel 0 = 126 ms steps, velocity 0/127 = no time, use RtMidi's delta). Notes on any channel are normalised to channel 0; for a non-MoMIDI device a note-on with velocity 0 is passed as a note-off.
 - `paddlekeyer.{cpp,h}` — Port of K4-Companion's keyer (Dale Farnsworth, GPL-3.0): Iambic A/B, Plain Iambic, Ultimatic and straight-key passthrough, sent as timed `KZD`/`KZU`. Paddle edges timestamped at capture (MoMIDI's own clock, the 1 ms serial poll); decisions read the paddles as of when they were due. Pure logic behind `keyertiming.h` seams; pinned by Dale's 554 recorded runs (`tests/test_paddlekeyersweeps.cpp`).
 - `keyertiming.h` — The Clock / Link / OneShotTimer seams the keyer runs against, and `pyRound` (half-to-even, as Python's `round`).
-- `seriallinepoller.{cpp,h}` — Serial paddle line-change detection for the 1 ms poll: rest state at open is not an edge, 20 ms straight-key debounce, per-line deltas.
+- `keyerruntime.{cpp,h}` — Production seams: `SteadyKeyerClock` (steady_clock, high-resolution waitable timer sleeps on Windows), `FunctionLink` (keyer → `TcpClient::sendCAT`), `QtOneShotTimer` (monitor restore, on the main thread).
+- `seriallinepoller.{cpp,h}` — Port of K4-Companion's serial line poll: rest state at open is not an edge, 20 ms straight-key debounce, per-line deltas. Tested, **not yet wired**: the V1.4 worker's own per-platform loops still feed the keyer (see `docs/cw-keyer-port-plan.md`).
 
 ## Threading
 
-- `IambicKeyer` on `HardwareController::m_keyerThread` (HighPriority).
-- `SidetoneGenerator` on `HardwareController::m_sidetoneThread`.
+- `PaddleKeyer::run()` on `HardwareController::m_keyerThread` (HighPriority, a `QThread::create` with no event loop: the keyer blocks on its own event queue and sleeps to its deadlines).
+- `SidetoneGenerator` on `HardwareController::m_sidetoneThread` (HighPriority); its pull-mode sink renders on that thread.
+- MIDI paddle edges reach the keyer on RtMidi's own thread; V1.4 edges on the HaliKey worker thread.
 - `HalikeyDevice` has its own `m_workerThread` for platform-worker variants.
 - `KpodDevice` owns `m_hidThread`; all hidapi I/O is on it. On Linux `KpodHidWorker` starts a second thread for the udev hotplug poll.
 - `KpodPlusDevice` owns `m_usbThread` (EP01 + config) and `m_ep02Thread` (keyer reader, HighPriority).
@@ -67,9 +68,11 @@ closed and switched off.
 
 ## Keyer flow
 
-HaliKey paddle → platform worker (thread) → `HalikeyDevice::lineStateChanged` → CwController demux → `IambicKeyer::setPaddleState` (one packed atomic, DirectConnection) → IambicKeyer state machine (keyer thread) → KZ CAT commands out + SidetoneGenerator enqueue.
+- **V1.4:** paddle → V1.4 worker (thread) → `HalikeyDevice::lineStateChanged` → `CwController::onLines` (edge detection, per-line delta, paddle reversal; DirectConnection) → `PaddleKeyer::paddleEvent`, stamped on arrival.
+- **MIDI:** paddle → RtMidi callback → `HaliKeyMidiSink` → `PaddleKeyer::midiMessage`, stamped by MoMIDI's own clock.
+- **Keyer thread:** `PaddleKeyer::run()` → timed `KZD####` / `KZU####` (and `ML0000` / restore if the monitor mute is on) → `FunctionLink` → `TcpClient::sendCAT` (queued to the I/O thread). Sidetone edges are scheduled on `SidetoneScheduler`, and `SidetoneGenerator`'s pull-mode render places them on exact frames.
 
-When KPOD+ is active, the HaliKey → IambicKeyer → KZ/Sidetone path is suppressed. KPOD+ owns the entire CW chain: paddle → onboard keyer → sidetone → KZ output forwarded directly to K4.
+The keyer keys nothing while CwController holds it inhibited: radio not ready, mode not CW or CW-R, or the KPOD+ owning CW. KPOD+ owns its whole chain: paddle → onboard keyer → its own sidetone → KZ strings forwarded to the K4 untouched.
 
 ## V1.4 serial latency (USB-serial bridge latency timer)
 

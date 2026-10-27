@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <functional>
+#include <memory>
 
 #include "hardware/usbdevicelifecycle.h"
 #include <QThread>
@@ -10,19 +11,23 @@
 class KpodDevice;
 class KpodPlusDevice;
 class HalikeyDevice;
-class IambicKeyer;
+class PaddleKeyer;
 class SidetoneGenerator;
+class SidetoneScheduler;
+class SteadyKeyerClock;
+class FunctionLink;
+class QtOneShotTimer;
 class RadioState;
 class ConnectionController;
 
 /**
  * @brief Owns hardware-side workers: KPOD USB knob (main thread), HaliKey CW paddle
- *        (HalikeyDevice — holds its own worker thread), IambicKeyer (HighPriority keyer thread),
- *        SidetoneGenerator (sidetone thread). Translates KPOD button presses → macroRequested
- *        for MainWindow dispatch.
+ *        (HalikeyDevice — holds its own worker thread), PaddleKeyer (HighPriority keyer thread)
+ *        with its sidetone scheduler and clock, SidetoneGenerator (sidetone thread). Translates
+ *        KPOD button presses → macroRequested for MainWindow dispatch.
  *
- * CW-keying orchestration (IambicKeyer + HaliKey paddle wiring, the V1.4 PTT demux,
- * the KPOD+ keyer-active gate, sidetone playback) lives on CwController — see
+ * CW-keying orchestration (PaddleKeyer + HaliKey paddle wiring, the KPOD+ keyer-active gate,
+ * the keyer's link to the K4) lives on CwController — see
  * cwcontroller.h. HardwareController constructs and owns the devices + threads;
  * CwController wires their CW behavior together via injected pointers.
  */
@@ -47,11 +52,11 @@ public:
     KpodPlusDevice *kpodPlusDevice() const { return m_kpodPlusDevice; }
     HalikeyDevice *halikeyDevice() const { return m_halikeyDevice; }
 
-    // IambicKeyer + SidetoneGenerator accessors — consumed by CwController,
-    // which is constructed right after HardwareController and wires the CW
-    // signal graph across these (HardwareController-owned) devices. Same
-    // Rule 2 documented-exception rationale as the device accessors above.
-    IambicKeyer *iambicKeyer() const { return m_iambicKeyer; }
+    // Keyer + sidetone accessors — consumed by CwController, which is constructed right after
+    // HardwareController and wires the CW graph across these (HardwareController-owned) objects.
+    // Same Rule 2 documented-exception rationale as the device accessors above.
+    PaddleKeyer *paddleKeyer() const { return m_paddleKeyer.get(); }
+    FunctionLink *keyerLink() const { return m_keyerLink.get(); }
     SidetoneGenerator *sidetoneGenerator() const { return m_sidetoneGenerator; }
 
     /// Stop every input producer this controller owns — HaliKey, the iambic keyer, the sidetone,
@@ -133,9 +138,14 @@ private:
     // HaliKey CW paddle device
     HalikeyDevice *m_halikeyDevice;
 
-    // Iambic keyer state machine (HighPriority thread). Constructed + owned
-    // here; CW signal wiring lives on CwController.
-    IambicKeyer *m_iambicKeyer;
+    // The HaliKey keyer (port of K4-Companion's) and the seams it runs on. Declaration order is
+    // construction order: the keyer refers to the clock, link, scheduler and timer, so they come
+    // first and outlive it. The keyer's thread runs PaddleKeyer::run() until close().
+    std::unique_ptr<SteadyKeyerClock> m_keyerClock;
+    std::unique_ptr<FunctionLink> m_keyerLink;
+    std::unique_ptr<SidetoneScheduler> m_sidetoneScheduler;
+    QtOneShotTimer *m_unmuteTimer = nullptr; // child; lives on the main thread
+    std::unique_ptr<PaddleKeyer> m_paddleKeyer;
     QThread *m_keyerThread = nullptr;
 
     // Local sidetone generator (dedicated thread). Constructed + owned here;

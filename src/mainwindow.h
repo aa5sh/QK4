@@ -209,7 +209,7 @@ private:
     FeatureMenuController *m_featureMenuController = nullptr;
     ModePopupController *m_modePopupController = nullptr;
 
-    // Hardware controller (owns KPOD, HaliKey, IambicKeyer, SidetoneGenerator and their threads)
+    // Hardware controller (owns KPOD, HaliKey, PaddleKeyer, SidetoneGenerator and their threads)
     HardwareController *m_hardwareController = nullptr;
     CwController *m_cwController = nullptr;
 

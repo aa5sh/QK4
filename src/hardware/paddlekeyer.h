@@ -108,9 +108,9 @@ private:
     void pushEvent(PaddleEventItem item);
 
     Stamps paddleTimestamps(std::optional<double> asOf) const;
-    Event sendStraightKey();
-    Event sendIambic();
-    Event sendUltimatic();
+    void sendStraightKey(const PaddleEventItem &item);
+    void sendIambic();
+    void sendUltimatic();
     void sendBurst(const Chooser &choose);
     Element missedFirstElement(std::optional<double> endedDue);
     Element placedFirstElement();

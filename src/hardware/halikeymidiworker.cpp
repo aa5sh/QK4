@@ -20,8 +20,8 @@ static constexpr unsigned char NOTE_LEFT_PADDLE = 20;
 static constexpr unsigned char NOTE_RIGHT_PADDLE = 21;
 static constexpr unsigned char NOTE_PTT = 31;
 
-HaliKeyMidiWorker::HaliKeyMidiWorker(const QString &deviceName, QObject *parent)
-    : HaliKeyWorkerBase(deviceName, parent) {}
+HaliKeyMidiWorker::HaliKeyMidiWorker(const QString &deviceName, std::shared_ptr<HaliKeyMidiSink> sink, QObject *parent)
+    : HaliKeyWorkerBase(deviceName, parent), m_sink(std::move(sink)) {}
 
 HaliKeyMidiWorker::~HaliKeyMidiWorker() {
     QMutexLocker lock(&m_midiMutex);
@@ -160,6 +160,27 @@ void HaliKeyMidiWorker::midiCallback(double deltaTime, std::vector<unsigned char
         return;
     if (!message || message->empty())
         return;
+    if (self->m_sink && message->size() >= 3) {
+        // Raw to the keyer, on this thread, with RtMidi's own delta: the paddle edge is stamped on
+        // arrival (PaddleKeyer::midiMessage, ported from K4-Companion).
+        int status = (*message)[0];
+        const int note = (*message)[1];
+        const int velocity = (*message)[2];
+        const int kind = status & 0xF0;
+        if (status == 0xB0)
+            self->m_momidiDetected.store(true, std::memory_order_relaxed);
+        if (kind == 0x90 || kind == 0x80) {
+            // WHY normalise the channel: QK4 has always taken notes on any channel; the keyer
+            // matches 0x90/0x80 exactly.
+            status = kind;
+            // WHY translate only for non-MoMIDI devices: MoMIDI's note-on is always key-down, its
+            // velocity carrying time. Ordinary MIDI sends note-on velocity 0 for a release, which
+            // left as key-down would hold the key down.
+            if (kind == 0x90 && velocity == 0 && !self->m_momidiDetected.load(std::memory_order_relaxed))
+                status = 0x80;
+        }
+        self->m_sink->call(status, note, velocity, deltaTime);
+    }
     // WHY marshal to the worker thread before doing anything Qt-related:
     // RtMidi invokes this callback from its OWN internal thread (not a QThread).
     // Emitting Qt signals from a non-Qt thread is undefined — Qt's event-queue
@@ -186,8 +207,8 @@ void HaliKeyMidiWorker::handleMidiMessage(double deltaTime, const std::vector<un
 
     // --- CC events: MoMIDI version detection and timing MSB ---
     if (status == 0xB0) {
-        if (channel == 0 && !m_momidiDetected) {
-            m_momidiDetected = true;
+        if (channel == 0 && !m_momidiDetected.load(std::memory_order_relaxed)) {
+            m_momidiDetected.store(true, std::memory_order_relaxed);
             qCDebug(hwMidi) << "HaliKeyMidiWorker: MoMIDI detected, version" << data2;
         } else if (channel != 0) {
             m_pendingTimeMsb = data2;
@@ -198,7 +219,7 @@ void HaliKeyMidiWorker::handleMidiMessage(double deltaTime, const std::vector<un
     // --- Note events ---
     bool pressed = false;
     if (status == 0x90) {
-        if (m_momidiDetected) {
+        if (m_momidiDetected.load(std::memory_order_relaxed)) {
             // MoMIDI: Note On is ALWAYS key down; velocity carries timing LSB
             pressed = true;
             m_pendingTimeMsb = 0;
