@@ -11,9 +11,12 @@
 #include "ui/pages/kpa1500page.h"
 #include "ui/pages/dxclusterpage.h"
 #include "ui/styling/k4constants.h"
+#include "ui/styling/k4styles.h"
 #include "controllers/audiocontroller.h"
 #include "controllers/hardwarecontroller.h"
+#include <QFrame>
 #include <QHBoxLayout>
+#include <QScrollArea>
 
 OptionsDialog::OptionsDialog(RadioState *radioState, AudioController *audioController,
                              HardwareController *hardwareController, CatServer *catServer, TciController *tciController,
@@ -159,10 +162,27 @@ void OptionsDialog::ensurePageCreated(int index) {
         return;
     }
 
+    // WHY every page scrolls: a page taller than the dialog was squeezed to fit, its rows crushed
+    // flat and its labels clipped (the HaliKey page once the keyer settings were added). A page
+    // that fits shows no scrollbar.
+    auto *scroll = new QScrollArea(this);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    scroll->setStyleSheet(
+        QString("QScrollArea { border: none; background: transparent; }"
+                "QScrollBar:vertical { background: %1; width: 8px; }"
+                "QScrollBar::handle:vertical { background: %2; border-radius: 4px; min-height: 20px; }"
+                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
+            .arg(K4Styles::Colors::DarkBackground)
+            .arg(K4Styles::Colors::BorderNormal));
+    scroll->setWidget(page);
+
     QWidget *placeholder = m_pageStack->widget(index);
     m_pageStack->removeWidget(placeholder);
     delete placeholder;
-    m_pageStack->insertWidget(index, page);
+    m_pageStack->insertWidget(index, scroll);
     m_pageCreated[index] = true;
 }
 
