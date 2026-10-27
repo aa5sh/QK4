@@ -1,0 +1,829 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// Port of K4-Companion's Keyer (Dale Farnsworth, GPL-3.0). Function by function against
+// k4companion: release_paddles 19536, end_straight_key_on_air 19588, midi_message_callback 19924,
+// midi_event_timestamp 19975, serial_message_callback 20010, send_paddle_event 20026,
+// start_burst_sidetone 20122, send_straight_key 20189, paddle_timestamps 20238, send_iambic 20281,
+// send_ultimatic 20407, send_burst 20442, missed_first_element 20604, placed_first_element 20634,
+// start_element 20671, plan_sidetone_catchup 20853, confirm_element 21008, element_sidetone 21088,
+// wait_until_sidetone_heard 21133, end_element 21190, measure_inherent_sidetone_lag 21246,
+// on_speed_change 21312, the monitor mute 21331-21352.
+//
+// Left out on purpose: auto character/word spacing. With it off, auto_space_until() returns None
+// everywhere, so removing it changes nothing else.
+//
+// Expressions keep the Python's order so the doubles match the recorded runs bit for bit.
+
+#include "hardware/paddlekeyer.h"
+#include "audio/sidetonescheduler.h"
+
+#include <algorithm>
+#include <cmath>
+#include <cstdio>
+
+using CwKeying::pyRound;
+
+namespace {
+
+std::string fourDigits(const char *prefix, long long ms) {
+    char buf[16];
+    std::snprintf(buf, sizeof buf, "%s%04lld;", prefix, ms);
+    return buf;
+}
+
+bool contains(const std::vector<int> &v, int x) {
+    return std::find(v.begin(), v.end(), x) != v.end();
+}
+
+} // namespace
+
+PaddleKeyer::PaddleKeyer(CwKeying::Clock &clock, CwKeying::Link &link, SidetoneScheduler &sidetone,
+                         CwKeying::OneShotTimer &unmuteTimer)
+    : m_clock(clock), m_link(link), m_sidetone(sidetone), m_unmuteTimer(unmuteTimer) {
+    setSpeed(20);
+}
+
+PaddleKeyer::~PaddleKeyer() {
+    m_unmuteTimer.cancel();
+}
+
+// ---- configuration ----
+
+void PaddleKeyer::setMode(Mode mode) {
+    std::lock_guard lock(m_configMutex);
+    m_mode = mode;
+}
+
+PaddleKeyer::Mode PaddleKeyer::mode() const {
+    std::lock_guard lock(m_configMutex);
+    return m_mode;
+}
+
+void PaddleKeyer::setStraightKeying(bool straight) {
+    if (m_straightKeying.exchange(straight) != straight)
+        releasePaddles();
+}
+
+bool PaddleKeyer::straightKeying() const {
+    return m_straightKeying.load();
+}
+
+void PaddleKeyer::setDitMemoryDelayPercent(double percent) {
+    std::lock_guard lock(m_configMutex);
+    m_ditMemoryDelayPercent = std::clamp(percent, 0.0, 100.0);
+}
+
+void PaddleKeyer::setSpeed(int wpm, double weighting) {
+    if (wpm <= 0)
+        return;
+    const double delta = (1 - weighting) / (1 + weighting);
+    const double eltMult = 1 - delta;
+    const double spaceMult = 1 + delta;
+    const double unweightedDitSeconds = 1.2 / wpm;
+    const double unweightedDahSeconds = unweightedDitSeconds * 3;
+    std::lock_guard lock(m_configMutex);
+    m_ditSeconds = unweightedDitSeconds * eltMult;
+    m_dahSeconds = unweightedDahSeconds * eltMult;
+    m_interElementSeconds = unweightedDitSeconds * spaceMult;
+}
+
+void PaddleKeyer::setDitNotes(std::vector<int> notes) {
+    std::lock_guard lock(m_configMutex);
+    m_ditNotes = std::move(notes);
+}
+
+void PaddleKeyer::setDahNotes(std::vector<int> notes) {
+    std::lock_guard lock(m_configMutex);
+    m_dahNotes = std::move(notes);
+}
+
+void PaddleKeyer::setDitSignal(Signal signal) {
+    std::lock_guard lock(m_configMutex);
+    m_ditSignal = signal;
+}
+
+void PaddleKeyer::setDahSignal(Signal signal) {
+    std::lock_guard lock(m_configMutex);
+    m_dahSignal = signal;
+}
+
+void PaddleKeyer::setMuteRadioMonitor(bool mute) {
+    m_muteRadioMonitor = mute;
+}
+
+void PaddleKeyer::setMonitorLevel(int level) {
+    m_monitorLevel = level;
+}
+
+void PaddleKeyer::setKeyDownInitialDelayMs(int ms) {
+    m_keyDownInitialDelayMs = ms;
+}
+
+void PaddleKeyer::setInhibited(bool inhibited) {
+    if (m_inhibited.exchange(inhibited) != inhibited && inhibited)
+        releasePaddles();
+}
+
+double PaddleKeyer::ditSeconds() const {
+    std::lock_guard lock(m_configMutex);
+    return m_ditSeconds;
+}
+
+double PaddleKeyer::dahSeconds() const {
+    std::lock_guard lock(m_configMutex);
+    return m_dahSeconds;
+}
+
+double PaddleKeyer::interElementSeconds() const {
+    std::lock_guard lock(m_configMutex);
+    return m_interElementSeconds;
+}
+
+// ---- event queue ----
+
+void PaddleKeyer::pushEvent(PaddleEventItem item) {
+    {
+        std::lock_guard lock(m_queueMutex);
+        m_queue.push_back(item);
+    }
+    m_queueCv.notify_one();
+}
+
+PaddleKeyer::PaddleEventItem PaddleKeyer::popEvent() {
+    std::unique_lock lock(m_queueMutex);
+    m_queueCv.wait(lock, [this] { return !m_queue.empty(); });
+    const PaddleEventItem item = m_queue.front();
+    m_queue.pop_front();
+    return item;
+}
+
+bool PaddleKeyer::hasPendingEvents() const {
+    std::lock_guard lock(m_queueMutex);
+    return !m_queue.empty();
+}
+
+// ---- release / close ----
+
+void PaddleKeyer::releasePaddles(bool closing) {
+    bool straightKeyDown;
+    std::optional<FirstElement> scheduled;
+    {
+        std::lock_guard lock(m_firstElementMutex);
+        if (closing)
+            m_closed = true;
+        straightKeyDown = m_straightKeyDown;
+        m_straightKeyDown = false;
+        scheduled = m_firstElementScheduled;
+        m_firstElementScheduled.reset();
+        const double now = m_clock.now();
+        std::lock_guard paddles(m_paddleMutex);
+        m_stamps.ditUp = now;
+        m_stamps.dahUp = now;
+        m_history.emplace_back(now, Event::DitUp);
+        m_history.emplace_back(now, Event::DahUp);
+        while (m_history.size() > kHistoryLength)
+            m_history.pop_front();
+    }
+    if (straightKeyDown) {
+        m_sidetone.keyNow(false);
+        endStraightKeyOnAir();
+    } else if (scheduled && !m_sidetone.cancelDown()) {
+        m_sidetone.keyNow(false);
+    }
+}
+
+void PaddleKeyer::endStraightKeyOnAir() {
+    if (!m_k4Keyed.exchange(false))
+        return;
+    long long ms;
+    {
+        std::lock_guard lock(m_straightMutex);
+        const double seconds = m_clock.now() - m_straightKeyDownAt;
+        m_previousKeyUpTimestamp = m_previousKeyDownTimestamp + seconds;
+        m_paddleTimestamp = std::max(m_paddleTimestamp, m_previousKeyUpTimestamp);
+        ms = straightKeyMs(seconds);
+    }
+    send(fourDigits("KZU", ms));
+}
+
+void PaddleKeyer::close() {
+    releasePaddles();
+    pushEvent({Event::Close, m_clock.now()});
+    releasePaddles(true);
+    m_unmuteTimer.cancel();
+}
+
+// ---- input ----
+
+void PaddleKeyer::midiMessage(int status, int note, int velocity, double rtmidiDelta) {
+    if (status == 0xb0 || status == 0xa0) {
+        m_midiDelta = (velocity * 126) / 1000.0;
+        return;
+    }
+    if (velocity == 0 || velocity == 127)
+        m_midiDelta = rtmidiDelta; // no time in this message: use RtMidi's
+    else
+        m_midiDelta += velocity / 1000.0;
+
+    if (status == 0x90 || status == 0x80) {
+        // WHY every note, mapped or not: the device counts its deltas from its previous note.
+        const double timestamp = midiEventTimestamp(m_midiDelta);
+        std::vector<int> ditNotes, dahNotes;
+        {
+            std::lock_guard lock(m_configMutex);
+            ditNotes = m_ditNotes;
+            dahNotes = m_dahNotes;
+        }
+        // WHY 0x90 is key-down whatever its velocity: these devices never send note-on velocity 0
+        // as a release; only 0x80 releases.
+        if (status == 0x90) {
+            if (contains(ditNotes, note)) {
+                m_ditWasDown = true;
+                paddleEvent(Event::DitDown, m_midiDelta, timestamp);
+            } else if (contains(dahNotes, note)) {
+                m_dahWasDown = true;
+                paddleEvent(Event::DahDown, m_midiDelta, timestamp);
+            }
+        } else {
+            if (contains(ditNotes, note)) {
+                if (m_ditWasDown) {
+                    m_ditWasDown = false;
+                    paddleEvent(Event::DitUp, m_midiDelta, timestamp);
+                }
+            } else if (contains(dahNotes, note)) {
+                if (m_dahWasDown) {
+                    m_dahWasDown = false;
+                    paddleEvent(Event::DahUp, m_midiDelta, timestamp);
+                }
+            }
+        }
+    }
+    m_midiDelta = 0;
+}
+
+double PaddleKeyer::midiEventTimestamp(double delta) {
+    const double arrived = m_clock.now();
+    m_midiDeviceClock += delta;
+    const double offset = arrived - m_midiDeviceClock;
+    if (!m_midiClockOffset || delta >= kMidiReanchorSeconds || offset - *m_midiClockOffset >= kMidiReanchorSeconds)
+        m_midiClockOffset = offset;
+    else
+        m_midiClockOffset = std::min(*m_midiClockOffset, offset);
+    return m_midiDeviceClock + *m_midiClockOffset;
+}
+
+void PaddleKeyer::serialSignalChanged(Signal signal, bool asserted, double deltaTime) {
+    Signal dit, dah;
+    {
+        std::lock_guard lock(m_configMutex);
+        dit = m_ditSignal;
+        dah = m_dahSignal;
+    }
+    if (signal == dit)
+        paddleEvent(asserted ? Event::DitDown : Event::DitUp, deltaTime);
+    if (signal == dah && !m_straightKeying)
+        paddleEvent(asserted ? Event::DahDown : Event::DahUp, deltaTime);
+}
+
+void PaddleKeyer::paddleEvent(Event event, double deltaTime, std::optional<double> timestamp) {
+    if (m_inhibited)
+        return;
+    double stamp;
+    if (m_straightKeying) {
+        {
+            std::lock_guard lock(m_firstElementMutex);
+            // Deliberate deviation: after close() an event is dropped rather than queued for a
+            // keyer thread that has gone.
+            if (m_closed)
+                return;
+            if (event == Event::DitDown) {
+                m_sidetone.keyNow(true);
+                m_straightKeyDown = true;
+                m_straightKeyDownAt = m_clock.now();
+            } else if (event == Event::DitUp) {
+                m_sidetone.keyNow(false);
+                m_straightKeyDown = false;
+            }
+        }
+        std::lock_guard lock(m_straightMutex);
+        m_paddleTimestamp += deltaTime;
+        stamp = m_paddleTimestamp;
+    } else {
+        {
+            std::lock_guard lock(m_firstElementMutex);
+            if (m_closed)
+                return;
+        }
+        const double arrived = m_clock.now();
+        stamp = timestamp ? *timestamp : arrived;
+        startBurstSidetone(event, arrived, stamp);
+    }
+    {
+        std::lock_guard lock(m_paddleMutex);
+        switch (event) {
+        case Event::DitDown:
+            m_stamps.ditDown = stamp;
+            break;
+        case Event::DitUp:
+            m_stamps.ditUp = stamp;
+            break;
+        case Event::DahDown:
+            m_stamps.dahDown = stamp;
+            break;
+        case Event::DahUp:
+            m_stamps.dahUp = stamp;
+            break;
+        case Event::Close:
+            break;
+        }
+        m_history.emplace_back(stamp, event);
+        while (m_history.size() > kHistoryLength)
+            m_history.pop_front();
+    }
+    pushEvent({event, stamp});
+}
+
+void PaddleKeyer::startBurstSidetone(Event event, double timestamp, double pressed) {
+    char element;
+    if (event == Event::DitDown)
+        element = '.';
+    else if (event == Event::DahDown)
+        element = '-';
+    else
+        return;
+    std::lock_guard lock(m_firstElementMutex);
+    if (m_closed || m_inBurst || m_firstElementScheduled)
+        return;
+    if (m_sidetone.scheduleDown(timestamp))
+        m_firstElementScheduled = FirstElement{timestamp, element, pressed};
+}
+
+std::optional<PaddleKeyer::FirstElement> PaddleKeyer::takeFirstElement() {
+    std::lock_guard lock(m_firstElementMutex);
+    auto scheduled = m_firstElementScheduled;
+    m_firstElementScheduled.reset();
+    return scheduled;
+}
+
+// ---- keyer loop ----
+
+void PaddleKeyer::run() {
+    while (processNextEvent() != Event::Close) {
+    }
+}
+
+PaddleKeyer::Event PaddleKeyer::processNextEvent() {
+    if (m_straightKeying)
+        return sendStraightKey();
+    if (mode() == Mode::Ultimatic)
+        return sendUltimatic();
+    return sendIambic();
+}
+
+long long PaddleKeyer::straightKeyMs(double seconds) const {
+    const long long ms = pyRound(seconds * 1000);
+    if (ms > 5000)
+        return 0;
+    return std::max<long long>(ms, m_sidetone.minimumSidetoneMs());
+}
+
+PaddleKeyer::Event PaddleKeyer::sendStraightKey() {
+    const PaddleEventItem item = popEvent();
+    if (!m_straightKeying || item.event == Event::Close)
+        return item.event;
+    const double timestamp = item.timestamp;
+    if (item.event == Event::DitDown) {
+        long long ms;
+        {
+            std::lock_guard lock(m_straightMutex);
+            ms = straightKeyMs(timestamp - m_previousKeyUpTimestamp);
+            m_previousKeyDownTimestamp = timestamp;
+        }
+        m_k4Keyed = true;
+        muteSidetoneMonitor();
+        send(fourDigits("KZD", ms));
+    } else if (item.event == Event::DitUp) {
+        long long ms;
+        {
+            std::lock_guard lock(m_straightMutex);
+            ms = straightKeyMs(timestamp - m_previousKeyDownTimestamp);
+            m_previousKeyUpTimestamp = timestamp;
+        }
+        if (m_k4Keyed.exchange(false)) {
+            send(fourDigits("KZU", ms));
+            double delay = m_keyDownInitialDelayMs / 1000.0;
+            delay += m_sidetone.delay();
+            delay += ms / 1000.0;
+            delay += kUnmuteExtraDelay;
+            delayedUnmuteSidetoneMonitor(delay);
+        }
+    }
+    return item.event;
+}
+
+PaddleKeyer::Stamps PaddleKeyer::paddleTimestamps(std::optional<double> asOf) const {
+    std::lock_guard lock(m_paddleMutex);
+    const Stamps stamps = m_stamps;
+    if (!asOf)
+        return stamps;
+    // Walk the history newest first for each paddle's latest edge at or before asOf: the
+    // paddles as they stood when the decision was due, not when the keyer got to it.
+    std::optional<double> found[4];
+    for (auto it = m_history.rbegin(); it != m_history.rend(); ++it) {
+        if (it->first > *asOf)
+            continue;
+        int index;
+        switch (it->second) {
+        case Event::DitUp:
+            index = 0;
+            break;
+        case Event::DahUp:
+            index = 1;
+            break;
+        case Event::DitDown:
+            index = 2;
+            break;
+        case Event::DahDown:
+            index = 3;
+            break;
+        default:
+            continue;
+        }
+        if (!found[index]) {
+            found[index] = it->first;
+            if (found[0] && found[1] && found[2] && found[3])
+                break;
+        }
+    }
+    const double s[4] = {stamps.ditUp, stamps.dahUp, stamps.ditDown, stamps.dahDown};
+    double r[4];
+    for (int i = 0; i < 4; ++i)
+        r[i] = found[i] ? *found[i] : (s[i] <= *asOf ? s[i] : 0);
+    return {r[0], r[1], r[2], r[3]};
+}
+
+PaddleKeyer::Event PaddleKeyer::sendIambic() {
+    const PaddleEventItem item = popEvent();
+    const Mode mode = this->mode();
+    if (mode == Mode::Ultimatic || item.event == Event::Close)
+        return item.event;
+    double ditUpMemoryDelay;
+    {
+        std::lock_guard lock(m_configMutex);
+        ditUpMemoryDelay = m_ditMemoryDelayPercent / 100 * (m_dahSeconds + m_interElementSeconds);
+    }
+
+    auto choose = [this, mode, ditUpMemoryDelay](Element prev, std::optional<double> look, std::optional<double> heard,
+                                                 std::optional<double> asOf) -> Element {
+        const Stamps t = paddleTimestamps(asOf);
+        const bool ditHeld = t.ditDown > t.ditUp;
+        const bool dahHeld = t.dahDown > t.dahUp;
+        bool dit = ditHeld;
+        bool dah = dahHeld;
+        if (prev && mode != Mode::PlainIambic) {
+            const double heardTs = *heard;
+            const double lookTs = *look;
+            dit = dit || (*prev == '-' && t.ditDown > heardTs);
+            if (mode == Mode::IambicB) {
+                const bool ditTapped = t.ditDown > lookTs && t.ditUp - lookTs > ditUpMemoryDelay;
+                const bool ditSqueezeReleased = !dahHeld && t.ditUp - heardTs > ditUpMemoryDelay;
+                dit = dit || (*prev == '-' && (ditTapped || ditSqueezeReleased));
+                const bool dahTapped = t.dahDown > lookTs && t.dahUp > lookTs;
+                const bool dahSqueezeReleased = !ditHeld && t.dahUp > heardTs;
+                dah = dah || (*prev == '.' && (dahTapped || dahSqueezeReleased));
+            }
+        }
+        if (dit && dah) {
+            if (!prev)
+                return t.dahDown < t.ditDown ? '-' : '.';
+            return *prev == '.' ? '-' : '.';
+        }
+        if (dit)
+            return '.';
+        if (dah)
+            return '-';
+        return std::nullopt;
+    };
+    sendBurst(choose);
+    return item.event;
+}
+
+PaddleKeyer::Event PaddleKeyer::sendUltimatic() {
+    const PaddleEventItem item = popEvent();
+    if (mode() != Mode::Ultimatic || item.event == Event::Close)
+        return item.event;
+    auto choose = [this](Element, std::optional<double>, std::optional<double>, std::optional<double> asOf) -> Element {
+        const Stamps t = paddleTimestamps(asOf);
+        const bool dit = t.ditDown > t.ditUp;
+        const bool dah = t.dahDown > t.dahUp;
+        if (dit && dah)
+            return t.dahDown > t.ditDown ? '-' : '.';
+        if (dit)
+            return '.';
+        if (dah)
+            return '-';
+        return std::nullopt;
+    };
+    sendBurst(choose);
+    return item.event;
+}
+
+void PaddleKeyer::sendBurst(const Chooser &choose) {
+    m_inBurst = true;
+    Element prev;
+    std::optional<double> prevLook;
+    std::optional<double> prevHeard;
+    bool anyElements = false;
+
+    auto finish = [&] {
+        if (anyElements) {
+            double delay = m_keyDownInitialDelayMs / 1000.0;
+            delay += m_sidetone.delay();
+            delay += *m_endElementTimestamp - m_elementKeyedStart;
+            delay += kUnmuteExtraDelay;
+            delayedUnmuteSidetoneMonitor(delay);
+        }
+        m_inBurst = false;
+    };
+
+    while (true) {
+        const bool firstElement = !prev;
+        Element elt;
+        if (firstElement) {
+            elt = choose(prev, prevLook, prevHeard, std::nullopt);
+            if (elt) {
+                const Stamps t = paddleTimestamps(std::nullopt);
+                m_firstElementClosedAt = *elt == '-' ? t.dahDown : t.ditDown;
+            }
+            if (!elt)
+                elt = placedFirstElement();
+            if (!elt)
+                elt = missedFirstElement(m_burstEndDue);
+            if (!elt) {
+                finish();
+                return;
+            }
+            m_burstEndDue.reset();
+        }
+        auto wanted = [&](double asOf) {
+            elt = choose(prev, prevLook, prevHeard, asOf);
+            return elt.has_value();
+        };
+        if (!startElement(firstElement, wanted)) {
+            finish();
+            return;
+        }
+        if (firstElement)
+            muteSidetoneMonitor();
+        const double eltTs = m_elementKeyedStart;
+        waitUntilSidetoneHeard();
+        const double eltHeardTs = firstElement ? eltTs : m_elementHeardStart;
+        const double readDue = m_elementReadDue ? *m_elementReadDue : m_clock.now();
+        const double eltLookTs = firstElement ? eltTs : readDue;
+        if (const Element again = choose(prev, prevLook, prevHeard, readDue))
+            elt = again;
+        anyElements = true;
+        endElement(*elt);
+        prev = elt;
+        prevLook = eltLookTs;
+        prevHeard = eltHeardTs;
+    }
+}
+
+PaddleKeyer::Element PaddleKeyer::missedFirstElement(std::optional<double> endedDue) {
+    if (!endedDue)
+        return std::nullopt;
+    std::vector<std::pair<double, Event>> history;
+    {
+        std::lock_guard lock(m_paddleMutex);
+        history.assign(m_history.begin(), m_history.end());
+    }
+    for (const auto &[timestamp, event] : history) {
+        if (timestamp <= *endedDue)
+            continue;
+        char elt;
+        if (event == Event::DitDown)
+            elt = '.';
+        else if (event == Event::DahDown)
+            elt = '-';
+        else
+            continue;
+        m_firstElementClosedAt = timestamp;
+        return elt;
+    }
+    return std::nullopt;
+}
+
+PaddleKeyer::Element PaddleKeyer::placedFirstElement() {
+    std::optional<FirstElement> scheduled;
+    {
+        std::lock_guard lock(m_firstElementMutex);
+        scheduled = m_firstElementScheduled;
+    }
+    if (!scheduled)
+        return std::nullopt;
+    if (!m_sidetone.cancelDown())
+        return scheduled->element;
+    takeFirstElement();
+    return std::nullopt;
+}
+
+double PaddleKeyer::wholeMs(double seconds) {
+    return std::ceil(seconds * 1000) / 1000;
+}
+
+std::optional<double> PaddleKeyer::sleepUntil(double when) {
+    const double wait = when - m_clock.now();
+    if (wait > 0) {
+        m_clock.sleep(wait);
+        return m_clock.now() - when;
+    }
+    return std::nullopt;
+}
+
+bool PaddleKeyer::startElement(bool firstElement, const std::function<bool(double)> &wanted) {
+    planSidetoneCatchup(firstElement);
+    double keyedStart;
+    double sidetoneStart;
+    long long ms;
+    if (firstElement) {
+        double closedAt;
+        if (const auto scheduled = takeFirstElement()) {
+            keyedStart = scheduled->keyedStart;
+            closedAt = scheduled->closedAt;
+            m_elementSidetoneQueued = true;
+        } else {
+            keyedStart = m_clock.now();
+            closedAt = m_firstElementClosedAt ? std::min(*m_firstElementClosedAt, keyedStart) : keyedStart;
+            m_elementSidetoneQueued = m_sidetone.scheduleDown(keyedStart);
+        }
+        m_firstElementClosedAt.reset();
+        m_elementTimestamp = keyedStart;
+        sidetoneStart = keyedStart;
+        ms = 0;
+        if (m_endElementTimestamp && *m_endElementTimestamp != 0) {
+            ms = pyRound((closedAt - *m_endElementTimestamp) * 1000);
+            if (!(0 <= ms && ms <= 5000))
+                ms = 0;
+        }
+    } else {
+        const double interElementSeconds = wholeMs(this->interElementSeconds());
+        const auto unshifted = std::make_pair(m_elementTimestamp, m_endElementTimestamp);
+        double gridShift = 0.0;
+        const double timeSinceEndElement = m_clock.now() - *m_endElementTimestamp;
+        if (timeSinceEndElement > interElementSeconds) {
+            gridShift = timeSinceEndElement - interElementSeconds + m_sidetoneDelayUsed;
+            *m_elementTimestamp += gridShift;
+            *m_endElementTimestamp += gridShift;
+        }
+        keyedStart = *m_elementTimestamp;
+        sidetoneStart = keyedStart - m_sidetoneDelayUsed;
+        if (!confirmElement(sidetoneStart, wanted, gridShift)) {
+            m_elementTimestamp = unshifted.first;
+            m_endElementTimestamp = unshifted.second;
+            return false;
+        }
+        sleepUntil(*m_endElementTimestamp + interElementSeconds);
+        ms = pyRound(this->interElementSeconds() * 1000);
+    }
+    m_lastKzdMs = ms;
+    send(fourDigits("KZD", ms));
+    m_elementKzdTimestamp = m_clock.now();
+    m_elementKeyedStart = keyedStart;
+    m_elementSidetoneStart = sidetoneStart;
+    return true;
+}
+
+void PaddleKeyer::planSidetoneCatchup(bool firstElement) {
+    const double sidetoneDelay = m_sidetone.delay();
+    if (firstElement) {
+        m_sidetoneDelayUsed = 0.0;
+    } else {
+        if (m_elementFirst && m_elementSidetoneQueued) {
+            if (const auto shift = m_sidetone.downShift())
+                m_sidetoneDelaySeen = *shift;
+        }
+        m_sidetoneDelayUsed += m_sidetonePendingStep + sidetoneDelay - m_sidetoneDelaySeen;
+    }
+    m_sidetoneDelaySeen = sidetoneDelay;
+    m_elementFirst = firstElement;
+    const double tolerableSidetoneLag = m_inherentSidetoneLag + kTolerableSidetoneLagMargin;
+    double behind = 0.0;
+    if (m_inherentSidetoneLag >= .001)
+        behind = std::max(0.0, sidetoneDelay - tolerableSidetoneLag - m_sidetoneDelayUsed);
+    m_sidetoneBehind = behind;
+}
+
+bool PaddleKeyer::confirmElement(double sidetoneStart, const std::function<bool(double)> &wanted, double gridShift) {
+    const std::optional<double> checkAt = m_sidetone.downDeadline(sidetoneStart);
+    const double wakeAt = checkAt ? *checkAt - kSidetoneEdgeMarginSeconds - m_wakeOverrun : *m_elementTimestamp;
+    const std::optional<double> overrun = sleepUntil(wakeAt);
+    const double readAt = m_clock.now();
+    if (checkAt && overrun)
+        m_wakeOverrun = std::min(kMaxWakeOverrun, std::max(*overrun, m_wakeOverrun * kWakeOverrunDecay));
+    const double due = std::min(readAt, wakeAt - gridShift);
+    if (!wanted(due)) {
+        m_burstEndDue = due;
+        m_elementSidetoneQueued = false;
+        return false;
+    }
+    const bool late = checkAt && readAt > *checkAt;
+    m_elementSidetoneQueued = m_sidetone.scheduleDown(sidetoneStart, late);
+    return true;
+}
+
+std::pair<double, double> PaddleKeyer::elementSidetone(double elementSeconds) const {
+    const double gapSeconds = wholeMs(interElementSeconds());
+    const double fraction = std::min(kMaxSidetoneCatchupFraction, m_sidetoneBehind / (elementSeconds + gapSeconds));
+    const double elementTrim = elementSeconds * fraction;
+    return {elementSeconds - elementTrim, elementTrim + gapSeconds * fraction};
+}
+
+double PaddleKeyer::upEdgeMargin(double ditSidetoneSeconds) const {
+    return std::max(0.0, ditSidetoneSeconds - m_sidetone.delay());
+}
+
+void PaddleKeyer::waitUntilSidetoneHeard() {
+    m_elementHeardStart = m_elementKeyedStart + m_sidetone.delay();
+    m_elementReadDue.reset();
+    if (!m_elementSidetoneQueued)
+        return;
+    const double giveUpAt = m_elementKzdTimestamp + ditSeconds();
+    double heardAt;
+    while (true) {
+        if (const auto h = m_sidetone.downHeardAt()) {
+            heardAt = *h;
+            m_elementHeardStart = heardAt;
+            break;
+        }
+        const double now = m_clock.now();
+        if (now >= giveUpAt)
+            return;
+        m_clock.sleep(std::min(kSidetoneHeardPollSeconds, giveUpAt - now));
+    }
+    const double ditSidetoneSeconds = elementSidetone(wholeMs(ditSeconds())).first;
+    double waitUntil = std::min(heardAt, giveUpAt);
+    if (const auto queueBy = m_sidetone.edgeDeadline(heardAt + ditSidetoneSeconds))
+        waitUntil = std::min(waitUntil, *queueBy - upEdgeMargin(ditSidetoneSeconds));
+    m_elementReadDue = waitUntil;
+    sleepUntil(waitUntil);
+}
+
+void PaddleKeyer::endElement(char element) {
+    const double elementSeconds = wholeMs(element == '-' ? dahSeconds() : ditSeconds());
+    const double sidetoneStart = m_elementSidetoneStart;
+    const auto [sidetoneSeconds, pendingStep] = elementSidetone(elementSeconds);
+    m_sidetonePendingStep = pendingStep;
+    m_sidetone.scheduleUp(sidetoneStart + sidetoneSeconds);
+    sleepUntil(m_elementKzdTimestamp + elementSeconds);
+    send(fourDigits("KZU", pyRound(elementSeconds * 1000)));
+    if ((m_lastKzdMs && *m_lastKzdMs == 0) || m_inherentSidetoneLag < .001)
+        measureInherentSidetoneLag();
+    m_endSidetoneTimestamp = sidetoneStart + sidetoneSeconds + m_sidetone.delay();
+    m_endElementTimestamp = m_elementKeyedStart + elementSeconds;
+    *m_elementTimestamp += elementSeconds + interElementSeconds();
+}
+
+void PaddleKeyer::measureInherentSidetoneLag() {
+    double lag = m_sidetone.delay();
+    if (m_inherentSidetoneLag >= .001)
+        lag = std::min(lag, m_inherentSidetoneLag);
+    if (const auto floor = m_sidetone.delayFloor())
+        lag = std::max(lag, *floor);
+    m_inherentSidetoneLag = lag;
+}
+
+// ---- K4 link and monitor ----
+
+void PaddleKeyer::send(const std::string &command) {
+    m_link.send(command);
+}
+
+void PaddleKeyer::muteSidetoneMonitor() {
+    if (!m_muteRadioMonitor)
+        return;
+    m_unmuteTimer.cancel();
+    bool wasMuted;
+    {
+        std::lock_guard lock(m_monitorMutex);
+        wasMuted = m_monitorMuted;
+        m_monitorMuted = true;
+    }
+    if (!wasMuted)
+        send("ML0000;");
+}
+
+void PaddleKeyer::unmuteSidetoneMonitor() {
+    char buf[16];
+    std::snprintf(buf, sizeof buf, "ML0%03d;", m_monitorLevel.load());
+    send(buf);
+    std::lock_guard lock(m_monitorMutex);
+    m_monitorMuted = false;
+}
+
+void PaddleKeyer::delayedUnmuteSidetoneMonitor(double delay) {
+    if (!m_muteRadioMonitor)
+        return;
+    m_unmuteTimer.cancel();
+    m_unmuteTimer.start(delay, [this] { unmuteSidetoneMonitor(); });
+}

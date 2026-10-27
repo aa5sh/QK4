@@ -13,7 +13,8 @@ RX and TX audio pipeline. Owned by `controllers/audiocontroller.cpp`.
 - `audioresampler.h` — header-only, Qt-free. Polyphase rational resampler for the capture rates `AudioDecimator` cannot take (44.1, 22.05, 16, 11.025, 8 kHz…). Before it, those microphones were refused and PTT keyed nothing (#180). Integer rates deliberately stay on `AudioDecimator` so their sound does not change. Tested in `tests/test_audioresampler.cpp`.
 - `micrate.h` — header-only. The wording the operator sees on screen (via `AudioEngine::micUnavailable`) when no microphone can be used, plus `isUsable()`, the same accept rule `setupAudioInput()` applies. Records why a mid-session rate change needs a restart. Tested in `tests/test_micrate.cpp`.
 - `rxoutputstage.h` — header-only, Qt-free. The last stage of RX playback: the 0 to +12 dB boost above the MAIN/SUB sliders (Options → Audio Output) and the soft limiter used when it is above 0 dB. Tested in `tests/test_rxoutputstage.cpp`.
-- `sidetonegenerator.{cpp,h}` — Real-time CW sidetone synthesis at 48kHz.
+- `sidetonegenerator.{cpp,h}` — Real-time CW sidetone synthesis at 48kHz. Being replaced by `sidetonescheduler` plus a mixer stage in the RX output (`docs/cw-keyer-port-plan.md`, phase 2).
+- `sidetonescheduler.{cpp,h}` — Sample-accurate sidetone edge placement, ported from K4-Companion (GPL-3.0): the keyer schedules "key down at T", the output callback places it on an exact frame against the block's play-out time. Delay fixed at the first edge (lead + block), never ratcheted by non-audio lateness, eased 1 ms/s in silence.
 
 ## Threading
 

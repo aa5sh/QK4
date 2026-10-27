@@ -443,6 +443,34 @@ target_include_directories(test_iambickeyer PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_iambickeyer Qt6::Core Qt6::Test)
 add_test(NAME IambicKeyerTests COMMAND test_iambickeyer)
 
+# PaddleKeyer — port of K4-Companion's keyer (Dale Farnsworth, GPL-3.0). Pure logic on a virtual
+# clock; see tests/paddlekeyersim.h and docs/cw-keyer-port-plan.md.
+set(QK4_PADDLEKEYER_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/hardware/paddlekeyer.cpp
+    ${CMAKE_SOURCE_DIR}/src/audio/sidetonescheduler.cpp
+)
+add_executable(test_paddlekeyersweeps test_paddlekeyersweeps.cpp ${QK4_PADDLEKEYER_SOURCES})
+target_include_directories(test_paddlekeyersweeps PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_compile_definitions(test_paddlekeyersweeps PRIVATE
+    QK4_PADDLEKEYER_DATA_DIR="${CMAKE_SOURCE_DIR}/tests/data/paddlekeyer")
+target_link_libraries(test_paddlekeyersweeps Qt6::Core Qt6::Test)
+add_test(NAME PaddleKeyerSweepsTests COMMAND test_paddlekeyersweeps)
+
+add_executable(test_paddlekeyer test_paddlekeyer.cpp ${QK4_PADDLEKEYER_SOURCES})
+target_include_directories(test_paddlekeyer PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_paddlekeyer Qt6::Core Qt6::Test)
+add_test(NAME PaddleKeyerTests COMMAND test_paddlekeyer)
+
+add_executable(test_seriallinepoller test_seriallinepoller.cpp ${CMAKE_SOURCE_DIR}/src/hardware/seriallinepoller.cpp)
+target_include_directories(test_seriallinepoller PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_seriallinepoller Qt6::Core Qt6::Test)
+add_test(NAME SerialLinePollerTests COMMAND test_seriallinepoller)
+
+add_executable(test_sidetonescheduler test_sidetonescheduler.cpp ${CMAKE_SOURCE_DIR}/src/audio/sidetonescheduler.cpp)
+target_include_directories(test_sidetonescheduler PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_sidetonescheduler Qt6::Core Qt6::Test)
+add_test(NAME SidetoneSchedulerTests COMMAND test_sidetonescheduler)
+
 # KPOD+ USB worker — pure-logic tests (command builders, EP02 trim, response decoder)
 add_executable(test_kpodplususbworker test_kpodplususbworker.cpp
     ${CMAKE_SOURCE_DIR}/src/hardware/kpodplususbworker.cpp

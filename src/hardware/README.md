@@ -15,7 +15,10 @@ USB / serial / MIDI device wrappers. Owned by `controllers/hardwarecontroller.cp
 - `kpodudevworker.{cpp,h}` — Linux-only udev poll loop for KPOD hotplug detection, wired to `QThread::started` and run until `stop()`.
 - `halikeyv14worker.{cpp,h}` — V1.4 hardware-protocol worker (serial). One `monitorLoop()` with three platform branches: `TIOCMIWAIT` + confirming re-read on Linux, 1 ms high-resolution-timer poll of `GetCommModemStatus` on Windows, 500 µs `usleep` poll of `TIOCMGET` on macOS. `DEBOUNCE_COUNT=2` on all three.
 - `halikeymidiworker.{cpp,h}` — MIDI-variant worker. Notes 20 = dit, 21 = dah, 31 = PTT. Implements the MoMIDI extended protocol (CC ch 0 = version detect; CC elsewhere = timing MSB; note velocity = timing LSB). **The MoMIDI timestamps are parsed but currently discarded** — `m_pendingTimeMsb` is never read, and the worker emits plain `bool` edges.
-- `iambickeyer.{cpp,h}` — Iambic A/B CW keyer state machine. `HighPriority` thread, atomic paddle state.
+- `iambickeyer.{cpp,h}` — Iambic A/B CW keyer state machine. `HighPriority` thread, atomic paddle state. Being replaced by `paddlekeyer` (see `docs/cw-keyer-port-plan.md`).
+- `paddlekeyer.{cpp,h}` — Port of K4-Companion's keyer (Dale Farnsworth, GPL-3.0): Iambic A/B, Plain Iambic, Ultimatic and straight-key passthrough, sent as timed `KZD`/`KZU`. Paddle edges timestamped at capture (MoMIDI's own clock, the 1 ms serial poll); decisions read the paddles as of when they were due. Pure logic behind `keyertiming.h` seams; pinned by Dale's 554 recorded runs (`tests/test_paddlekeyersweeps.cpp`).
+- `keyertiming.h` — The Clock / Link / OneShotTimer seams the keyer runs against, and `pyRound` (half-to-even, as Python's `round`).
+- `seriallinepoller.{cpp,h}` — Serial paddle line-change detection for the 1 ms poll: rest state at open is not an edge, 20 ms straight-key debounce, per-line deltas.
 
 ## Threading
 
