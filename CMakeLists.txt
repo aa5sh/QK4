@@ -246,6 +246,7 @@ set(SOURCES
     src/hardware/halikeymidiworker.cpp
     src/hardware/paddlekeyer.cpp
     src/hardware/keyerruntime.cpp
+    src/hardware/seriallinepoller.cpp
     third_party/rtmidi/RtMidi.cpp
 )
 
@@ -384,6 +385,7 @@ set(HEADERS
     src/hardware/paddlekeyer.h
     src/hardware/keyertiming.h
     src/hardware/keyerruntime.h
+    src/hardware/seriallinepoller.h
 )
 
 if(UNIX AND NOT APPLE)

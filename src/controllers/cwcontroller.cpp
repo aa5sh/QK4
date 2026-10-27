@@ -5,6 +5,7 @@
 #include "audio/sidetonegenerator.h"
 #include "connectioncontroller.h"
 #include "hardware/halikeydevice.h"
+#include "hardware/keyerruntime.h"
 #include "hardware/kpodplusdevice.h"
 #include "hardware/paddlekeyer.h"
 #include "models/radiostate.h"
@@ -81,8 +82,10 @@ CwController::CwController(RadioState *radioState, ConnectionController *connect
         m_keyer->releasePaddles();
     });
     connect(settings, &RadioSettings::halikeyKeyerModeChanged, this, [this](int) { applyMode(); });
+    m_halikey->setStraightKey(settings->halikeyStraightKey());
     connect(settings, &RadioSettings::halikeyStraightKeyChanged, this, [this](bool straight) {
         m_keyer->setStraightKeying(straight);
+        m_halikey->setStraightKey(straight);
         applyReversal();
     });
     connect(settings, &RadioSettings::halikeyDitMemoryDelayChanged, this,
@@ -110,10 +113,13 @@ CwController::CwController(RadioState *radioState, ConnectionController *connect
     // =========================================================================
     // HaliKey → keyer
     // =========================================================================
-    // V1.4 serial: one confirmed sample per change, on the worker thread (invariant 1).
+    // V1.4 serial: one edge per change from the worker's 1 ms poll, on the worker thread
+    // (invariant 1). The poller has already applied rest state, straight-key debounce and the
+    // per-line delta.
     connect(
-        m_halikey, &HalikeyDevice::lineStateChanged, this,
-        [this](bool dit, bool dah, bool ptt) { onLines(dit, dah, ptt); }, Qt::DirectConnection);
+        m_halikey, &HalikeyDevice::paddleChanged, this,
+        [this](bool dah, bool asserted, double deltaTime) { onPaddle(dah, asserted, deltaTime); },
+        Qt::DirectConnection);
 
     // MIDI: raw messages with RtMidi's delta, on RtMidi's thread (invariant 1). MoMIDI's own time
     // stamps are decoded by the keyer.
@@ -122,13 +128,8 @@ CwController::CwController(RadioState *radioState, ConnectionController *connect
             m_keyer->midiMessage(status, note, velocity, deltaTime);
     });
 
-    // A port opening or closing starts line tracking afresh; a lost device releases the key
-    // (a held paddle's release would otherwise never arrive).
-    connect(m_halikey, &HalikeyDevice::connected, this, [this]() { m_resetLines.store(true); });
-    connect(m_halikey, &HalikeyDevice::disconnected, this, [this]() {
-        m_resetLines.store(true);
-        m_keyer->releasePaddles();
-    });
+    // A lost device releases the key: a held paddle's release would otherwise never arrive.
+    connect(m_halikey, &HalikeyDevice::disconnected, this, [this]() { m_keyer->releasePaddles(); });
 
     // =========================================================================
     // KPOD+ EP02 keyer data routing — unchanged
@@ -190,37 +191,15 @@ void CwController::updateInhibit() {
     m_keyer->setInhibited(inhibited);
 }
 
-void CwController::onLines(bool dit, bool dah, bool ptt) {
+void CwController::onPaddle(bool dah, bool asserted, double deltaTime) {
     if (!m_cachedIsV14.load(std::memory_order_acquire))
         return; // MIDI reaches the keyer through the raw sink
-    const double now = m_clock.now();
-    if (m_resetLines.exchange(false)) {
-        m_lastDit = false;
-        m_lastDah = false;
-        m_lastDitChange = 0;
-        m_lastDahChange = 0;
-    }
-    // V1.4 firmware reports the dit lever on CTS, which lineStateChanged carries as `ptt`.
-    bool ditLever = ptt;
-    bool dahLever = dah;
-    (void)dit;
     if (m_reversed.load(std::memory_order_acquire))
-        std::swap(ditLever, dahLever);
-    // Dit first, as K4-Companion's serial poller reports them. Each carries the time since that
-    // line's previous change, which a straight key's KZD/KZU are built from.
-    if (ditLever != m_lastDit) {
-        const double delta = m_lastDitChange > 0 ? now - m_lastDitChange : 0;
-        m_lastDit = ditLever;
-        m_lastDitChange = now;
-        m_keyer->paddleEvent(ditLever ? PaddleKeyer::Event::DitDown : PaddleKeyer::Event::DitUp, delta);
-    }
-    if (dahLever != m_lastDah) {
-        const double delta = m_lastDahChange > 0 ? now - m_lastDahChange : 0;
-        m_lastDah = dahLever;
-        m_lastDahChange = now;
-        if (!m_keyer->straightKeying())
-            m_keyer->paddleEvent(dahLever ? PaddleKeyer::Event::DahDown : PaddleKeyer::Event::DahUp, delta);
-    }
+        dah = !dah;
+    if (dah)
+        m_keyer->paddleEvent(asserted ? PaddleKeyer::Event::DahDown : PaddleKeyer::Event::DahUp, deltaTime);
+    else
+        m_keyer->paddleEvent(asserted ? PaddleKeyer::Event::DitDown : PaddleKeyer::Event::DitUp, deltaTime);
 }
 
 void CwController::setKeyDownInitialDelay(int ms) {

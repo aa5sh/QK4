@@ -23,11 +23,11 @@ struct HaliKeyPortInfo {
  *        business — see CwController; this class only debounces and forwards.
  *
  * Debounce responsibility lives in the worker:
- *   - V1.4 serial worker confirms each transition across ≥2 reads before emitting. The read
- *     cadence is platform-specific: blocking TIOCMIWAIT plus one 500 µs confirming re-read on
- *     Linux, a 1 ms high-resolution-timer poll of GetCommModemStatus on Windows, and a 2 kHz
- *     (500 µs) usleep poll on macOS. That count-based filter is the only contact-bounce
- *     defense for the serial path.
+ *   - V1.4 serial worker polls the lines every 1 ms on every platform through SerialLinePoller
+ *     (port of K4-Companion's serial path) and emits paddleChanged: paddles on the first poll
+ *     that sees a change, a straight key after 20 ms without one, and the line state at open
+ *     taken as rest. The keyer reads paddles from time-stamped history, so a bounce inside an
+ *     element changes nothing on the air.
  *   - MIDI worker emits firmware-debounced Note On/Off events as-is. There is no
  *     electrical bounce in a MIDI message stream.
  *
@@ -73,6 +73,9 @@ public:
     // CwController points this at the keyer. Thread-safe; may be set before or after openPort().
     void setMidiSink(std::function<void(int status, int note, int velocity, double deltaTime)> sink);
 
+    // Straight key / external keyer on the dit line (serial: 20 ms debounce, dah line ignored).
+    void setStraightKey(bool straight);
+
 signals:
     void connected();
     void disconnected();
@@ -81,6 +84,10 @@ signals:
     // Debounced input lines, emitted as one sample whenever any of them changes. See
     // HaliKeyWorkerBase::lineStateChanged for why the three travel together.
     void lineStateChanged(bool dit, bool dah, bool ptt);
+
+    // V1.4 serial: one paddle line changed. See HaliKeyWorkerBase::paddleChanged. Emitted on the
+    // worker thread.
+    void paddleChanged(bool dah, bool asserted, double deltaTime);
 
 private:
     void onRawLines(bool dit, bool dah, bool ptt);
@@ -92,6 +99,7 @@ private:
     QString m_portName;
     bool m_connected = false;
     int m_deviceType = 0; // 0 = V1.4 serial, 1 = MIDI. Set via ctor / setDeviceType.
+    std::atomic<bool> m_straightKey{false};
 
     // Confirmed paddle state — written from whichever worker thread delivered the raw event
     // (RtMidi callback on the MIDI variant, monitor thread on the V1.4 variant). Same-direction

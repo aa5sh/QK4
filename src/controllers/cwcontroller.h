@@ -4,8 +4,6 @@
 #include <QObject>
 #include <atomic>
 
-#include "hardware/keyerruntime.h"
-
 class RadioState;
 class ConnectionController;
 class PaddleKeyer;
@@ -43,7 +41,7 @@ class KpodPlusDevice;
 //   src                                  | dst                         | thread
 //   -------------------------------------|-----------------------------|-----------------------------
 //   PaddleKeyer → FunctionLink            | TcpClient::sendCAT          | keyer → I/O (sendCAT queues)
-//   HalikeyDevice::lineStateChanged (V1.4)| PaddleKeyer::paddleEvent    | runs ON the HaliKey worker
+//   HalikeyDevice::paddleChanged (V1.4)  | PaddleKeyer::paddleEvent    | runs ON the HaliKey worker
 //   HalikeyDevice MIDI sink (MIDI)       | PaddleKeyer::midiMessage    | runs ON RtMidi's thread
 //   RadioState keyer speed/KP/pitch/ML/KZL| keyer + sidetone + KPOD+    | main
 //   RadioState::modeChanged, radioReady,  | PaddleKeyer::setInhibited   | main
@@ -114,7 +112,7 @@ private:
     void applyMode();
     void applyReversal();
     void updateInhibit();
-    void onLines(bool dit, bool dah, bool ptt);
+    void onPaddle(bool dah, bool asserted, double deltaTime);
 
     RadioState *m_radioState;
     ConnectionController *m_connection;
@@ -132,14 +130,6 @@ private:
     std::atomic<bool> m_cachedIsV14{true};
     // The K4's KP paddle orientation is Reverse. See invariant 2.
     std::atomic<bool> m_reversed{false};
-
-    // V1.4 line edge detection (HaliKey worker thread only, reset when the port opens or closes).
-    bool m_lastDit = false;
-    bool m_lastDah = false;
-    double m_lastDitChange = 0;
-    double m_lastDahChange = 0;
-    std::atomic<bool> m_resetLines{false};
-    SteadyKeyerClock m_clock;
 };
 
 #endif // CWCONTROLLER_H

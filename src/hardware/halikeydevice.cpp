@@ -25,6 +25,12 @@ void HalikeyDevice::setMidiSink(std::function<void(int, int, int, double)> sink)
     m_midiSink->set(std::move(sink));
 }
 
+void HalikeyDevice::setStraightKey(bool straight) {
+    m_straightKey.store(straight, std::memory_order_release);
+    if (m_worker)
+        m_worker->setStraightKey(straight);
+}
+
 HalikeyDevice::~HalikeyDevice() {
     closePort();
 }
@@ -70,6 +76,9 @@ bool HalikeyDevice::openPort(const QString &portName) {
     // from that thread. Downstream connections are independently safe (CwController's handler only
     // touches atomics and queues to the keyer thread).
     connect(m_worker, &HaliKeyWorkerBase::lineStateChanged, this, &HalikeyDevice::onRawLines, Qt::DirectConnection);
+    // Straight through, on the worker thread: the keyer stamps the edge on arrival.
+    connect(m_worker, &HaliKeyWorkerBase::paddleChanged, this, &HalikeyDevice::paddleChanged, Qt::DirectConnection);
+    m_worker->setStraightKey(m_straightKey.load(std::memory_order_acquire));
     connect(m_worker, &HaliKeyWorkerBase::portOpened, this, [this]() {
         m_connected = true;
         emit connected();

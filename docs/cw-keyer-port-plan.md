@@ -8,10 +8,11 @@
   `SidetoneScheduler`, still on its own sink (phase 2 moves it into the RX output). The HaliKey page
   has the keyer mode, input type, dit memory delay and monitor mute. Threaded test is clean under
   ThreadSanitizer.
-- Deferred: `SerialLinePoller` is not wired. The V1.4 worker's existing per-platform loops (1–2 ms
-  confirm) still feed the keyer, which keeps its hardware-verified Windows/Linux behaviour. The
-  catch is that a **serial straight key has no 20 ms debounce yet**, so contact bounce could key
-  short extra elements. A MIDI straight key is debounced by its firmware.
+- Serial path follows Dale's too: the V1.4 worker polls every 1 ms on every platform through
+  `SerialLinePoller` (rest state at open, 20 ms straight-key debounce, per-line deltas). This
+  replaced the per-platform loops, including Linux's `TIOCMIWAIT`. The Windows 1 ms high-resolution
+  timer, the DTR/RTS power and the native port handling are unchanged. Bench this on all three
+  OSes; it touches the hardware-verified Windows stuck-paddle fix's loop.
 **Source:** Dale Farnsworth's [K4-Companion](https://github.com/DaleFarnsworth/K4-Companion),
 commit `040f711` (v2.2), GPL-3.0, the same licence as QK4. Ported files carry an SPDX header and
 credit him.

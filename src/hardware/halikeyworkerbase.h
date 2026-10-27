@@ -58,7 +58,12 @@ public:
     explicit HaliKeyWorkerBase(const QString &portName, QObject *parent = nullptr);
     ~HaliKeyWorkerBase() override = default;
 
-    virtual void prepareShutdown() {} // Override for platform-specific unblocking (e.g. Linux TIOCMIWAIT)
+    virtual void prepareShutdown() {} // Override for platform-specific unblocking
+
+    // A straight key (or external keyer) on the dit line rather than paddles. The serial worker
+    // debounces a straight key for 20 ms and ignores the dah line. Thread-safe; takes effect on
+    // the next poll.
+    void setStraightKey(bool straight) { m_straightKey.store(straight, std::memory_order_release); }
 
 public slots:
     virtual void start() = 0; // Called when thread starts
@@ -78,12 +83,19 @@ signals:
     // it carries its last-known values for the lines that did not change. That still gives the
     // keyer a coherent pair and one uniform interface for both transports.
     void lineStateChanged(bool dit, bool dah, bool ptt);
+
+    // One paddle line changed (serial worker): which lever, its new state, and the time in seconds
+    // since that line's previous reported change (0 the first time). Emitted on the worker thread
+    // the moment the 1 ms poll sees it. Port of K4-Companion's serial callback.
+    void paddleChanged(bool dah, bool asserted, double deltaTime);
+
     void errorOccurred(const QString &error);
     void portOpened();
 
 protected:
     QString m_portName;
     std::atomic<bool> m_running{false};
+    std::atomic<bool> m_straightKey{false};
 };
 
 #endif // HALIKEYWORKERBASE_H
