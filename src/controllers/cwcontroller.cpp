@@ -147,7 +147,11 @@ CwController::~CwController() {
     // calling HardwareController::shutdownDevices() while ConnectionController is still alive; this
     // is the second line of defence.
     disconnect(this);
-    m_halikey->setMidiSink(nullptr);
+    // WHY the MIDI sink is NOT cleared here: HardwareController, and with it the HaliKey, is
+    // destroyed before this (construction order), so m_halikey dangles by now. Clearing it here
+    // crashed QK4 on every quit. Nothing needs it cleared: shutdownDevices() closes the HaliKey,
+    // which stops RtMidi's callbacks, before either object goes away, and the sink dies with the
+    // device.
 }
 
 void CwController::applySpeed() {
