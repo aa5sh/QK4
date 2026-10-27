@@ -49,8 +49,7 @@ class KpodPlusDevice;
 //   src                                  | dst                | thread hop                | conn
 //   -------------------------------------|--------------------|---------------------------|--------
 //   RadioState::keyerSpeedChanged        | sidetone + keyer + | main -> sidetone thread   | invokeMethod queued
-//                                        | KZL to K4 +        | main -> keyer thread      |
-//                                        | KPOD+ setKeyerSpd  | main -> I/O thread (sendCAT)
+//                                        | KPOD+ setKeyerSpd  | main -> keyer thread      |
 //   RadioState::keyerPaddleChanged       | keyer mode/reverse | main -> keyer thread      | invokeMethod queued
 //                                        | + KPOD+ setKeyer-  |                           |
 //                                        | Params             |                           |
@@ -183,7 +182,7 @@ class KpodPlusDevice;
 //   - Sidetone audible during keying, gated correctly when KPOD+ active
 //   - Hold a paddle in CW, switch mode mid-press to SSB; keyer cleanly
 //     stops, no stuck KZ
-//   - WPM changes during keying: KZL syncs correctly to K4
+//   - WPM changes during keying: the K4's KZL is left as the operator set it
 //   - KPOD+ presence detection gates IambicKeyer correctly (no double
 //     keying when KPOD+ plug-in event arrives mid-paddle)
 //   - ASAN clean (debug build with QK4_TESTS_SANITIZE=ON)

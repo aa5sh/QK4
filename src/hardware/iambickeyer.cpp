@@ -250,8 +250,7 @@ void IambicKeyer::enterElement(bool isDit) {
     // element strings drift slow (~1 ms/element on Windows) and the KZ stream + sidetone
     // inherit the jitter. Chaining on an absolute ns deadline lets element N's overshoot
     // shorten element N+1's arm time instead — rounding errors never accumulate. A WPM
-    // change mid-chain extends the grid by the new interval from the current boundary,
-    // matching the K4's KZL semantics.
+    // change mid-chain extends the grid by the new interval from the current boundary.
     const qint64 intervalNs = qint64(intervalMs) * 1'000'000;
     const qint64 now = m_pressClock.nsecsElapsed();
     if (fromIdle)

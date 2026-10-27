@@ -1340,12 +1340,6 @@ void MainWindow::onRadioReady() {
     m_connectionController->sendCAT("PS;");   // Remote power state - not in RDY, drives the status-bar power button
     // Note: ML and KP commands come in RDY; dump - no need to query
 
-    // Sync element length with K4 server (sent in RDY dump as KZLnn)
-    if (m_radioState->keyerSpeed() > 0) {
-        int ditMs = RadioUtils::ditMsForWpm(m_radioState->keyerSpeed());
-        m_connectionController->sendCAT(QString("KZL%1;").arg(ditMs, 2, 10, QChar('0')));
-    }
-
     // Create synthetic "Display FPS" menu item (will update from radio echo)
     m_menuController->addSyntheticDisplayFpsItem(15);
 

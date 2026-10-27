@@ -115,8 +115,16 @@ Sidebar — not directly a protocol *quirk*, but non-obvious enough to belong he
 | `KZ-;` | dah element (3 dits on) |
 | `KZ ;` | letter space |
 | `KZP####;` | pause N ms before the next element (fist preservation) |
-| `KZL##;` | element length in ms (`1200 / WPM`) |
+| `KZLnnnn;` | remote paddle **key-down initial delay**, 0–1000 ms, default 80. The K4 holds a remote key-down this long before transmitting, so the timed commands that follow arrive in time: a jitter buffer. **The operator's setting — QK4 reads it (RDY dump) and never writes it.** It is *not* the element length |
 | `KZD####;` / `KZU####;` | raw key-down / key-up for N ms. K4/0 uses this form for real-time paddle forwarding; QK4 does not |
+
+**`KZL` was misread until 2026-10-27.** From `0bd443d` QK4 sent `KZL` = 1200 / WPM, two digits,
+on every connect and every speed change, taking it for the element length. That set the K4's
+remote-keying delay buffer to 30 ms at 40 WPM, shrinking it as the speed rose. The K4 stores the
+value, so a radio QK4 has keyed still holds the last one written. The golden capture of
+2026-04-20 shows `KZL60;` at `KS020`. Reset it once on the radio (`KZL0080;` or the K4 menu).
+Reference: Elecraft K4 CAT, "KZL (Remote Paddle / Key-Down Initial Delay)". K4-Companion reads
+it the same way.
 
 **The byte between `Z` and `;` in the letter-space form is 0x20, a literal SPACE.** Confirmed by
 hexdump of EP02 traffic from a live KPOD+. Elecraft's `KPodKeyerInterface.pdf` v1.00 renders it as

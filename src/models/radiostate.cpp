@@ -636,6 +636,8 @@ void RadioState::registerCommandHandlers() {
     m_commandHandlers.append({"PS", [this](const QString &c) { PowerHandlers::handlePS(m_powerState, *this, c); }});
     m_commandHandlers.append({"KS", [this](const QString &c) { handleKS(c); }});
     m_commandHandlers.append({"KP", [this](const QString &c) { handleKP(c); }});
+    m_commandHandlers.append(
+        {"KZL", [this](const QString &c) { ModeFilterHandlers::handleKZL(m_modeFilterState, *this, c); }});
     m_commandHandlers.append({"SM", [this](const QString &c) { handleSM(c); }});
     m_commandHandlers.append({"PO", [this](const QString &c) { handlePO(c); }});
     m_commandHandlers.append({"TM", [this](const QString &c) { handleTM(c); }});

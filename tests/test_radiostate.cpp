@@ -224,6 +224,30 @@ private slots:
         QCOMPARE(rs.keyerSpeed(), 20);
     }
 
+    // KZL: remote paddle key-down initial delay, KZLnnnn; 0-1000 ms. Read, never written.
+    void testKeyDownInitialDelay() {
+        RadioState rs;
+        QSignalSpy spy(&rs, &RadioState::keyDownInitialDelayChanged);
+        QCOMPARE(rs.keyDownInitialDelayMs(), -1);
+        rs.parseCATCommand("KZL0080;");
+        QCOMPARE(rs.keyDownInitialDelayMs(), 80);
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toInt(), 80);
+        rs.parseCATCommand("KZL0080;"); // unchanged: no emit
+        QCOMPARE(spy.count(), 1);
+        // The RDY dump has been seen sending it unpadded.
+        rs.parseCATCommand("KZL60;");
+        QCOMPARE(rs.keyDownInitialDelayMs(), 60);
+        rs.parseCATCommand("KZL1000;");
+        QCOMPARE(rs.keyDownInitialDelayMs(), 1000);
+        // Out of range or malformed: ignored.
+        rs.parseCATCommand("KZL1001;");
+        rs.parseCATCommand("KZLabc;");
+        rs.parseCATCommand("KZL;");
+        QCOMPARE(rs.keyDownInitialDelayMs(), 1000);
+        QCOMPARE(spy.count(), 3);
+    }
+
     // Streaming Latency (SL command)
     void testStreamingLatency() {
         RadioState rs;
@@ -2909,6 +2933,7 @@ private slots:
         rs.parseCATCommand("RG-020;");
         rs.parseCATCommand("SQ010;");
         rs.parseCATCommand("KS020;");
+        rs.parseCATCommand("KZL0080;");
         rs.parseCATCommand("AN3;");
         rs.parseCATCommand("AT1;");
         rs.parseCATCommand("RO+0500;");
@@ -2947,6 +2972,7 @@ private slots:
         QCOMPARE(rs.rfGain(), -999);
         QCOMPARE(rs.squelchLevel(), -1);
         QCOMPARE(rs.keyerSpeed(), -1);
+        QCOMPARE(rs.keyDownInitialDelayMs(), -1);
         QCOMPARE(rs.keyingWeight(), -1);
         QCOMPARE(rs.monitorLevelCW(), -1);
         // Antenna / ATU

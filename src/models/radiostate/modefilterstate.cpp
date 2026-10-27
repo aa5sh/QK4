@@ -15,6 +15,7 @@ void ModeFilterState::reset() {
     ifShiftB = -1;
     cwPitch = -1;
     keyerSpeed = -1;
+    keyDownInitialDelayMs = -1;
     iambicMode = QChar();
     paddleOrientation = QChar();
     keyingWeight = -1;
@@ -78,6 +79,21 @@ void handleKS(ModeFilterState &state, RadioState &owner, const QString &cmd) {
     if (ok && state.keyerSpeed != wpm) {
         state.keyerSpeed = wpm;
         emit owner.keyerSpeedChanged(state.keyerSpeed);
+    }
+}
+
+void handleKZL(ModeFilterState &state, RadioState &owner, const QString &cmd) {
+    // KZLnnnn; nnnn = 0-1000 ms. WHY any width: the RDY dump has been seen sending it unpadded
+    // ("KZL60;", tests/golden capture 2026-04-20), so the digits are taken as they come.
+    if (cmd.length() <= 3)
+        return;
+    bool ok;
+    const int ms = cmd.mid(3).toInt(&ok);
+    if (!ok || ms < 0 || ms > 1000)
+        return;
+    if (state.keyDownInitialDelayMs != ms) {
+        state.keyDownInitialDelayMs = ms;
+        emit owner.keyDownInitialDelayChanged(ms);
     }
 }
 

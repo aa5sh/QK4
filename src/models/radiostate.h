@@ -89,6 +89,7 @@ public:
     int shiftBHz() const { return m_modeFilterState.ifShiftB * 10; }
     int cwPitch() const { return m_modeFilterState.cwPitch; }
     int keyerSpeed() const { return m_modeFilterState.keyerSpeed; }
+    int keyDownInitialDelayMs() const { return m_modeFilterState.keyDownInitialDelayMs; }
 
     // Keyer paddle (KP) — backed by m_modeFilterState.
     QChar iambicMode() const { return m_modeFilterState.iambicMode; }
@@ -573,14 +574,15 @@ signals:
     void ritXitChanged(bool ritEnabled, bool xitEnabled, int offset);
     void ritXitBChanged(bool ritEnabled, int offset);
     void messageBankChanged(int bank);
-    void processingChanged();         // NB, NR, PA, RA, GT changes for Main RX
-    void processingChangedB();        // NB, NR, PA, RA, GT changes for Sub RX
-    void refLevelChanged(int level);  // Panadapter reference level (#REF command)
-    void scaleChanged(int scale);     // Panadapter scale (#SCL command, 10-150) - GLOBAL, applies to both
-    void spanChanged(int spanHz);     // Panadapter span (#SPN command)
-    void refLevelBChanged(int level); // Sub RX panadapter reference level (#REF$ command)
-    void spanBChanged(int spanHz);    // Sub RX panadapter span (#SPN$ command)
-    void keyerSpeedChanged(int wpm);  // CW keyer speed
+    void processingChanged();                // NB, NR, PA, RA, GT changes for Main RX
+    void processingChangedB();               // NB, NR, PA, RA, GT changes for Sub RX
+    void refLevelChanged(int level);         // Panadapter reference level (#REF command)
+    void scaleChanged(int scale);            // Panadapter scale (#SCL command, 10-150) - GLOBAL, applies to both
+    void spanChanged(int spanHz);            // Panadapter span (#SPN command)
+    void refLevelBChanged(int level);        // Sub RX panadapter reference level (#REF$ command)
+    void spanBChanged(int spanHz);           // Sub RX panadapter span (#SPN$ command)
+    void keyerSpeedChanged(int wpm);         // CW keyer speed
+    void keyDownInitialDelayChanged(int ms); // KZL remote key-down delay, 0-1000 ms
     void keyerPaddleChanged(QChar iambic, QChar paddle, int weight); // KP keyer paddle settings
     void qskDelayChanged(int delay);                                 // QSK/VOX delay in 10ms increments
     void rfGainChanged(int gain);                                    // RF gain
