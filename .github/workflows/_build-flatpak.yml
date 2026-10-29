@@ -35,7 +35,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     container:
-      image: ghcr.io/flathub-infra/flatpak-github-actions:kde-6.10
+      # WHY the digest: the kde-6.10 tag is rebuilt in place, so the tag alone does not say which
+      # image built a given bundle. The tag stays for readability and for scripts/check-qt-version.sh,
+      # which requires its X.Y to match .github/qt-version (a runtime branch cannot pin the patch).
+      # To refresh, resolve the tag's current index digest on ghcr.io and replace the sha256.
+      image: ghcr.io/flathub-infra/flatpak-github-actions:kde-6.10@sha256:62920cbbb53c4e047801562c0475d70393482de9698dfeac740aad99e6c674e6
       # flatpak-builder needs to create its own sandboxes.
       options: --privileged
     outputs:
