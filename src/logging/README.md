@@ -104,6 +104,18 @@ category that no rule or Options switch can address. The same test enforces it.
 | `qk4.spectrum.minipan` | `lcSpectrumMiniPan` | mini-pan renderer | `dsp.minipan` |
 | `qk4.spectrum.diag` | `lcSpectrumDiag` | waterfall tier and geometry diagnostics | `qk4.pan.diag` |
 
+## What a log contains, and what it never does
+
+A log file holds what the app did: connection attempts with the K4's host and port, audio device
+names, CAT commands when that bench item is on, the startup macro text and DX cluster callsigns. It
+never holds a radio password, PSK or PSK identity:
+
+- `RadioSettings` registers every saved password and PSK identity with `Logging::registerSecret()`
+  when it loads or edits a radio, and the writer replaces any occurrence with `<redacted>` (strings
+  shorter than 4 characters are not redacted).
+- `LogCategoriesTests` fails any log statement that streams an identifier ending in `password`,
+  `psk`, `secret`, `identity` or `presharedkey`. Log `.isEmpty()` or `.size()` of it instead.
+
 ## Turning debug on
 
 Options → Diagnostics, or on the command line:

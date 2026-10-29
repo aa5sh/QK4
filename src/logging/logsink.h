@@ -66,6 +66,11 @@ public:
     // The handler body. Safe from any thread, at any time.
     void post(QtMsgType type, const QMessageLogContext &context, const QString &message);
 
+    // Every later occurrence of `secret` is written as "<redacted>", in the file and on the console.
+    // Strings shorter than MinSecretLength are ignored: redacting "K4" would wreck every line.
+    static constexpr int MinSecretLength = 4;
+    void registerSecret(const QString &secret);
+
     // Real-time producers never wait for the queue lock and never wake the writer.
     static void markRealtimeThread();
     static bool isRealtimeThread();
@@ -85,6 +90,11 @@ private:
     QString filePathLocked(int index) const;
     void mirror(const LogRecord &record);
     QString format(const LogRecord &record) const;
+
+    QString redact(const QString &message) const;
+
+    mutable std::mutex m_secretMutex;
+    QStringList m_secrets;
 
     LogQueue m_queue;
     std::vector<LogRecord> m_spare;
@@ -117,6 +127,8 @@ LogSink *sink();
 // reach the console.
 void shutdown();
 void markRealtimeThread();
+// Registers with the installed sink; does nothing before install().
+void registerSecret(const QString &secret);
 // Marks `thread` real-time as it starts, before anything connected to started() later runs.
 // Connect it before any started() connection that enters a loop.
 void markRealtimeOnStart(QThread *thread);

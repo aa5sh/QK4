@@ -1,5 +1,6 @@
 #include "radiosettings.h"
 #include "logging/logrules.h"
+#include "logging/logsink.h"
 #include "audio/rxoutputstage.h"
 #include "ui/styling/k4constants.h"
 #include "utils/windowfit.h"
@@ -870,6 +871,8 @@ quint16 RadioSettings::defaultRadioPort(bool useTls) {
 }
 
 RadioEntry RadioSettings::sanitized(RadioEntry radio) {
+    Logging::registerSecret(radio.password);
+    Logging::registerSecret(radio.identity);
     radio.port = remotePort(radio.port, defaultRadioPort(radio.useTls));
     return radio;
 }
@@ -895,6 +898,8 @@ void RadioSettings::load() {
         entry.streamingLatency = m_settings.value("streamingLatency", 3).toInt(); // Default SL3
         entry.displayFps = m_settings.value("displayFps", 15).toInt();            // Default 15 FPS
         entry.connectAtStartup = m_settings.value("connectAtStartup", false).toBool();
+        Logging::registerSecret(entry.password);
+        Logging::registerSecret(entry.identity);
         m_radios.append(entry);
     }
     m_settings.endArray();

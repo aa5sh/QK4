@@ -129,7 +129,7 @@ void LogSink::post(QtMsgType type, const QMessageLogContext &context, const QStr
         // Qt aborts as soon as this returns: write everything now, on this thread.
         drain();
         if (m_console && !consoleEnabled())
-            m_console(type, context, message);
+            m_console(type, context, redact(message));
         return;
     }
     // WHY: a real-time thread never wakes the writer. notify_one can enter the kernel; the writer's
@@ -198,10 +198,15 @@ void LogSink::drainLocked() {
 
     const std::size_t n = m_queue.take(m_spare);
     const quint64 dropped = m_queue.takeDropped();
+    std::unique_lock<std::mutex> secretLock(m_secretMutex);
+    const bool redacting = !m_secrets.isEmpty();
+    secretLock.unlock();
     for (std::size_t i = 0; i < n; ++i) {
-        const LogRecord &record = m_spare[i];
+        LogRecord &record = m_spare[i];
         if (isKnownNoise(record.message))
             continue;
+        if (redacting)
+            record.message = redact(record.message);
         if (m_file.isOpen())
             writeLine(format(record));
         mirror(record);
@@ -218,6 +223,24 @@ void LogSink::drainLocked() {
         m_file.flush();
 
     t_draining = wasDraining;
+}
+
+void LogSink::registerSecret(const QString &secret) {
+    if (secret.size() < MinSecretLength)
+        return;
+    std::lock_guard<std::mutex> lock(m_secretMutex);
+    if (!m_secrets.contains(secret))
+        m_secrets << secret;
+}
+
+// WHY in the writer and not the producer: redaction is a search per secret per line, which is
+// exactly the work the handler must not do on the thread that logged.
+QString LogSink::redact(const QString &message) const {
+    std::lock_guard<std::mutex> lock(m_secretMutex);
+    QString out = message;
+    for (const QString &secret : m_secrets)
+        out.replace(secret, QStringLiteral("<redacted>"));
+    return out;
 }
 
 QString LogSink::format(const LogRecord &record) const {
@@ -397,6 +420,11 @@ void shutdown() {
 
 void markRealtimeThread() {
     LogSink::markRealtimeThread();
+}
+
+void registerSecret(const QString &secret) {
+    if (g_sink)
+        g_sink->registerSecret(secret);
 }
 
 void markRealtimeOnStart(QThread *thread) {

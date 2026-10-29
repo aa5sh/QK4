@@ -145,6 +145,35 @@ const QRegularExpression &uncategorisedCall() {
     return re;
 }
 
+// The operands of every log statement: from qCDebug( / qCInfo( / qCWarning( / qCCritical( to the
+// statement's semicolon, in code with comments and literal contents removed.
+QList<Violation> logStatementsStreaming(const QString &code, const QString &file, const QRegularExpression &forbidden) {
+    static const QRegularExpression start(QStringLiteral(R"(\bqC(Debug|Info|Warning|Critical)\s*\()"));
+    // Only the emptiness or length of a secret may be logged.
+    static const QRegularExpression harmless(
+        QStringLiteral(R"(\b\w+\s*(\.|->)\s*(isEmpty|isNull|size|length|count)\s*\(\s*\))"));
+    QList<Violation> found;
+    auto it = start.globalMatch(code);
+    while (it.hasNext()) {
+        const auto m = it.next();
+        const qsizetype end = code.indexOf(QLatin1Char(';'), m.capturedEnd());
+        QString statement = code.mid(m.capturedStart(), end < 0 ? -1 : end - m.capturedStart());
+        statement.remove(harmless);
+        const auto hit = forbidden.match(statement);
+        if (hit.hasMatch())
+            found.append({file, lineOf(code, m.capturedStart()), hit.captured()});
+    }
+    return found;
+}
+
+// An identifier that names a secret: one that ends in password, psk, secret, identity or
+// presharedkey, in any case (m_password, pskIdentity, preSharedKey).
+const QRegularExpression &secretIdentifier() {
+    static const QRegularExpression re(QStringLiteral(R"(\b\w*(password|psk|secret|identity|presharedkey)\b)"),
+                                       QRegularExpression::CaseInsensitiveOption);
+    return re;
+}
+
 bool inLoggingDir(const QString &rel) {
     return rel.startsWith(QStringLiteral("logging/"));
 }
@@ -205,6 +234,37 @@ private slots:
             ++hits;
         }
         QCOMPARE(hits, 2);
+    }
+
+    void noLogStatementStreamsASecret() {
+        QList<Violation> violations;
+        QDirIterator it(QStringLiteral(QK4_SOURCE_DIR), {"*.cpp", "*.h"}, QDir::Files, QDirIterator::Subdirectories);
+        while (it.hasNext()) {
+            const QString path = it.next();
+            QFile f(path);
+            if (!f.open(QIODevice::ReadOnly))
+                continue;
+            violations +=
+                logStatementsStreaming(codeOnly(QString::fromUtf8(f.readAll())), relative(path), secretIdentifier());
+        }
+        QVERIFY2(violations.isEmpty(),
+                 qPrintable(QStringLiteral("never log a password, PSK or PSK identity - log whether it is set:\n") +
+                            describe(violations)));
+    }
+
+    void secretScanCatchesSecretsButNotTheirEmptiness() {
+        const auto scan = [](const char *source) {
+            return logStatementsStreaming(codeOnly(QString::fromUtf8(source)), QStringLiteral("x.cpp"),
+                                          secretIdentifier())
+                .size();
+        };
+        QCOMPARE(scan("qCDebug(lcLinkTcp) << \"identity:\" << m_identity;"), 1);
+        QCOMPARE(scan("qCWarning(lcApp) << entry.password\n    << 1;"), 1);
+        QCOMPARE(scan("qCInfo(lcApp) << preSharedKey;"), 1);
+        QCOMPARE(scan("qCDebug(lcLinkTcp) << (m_identity.isEmpty() ? \"empty\" : \"set\");"), 0);
+        QCOMPARE(scan("qCDebug(lcLinkTcp) << \"password\" << m_password.size();"), 0);
+        QCOMPARE(scan("qCDebug(lcLinkTcp) << tls12PskCiphers.size() << identityHint;"), 0);
+        QCOMPARE(scan("log(m_password); qCDebug(lcApp) << 1;"), 0);
     }
 
     void scannerIgnoresCommentsAndStringsButSeesCode() {

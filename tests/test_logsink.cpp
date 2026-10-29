@@ -148,6 +148,24 @@ private slots:
         first.stop();
     }
 
+    void registeredSecretsAreRedactedEverywhere() {
+        QTemporaryDir dir;
+        LogSink sink(8192);
+        sink.setConsoleHandler(captureConsole);
+        sink.registerSecret(QStringLiteral("hunter22"));
+        sink.registerSecret(QStringLiteral("K4")); // too short to redact safely
+        QVERIFY(sink.setFile(fileIn(dir.path(), 3, 600)));
+        for (int i = 0; i < 20; ++i)
+            post(sink, QtWarningMsg, QStringLiteral("K4 password hunter22 try %1").arg(i));
+        sink.stop();
+        const QString all =
+            readAll(dir.path() + "/qk4.log") + readAll(dir.path() + "/qk4.1.log") + readAll(dir.path() + "/qk4.2.log");
+        QVERIFY(QFile::exists(dir.path() + "/qk4.1.log")); // the rotation was crossed
+        QVERIFY(!all.contains("hunter22"));
+        QVERIFY(all.contains("K4 password <redacted> try 19"));
+        QVERIFY(!consoleLines.join('\n').contains("hunter22"));
+    }
+
     void dropsAreReported() {
         QTemporaryDir dir;
         LogSink sink(4);

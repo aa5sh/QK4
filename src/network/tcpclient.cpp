@@ -453,7 +453,7 @@ void TcpClient::onPreSharedKeyAuthenticationRequired(QSslPreSharedKeyAuthenticat
     authenticator->setIdentity(m_identity.toUtf8());
     authenticator->setPreSharedKey(m_password.toUtf8());
 
-    qCDebug(lcLinkTcp) << "PSK credentials provided, identity:" << (m_identity.isEmpty() ? "(empty)" : m_identity);
+    qCDebug(lcLinkTcp) << "PSK credentials provided, identity:" << (m_identity.isEmpty() ? "empty" : "set");
 }
 
 void TcpClient::onConnectTimeout() {
