@@ -23,7 +23,6 @@ class AntennaConfigController : public QObject {
 public:
     explicit AntennaConfigController(RadioState *radioState, ConnectionController *connection, QWidget *parentWidget,
                                      QObject *parent = nullptr);
-    ~AntennaConfigController() override;
 
     // Task-level show API. The TRIGGER widget (a button-row popup) is the
     // anchor for showAboveWidget(); the caller passes it in because the

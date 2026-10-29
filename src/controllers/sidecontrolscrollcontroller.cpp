@@ -184,10 +184,6 @@ SideControlScrollController::SideControlScrollController(RadioState *radioState,
     });
 }
 
-SideControlScrollController::~SideControlScrollController() {
-    disconnect(this);
-}
-
 void SideControlScrollController::applyFilterEdgeChange(bool adjustHi, int delta) {
     // HI and LO adjust filter edges while keeping the OPPOSITE edge fixed.
     // Both BW and IS must change. Work in decahertz (dah) to avoid rounding

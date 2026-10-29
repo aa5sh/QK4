@@ -113,10 +113,6 @@ RightSideController::RightSideController(RadioState *radioState, ConnectionContr
     connect(m_panel, &RightSidePanel::lockBClicked, this, [this]() { m_connection->sendCAT("SW151;"); });
 }
 
-RightSideController::~RightSideController() {
-    disconnect(this);
-}
-
 void RightSideController::cycleFilterPreset(bool vfoB) {
     const int current = vfoB ? m_radioState->filterPositionB() : m_radioState->filterPosition();
     const int next = RadioUtils::nextFilterPreset(current);

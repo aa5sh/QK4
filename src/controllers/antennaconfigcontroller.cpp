@@ -66,12 +66,6 @@ AntennaConfigController::AntennaConfigController(RadioState *radioState, Connect
     });
 }
 
-AntennaConfigController::~AntennaConfigController() {
-    // Architecture Rule 11 — disconnect first to prevent queued signals
-    // from arriving during partial destruction.
-    disconnect(this);
-}
-
 void AntennaConfigController::showMainRxPopupAbove(QWidget *trigger) {
     if (trigger)
         m_mainRxPopup->showAboveWidget(trigger);

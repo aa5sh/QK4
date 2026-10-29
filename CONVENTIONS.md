@@ -289,7 +289,14 @@ All three must pass. No exceptions. `.github/workflows/ci-checks.yml` mirrors th
 
 ### 11. [sanitizer + review] Controlled Shutdown Order
 
-Every controller and MainWindow calls `disconnect(this)` as the first statement in its destructor. This prevents queued signals from arriving during partial destruction. Thread shutdown follows the dependency chain: producers stop before consumers.
+Thread shutdown follows the dependency chain: producers stop before consumers, and before anything they read is destroyed (`MainWindow::closeEvent`, CONC-001).
+
+A destructor cuts every incoming connection that can still fire while its body runs, and nothing else. In Qt, `sender->disconnect(receiver)` removes that sender's signals into that receiver; called bare inside a member, `disconnect(this)` names `this` as the *sender* and so removes only this object's connections to itself. There is no call that cuts every incoming connection at once (the sender may never be null), and Qt removes a connection on its own only when either end's `~QObject` runs — after the derived destructor body, and for a `QWidget` after its children are already destroyed. So, in the destructor:
+
+- **A sender that the body's own work makes emit** (a teardown call that emits synchronously back into this object): `sender->disconnect(this)` before that work. Guard it if the sender may already be gone (`QPointer`).
+- **A cross-thread `Qt::DirectConnection`, or a lambda whose context object is not `this`**: keep the `QMetaObject::Connection` and `QObject::disconnect(handle)` first. A handle is safe to disconnect after the sender is destroyed; a raw sender pointer is not. A disconnect stops new calls only — it never waits for one already running on another thread, so stopping that thread first remains the real guarantee.
+- **A `QWidget` that receives from its own descendants** (MainWindow): cut each descendant from it before the body ends.
+- **Otherwise nothing.** Queued signals are not delivered mid-destructor unless the body runs an event loop, and `~QObject` discards events still posted to the object. Don't add a destructor just to disconnect.
 
 ASAN in the sanitizer CI job catches use-after-free on violation if the destruction path runs under test. Review catches the rest.
 

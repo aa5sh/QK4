@@ -24,7 +24,6 @@ class ProcessingDisplayController : public QObject {
 public:
     explicit ProcessingDisplayController(RadioState *radioState, VFOWidget *vfoA, VFOWidget *vfoB,
                                          QObject *parent = nullptr);
-    ~ProcessingDisplayController() override;
 
 private slots:
     void refreshVfoA();

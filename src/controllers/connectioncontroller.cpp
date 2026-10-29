@@ -37,7 +37,6 @@ ConnectionController::ConnectionController(QObject *parent) : QObject(parent), m
 }
 
 ConnectionController::~ConnectionController() {
-    disconnect(this);
     if (m_ioThread) {
         QMetaObject::invokeMethod(m_tcpClient, "disconnectFromHost", Qt::BlockingQueuedConnection);
         m_ioThread->quit();

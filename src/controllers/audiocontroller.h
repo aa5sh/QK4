@@ -129,6 +129,9 @@ private:
     AudioEngine *m_audioEngine;
     QThread *m_audioThread = nullptr;
     OpusDecoder *m_opusDecoder;
+    // The RX decode handler. Its context is Protocol, not this, so Qt never drops it when this
+    // object is destroyed; the destructor has to.
+    QMetaObject::Connection m_rxDecodeConnection;
 
     // Orders the two ways the TX source is written. Every write takes the next generation; a
     // setTxSourceAfterPtt() switch still in the queue applies only if no write has happened since

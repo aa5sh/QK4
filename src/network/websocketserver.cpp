@@ -39,7 +39,6 @@ WebSocketServer::WebSocketServer(QObject *parent)
 }
 
 WebSocketServer::~WebSocketServer() {
-    disconnect(this);
     stop();
 }
 

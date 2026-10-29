@@ -20,7 +20,6 @@ DxClusterController::DxClusterController(QObject *parent) : QObject(parent) {
 }
 
 DxClusterController::~DxClusterController() {
-    disconnect(this);
     // Shut down all cluster instances
     for (auto it = m_instances.begin(); it != m_instances.end(); ++it) {
         auto &inst = it.value();

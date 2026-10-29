@@ -162,10 +162,6 @@ PopupManager::PopupManager(RadioState *radioState, ConnectionController *connect
             [this]() { m_txEqPopup->setAllBands(m_radioState->txEqBands()); });
 }
 
-PopupManager::~PopupManager() {
-    disconnect(this);
-}
-
 void PopupManager::setBottomMenuBar(BottomMenuBar *bottomMenuBar) {
     m_bottomMenuBar = bottomMenuBar;
 }

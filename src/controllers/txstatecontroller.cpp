@@ -34,10 +34,6 @@ TxStateController::TxStateController(RadioState *radioState, SideControlPanel *s
     });
 }
 
-TxStateController::~TxStateController() {
-    disconnect(this);
-}
-
 void TxStateController::onTransmitStateChanged(bool transmitting) {
     // Only the active TX VFO flips its meter to TX mode; the other VFO
     // stays on S-meter so you can see incoming signal on the non-TX side.

@@ -36,7 +36,6 @@ TciServer::TciServer(QObject *parent)
 }
 
 TciServer::~TciServer() {
-    disconnect(this);
     stop();
 }
 

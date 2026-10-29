@@ -73,10 +73,6 @@ ModePopupController::ModePopupController(RadioState *radioState, ConnectionContr
     });
 }
 
-ModePopupController::~ModePopupController() {
-    disconnect(this);
-}
-
 void ModePopupController::toggleForVfoA(QWidget *anchor) {
     if (m_popup->isVisibleOrJustHidden())
         m_popup->hidePopup();

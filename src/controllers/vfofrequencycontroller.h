@@ -27,7 +27,6 @@ class VfoFrequencyController : public QObject {
 public:
     explicit VfoFrequencyController(RadioState *radioState, ConnectionController *connection, VFOWidget *vfoA,
                                     VFOWidget *vfoB, QObject *parent = nullptr);
-    ~VfoFrequencyController() override;
 
     void refresh();     // recompute both VFOs
     void refreshVfoA(); // recompute VFO A only

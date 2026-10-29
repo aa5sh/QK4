@@ -397,8 +397,9 @@ m_tciServer->moveToThread(m_tciThread);
 m_tciThread->start();
 ```
 
-Destructor, per Rule 11: `disconnect(this)` first, then blocking-invoke `stop()` (which closes
-sessions and unkeys any owned PTT), then `quit()` + `wait(2000)`. Producers stop before consumers —
+Destructor, per Rule 11: cut `AudioController` from the controller first (`shutdown()` makes it emit
+back into it), then blocking-invoke `stop()` (which closes sessions and unkeys any owned PTT), then
+`quit()` + `wait(2000)`. Producers stop before consumers —
 the TCI server stops before `AudioController` and `ConnectionController`.
 
 ### The four cross-thread edges

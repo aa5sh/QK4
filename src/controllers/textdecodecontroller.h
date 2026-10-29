@@ -24,7 +24,6 @@ class TextDecodeController : public QObject {
 public:
     explicit TextDecodeController(RadioState *radioState, ConnectionController *connection, QWidget *parentWidget,
                                   QObject *parent = nullptr);
-    ~TextDecodeController() override;
 
     // Task-level API — show the window configured for the current radio
     // mode + data sub-mode, enable decode if not already enabled.

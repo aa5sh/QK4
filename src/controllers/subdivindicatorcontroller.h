@@ -25,7 +25,6 @@ public:
     explicit SubDivIndicatorController(RadioState *radioState, SpectrumController *spectrum, VFOWidget *vfoB,
                                        QLabel *subLabel, QLabel *divLabel, QLabel *modeBLabel,
                                        QObject *parent = nullptr);
-    ~SubDivIndicatorController() override;
 
     // Forces SUB/DIV badges to disabled styling and dims VFO B (also styles
     // the VFO B mode label and sets the frequency-display color) on K4

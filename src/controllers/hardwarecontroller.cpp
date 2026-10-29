@@ -305,7 +305,6 @@ void HardwareController::shutdownDevices() {
 }
 
 HardwareController::~HardwareController() {
-    disconnect(this);
     // Normally a no-op: MainWindow::closeEvent has already run this, which is the whole point —
     // doing it here for the first time is what CONC-001 was. Still called, because a fatal error
     // or a window that was never shown reaches the destructor without a closeEvent.

@@ -26,7 +26,6 @@ public:
     // Stored as QPointer so cleanup is safe if the parent widget is destroyed first.
     MacroController(ConnectionController *connection, PopupManager *popupManager, QWidget *dialogParent,
                     QObject *parent = nullptr);
-    ~MacroController() override;
 
     // Public entry point for PF1-PF4 clicks and HardwareController's
     // macroRequested signal. Looks up the CAT command for the given

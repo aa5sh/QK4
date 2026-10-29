@@ -41,10 +41,6 @@ VfoFrequencyController::VfoFrequencyController(RadioState *radioState, Connectio
             [this](int digitFromRight) { setTuningRateFromDigit(true, digitFromRight); });
 }
 
-VfoFrequencyController::~VfoFrequencyController() {
-    disconnect(this);
-}
-
 void VfoFrequencyController::refresh() {
     refreshVfoA();
     refreshVfoB();

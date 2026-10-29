@@ -29,10 +29,6 @@ SubDivIndicatorController::SubDivIndicatorController(RadioState *radioState, Spe
     connect(m_radioState, &RadioState::diversityChanged, this, &SubDivIndicatorController::onDiversityChanged);
 }
 
-SubDivIndicatorController::~SubDivIndicatorController() {
-    disconnect(this);
-}
-
 void SubDivIndicatorController::onSubRxEnabledChanged(bool enabled) {
     setSubLabelActive(enabled);
     // WHY: DIV requires SUB (K4 constraint). When SUB turns on while DIV is

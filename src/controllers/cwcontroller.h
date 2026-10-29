@@ -66,7 +66,8 @@ class KpodPlusDevice;
 //   3. The keyer's commands reach TcpClient through FunctionLink → sendCAT, which queues to the
 //      I/O thread. One producer thread, one consumer: FIFO, so KZD/KZU stay in order.
 //   4. KPOD+ EP02 keyer data routes EP02 worker → I/O thread via QueuedConnection.
-//   5. Destructor runs disconnect(this) first (CONVENTIONS Rule 11).
+//   5. The destructor cuts the V1.4 line handler first (CONVENTIONS Rule 11). That stops new
+//      calls only; an edge already in flight on the worker is ruled out by shutdownDevices().
 //   6. The link is never gated: a KZU closing an open KZD must always reach the K4. Suppression
 //      is the inhibit's job, upstream of the keyer.
 //
@@ -120,6 +121,10 @@ private:
     SidetoneGenerator *m_sidetone; // owned by HardwareController
     HalikeyDevice *m_halikey;      // owned by HardwareController
     KpodPlusDevice *m_kpodPlus;    // owned by HardwareController
+
+    // The V1.4 line handler (invariant 1). Kept so the destructor can cut it: it runs on the HaliKey
+    // worker, and ~QObject would drop it only after this object's members are gone.
+    QMetaObject::Connection m_paddleConnection;
 
     // Main thread only.
     bool m_radioReady = false;

@@ -222,21 +222,20 @@ void MainWindow::closeEvent(QCloseEvent *event) {
 }
 
 MainWindow::~MainWindow() {
-    // Disconnect all signals targeting this object FIRST — prevents queued signals
-    // from arriving during partial destruction (e.g., a RadioState signal firing
-    // after some child widgets are already destroyed but before MainWindow is).
-    disconnect(this);
+    // WHY every descendant is cut from this window before the body ends: ~QWidget destroys the
+    // children (controllers first, in construction order) BEFORE ~QObject drops the connections
+    // into this window, and by then MainWindow's own part is already destroyed. Anything a child's
+    // teardown makes a child emit would otherwise run a MainWindow handler on a dead object.
+    // `sender->disconnect(this)` cuts that sender's signals into this window; there is no call
+    // that cuts every incoming connection at once (Qt forbids a null sender).
+    const QList<QObject *> descendants = findChildren<QObject *>();
+    for (QObject *descendant : descendants) {
+        descendant->disconnect(this);
+    }
+    RadioSettings::instance()->disconnect(this);
 
-    // HardwareController handles KPOD, HaliKey, Keyer, Sidetone shutdown
-    // (it's a child of MainWindow, so Qt deletes it automatically —
-    //  its destructor shuts down threads in the correct order)
-
-    // ConnectionController handles I/O thread shutdown in its destructor
-    // (it's a child of MainWindow, so Qt deletes it automatically)
-    // AudioController handles audio thread shutdown in its destructor
-
-    // KPA1500UiController's own destructor disconnects its signals and
-    // disconnects from the amplifier — Qt handles its deletion as a child.
+    // Thread and device teardown is not here: closeEvent runs it in dependency order, and each
+    // owning controller's destructor repeats it for the paths that never reach closeEvent.
 }
 
 void MainWindow::setupControllers() {
@@ -256,8 +255,9 @@ void MainWindow::setupControllers() {
     });
 
     // The single owner of "are we transmitting". Constructed here, directly after the two
-    // controllers it drives, so Qt's child destruction order tears it down after them and its
-    // disconnect(this) has already run by the time anything it references is gone.
+    // controllers it drives, so Qt's child destruction order tears it down after them: their
+    // destruction removes every connection they had into it, so nothing reaches it once the
+    // objects it points at are gone.
     m_transmitController = new TransmitController(m_radioState, m_connectionController, m_audioController, this);
     connect(m_transmitController, &TransmitController::transmittingChanged, this,
             [this](bool transmitting) { m_bottomMenuBar->setPttActive(transmitting); });

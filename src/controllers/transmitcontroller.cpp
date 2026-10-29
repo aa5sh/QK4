@@ -60,11 +60,6 @@ TransmitController::TransmitController(RadioState *radioState, ConnectionControl
             });
 }
 
-TransmitController::~TransmitController() {
-    // CONVENTIONS Rule 11 — sever connections before anything this handler touches tears down.
-    disconnect(this);
-}
-
 bool TransmitController::engage(Owner who, Route how) {
     // No radio, no transmission. Checked here rather than left to AudioController, which silently
     // drops a PTT-on when disconnected: the arbiter would otherwise believe it held a transmitter

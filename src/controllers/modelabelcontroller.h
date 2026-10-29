@@ -21,7 +21,6 @@ class ModeLabelController : public QObject {
 public:
     explicit ModeLabelController(RadioState *radioState, QLabel *modeALabel, QLabel *modeBLabel,
                                  QObject *parent = nullptr);
-    ~ModeLabelController() override;
 
     // Recompute + set both labels from current RadioState. Public so
     // other controllers / MainWindow can trigger a refresh (e.g., after

@@ -52,10 +52,6 @@ RitXitController::RitXitController(RadioState *radioState, ConnectionController 
     });
 }
 
-RitXitController::~RitXitController() {
-    disconnect(this);
-}
-
 bool RitXitController::handleRitLabelClick() {
     // WHY: SW54 is the BSET-aware RIT toggle — on BSET off it toggles RT,
     // on BSET on it toggles RT$. RT/; only toggles RT. The K4 doesn't echo

@@ -116,7 +116,7 @@ CwController::CwController(RadioState *radioState, ConnectionController *connect
     // V1.4 serial: one edge per change from the worker's 1 ms poll, on the worker thread
     // (invariant 1). The poller has already applied rest state, straight-key debounce and the
     // per-line delta.
-    connect(
+    m_paddleConnection = connect(
         m_halikey, &HalikeyDevice::paddleChanged, this,
         [this](bool dah, bool asserted, double deltaTime) { onPaddle(dah, asserted, deltaTime); },
         Qt::DirectConnection);
@@ -143,10 +143,12 @@ CwController::CwController(RadioState *radioState, ConnectionController *connect
 }
 
 CwController::~CwController() {
-    // CONVENTIONS Rule 11. What actually protects the device-thread handlers is MainWindow::closeEvent
-    // calling HardwareController::shutdownDevices() while ConnectionController is still alive; this
-    // is the second line of defence.
-    disconnect(this);
+    // WHY the handle and not m_halikey->disconnect(this): the HaliKey may already be destroyed
+    // (HardwareController goes first), and disconnecting a handle is safe either way. What actually
+    // protects the device-thread handlers is MainWindow::closeEvent calling
+    // HardwareController::shutdownDevices() while ConnectionController is still alive; a disconnect
+    // cannot stop a call the worker has already started.
+    disconnect(m_paddleConnection);
     // WHY the MIDI sink is NOT cleared here: HardwareController, and with it the HaliKey, is
     // destroyed before this (construction order), so m_halikey dangles by now. Clearing it here
     // crashed QK4 on every quit. Nothing needs it cleared: shutdownDevices() closes the HaliKey,

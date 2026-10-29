@@ -46,7 +46,6 @@ class PopupManager : public QObject {
 public:
     explicit PopupManager(RadioState *radioState, ConnectionController *connection, SpectrumController *spectrum,
                           VFOWidget *vfoA, VFOWidget *vfoB, QWidget *parentWidget, QObject *parent = nullptr);
-    ~PopupManager() override;
 
     // BottomMenuBar and VFO widgets must be injected after construction
     // because they are created by MainWindow::setupUi() AFTER controllers.

@@ -35,7 +35,6 @@ public:
     RightSideController(RadioState *radioState, ConnectionController *connection, RightSidePanel *panel,
                         ModePopupController *modePopup, FeatureMenuController *featureMenu,
                         MacroController *macroController, QWidget *featureAnchor, QObject *parent = nullptr);
-    ~RightSideController() override;
 
     // Step one VFO's filter preset 1 -> 3 -> 2 -> 1 with FP / FP$. Unlike the FIL button (SW33), this
     // names the VFO explicitly, so it never depends on which VFO the radio considers selected.

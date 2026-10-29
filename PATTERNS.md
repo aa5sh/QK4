@@ -330,7 +330,6 @@ class MyPopupController : public QObject {
 public:
     MyPopupController(RadioState *state, ConnectionController *conn,
                       QPushButton *trigger, QObject *parent = nullptr);
-    ~MyPopupController() override { disconnect(this); }
 
 private:
     QPointer<MyPopup> m_popup;       // QPointer if a parent owns lifetime, raw + manual otherwise
@@ -449,7 +448,7 @@ class MyController : public QObject {
 
 ### Destructor rules
 
-1. **First statement: `disconnect(this);`** — Architecture Rule 11. Prevents queued signals arriving during partial destruction.
+1. **Cut what can still fire, and only that** — Architecture Rule 11. `sender->disconnect(this)` for a sender the destructor's own work makes emit; a stored `QMetaObject::Connection` for a cross-thread `DirectConnection` or a lambda whose context is not `this`. Bare `disconnect(this)` cuts only self-connections. A controller with none of these needs no destructor.
 2. **Owned QObject children delete automatically via Qt parent ownership.** Don't manually `delete` widgets.
 
 ### Public-API rules

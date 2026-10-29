@@ -23,10 +23,9 @@
 // WHY: last, after every project header. windows.h defines SendMessage, ERROR and a long tail of
 // other unqualified macros, and anything it reaches first it rewrites - a header that later
 // declares a member called SendMessage or an enumerator called ERROR fails in a way that names
-// neither. WIN32_LEAN_AND_MEAN and NOMINMAX cut most of it; include order handles the rest.
+// neither. WIN32_LEAN_AND_MEAN and NOMINMAX (defined for every target in CMakeLists.txt) cut most of
+// it; include order handles the rest.
 #ifdef Q_OS_WIN
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
 #include <windows.h>
 #include <cstdio>
 #endif

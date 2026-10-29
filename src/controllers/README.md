@@ -42,7 +42,7 @@ See `PATTERNS.md` → "Controller Pattern":
 1. Inject `RadioState *` and `ConnectionController *` via constructor (never singletons).
 2. Expose **task-level** APIs, not owned widget getters (Architecture Rule 2).
 3. Read-access via `const Type &` only (Architecture Rule 3).
-4. Destructor's first line: `disconnect(this);` (Architecture Rule 11).
+4. Destructor cuts the incoming connections that can still fire while it runs — `sender->disconnect(this)` or a stored `QMetaObject::Connection` — and nothing else; bare `disconnect(this)` only cuts self-connections (Architecture Rule 11).
 5. Add to the symptom table in `docs/controllers.md`.
 
 ## Banned shapes

@@ -30,7 +30,6 @@ public:
     explicit TxStateController(RadioState *radioState, SideControlPanel *sideControlPanel,
                                VfoFrequencyController *vfoFrequencyController, VFOWidget *vfoA, VFOWidget *vfoB,
                                QLabel *txIndicator, QLabel *txTriangle, QLabel *txTriangleB, QObject *parent = nullptr);
-    ~TxStateController() override;
 
     // Resets the TX triangles to their RX-state default on K4 disconnect.
     void reset();

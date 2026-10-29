@@ -112,11 +112,6 @@ FeatureMenuController::FeatureMenuController(RadioState *radioState, ConnectionC
     connect(m_radioState, &RadioState::bSetChanged, this, &FeatureMenuController::refreshCurrentFeature);
 }
 
-FeatureMenuController::~FeatureMenuController() {
-    // Architecture Rule 11.
-    disconnect(this);
-}
-
 void FeatureMenuController::toggleFeature(FeatureMenuBar::Feature feature, QWidget *anchor) {
     if (m_bar->isMenuVisible() && m_bar->currentFeature() == feature) {
         m_bar->hideMenu();

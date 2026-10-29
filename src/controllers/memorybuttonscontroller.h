@@ -25,7 +25,6 @@ public:
     MemoryButtonsController(ConnectionController *connection, QPushButton *m1, QPushButton *m2, QPushButton *m3,
                             QPushButton *m4, QPushButton *rec, QPushButton *store, QPushButton *rcl,
                             QObject *parent = nullptr);
-    ~MemoryButtonsController() override;
 
 protected:
     // Catches right-clicks on REC / STORE / RCL — sends the alternate SW

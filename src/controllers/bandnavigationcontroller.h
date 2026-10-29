@@ -23,7 +23,6 @@ class BandNavigationController : public QObject {
 public:
     explicit BandNavigationController(RadioState *radioState, ConnectionController *connection,
                                       PopupManager *popupManager, QObject *parent = nullptr);
-    ~BandNavigationController() override;
 
     // Last BN echo from the K4 for the indicated VFO. -1 until first echo.
     // Bands 0..10 = HF/6m, 11..22 = XVTR Band 1..12.

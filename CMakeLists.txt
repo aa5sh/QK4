@@ -15,6 +15,15 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
+# Directory-wide, so every target - app, tests and third_party sources - sees the same <windows.h>.
+# WHY: without NOMINMAX, <windows.h> defines min/max macros that break every bare std::min/std::max
+# in a translation unit that includes it. WIN32_LEAN_AND_MEAN drops winsock.h (which collides with
+# k4discovery's winsock2.h), mmsystem.h and the shell/OLE/crypto headers; the code that needs
+# mmsystem (RtMidi) or winsock includes it explicitly.
+if(WIN32)
+    add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN)
+endif()
+
 # Tests only: configure the unit tests and stop before the app, so only the Qt modules the tests
 # link - all of them in qtbase - need to exist. WHY: the weekly ThreadSanitizer job builds Qt itself
 # with -sanitize thread (a distro Qt hides its own locking from TSan and every cross-thread queued

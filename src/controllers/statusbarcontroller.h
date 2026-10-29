@@ -35,7 +35,6 @@ class StatusBarController : public QObject {
 public:
     StatusBarController(RadioState *radioState, ConnectionController *connectionController,
                         NetworkMetrics *networkMetrics, QWidget *parentWidget, QObject *parent = nullptr);
-    ~StatusBarController() override;
 
     // Container widget — MainWindow adds this into its top layout.
     QWidget *widget() const;

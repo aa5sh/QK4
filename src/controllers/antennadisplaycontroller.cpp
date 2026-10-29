@@ -64,10 +64,6 @@ AntennaDisplayController::AntennaDisplayController(RadioState *radioState, BandN
     }
 }
 
-AntennaDisplayController::~AntennaDisplayController() {
-    disconnect(this);
-}
-
 void AntennaDisplayController::onAntennaChanged(int txAnt, int rxAntMain, int rxAntSub) {
     // K4 AN/AR commands "do not pertain to transverter antennas" (K4 reference
     // rev D5): on XVTR bands the TX antenna is XV OUT and any RX path is XV IN.

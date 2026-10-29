@@ -28,10 +28,6 @@ ButtonRowDispatcher::ButtonRowDispatcher(RadioState *radioState, ConnectionContr
     connect(m_radioState, &RadioState::modeChanged, this, [this](RadioState::Mode) { refreshTxButtonsForMode(); });
 }
 
-ButtonRowDispatcher::~ButtonRowDispatcher() {
-    disconnect(this);
-}
-
 void ButtonRowDispatcher::onMainRxClicked(int index) {
     if (!m_connection->isConnected())
         return;

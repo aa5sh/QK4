@@ -27,7 +27,6 @@ class MenuController : public QObject {
 public:
     explicit MenuController(ConnectionController *connection, SpectrumController *spectrum, QWidget *parentWidget,
                             QObject *parent = nullptr);
-    ~MenuController() override;
 
     // CAT routing entry points used by MainWindow::onCatResponse. Each
     // forwards into the encapsulated MenuModel. Returning void (the model's

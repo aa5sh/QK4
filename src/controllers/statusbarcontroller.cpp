@@ -197,12 +197,6 @@ StatusBarController::StatusBarController(RadioState *radioState, ConnectionContr
     updateDateTime();
 }
 
-StatusBarController::~StatusBarController() {
-    // Architecture Rule 11 — disconnect first to prevent queued signals from
-    // arriving during partial destruction.
-    disconnect(this);
-}
-
 QWidget *StatusBarController::widget() const {
     return m_container;
 }

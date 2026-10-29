@@ -83,18 +83,14 @@ KPA1500UiController::KPA1500UiController(StatusBarController *statusBar, RightSi
 }
 
 KPA1500UiController::~KPA1500UiController() {
-    // WHY: sever BOTH directions before triggering disconnectFromHost() —
-    // that call synchronously emits disconnected signals. If we only cut
-    // outgoing connections (`disconnect(this)` where this is sender), the
-    // client's disconnected signal still reaches our onDisconnected slot,
-    // which then calls into sibling controllers' widgets — and those
-    // widgets may already be gone under Qt's child-destruction order.
-    // See CONVENTIONS.md → Architecture Rule 11.
+    // WHY cut the client's connections into this before disconnectFromHost(): that call emits
+    // disconnected synchronously, and onDisconnected reaches sibling controllers' widgets, which
+    // Qt's child destruction order may already have destroyed. Qt would only drop these
+    // connections in ~QObject, after this body has run.
     if (m_client) {
-        disconnect(m_client, nullptr, this, nullptr);
+        m_client->disconnect(this);
         m_client->disconnectFromHost();
     }
-    disconnect(this);
 }
 
 void KPA1500UiController::connectIfEnabled() {

@@ -9,9 +9,6 @@
 #include <thread>
 
 #ifdef Q_OS_WIN
-#ifndef NOMINMAX
-#define NOMINMAX // <windows.h> would otherwise define min/max macros over std::max below
-#endif
 #include <windows.h>
 #endif
 

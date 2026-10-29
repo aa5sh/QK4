@@ -34,10 +34,6 @@ VfoRowIndicatorController::VfoRowIndicatorController(RadioState *radioState, Spe
     connect(m_radioState, &RadioState::messageBankChanged, this, &VfoRowIndicatorController::onMessageBankChanged);
 }
 
-VfoRowIndicatorController::~VfoRowIndicatorController() {
-    disconnect(this);
-}
-
 void VfoRowIndicatorController::onSplitChanged(bool enabled) {
     const QString splitStyle = QString("color: %1; font-size: %2px;")
                                    .arg(K4Styles::Colors::AccentAmber)

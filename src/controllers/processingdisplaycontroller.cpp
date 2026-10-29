@@ -11,10 +11,6 @@ ProcessingDisplayController::ProcessingDisplayController(RadioState *radioState,
     connect(m_radioState, &RadioState::processingChangedB, this, &ProcessingDisplayController::refreshVfoB);
 }
 
-ProcessingDisplayController::~ProcessingDisplayController() {
-    disconnect(this);
-}
-
 void ProcessingDisplayController::refreshVfoA() {
     m_vfoA->setAGC(RadioUtils::agcLabel(m_radioState->agcSpeed()), RadioUtils::agcActive(m_radioState->agcSpeed()));
     m_vfoA->setPreamp(m_radioState->preampEnabled() && m_radioState->preamp() > 0, m_radioState->preamp());

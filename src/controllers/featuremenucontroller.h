@@ -24,7 +24,6 @@ class FeatureMenuController : public QObject {
 public:
     explicit FeatureMenuController(RadioState *radioState, ConnectionController *connection, QWidget *parentWidget,
                                    QObject *parent = nullptr);
-    ~FeatureMenuController() override;
 
     // Toggle the popup for the given feature. If it's already visible for
     // this feature, hide it; otherwise sync state from RadioState and show

@@ -156,14 +156,6 @@ TextDecodeController::TextDecodeController(RadioState *radioState, ConnectionCon
     });
 }
 
-TextDecodeController::~TextDecodeController() {
-    // Architecture Rule 11 — disconnect first to prevent queued signals
-    // from arriving during partial destruction.
-    disconnect(this);
-    // m_mainWindow / m_subWindow are owned by parentWidget (passed to the
-    // TextDecodeWindow constructor) and delete via Qt parent-ownership.
-}
-
 void TextDecodeController::showMainRx() {
     RadioState::Mode mode = m_radioState->mode();
     m_mainWindow->setOperatingMode(operatingModeFor(mode, m_radioState->dataSubMode()));

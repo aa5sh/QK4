@@ -36,10 +36,6 @@ void BandNavigationController::onCatResponse(const QString &response) {
     }
 }
 
-BandNavigationController::~BandNavigationController() {
-    disconnect(this);
-}
-
 void BandNavigationController::setCurrentBand(int bandNum, bool forVfoB) {
     const int previous = forVfoB ? m_currentBandNumB : m_currentBandNum;
     if (forVfoB) {

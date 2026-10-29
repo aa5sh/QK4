@@ -250,7 +250,8 @@ void TciController::wireAudioAndClients() {
     // A listener arriving after an idle stretch must not hear samples from before the gap: the
     // bridge skips work entirely while nobody is subscribed, so the filter history is stale.
     connect(
-        m_server, &TciServer::audioStartRequested, m_bridge, [this](int) { m_bridge->reset(); }, Qt::QueuedConnection);
+        m_server, &TciServer::audioStartRequested, m_bridge, [bridge = m_bridge](int) { bridge->reset(); },
+        Qt::QueuedConnection);
 
     // Queued (m_server is on the TCI thread, this is not), so the cache is written on the main
     // thread and read there too. Re-emitted rather than forwarded directly so no consumer can
@@ -839,34 +840,28 @@ void TciController::shutdown() {
 }
 
 TciController::~TciController() {
-    // Rule 11: drop queued signals before partial destruction, then stop producers before consumers.
-    disconnect(this);
+    // WHY AudioController is cut first: shutdown() below calls its setPttActive, which emits
+    // pttActiveChanged synchronously into this object's handler - mid-destructor - and Qt would
+    // only drop that connection in ~QObject, after this body. No other sender can fire into this
+    // during the body: TciServer's signals are queued from the TCI thread and nothing here runs an
+    // event loop to deliver them (~QObject discards what is still posted).
+    if (m_audioController) {
+        m_audioController->disconnect(this);
+    }
 
     // UNKEY FROM HERE, because the unkey the server is about to ask for cannot arrive.
     //
     // TciServer::stop releases a held PTT and emits pttRequested(false) - but that signal is
-    // queued to this controller on the main thread, and the disconnect above has just severed it.
-    // Below it is worse still: stop is called with a BlockingQueuedConnection, so the main thread
-    // is sitting inside that call and the queue it would be delivered to is never drained again.
-    // Either way, a client holding the transmitter when QK4 quit left the radio keyed with the
-    // audio path still gated to the TCI source.
-    //
-    // Done HERE, ahead of both teardown paths, because the no-thread path has the same hole: it
-    // deletes the server outright, and ~TciServer calls the same stop() into the same severed
-    // signal. It is also safe to unkey this early precisely BECAUSE disconnect has run - nothing
-    // can key again between here and the end of this destructor.
+    // queued to this controller on the main thread, and stop is called with a
+    // BlockingQueuedConnection: the main thread is sitting inside that call, and the event is
+    // discarded unprocessed when this object is destroyed. A client holding the transmitter when
+    // QK4 quit left the radio keyed with the audio path still gated to the TCI source.
     //
     // Releases the transmitter if shutdown() has not already done it. The QPointer is what makes
     // this safe: on the normal quit path AudioController is destroyed BEFORE this controller, and
     // the release has to be skipped rather than performed against freed memory. Doing it here as a
     // raw-pointer call is what segfaulted on every quit-while-connected.
     shutdown();
-
-    if (!m_tciThread) {
-        delete m_bridge;
-        delete m_server;
-        return;
-    }
 
     QMetaObject::invokeMethod(m_server, "stop", Qt::BlockingQueuedConnection);
 

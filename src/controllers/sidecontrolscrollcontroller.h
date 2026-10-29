@@ -26,7 +26,6 @@ class SideControlScrollController : public QObject {
 public:
     SideControlScrollController(RadioState *radioState, ConnectionController *connection, SideControlPanel *panel,
                                 QObject *parent = nullptr);
-    ~SideControlScrollController() override;
 
 private:
     // Shared between highCutChanged and lowCutChanged. When adjustHi is true,

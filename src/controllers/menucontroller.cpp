@@ -27,12 +27,6 @@ MenuController::MenuController(ConnectionController *connection, SpectrumControl
     connect(m_menuModel, &MenuModel::menuItemAdded, this, &MenuController::onMenuItemAdded);
 }
 
-MenuController::~MenuController() {
-    // Architecture Rule 11 — disconnect first to prevent queued signals
-    // from arriving during partial destruction.
-    disconnect(this);
-}
-
 void MenuController::ingestMedf(const QString &cmd) {
     if (m_menuModel)
         m_menuModel->parseMEDF(cmd);

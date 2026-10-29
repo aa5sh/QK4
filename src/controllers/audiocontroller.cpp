@@ -45,7 +45,7 @@ AudioController::AudioController(ConnectionController *connController, RadioStat
     // m_opusDecoder is only called from this lambda → single-threaded on I/O thread
     // m_audioEngine->enqueueAudio() is mutex-protected → safe from any thread
     auto *protocol = m_connectionController->tcpClient()->protocol();
-    connect(protocol, &Protocol::audioDataReady, protocol, [this](const QByteArray &payload) {
+    m_rxDecodeConnection = connect(protocol, &Protocol::audioDataReady, protocol, [this](const QByteArray &payload) {
         QByteArray pcmData = m_opusDecoder->decodeK4Packet(payload);
         if (!pcmData.isEmpty()) {
             m_audioEngine->enqueueAudio(pcmData);
@@ -103,7 +103,12 @@ AudioController::AudioController(ConnectionController *connController, RadioStat
 }
 
 AudioController::~AudioController() {
-    disconnect(this);
+    // WHY first, ahead of deleting the decoder it uses: this handler runs on the I/O thread and
+    // lives as long as Protocol. On the normal quit path ConnectionController, and Protocol with
+    // it, is already gone and this is a no-op; it is what keeps an AudioController destroyed
+    // before the I/O link from leaving a handler bound to freed memory. It stops new calls only;
+    // it does not wait for a decode already running on the I/O thread.
+    disconnect(m_rxDecodeConnection);
     delete m_opusDecoder;
 
     if (m_audioThread) {

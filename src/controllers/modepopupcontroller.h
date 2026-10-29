@@ -26,7 +26,6 @@ class ModePopupController : public QObject {
 public:
     explicit ModePopupController(RadioState *radioState, ConnectionController *connection, QWidget *parentWidget,
                                  QObject *parent = nullptr);
-    ~ModePopupController() override;
 
     // Task-level toggle entry points. Each captures current-visibility
     // first, then hides OR shows with the target-VFO preset.

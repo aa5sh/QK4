@@ -29,7 +29,6 @@ class RitXitController : public QObject {
 public:
     explicit RitXitController(RadioState *radioState, ConnectionController *connection, SpectrumController *spectrum,
                               QLabel *ritLabel, QLabel *xitLabel, QLabel *ritXitValueLabel, QObject *parent = nullptr);
-    ~RitXitController() override;
 
     // Resets RIT/XIT indicator labels to their disconnected defaults:
     // value display "+0.00" and both RIT/XIT labels in disabled styling.

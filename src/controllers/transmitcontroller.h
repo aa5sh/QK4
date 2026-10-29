@@ -35,7 +35,6 @@ public:
 
     TransmitController(RadioState *radioState, ConnectionController *connection, AudioController *audio,
                        QObject *parent = nullptr);
-    ~TransmitController() override;
 
     /// Ask to transmit. Returns false if refused — because somebody else holds the transmitter, or
     /// because there is no radio to transmit with. A refusal changes nothing, so the caller must

@@ -27,7 +27,6 @@ class SpectrumController : public QObject {
 
 public:
     explicit SpectrumController(ConnectionController *conn, RadioState *radioState, QObject *parent = nullptr);
-    ~SpectrumController();
 
     void setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA, VFOWidget *vfoB);
 

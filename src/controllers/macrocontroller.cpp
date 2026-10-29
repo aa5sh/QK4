@@ -17,10 +17,6 @@ MacroController::MacroController(ConnectionController *connection, PopupManager 
     connect(m_popupManager, &PopupManager::macroFunctionTriggered, this, &MacroController::onFunctionTriggered);
 }
 
-MacroController::~MacroController() {
-    disconnect(this);
-}
-
 void MacroController::executeMacro(const QString &functionId) {
     const MacroEntry macro = RadioSettings::instance()->macro(functionId);
     if (macro.command.isEmpty()) {
