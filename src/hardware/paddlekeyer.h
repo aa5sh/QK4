@@ -15,15 +15,21 @@
 // is sent from the keyer thread, in the order the keyer decides: other threads post a request to
 // its queue and never send.
 //
+// The main thread takes no lock the keyer or a device thread can wait on: configuration is held in
+// atomics; a release, close or monitor restore is a request in a ring only requesters lock, and
+// the keyer does the work of a release itself, at its next decision. It wakes on a semaphore.
+//
 // KPOD+ keying does not pass through here. See docs/cw-keyer-port-plan.md.
 
 #ifndef PADDLEKEYER_H
 #define PADDLEKEYER_H
 
 #include "hardware/keyertiming.h"
+#include "utils/rtsemaphore.h"
+#include "utils/spscring.h"
 
 #include <atomic>
-#include <condition_variable>
+#include <cstdint>
 #include <deque>
 #include <functional>
 #include <mutex>
@@ -102,6 +108,10 @@ private:
         double keyDownAt = 0.0;              // Release: when the straight key went down
         unsigned long long monitorToken = 0; // RestoreMonitor: the restore it belongs to
     };
+    // Up to four MIDI notes per lever, packed so both levers are read in one atomic load.
+    static constexpr int kMaxNotes = 4;
+    static std::uint64_t packNotes(std::uint64_t packed, int lever, const std::vector<int> &notes);
+    static bool leverHasNote(std::uint64_t packed, int lever, int note);
     struct Stamps {
         double ditUp, dahUp, ditDown, dahDown;
     };
@@ -111,10 +121,12 @@ private:
         double closedAt;
     };
 
-    PaddleEventItem popEvent();
-    void pushEvent(PaddleEventItem item);
+    void pushEvent(PaddleEventItem item);   // caller holds m_firstElementMutex
+    void pushRequest(PaddleEventItem item); // Close or RestoreMonitor, any thread
+    bool applyPendingReleases();            // keyer thread; true if one was applied
+    void applyRelease(double at);           // keyer thread
 
-    Stamps paddleTimestamps(std::optional<double> asOf) const;
+    Stamps paddleTimestamps(std::optional<double> asOf);
     void sendStraightKey(const PaddleEventItem &item);
     void sendIambic();
     void sendUltimatic();
@@ -146,29 +158,35 @@ private:
     SidetoneScheduler &m_sidetone;
     CwKeying::OneShotTimer &m_unmuteTimer;
 
-    // ---- configuration ----
-    mutable std::mutex m_configMutex;
-    Mode m_mode = Mode::IambicB;
+    // ---- configuration (written by any thread, read lock-free by the keyer and device threads) ----
+    std::atomic<Mode> m_mode{Mode::IambicB};
     std::atomic<bool> m_straightKeying{false};
-    double m_ditMemoryDelayPercent = 33.0;
-    std::vector<int> m_ditNotes{20};
-    std::vector<int> m_dahNotes{21};
-    Signal m_ditSignal = Signal::DSR;
-    Signal m_dahSignal = Signal::DCD;
+    std::atomic<double> m_ditMemoryDelayPercent{33.0};
+    std::atomic<std::uint64_t> m_notes; // dit notes in the low 32 bits, dah in the high; see packNotes
+    std::atomic<Signal> m_ditSignal{Signal::DSR};
+    std::atomic<Signal> m_dahSignal{Signal::DCD};
+    std::mutex m_notesWriteMutex; // writers of m_notes only, so two setters cannot lose an update
     std::atomic<bool> m_muteRadioMonitor{false};
     std::atomic<int> m_monitorLevel{0};
     std::atomic<int> m_keyDownInitialDelayMs{0};
     std::atomic<bool> m_inhibited{false};
 
-    // Element timing from on_speed_change; written under m_configMutex, read by the keyer thread.
-    double m_ditSeconds = 0;
-    double m_dahSeconds = 0;
-    double m_interElementSeconds = 0;
+    // Element timing from on_speed_change. Each value is read on its own, as it always was.
+    std::atomic<double> m_ditSeconds{0};
+    std::atomic<double> m_dahSeconds{0};
+    std::atomic<double> m_interElementSeconds{0};
 
-    // ---- event queue (device -> keyer) ----
-    mutable std::mutex m_queueMutex;
-    std::condition_variable m_queueCv;
-    std::deque<PaddleEventItem> m_queue;
+    // ---- queues to the keyer ----
+    // Paddle events (device threads) and the keyer's own straight-key Release: pushed under
+    // m_firstElementMutex, which makes the producers one at a time.
+    SpscRing<PaddleEventItem, 1024> m_events;
+    // Releases (the time each was asked for) and Close / RestoreMonitor, from any thread: pushed
+    // under m_requestMutex, which the keyer never takes. Separate, so a pending restore never
+    // holds up a release the keyer applies mid-burst.
+    SpscRing<double, 64> m_releases;
+    SpscRing<PaddleEventItem, 64> m_requests;
+    std::mutex m_requestMutex;
+    RtSemaphore m_wake; // one post per push
 
     // ---- paddle state (device thread writes, keyer reads) ----
     mutable std::mutex m_paddleMutex;
@@ -186,7 +204,7 @@ private:
     std::mutex m_firstElementMutex;
     std::optional<FirstElement> m_firstElementScheduled;
     std::atomic<bool> m_inBurst{false};
-    bool m_closed = false;
+    std::atomic<bool> m_closed{false};
     bool m_straightKeyDown = false;
     double m_straightKeyDownAt = 0.0; // read only under m_firstElementMutex, like its writer
 

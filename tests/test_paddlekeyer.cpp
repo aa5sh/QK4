@@ -53,6 +53,9 @@ struct StraightRig {
         keyer.setDitSignal(PaddleKeyer::Signal::DSR);
         keyer.setMuteRadioMonitor(false);
         keyer.setSpeed(30);
+        // Switching to straight keying asks the keyer for a release, which it carries out on its
+        // own thread; let it, so each case starts from a keyer with nothing pending.
+        drain();
     }
     void drain() {
         while (keyer.hasPendingEvents())

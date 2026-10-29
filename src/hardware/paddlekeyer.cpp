@@ -18,6 +18,7 @@
 #include "audio/sidetonescheduler.h"
 
 #include <algorithm>
+#include <iterator>
 #include <cmath>
 #include <utility>
 
@@ -60,15 +61,12 @@ Frame fourDigits(const char *prefix, long long ms) {
     return formatFrame(prefix, ms, 4);
 }
 
-bool contains(const std::vector<int> &v, int x) {
-    return std::find(v.begin(), v.end(), x) != v.end();
-}
-
 } // namespace
 
 PaddleKeyer::PaddleKeyer(CwKeying::Clock &clock, CwKeying::Link &link, SidetoneScheduler &sidetone,
                          CwKeying::OneShotTimer &unmuteTimer)
-    : m_clock(clock), m_link(link), m_sidetone(sidetone), m_unmuteTimer(unmuteTimer) {
+    : m_clock(clock), m_link(link), m_sidetone(sidetone), m_unmuteTimer(unmuteTimer),
+      m_notes(packNotes(packNotes(~0ULL, 0, {20}), 1, {21})) {
     setSpeed(20);
 }
 
@@ -79,13 +77,11 @@ PaddleKeyer::~PaddleKeyer() {
 // ---- configuration ----
 
 void PaddleKeyer::setMode(Mode mode) {
-    std::lock_guard lock(m_configMutex);
-    m_mode = mode;
+    m_mode.store(mode);
 }
 
 PaddleKeyer::Mode PaddleKeyer::mode() const {
-    std::lock_guard lock(m_configMutex);
-    return m_mode;
+    return m_mode.load();
 }
 
 void PaddleKeyer::setStraightKeying(bool straight) {
@@ -94,8 +90,7 @@ void PaddleKeyer::setStraightKeying(bool straight) {
 }
 
 void PaddleKeyer::setDitMemoryDelayPercent(double percent) {
-    std::lock_guard lock(m_configMutex);
-    m_ditMemoryDelayPercent = std::clamp(percent, 0.0, 100.0);
+    m_ditMemoryDelayPercent.store(std::clamp(percent, 0.0, 100.0));
 }
 
 void PaddleKeyer::setSpeed(int wpm, double weighting) {
@@ -106,30 +101,46 @@ void PaddleKeyer::setSpeed(int wpm, double weighting) {
     const double spaceMult = 1 + delta;
     const double unweightedDitSeconds = 1.2 / wpm;
     const double unweightedDahSeconds = unweightedDitSeconds * 3;
-    std::lock_guard lock(m_configMutex);
-    m_ditSeconds = unweightedDitSeconds * eltMult;
-    m_dahSeconds = unweightedDahSeconds * eltMult;
-    m_interElementSeconds = unweightedDitSeconds * spaceMult;
+    m_ditSeconds.store(unweightedDitSeconds * eltMult);
+    m_dahSeconds.store(unweightedDahSeconds * eltMult);
+    m_interElementSeconds.store(unweightedDitSeconds * spaceMult);
+}
+
+// Lever 0 (dit) in bits 0-31, lever 1 (dah) in bits 32-63; one note per byte, 0xFF for none.
+std::uint64_t PaddleKeyer::packNotes(std::uint64_t packed, int lever, const std::vector<int> &notes) {
+    std::uint64_t half = 0xFFFFFFFFULL;
+    for (size_t i = 0; i < notes.size() && i < kMaxNotes; ++i) {
+        half &= ~(0xFFULL << (8 * i));
+        half |= static_cast<std::uint64_t>(notes[i] & 0x7F) << (8 * i);
+    }
+    const int shift = lever * 32;
+    return (packed & ~(0xFFFFFFFFULL << shift)) | (half << shift);
+}
+
+bool PaddleKeyer::leverHasNote(std::uint64_t packed, int lever, int note) {
+    const std::uint64_t half = packed >> (lever * 32);
+    for (int i = 0; i < kMaxNotes; ++i)
+        if (static_cast<int>((half >> (8 * i)) & 0xFF) == note)
+            return true;
+    return false;
 }
 
 void PaddleKeyer::setDitNotes(std::vector<int> notes) {
-    std::lock_guard lock(m_configMutex);
-    m_ditNotes = std::move(notes);
+    std::lock_guard lock(m_notesWriteMutex);
+    m_notes.store(packNotes(m_notes.load(), 0, notes));
 }
 
 void PaddleKeyer::setDahNotes(std::vector<int> notes) {
-    std::lock_guard lock(m_configMutex);
-    m_dahNotes = std::move(notes);
+    std::lock_guard lock(m_notesWriteMutex);
+    m_notes.store(packNotes(m_notes.load(), 1, notes));
 }
 
 void PaddleKeyer::setDitSignal(Signal signal) {
-    std::lock_guard lock(m_configMutex);
-    m_ditSignal = signal;
+    m_ditSignal.store(signal);
 }
 
 void PaddleKeyer::setDahSignal(Signal signal) {
-    std::lock_guard lock(m_configMutex);
-    m_dahSignal = signal;
+    m_dahSignal.store(signal);
 }
 
 void PaddleKeyer::setMuteRadioMonitor(bool mute) {
@@ -150,71 +161,100 @@ void PaddleKeyer::setInhibited(bool inhibited) {
 }
 
 double PaddleKeyer::ditSeconds() const {
-    std::lock_guard lock(m_configMutex);
-    return m_ditSeconds;
+    return m_ditSeconds.load();
 }
 
 double PaddleKeyer::dahSeconds() const {
-    std::lock_guard lock(m_configMutex);
-    return m_dahSeconds;
+    return m_dahSeconds.load();
 }
 
 double PaddleKeyer::interElementSeconds() const {
-    std::lock_guard lock(m_configMutex);
-    return m_interElementSeconds;
+    return m_interElementSeconds.load();
 }
 
-// ---- event queue ----
+// ---- queues ----
 
 void PaddleKeyer::pushEvent(PaddleEventItem item) {
-    {
-        std::lock_guard lock(m_queueMutex);
-        m_queue.push_back(item);
-    }
-    m_queueCv.notify_one();
+    if (m_events.push(item))
+        m_wake.post();
 }
 
-PaddleKeyer::PaddleEventItem PaddleKeyer::popEvent() {
-    std::unique_lock lock(m_queueMutex);
-    m_queueCv.wait(lock, [this] { return !m_queue.empty(); });
-    const PaddleEventItem item = m_queue.front();
-    m_queue.pop_front();
-    return item;
+void PaddleKeyer::pushRequest(PaddleEventItem item) {
+    bool queued;
+    {
+        std::lock_guard lock(m_requestMutex);
+        queued = m_requests.push(item);
+    }
+    if (queued)
+        m_wake.post();
 }
 
 bool PaddleKeyer::hasPendingEvents() const {
-    std::lock_guard lock(m_queueMutex);
-    return !m_queue.empty();
+    return !m_releases.empty() || !m_events.empty() || !m_requests.empty();
 }
 
 // ---- release / close ----
 
+// WHY a request the keyer carries out, rather than the work done here: this is called from the
+// main thread (Esc, inhibit, a lost device, a reversal), and the work takes the locks the keyer and
+// the paddle thread share, and the sidetone scheduler's. A normal-priority thread holding them
+// could stall a real-time one, and cancelling a scheduled sidetone edge waits up to 100 ms. The
+// keyer applies the release at its next decision, with the time it was asked for, so the paddles
+// read as released from that instant, exactly as before.
 void PaddleKeyer::releasePaddles(bool closing) {
-    bool straightKeyDown;
+    if (closing)
+        m_closed.store(true);
+    bool queued;
+    {
+        std::lock_guard lock(m_requestMutex);
+        queued = m_releases.push(m_clock.now());
+    }
+    if (queued)
+        m_wake.post();
+}
+
+bool PaddleKeyer::applyPendingReleases() {
+    bool applied = false;
+    double at;
+    while (m_releases.pop(at)) {
+        applyRelease(at);
+        applied = true;
+    }
+    return applied;
+}
+
+void PaddleKeyer::applyRelease(double at) {
+    bool straightKeyDown = false;
     std::optional<FirstElement> scheduled;
     {
         std::lock_guard lock(m_firstElementMutex);
-        if (closing)
-            m_closed = true;
-        straightKeyDown = m_straightKeyDown;
-        m_straightKeyDown = false;
-        scheduled = m_firstElementScheduled;
-        m_firstElementScheduled.reset();
-        const double now = m_clock.now();
+        // A key pressed after the release was asked for is a new press, and stays.
+        if (m_straightKeyDown && m_straightKeyDownAt <= at) {
+            straightKeyDown = true;
+            m_straightKeyDown = false;
+        }
+        if (m_firstElementScheduled && m_firstElementScheduled->keyedStart <= at) {
+            scheduled = m_firstElementScheduled;
+            m_firstElementScheduled.reset();
+        }
         {
             std::lock_guard paddles(m_paddleMutex);
-            m_stamps.ditUp = now;
-            m_stamps.dahUp = now;
-            m_history.emplace_back(now, Event::DitUp);
-            m_history.emplace_back(now, Event::DahUp);
+            m_stamps.ditUp = std::max(m_stamps.ditUp, at);
+            m_stamps.dahUp = std::max(m_stamps.dahUp, at);
+            // In time order, as if appended when it was asked for: edges that arrived since are
+            // later and stay after it.
+            auto pos = m_history.end();
+            while (pos != m_history.begin() && std::prev(pos)->first > at)
+                --pos;
+            pos = m_history.insert(pos, {at, Event::DahUp});
+            m_history.insert(pos, {at, Event::DitUp});
             while (m_history.size() > kHistoryLength)
                 m_history.pop_front();
         }
-        // WHY posted, and under this lock: the keyer thread may be between deciding to key and
-        // sending the KZD. A KZU sent from here could reach the radio first and leave it keyed.
+        // WHY queued, and under this lock: the KZD this release ends may still be in the queue.
         // paddleEvent queues under the same lock, so the DitDown this release saw is ahead of it.
         if (straightKeyDown)
-            pushEvent({Event::Release, now, m_straightKeyDownAt});
+            pushEvent({Event::Release, at, m_straightKeyDownAt});
     }
     if (straightKeyDown)
         m_sidetone.keyNow(false);
@@ -238,7 +278,7 @@ void PaddleKeyer::endStraightKeyOnAir(double keyDownAt, double releasedAt) {
 
 void PaddleKeyer::close() {
     releasePaddles(true);
-    pushEvent({Event::Close, m_clock.now()});
+    pushRequest({Event::Close, m_clock.now()});
     m_unmuteTimer.cancel();
 }
 
@@ -257,29 +297,26 @@ void PaddleKeyer::midiMessage(int status, int note, int velocity, double rtmidiD
     if (status == 0x90 || status == 0x80) {
         // WHY every note, mapped or not: the device counts its deltas from its previous note.
         const double timestamp = midiEventTimestamp(m_midiDelta);
-        std::vector<int> ditNotes, dahNotes;
-        {
-            std::lock_guard lock(m_configMutex);
-            ditNotes = m_ditNotes;
-            dahNotes = m_dahNotes;
-        }
+        const std::uint64_t notes = m_notes.load();
+        const bool ditNote = leverHasNote(notes, 0, note);
+        const bool dahNote = leverHasNote(notes, 1, note);
         // WHY 0x90 is key-down whatever its velocity: these devices never send note-on velocity 0
         // as a release; only 0x80 releases.
         if (status == 0x90) {
-            if (contains(ditNotes, note)) {
+            if (ditNote) {
                 m_ditWasDown = true;
                 paddleEvent(Event::DitDown, m_midiDelta, timestamp);
-            } else if (contains(dahNotes, note)) {
+            } else if (dahNote) {
                 m_dahWasDown = true;
                 paddleEvent(Event::DahDown, m_midiDelta, timestamp);
             }
         } else {
-            if (contains(ditNotes, note)) {
+            if (ditNote) {
                 if (m_ditWasDown) {
                     m_ditWasDown = false;
                     paddleEvent(Event::DitUp, m_midiDelta, timestamp);
                 }
-            } else if (contains(dahNotes, note)) {
+            } else if (dahNote) {
                 if (m_dahWasDown) {
                     m_dahWasDown = false;
                     paddleEvent(Event::DahUp, m_midiDelta, timestamp);
@@ -302,12 +339,8 @@ double PaddleKeyer::midiEventTimestamp(double delta) {
 }
 
 void PaddleKeyer::serialSignalChanged(Signal signal, bool asserted, double deltaTime) {
-    Signal dit, dah;
-    {
-        std::lock_guard lock(m_configMutex);
-        dit = m_ditSignal;
-        dah = m_dahSignal;
-    }
+    const Signal dit = m_ditSignal.load();
+    const Signal dah = m_dahSignal.load();
     if (signal == dit)
         paddleEvent(asserted ? Event::DitDown : Event::DitUp, deltaTime);
     if (signal == dah && !m_straightKeying)
@@ -403,7 +436,27 @@ void PaddleKeyer::run() {
 // one when the thread started waiting. K4-Companion gets the same by closing and reopening its
 // keyer whenever straight keying is switched (set_device_type).
 PaddleKeyer::Event PaddleKeyer::processNextEvent() {
-    const PaddleEventItem item = popEvent();
+    PaddleEventItem item;
+    while (true) {
+        const bool released = applyPendingReleases();
+        if (m_events.pop(item))
+            break;
+        if (m_requests.pop(item)) {
+            if (item.event == Event::Close) {
+                // Whatever the release before it queued (a straight key's KZU) goes out first.
+                applyPendingReleases();
+                PaddleEventItem last;
+                while (m_events.pop(last))
+                    if (last.event == Event::Release)
+                        endStraightKeyOnAir(last.keyDownAt, last.timestamp);
+                return Event::Close;
+            }
+            break;
+        }
+        if (released)
+            return Event::Release;
+        m_wake.wait();
+    }
     switch (item.event) {
     case Event::Close:
         return item.event;
@@ -463,7 +516,9 @@ void PaddleKeyer::sendStraightKey(const PaddleEventItem &item) {
     }
 }
 
-PaddleKeyer::Stamps PaddleKeyer::paddleTimestamps(std::optional<double> asOf) const {
+PaddleKeyer::Stamps PaddleKeyer::paddleTimestamps(std::optional<double> asOf) {
+    // Every decision reads the paddles here: a release asked for since takes effect now.
+    applyPendingReleases();
     std::lock_guard lock(m_paddleMutex);
     const Stamps stamps = m_stamps;
     if (!asOf)
@@ -506,11 +561,8 @@ PaddleKeyer::Stamps PaddleKeyer::paddleTimestamps(std::optional<double> asOf) co
 
 void PaddleKeyer::sendIambic() {
     const Mode mode = this->mode();
-    double ditUpMemoryDelay;
-    {
-        std::lock_guard lock(m_configMutex);
-        ditUpMemoryDelay = m_ditMemoryDelayPercent / 100 * (m_dahSeconds + m_interElementSeconds);
-    }
+    const double ditUpMemoryDelay =
+        m_ditMemoryDelayPercent.load() / 100 * (m_dahSeconds.load() + m_interElementSeconds.load());
 
     auto choose = [this, mode, ditUpMemoryDelay](Element prev, std::optional<double> look, std::optional<double> heard,
                                                  std::optional<double> asOf) -> Element {
@@ -627,12 +679,9 @@ void PaddleKeyer::sendBurst(const Chooser &choose) {
 PaddleKeyer::Element PaddleKeyer::missedFirstElement(std::optional<double> endedDue) {
     if (!endedDue)
         return std::nullopt;
-    std::vector<std::pair<double, Event>> history;
-    {
-        std::lock_guard lock(m_paddleMutex);
-        history.assign(m_history.begin(), m_history.end());
-    }
-    for (const auto &[timestamp, event] : history) {
+    applyPendingReleases();
+    std::lock_guard lock(m_paddleMutex);
+    for (const auto &[timestamp, event] : m_history) {
         if (timestamp <= *endedDue)
             continue;
         char elt;
@@ -649,6 +698,7 @@ PaddleKeyer::Element PaddleKeyer::missedFirstElement(std::optional<double> ended
 }
 
 PaddleKeyer::Element PaddleKeyer::placedFirstElement() {
+    applyPendingReleases();
     std::optional<FirstElement> scheduled;
     {
         std::lock_guard lock(m_firstElementMutex);

@@ -503,6 +503,7 @@ add_test(NAME DxClusterControllerTests COMMAND test_dxclustercontroller)
 set(QK4_PADDLEKEYER_SOURCES
     ${CMAKE_SOURCE_DIR}/src/hardware/paddlekeyer.cpp
     ${CMAKE_SOURCE_DIR}/src/audio/sidetonescheduler.cpp
+    ${CMAKE_SOURCE_DIR}/src/utils/rtsemaphore.cpp
 )
 add_executable(test_paddlekeyersweeps test_paddlekeyersweeps.cpp ${QK4_PADDLEKEYER_SOURCES})
 target_include_directories(test_paddlekeyersweeps PRIVATE ${CMAKE_SOURCE_DIR}/src)

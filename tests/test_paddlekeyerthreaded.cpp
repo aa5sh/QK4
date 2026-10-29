@@ -271,6 +271,27 @@ private slots:
         }
     }
 
+    // The main thread releases while a first element's sidetone edge is scheduled but not yet
+    // placed (no audio callback runs here). Cancelling that edge waits up to 100 ms for the audio
+    // side; the wait belongs to the keyer, never to the thread that asked for the release.
+    void releaseNeverWaitsOnTheCaller() {
+        SteadyKeyerClock clock;
+        CaptureLink link;
+        NullTimer timer;
+        SidetoneScheduler sidetone{clock, [&clock]() -> std::optional<double> { return clock.now(); }};
+        PaddleKeyer keyer{clock, link, sidetone, timer};
+        keyer.setSpeed(30);
+        keyer.paddleEvent(PaddleKeyer::Event::DitDown, 0); // schedules the first element's tone
+        QElapsedTimer t;
+        t.start();
+        keyer.releasePaddles();
+        QVERIFY2(t.elapsed() < 20, qPrintable(QString::number(t.elapsed()) + " ms"));
+        std::thread keyerThread([&keyer] { keyer.run(); });
+        keyer.close();
+        keyerThread.join();
+        QCOMPARE(openKzd(link.sent()), 0);
+    }
+
     // Close with nothing keyed returns promptly: the loop wakes on the Close event.
     void closeWhenIdleJoinsPromptly() {
         Rig rig;
