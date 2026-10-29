@@ -5,6 +5,8 @@ USB / serial / MIDI device wrappers. Owned by `controllers/hardwarecontroller.cp
 ## Files
 
 - `usbdevicelifecycle.h` — Header-only, Qt-free policy shared by the KPOD and KPOD+: given `{present, open, enabled}` and an event (detected / lost / opened / open-failed / enabled / disabled / shutting down), decides whether to open, close, report or notify. **One owner of "should this device be open"** — it used to be decided independently in the worker and in `HardwareController`, which is how a disabled KPOD+ got opened anyway (USB-002). Effects are derived from state EDGES, so the duplicate removals both devices emit per unplug report once. Covered by `test_usbdevicelifecycle`.
+- `kpodhidworker.{cpp,h}` — `KpodHidWorker`, on `KpodDevice::m_hidThread`. Owns the hidapi handle and runs every `hid_*` call: detection, polling, and on Linux the udev hotplug thread. Public slots are dispatched from the façade by queued connection.
+- `halikey_midi_ports.h` — header-only, no RtMidi dependency. Finds the HaliKey MIDI port by case-insensitive name containment, not equality: the WinMM backend appends the port index to the name, and Windows renumbers ports when any MIDI device is removed.
 - `kpoddevice.{cpp,h}` — Thin Qt façade over `KpodHidWorker`; owns `m_hidThread` and re-emits the worker's signals. **No `hid_*` call lives here** — see the hidapi section below. Detection runs on the worker thread as soon as it starts, so the window appears immediately; consumers observe `deviceInfoReady()` before reading `isDetected()`.
 - `kpodplusdevice.{cpp,h}` — Façade for the KPOD+ tuning knob + CW keyer. Owns **two** threads: `m_usbThread` (EP01 encoder/buttons/rocker polling and every config command) and `m_ep02Thread` (the keyer reader). Nothing here touches libusb. Configurable keyer parameters (speed, pitch, iambic mode, paddle orientation, encode mode, stuck timeout) are dispatched to the USB worker on change.
 - `halikeydevice.{cpp,h}` — HaliKey CW paddle. Delegates to one of 2 workers (selected by `deviceType`: 0 = V1.4 serial, 1 = MIDI); owns its own `m_workerThread`. Passes input straight through, with no debounce or queue of its own: `paddleChanged` from the V1.4 worker, and the MIDI sink set by `setMidiSink`.
@@ -15,7 +17,7 @@ USB / serial / MIDI device wrappers. Owned by `controllers/hardwarecontroller.cp
 - `halikeyv14worker.{cpp,h}` — V1.4 hardware-protocol worker (serial). Opens the port natively, powers the contacts with DTR/RTS, and polls the lines every 1 ms on every platform (a high-resolution waitable timer on Windows, `usleep` elsewhere) through `SerialLinePoller`. Dit = CTS, dah = DCD ∥ DSR. Emits `paddleChanged(dah, asserted, delta)`. Polling, not edge waits, on every OS: a blocking wait can't time a straight key's 20 ms debounce, and FTDI drivers on Windows miss isolated modem-line events.
 - `halikeymidiworker.{cpp,h}` — MIDI-variant worker. Notes 20 = dit, 21 = dah, 31 = PTT (ignored). Every raw message also goes straight from RtMidi's thread to the `HaliKeyMidiSink` that `HalikeyDevice::setMidiSink` sets. CwController points it at `PaddleKeyer::midiMessage`, which decodes MoMIDI's own time stamps (note velocity = ms since the previous event, CC/poly aftertouch on channel 0 = 126 ms steps, velocity 0/127 = no time, use RtMidi's delta). Notes on any channel are normalised to channel 0; for a non-MoMIDI device a note-on with velocity 0 is passed as a note-off.
 - `halikeyportscan.{cpp,h}` — Lists HaliKey serial or MIDI ports on a short-lived worker thread and delivers them queued to the caller's thread, for the Options page. The first CoreMIDI enumeration in a process took 0.8–1.9 s on macOS, and SetupAPI COM enumeration is slow on Windows with Bluetooth serial ports; both used to run on the GUI thread. One scan at a time: a repeat request is absorbed, a request for the other device type replaces the outdated scan. `chooseIndex()` is the saved-port / first-HaliKey-MIDI selection rule.
-- `paddlekeyer.{cpp,h}` — Port of K4-Companion's keyer (Dale Farnsworth, GPL-3.0): Iambic A/B, Plain Iambic, Ultimatic and straight-key passthrough, sent as timed `KZD`/`KZU`. Paddle edges timestamped at capture (MoMIDI's own clock, the 1 ms serial poll); decisions read the paddles as of when they were due. Pure logic behind `keyertiming.h` seams; pinned by Dale's 554 recorded runs (`tests/test_paddlekeyersweeps.cpp`).
+- `paddlekeyer.{cpp,h}` — Port of K4-Companion's keyer (Dale Farnsworth, GPL-3.0): Iambic A/B, Plain Iambic, Ultimatic and straight-key passthrough, sent as timed `KZD`/`KZU`. Paddle edges timestamped at capture (MoMIDI's own clock, the 1 ms serial poll); decisions read the paddles as of when they were due. Pure logic behind `keyertiming.h` seams; pinned by Dale's 564 recorded runs (`tests/test_paddlekeyersweeps.cpp`, data in `tests/data/paddlekeyer/`).
 - `keyertiming.h` — The Clock / Link / OneShotTimer seams the keyer runs against, and `pyRound` (half-to-even, as Python's `round`).
 - `keyerruntime.{cpp,h}` — Production seams: `SteadyKeyerClock` (steady_clock, high-resolution waitable timer sleeps on Windows), `FunctionLink` (keyer → `TcpClient::sendCAT`), `QtOneShotTimer` (monitor restore, on the main thread).
 - `seriallinepoller.{cpp,h}` — Port of K4-Companion's serial line poll, run by the V1.4 worker: rest state at open is not an edge, paddles reported on the first poll that sees them, 20 ms straight-key debounce (dah line ignored), per-line deltas.
@@ -25,7 +27,8 @@ USB / serial / MIDI device wrappers. Owned by `controllers/hardwarecontroller.cp
 - `PaddleKeyer::run()` on `HardwareController::m_keyerThread` (HighPriority, a `QThread::create` with no event loop: the keyer blocks on its own event queue and sleeps to its deadlines).
 - `SidetoneGenerator` on `HardwareController::m_sidetoneThread` (HighPriority); a 1 ms timer there pushes one 4 ms block at a time, keeping the sink's queue at the shortest level the device sustains (starts at 8 ms, rises a block per dry-out).
 - MIDI paddle edges reach the keyer on RtMidi's own thread; V1.4 edges on the HaliKey worker thread.
-- `HalikeyDevice` has its own `m_workerThread` for platform-worker variants.
+- `HalikeyDevice` has its own `m_workerThread` for the V1.4 and MIDI workers. It is started with no priority, so it inherits the starting thread's priority (`QThread::InheritPriority`), although it runs the V1.4 1 ms poll.
+- `HaliKeyPortScan` runs each port scan on a short-lived `QThread::create` thread and delivers the list queued to the caller's thread.
 - `KpodDevice` owns `m_hidThread`; all hidapi I/O is on it. On Linux `KpodHidWorker` starts a second thread for the udev hotplug poll.
 - `KpodPlusDevice` owns `m_usbThread` (EP01 + config) and `m_ep02Thread` (keyer reader, HighPriority).
 
@@ -33,16 +36,21 @@ USB / serial / MIDI device wrappers. Owned by `controllers/hardwarecontroller.cp
 long after they stopped (USB-011); if a comment here claims main-thread USB I/O, it is stale, not a
 rule.
 
-Eleven `new QThread` sites across the app; seven are in or adjacent to this directory — five in
-`hardware/` (`kpoddevice`, `kpodhidworker`, `kpodplusdevice` ×2, `halikeydevice`) and two in
-`hardwarecontroller.cpp` (keyer, sidetone). The remaining four are in `audiocontroller.cpp`,
-`connectioncontroller.cpp`, `dxclustercontroller.cpp` and `tcicontroller.cpp`.
+Threads are created two ways: `new QThread` (with `moveToThread`) and `QThread::create` (a function
+run with no event loop). Count both with:
 
-Count them with `rg -c 'new QThread' src --glob '*.cpp'` rather than trusting this line — it has been
-wrong before.
+```bash
+rg -c 'new QThread|QThread::create' src --glob '*.cpp'
+```
+
+In this directory: `kpoddevice`, `kpodhidworker`, `kpodplusdevice` ×2, `halikeydevice` and
+`halikeyportscan`. In `hardwarecontroller.cpp`: the keyer (`QThread::create`) and the sidetone thread.
+The rest are in `audiocontroller.cpp`, `connectioncontroller.cpp`, `dxclustercontroller.cpp` and
+`tcicontroller.cpp`.
 
 Live thread count is not the same as the site count: `kpodhidworker`'s udev hotplug thread is
-`#ifdef Q_OS_LINUX`, and `dxclustercontroller` creates one thread *per cluster instance*.
+`#ifdef Q_OS_LINUX`, `dxclustercontroller` creates one thread *per cluster instance*, and a port-scan
+thread exists only while a scan runs.
 
 ## Who decides a device is open
 

@@ -19,6 +19,8 @@ for byte.
 | `summary_30wpm_dah-first.json`, `summary_40wpm_dah-first.json` | dah closed first, dit after it, both held | 10, 8 |
 | `summary_30wpm_stall.json`, `summary_40wpm_stall.json` | S then T over MoMIDI with the process stalled | 101, 75 |
 
+564 runs in all. Recount with `jq -s 'map(length) | add' tests/data/paddlekeyer/summary_*.json`.
+
 All were recorded with Iambic B, Dit Mem 0 %, and the K4's monitor mute on. That's why every
 burst carries `ML0000;` after its first `KZD`.
 

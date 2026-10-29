@@ -14,9 +14,22 @@ here: two hand-maintained lists drift apart, and this one already had.
 ## Groups
 
 ### Core I/O owners
-`ConnectionController`, `AudioController`, `HardwareController`, `SpectrumController`,
-`DxClusterController`, `TciController` — each owns a dedicated thread and a device/network boundary.
-`CwController` orchestrates keying across the HardwareController-owned devices.
+`ConnectionController`, `AudioController`, `HardwareController`, `DxClusterController`, `TciController`
+— each owns a device or network boundary and the threads behind it:
+
+- `ConnectionController` — the I/O thread (TcpClient + Protocol).
+- `AudioController` — the audio thread.
+- `HardwareController` — the sidetone thread and the keyer thread. The USB and serial devices it owns
+  start their own worker threads (see `hardware/README.md`).
+- `DxClusterController` — one thread per cluster connection.
+- `TciController` — the TCI server thread.
+
+`rg -n 'new QThread|QThread::create' src/controllers` lists them.
+
+### Main-thread coordinators
+`SpectrumController` (panadapters, span, click/scroll tune), `CwController` (keying across the
+HardwareController-owned devices) and `TransmitController` (the single owner of "are we
+transmitting") own no thread.
 
 ### Popup family
 `PopupManager`, `ModePopupController`, `FeatureMenuController`, `AntennaConfigController`,
@@ -33,7 +46,7 @@ routing layer for click/macro/band/memory events.
 `RightSideController`, `KPA1500UiController` — observe RadioState and render.
 
 ### Text decode
-`TextDecodeController` — FT8/PSK decoder window lifecycle.
+`TextDecodeController` — lifecycle of the windows that show the K4's own on-radio decoder (CW / AFSK / FSK / PSK / DATA / SSB).
 
 ## Adding a new controller
 

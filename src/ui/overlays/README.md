@@ -7,18 +7,18 @@ Widgets that paint on top of other widgets. Not popups — overlays are not self
 - `menuoverlay` — Full-screen MEDF menu overlay. Driven by `MenuController`.
 - `sidecontroloverlay` — Base class for the two mini overlays below.
 - `monoverlay` / `baloverlay` — MON / BAL side-control mini overlays.
-- `mousevfoindicator` — Cursor-follow overlay. Shows the frequency under the mouse on the panadapter.
-- `dxspotoverlay` — DX cluster spots painted onto the panadapter.
+- `mousevfoindicator` — small cursor-follow badge on the panadapter. Colours itself cyan (VFO A) or green (VFO B) while the pointer is over it. Purely visual: no CAT, no RadioState.
+- `dxspotoverlay` — DX cluster spots painted onto the panadapter. Clicking a spot label emits the frequency for click-to-tune (left → VFO A, right → VFO B).
 
 ## Pattern
 
 Overlays typically:
 1. Take a pointer to their host widget as parent (for paint-coordinate mapping).
-2. Observe one or two RadioState signals; re-render via `update()`.
+2. Get their data from their owner or from RadioState signals; re-render via `update()`.
 3. Don't own CAT dispatch — pure presentation.
 
 ## Ownership
 
 - `menuoverlay` → `MenuController`.
 - `mon/bal` overlays → `SideControlPanel` (host widget).
-- `mousevfoindicator` + `dxspotoverlay` → `SpectrumController` / `PanadapterRhiWidget`.
+- `mousevfoindicator` + `dxspotoverlay` → created and fed by `SpectrumController`, as children of each `PanadapterRhiWidget`.

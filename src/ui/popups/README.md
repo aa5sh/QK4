@@ -1,13 +1,15 @@
 # ui/popups/
 
-Popup widgets. All inherit from `K4PopupBase` (in `ui/styling/`).
+Popup widgets and their base class. Every popup here inherits from `K4PopupBase`, which lives in this directory.
 
 ## Files
 
-Grouped by trigger:
+- `k4popupbase` — base class for every popup. Handles window flags, translucent background, placement above the trigger button, drop shadow and background painting, Escape and the `closed()` signal.
 
-- **Band / mode / display / Fn / button row** (5): `bandpopupwidget`, `modepopupwidget`, `displaypopupwidget`, `fnpopupwidget`, `buttonrowpopup` — main app popups, triggered from `BottomMenuBar`.
-- **Audio effects** (1): `rxeqpopupwidget` — RX EQ.
+The popups, grouped by trigger. `rg -l ': public K4PopupBase' src/ui/popups` lists them.
+
+- **Band / mode / display / Fn / button row** (5): `bandpopupwidget`, `modepopupwidget`, `displaypopupwidget`, `fnpopupwidget`, `buttonrowpopup` — main app popups. Most open from `BottomMenuBar`; the mode popup opens from the right panel's MODE key.
+- **Audio effects** (1): `rxeqpopupwidget` — RX EQ and TX EQ (two instances of one class).
 - **Antenna config** (1): `antennacfgpopup` — per-VFO antenna masking.
 - **Audio I/O** (4): `lineinpopup`, `lineoutpopup`, `micinputpopup`, `micconfigpopup`.
 - **Modulation** (2): `voxpopup`, `ssbbwpopup`.
@@ -18,18 +20,21 @@ Grouped by trigger:
 
 See `PATTERNS.md` → "Adding a Popup Menu":
 
-1. Inherit from `K4PopupBase` (in `ui/styling/k4popupbase.h`), never from `QWidget` directly.
+1. Inherit from `K4PopupBase` (`ui/popups/k4popupbase.h`), never from `QWidget` directly.
 2. Implement the pure-virtual `contentSize()`.
 3. Call `initPopup()` last in the constructor.
 4. Use `contentMargins()` for layout (handles shadow + content padding).
 5. Use `K4Styles::*` for all colors, gradients, and button styling.
-6. Never implement shadow code — `K4PopupBase` handles this.
+6. Never implement shadow code — `K4PopupBase` handles this. For custom painting, override `paintContent()`, not `paintEvent()`.
 
 ## Ownership
 
-Most popups are owned by `controllers/popupmanager.cpp` (primary family) or a specialized controller (`modepopupcontroller`, `featuremenucontroller`, `antennaconfigcontroller`).
+- `controllers/popupmanager.cpp` — the primary family, plus `softwarelistpopup`.
+- `controllers/modepopupcontroller.cpp` — `modepopupwidget`.
+- `controllers/antennaconfigcontroller.cpp` — the three `antennacfgpopup` instances (Main RX, Sub RX, TX).
+- `controllers/statusbarcontroller.cpp` — `confirmpopup`, for the remote power-off.
 
 ## See also
 
 - `PATTERNS.md` → "Adding a Popup Menu".
-- `ui/styling/k4popupbase.h` — base class reference.
+- `ui/popups/k4popupbase.h` — base class reference.

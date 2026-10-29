@@ -1,11 +1,26 @@
 # dsp/
 
-GPU-accelerated spectrum + waterfall rendering via Qt RHI (Metal / DX / Vulkan / GL).
+GPU-accelerated spectrum + waterfall rendering via Qt RHI, through `QRhiWidget`.
+
+Graphics API: `QRhiWidget` defaults to Metal on macOS, Direct3D 11 on Windows and OpenGL elsewhere
+(Qt docs, `QRhiWidget::setApi()`). Both widgets also call `setApi(Metal)` on macOS. Nothing selects
+Vulkan, so Linux, the Raspberry Pi and the Flatpak render with OpenGL. When no `QRhi` can be
+created, `QRhiWidget::renderFailed` fires; `SpectrumController` logs it.
+
+Qt version: `QRhiWidget` needs Qt 6.7 or later. The QRhi classes (`QRhi`, `QShader`,
+`QShaderDescription`) have no source or binary compatibility guarantee across Qt minor releases
+(Qt docs, QRhiWidget). They are included as `<rhi/qrhi.h>` through `Qt6::GuiPrivate`. Re-test the
+panadapter on every Qt minor bump; the release packages use Qt 6.10 on macOS, Windows and Flatpak,
+and Debian Trixie's Qt on the Pi.
+
+Reparenting: neither widget implements `QRhiWidget::releaseResources()`. Qt expects a robust
+subclass to implement it if the widget can move to a different top-level window. These widgets are
+never moved to another top-level window; implement it before doing that.
 
 ## Files
 
-- `panadapter_rhi.{cpp,h}` — Main panadapter (spectrum + waterfall). Click-tune, passband overlays, DX spot overlays, TX markers. ~1870 LOC (naturally large — RHI pipeline + buffer management).
-- `minipan_rhi.{cpp,h}` — Per-VFO mini-pan widget. ~1065 LOC.
+- `panadapter_rhi.{cpp,h}` — Main panadapter (spectrum + waterfall). Click-tune, passband overlays, DX spot overlays, TX markers. Naturally large (RHI pipeline + buffer management).
+- `minipan_rhi.{cpp,h}` — `MiniPanRhiWidget`, the per-VFO mini-pan.
 - `panadapter_constants.h` — Shared rendering parameters: RTTY shift, grid cell size, line widths, dash pattern. Texture and history dimensions are **not** here; they live in `panadapter_rhi.h` (`BASE_TEXTURE_WIDTH`, `MAX_WATERFALL_HISTORY`).
 - `waterfallgeometry.{cpp,h}` — `WaterfallGeometry::` namespace. Which stored waterfall row each screen pixel shows: visible-row count, ring offsets, and the uniforms `waterfall.vert` consumes. Mirrors the shaders' V math so the mapping can be tested without a GPU; covered by `test_waterfallgeometry`.
 - `spectrumgeometry.{cpp,h}` — `SpectrumGeometry::` namespace. The frequency axis: operating mode and DATA sub-mode as enums (parsed once in the setters, not compared as strings per frame), the CW display centre shared by the panadapter, its frequency-scale and band-plan overlays and click-tune, passband edges and marker position for primary and secondary VFO, and the bounds check on a PAN frame's wire-supplied bin count. Pure arithmetic on Qt Core, covered by `test_spectrumgeometry`.
@@ -14,7 +29,11 @@ GPU-accelerated spectrum + waterfall rendering via Qt RHI (Metal / DX / Vulkan /
 - `dashgeometry.h` — `DashGeometry::` namespace. Builds the vertices for a dashed vertical overlay line and caps itself at the buffer size `PanadapterConstants::MaxDashFloats` states. Depends on Qt Core only — kept out of `rhi_utils.h` so `test_panadapterdashes` needs no private Qt headers.
 - `audioupsampler.{cpp,h}` — `AudioUpsampler`, a streaming windowed-sinc 4:1 interpolator (12 kHz → 48 kHz) for the TCI receive path. Not used by the renderer; lives here as signal processing. Stopband rejection pinned by `test_audioupsampler`.
 - `rhi_utils.h` — Shared RHI helpers (color LUT size, texture builders).
-- `shaders/` — 4 shader pairs (vert/frag): spectrum, spectrum_fill, waterfall, overlay. Compiled at build time via `qt6_add_shaders()` in `CMakeLists.txt`.
+- `shaders/` — Vulkan-style GLSL (`#version 440`), compiled at build time to `.qsb` by `qt6_add_shaders()` in `CMakeLists.txt` and loaded from `:/shaders/src/dsp/shaders/*.qsb`.
+  - `spectrum_fill.{vert,frag}` — the panadapter's filled spectrum trace.
+  - `spectrum.{vert,frag}` — the mini-pan's spectrum trace.
+  - `waterfall.{vert,frag}` — the waterfall, in both widgets.
+  - `overlay.{vert,frag}` — flat-colour overlay geometry (passband, markers, grid lines), in both widgets.
 
 ## Amplitude axis
 
@@ -79,9 +98,9 @@ Owned by `SpectrumController` (`controllers/spectrumcontroller.cpp`).
 
 ## Data flow
 
-K4 spectrum packets → `Protocol` → `ConnectionController` → `SpectrumController` → `PanadapterRhiWidget` / `MinipanRhiWidget`.
+K4 spectrum packets → `Protocol` (I/O thread) → `ConnectionController` (re-emits, queued to the main thread) → `SpectrumController` → `PanadapterRhiWidget` / `MiniPanRhiWidget`.
 
-Spectrum data routing includes AR (auto-reference), #SCL (scale), #SPN (span), #REF (reference level), #WFC (waterfall color), #WFH (waterfall history) — all stored on `SpectrumDisplayState` in `models/radiostate/`.
+Spectrum display state includes #AR (auto-reference), #SCL (scale), #SPN (span), #REF (reference level), #WFC (waterfall color), #WFH (waterfall history) — all stored on `SpectrumDisplayState` in `models/radiostate/`.
 
 ## See also
 
