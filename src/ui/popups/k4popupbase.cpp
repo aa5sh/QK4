@@ -168,6 +168,26 @@ void K4PopupBase::paintEvent(QPaintEvent *event) {
     paintContent(painter, cr);
 }
 
+void K4PopupBase::paintCompactRowFrame(QPainter &painter, const QRect &contentRect,
+                                       std::initializer_list<const QWidget *> delimitedWidgets) const {
+    constexpr int DelimiterInset = 7;  // Gap between a delimiter's ends and the frame's top/bottom
+    constexpr int DelimiterOffset = 3; // Half the row's 6 px spacing, past the widget's inclusive right()
+
+    painter.setBrush(K4Styles::buttonGradient(contentRect.top(), contentRect.bottom()));
+    painter.setPen(QPen(K4Styles::borderColor(), 1));
+    painter.drawRoundedRect(contentRect, K4Styles::Dimensions::BorderRadiusLarge,
+                            K4Styles::Dimensions::BorderRadiusLarge);
+
+    const int lineTop = contentRect.top() + DelimiterInset;
+    const int lineBottom = contentRect.bottom() - DelimiterInset;
+    for (const QWidget *widget : delimitedWidgets) {
+        if (widget && widget->isVisible()) {
+            const int x = widget->geometry().right() + DelimiterOffset;
+            painter.drawLine(x, lineTop, x, lineBottom);
+        }
+    }
+}
+
 void K4PopupBase::paintContent(QPainter &painter, const QRect &contentRect) {
     // Default implementation does nothing
     // Subclasses can override for custom painting

@@ -4,8 +4,6 @@
 #include <QPainter>
 
 namespace {
-const int ContentHeight = 52;
-const int ContentMargin = 12;
 const int TitleWidth = 140; // Wider title for "MIC INPUT"
 } // namespace
 
@@ -17,7 +15,7 @@ MicInputPopupWidget::MicInputPopupWidget(QWidget *parent) : K4PopupBase(parent) 
 void MicInputPopupWidget::setupUi() {
     int sm = K4Styles::Dimensions::ShadowMargin;
     auto *layout = new QHBoxLayout(this);
-    layout->setContentsMargins(sm + ContentMargin, sm + 8, sm + ContentMargin, sm + 8);
+    layout->setContentsMargins(sm + CompactRowContentMargin, sm + 8, sm + CompactRowContentMargin, sm + 8);
     layout->setSpacing(6);
 
     m_titleLabel = new QPushButton("MIC INPUT", this);
@@ -104,11 +102,11 @@ void MicInputPopupWidget::setupUi() {
 }
 
 QSize MicInputPopupWidget::contentSize() const {
-    const int contentWidth = ContentMargin + TitleWidth + 6 + K4Styles::Dimensions::PopupButtonWidth + 6 +
+    const int contentWidth = CompactRowContentMargin + TitleWidth + 6 + K4Styles::Dimensions::PopupButtonWidth + 6 +
                              K4Styles::Dimensions::PopupButtonWidth + 6 + K4Styles::Dimensions::PopupButtonWidth + 6 +
                              K4Styles::Dimensions::PopupButtonWidth + 6 + K4Styles::Dimensions::PopupButtonWidth + 6 +
-                             K4Styles::Dimensions::NavButtonWidth + ContentMargin;
-    return QSize(contentWidth, ContentHeight);
+                             K4Styles::Dimensions::NavButtonWidth + CompactRowContentMargin;
+    return QSize(contentWidth, CompactRowContentHeight);
 }
 
 void MicInputPopupWidget::updateButtonStyles() {
@@ -137,23 +135,5 @@ void MicInputPopupWidget::setCurrentInput(int input) {
 }
 
 void MicInputPopupWidget::paintContent(QPainter &painter, const QRect &contentRect) {
-    QLinearGradient grad = K4Styles::buttonGradient(contentRect.top(), contentRect.bottom());
-    painter.setBrush(grad);
-    painter.setPen(QPen(K4Styles::borderColor(), 1));
-    painter.drawRoundedRect(contentRect, K4Styles::Dimensions::BorderRadiusLarge,
-                            K4Styles::Dimensions::BorderRadiusLarge);
-
-    painter.setPen(QPen(K4Styles::borderColor(), 1));
-    int lineTop = contentRect.top() + 7;
-    int lineBottom = contentRect.bottom() - 7;
-
-    auto drawDelimiter = [&](QWidget *widget) {
-        if (widget && widget->isVisible()) {
-            int x = widget->geometry().right() + 3;
-            painter.drawLine(x, lineTop, x, lineBottom);
-        }
-    };
-
-    drawDelimiter(m_titleLabel);
-    drawDelimiter(m_rearLineBtn);
+    paintCompactRowFrame(painter, contentRect, {m_titleLabel, m_rearLineBtn});
 }

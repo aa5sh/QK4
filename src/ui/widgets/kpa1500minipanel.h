@@ -46,8 +46,6 @@ private slots:
     void onDecayTimer();
 
 private:
-    void updateButtonLabels();
-
     // Animation timer
     QTimer *m_decayTimer;
 

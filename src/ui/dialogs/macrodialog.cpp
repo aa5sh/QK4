@@ -55,6 +55,7 @@ MacroItemWidget::MacroItemWidget(const QString &functionId, const QString &displ
                                    .arg(K4Styles::Colors::InactiveGray)
                                    .arg(K4Styles::Dimensions::FontSizePopup));
     m_labelEdit->hide();
+    m_labelEdit->installEventFilter(this);
     connect(m_labelEdit, &QLineEdit::editingFinished, this, &MacroItemWidget::finishEditing);
     layout->addWidget(m_labelEdit, 1); // stretch factor 1
 
@@ -77,6 +78,7 @@ MacroItemWidget::MacroItemWidget(const QString &functionId, const QString &displ
                                      .arg(K4Styles::Dimensions::FontSizePopup)
                                      .arg(K4Styles::Fonts::Data));
     m_commandEdit->hide();
+    m_commandEdit->installEventFilter(this);
     connect(m_commandEdit, &QLineEdit::editingFinished, this, &MacroItemWidget::finishEditing);
     layout->addWidget(m_commandEdit, 1); // stretch factor 1
 
@@ -189,6 +191,19 @@ void MacroItemWidget::finishEditing() {
             emit commandChanged(m_functionId, m_command);
         }
     }
+}
+
+bool MacroItemWidget::eventFilter(QObject *watched, QEvent *event) {
+    // WHY: Tab never reaches a keyPressEvent while a QLineEdit has focus - QWidget::event() spends it
+    // on focus-chain traversal first, which would close the editor without the dialog knowing.
+    if ((watched == m_labelEdit || watched == m_commandEdit) && event->type() == QEvent::KeyPress) {
+        const int key = static_cast<QKeyEvent *>(event)->key();
+        if (key == Qt::Key_Tab || key == Qt::Key_Backtab) {
+            emit fieldSwitchRequested();
+            return true;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 void MacroItemWidget::paintEvent(QPaintEvent *event) {
@@ -508,6 +523,11 @@ void MacroDialog::populateItems() {
             }
         });
 
+        connect(widget, &MacroItemWidget::fieldSwitchRequested, this, [this, widget]() {
+            if (m_editMode && m_itemWidgets.indexOf(widget) == m_selectedIndex)
+                setEditMode(true, !m_editingCommand);
+        });
+
         connect(widget, &MacroItemWidget::labelChanged, this, &MacroDialog::onLabelChanged);
         connect(widget, &MacroItemWidget::commandChanged, this, &MacroDialog::onCommandChanged);
 
@@ -566,12 +586,6 @@ void MacroDialog::keyPressEvent(QKeyEvent *event) {
             setEditMode(false);
         } else {
             closeDialog();
-        }
-        break;
-    case Qt::Key_Tab:
-        // In edit mode, Tab switches between label and command
-        if (m_editMode) {
-            setEditMode(true, !m_editingCommand);
         }
         break;
     default:
@@ -709,6 +723,9 @@ void MacroDialog::setEditMode(bool editing, bool editCommand) {
     if (m_selectedIndex >= 0 && m_selectedIndex < m_itemWidgets.size()) {
         auto *widget = m_itemWidgets[m_selectedIndex];
         if (editing) {
+            // WHY: commit the field being left first. Opening the other editor moves focus, and the
+            // closing editor's editingFinished would then hide both.
+            widget->finishEditing();
             if (editCommand) {
                 widget->editCommand();
             } else {

@@ -445,16 +445,12 @@ void MenuOverlayWidget::keyPressEvent(QKeyEvent *event) {
         break;
     case Qt::Key_Plus:
     case Qt::Key_Equal:
-        if (!m_itemWidgets.isEmpty() && m_selectedIndex < m_itemWidgets.size()) {
-            MenuItem *item = m_itemWidgets[m_selectedIndex]->menuItem();
+        if (MenuItem *item = selectedMenuItem())
             emit menuValueChangeRequested(item->id, "+");
-        }
         break;
     case Qt::Key_Minus:
-        if (!m_itemWidgets.isEmpty() && m_selectedIndex < m_itemWidgets.size()) {
-            MenuItem *item = m_itemWidgets[m_selectedIndex]->menuItem();
+        if (MenuItem *item = selectedMenuItem())
             emit menuValueChangeRequested(item->id, "-");
-        }
         break;
     default:
         QWidget::keyPressEvent(event);
@@ -470,71 +466,42 @@ void MenuOverlayWidget::mousePressEvent(QMouseEvent *event) {
 }
 
 void MenuOverlayWidget::wheelEvent(QWheelEvent *event) {
-    int steps = m_wheelAccumulator.accumulate(event);
-    if (steps == 0) {
-        event->accept();
-        return;
-    }
-
-    if (m_editMode) {
-        // In edit mode, wheel changes value
-        if (!m_itemWidgets.isEmpty() && m_selectedIndex < m_itemWidgets.size()) {
-            MenuItem *item = m_itemWidgets[m_selectedIndex]->menuItem();
-            for (int i = 0; i < qAbs(steps); ++i)
-                emit menuValueChangeRequested(item->id, steps > 0 ? "+" : "-");
-        }
-    } else {
-        // In browse mode, wheel scrolls through items
-        for (int i = 0; i < qAbs(steps); ++i) {
-            if (steps > 0)
-                navigateUp();
-            else
-                navigateDown();
-        }
-    }
+    applyWheelSteps(m_wheelAccumulator.accumulate(event));
     event->accept();
 }
 
 bool MenuOverlayWidget::eventFilter(QObject *watched, QEvent *event) {
     // Intercept wheel events from scroll area to move selection instead of scrolling
-    if (event->type() == QEvent::Wheel) {
-        if (watched == m_scrollArea || watched == m_scrollArea->viewport()) {
-            QWheelEvent *wheelEvent = static_cast<QWheelEvent *>(event);
-            wheelEvent->accept();
-
-            int steps = m_wheelAccumulator.accumulate(wheelEvent);
-            if (steps == 0)
-                return true;
-
-            if (m_editMode) {
-                // In edit mode, wheel changes value
-                if (!m_itemWidgets.isEmpty() && m_selectedIndex < m_itemWidgets.size()) {
-                    MenuItem *item = m_itemWidgets[m_selectedIndex]->menuItem();
-                    for (int i = 0; i < qAbs(steps); ++i)
-                        emit menuValueChangeRequested(item->id, steps > 0 ? "+" : "-");
-                }
-            } else {
-                // In browse mode, wheel moves selection (with hard stops)
-                for (int i = 0; i < qAbs(steps); ++i) {
-                    if (steps > 0)
-                        navigateUp();
-                    else
-                        navigateDown();
-                }
-            }
-            return true; // Event handled, don't let scroll area scroll
-        }
+    if (event->type() == QEvent::Wheel && (watched == m_scrollArea || watched == m_scrollArea->viewport())) {
+        auto *wheelEvent = static_cast<QWheelEvent *>(event);
+        wheelEvent->accept();
+        applyWheelSteps(m_wheelAccumulator.accumulate(wheelEvent));
+        return true; // Event handled, don't let scroll area scroll
     }
     return QWidget::eventFilter(watched, event);
+}
+
+void MenuOverlayWidget::applyWheelSteps(int steps) {
+    // Browse mode moves the selection (with hard stops); edit mode steps the value - navigateUp/Down do both.
+    for (int i = 0; i < qAbs(steps); ++i) {
+        if (steps > 0)
+            navigateUp();
+        else
+            navigateDown();
+    }
+}
+
+MenuItem *MenuOverlayWidget::selectedMenuItem() const {
+    if (m_selectedIndex < 0 || m_selectedIndex >= m_itemWidgets.size())
+        return nullptr;
+    return m_itemWidgets[m_selectedIndex]->menuItem();
 }
 
 void MenuOverlayWidget::navigateUp() {
     if (m_editMode) {
         // In edit mode, up increments value
-        if (!m_itemWidgets.isEmpty() && m_selectedIndex < m_itemWidgets.size()) {
-            MenuItem *item = m_itemWidgets[m_selectedIndex]->menuItem();
+        if (MenuItem *item = selectedMenuItem())
             emit menuValueChangeRequested(item->id, "+");
-        }
     } else {
         // In browse mode, up moves selection
         if (m_selectedIndex > 0) {
@@ -549,10 +516,8 @@ void MenuOverlayWidget::navigateUp() {
 void MenuOverlayWidget::navigateDown() {
     if (m_editMode) {
         // In edit mode, down decrements value
-        if (!m_itemWidgets.isEmpty() && m_selectedIndex < m_itemWidgets.size()) {
-            MenuItem *item = m_itemWidgets[m_selectedIndex]->menuItem();
+        if (MenuItem *item = selectedMenuItem())
             emit menuValueChangeRequested(item->id, "-");
-        }
     } else {
         // In browse mode, down moves selection
         if (m_selectedIndex < m_itemWidgets.size() - 1) {
@@ -565,11 +530,9 @@ void MenuOverlayWidget::navigateDown() {
 }
 
 void MenuOverlayWidget::selectCurrent() {
-    if (m_itemWidgets.isEmpty() || m_selectedIndex >= m_itemWidgets.size()) {
+    MenuItem *item = selectedMenuItem();
+    if (!item)
         return;
-    }
-
-    MenuItem *item = m_itemWidgets[m_selectedIndex]->menuItem();
     if (item->isReadOnly()) {
         return;
     }
@@ -592,11 +555,9 @@ void MenuOverlayWidget::closeOverlay() {
 }
 
 void MenuOverlayWidget::resetToDefault() {
-    if (m_itemWidgets.isEmpty() || m_selectedIndex >= m_itemWidgets.size()) {
+    MenuItem *item = selectedMenuItem();
+    if (!item)
         return;
-    }
-
-    MenuItem *item = m_itemWidgets[m_selectedIndex]->menuItem();
     if (item->isReadOnly()) {
         return;
     }
@@ -666,12 +627,12 @@ void MenuOverlayWidget::updateNormButton() {
                                 .arg(K4Styles::Dimensions::FontSizeMedium)
                                 .arg(K4Styles::Colors::TextWhite);
 
-    if (m_itemWidgets.isEmpty() || m_selectedIndex >= m_itemWidgets.size()) {
+    MenuItem *item = selectedMenuItem();
+    if (!item) {
         m_normBtn->setStyleSheet(normBtnDisabled);
         return;
     }
 
-    MenuItem *item = m_itemWidgets[m_selectedIndex]->menuItem();
     if (item->isReadOnly()) {
         // NORM cannot change a read-only item, so it must not light up for one either
         m_normBtn->setStyleSheet(normBtnDisabled);

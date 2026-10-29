@@ -90,13 +90,11 @@ void Kpa1500MiniPanel::setTemperature(float celsius) {
 
 void Kpa1500MiniPanel::setMode(bool operate) {
     m_operate = operate;
-    updateButtonLabels();
     update();
 }
 
 void Kpa1500MiniPanel::setAtuMode(bool modeInline) {
     m_atuModeInline = modeInline;
-    updateButtonLabels();
     update();
 }
 
@@ -137,12 +135,6 @@ void Kpa1500MiniPanel::setConnected(bool connected) {
         m_decayTimer->stop();
     }
     update();
-}
-
-void Kpa1500MiniPanel::updateButtonLabels() {
-    m_modeBtn->setText("MODE");
-    m_atuBtn->setText("ATU");
-    m_antBtn->setText("ANT");
 }
 
 void Kpa1500MiniPanel::onDecayTimer() {
@@ -247,7 +239,7 @@ void Kpa1500MiniPanel::paintEvent(QPaintEvent *) {
     };
 
     QFont labelFont = K4Styles::Fonts::paintFont(K4Styles::Dimensions::FontSizeSmall);
-    QFont valueFont = K4Styles::Fonts::paintFont(9, QFont::Bold);
+    QFont valueFont = K4Styles::Fonts::paintFont(K4Styles::Dimensions::FontSizeNormal, QFont::Bold);
 
     int barX = cx + LABEL_WIDTH;
     int barW = cw - LABEL_WIDTH - VALUE_WIDTH;

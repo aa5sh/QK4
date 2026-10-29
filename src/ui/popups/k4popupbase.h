@@ -2,6 +2,7 @@
 #define K4POPUPBASE_H
 
 #include <QElapsedTimer>
+#include <initializer_list>
 #include <QWidget>
 
 /**
@@ -128,6 +129,20 @@ protected:
      * @param contentRect The content rectangle (inside shadow margins)
      */
     virtual void paintContent(QPainter &painter, const QRect &contentRect);
+
+    // Single-row popups (title | controls | value | -/+ | close) share one content height and margin.
+    static constexpr int CompactRowContentHeight = 52;
+    static constexpr int CompactRowContentMargin = 12;
+
+    /**
+     * @brief Paint a single-row popup's frame: button gradient, border, and a vertical
+     *        delimiter after each visible widget in @p delimitedWidgets.
+     *
+     * For use from paintContent(). Assumes the row's 6 px layout spacing, so each
+     * delimiter falls in the middle of the gap to the right of its widget.
+     */
+    void paintCompactRowFrame(QPainter &painter, const QRect &contentRect,
+                              std::initializer_list<const QWidget *> delimitedWidgets) const;
 
     // Standard Qt event handlers
     void paintEvent(QPaintEvent *event) override;

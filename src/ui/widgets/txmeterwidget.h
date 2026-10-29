@@ -25,10 +25,6 @@ public:
     explicit TxMeterWidget(QWidget *parent = nullptr);
 
     // Set meter values (from TM command and supply current)
-    void setPower(double watts, bool isQrp = false);
-    void setAlc(int bars);        // 0-10
-    void setCompression(int dB);  // 0-30
-    void setSwr(double ratio);    // 1.0-3.0+
     void setCurrent(double amps); // 0-25
     void setQrp(bool isQrp);
 
@@ -52,15 +48,14 @@ public:
 
     // Scale maxima. Public so the marks can be checked against the same numbers the setters use -
     // a mark and a fill disagreeing about full scale is exactly the defect this replaced.
-    static constexpr double MaxPowerQRO = 110.0;     // K4 max power in QRO mode (watts)
-    static constexpr double MaxPowerQRP = 10.0;      // K4 max power in QRP mode (watts)
-    static constexpr double MaxPowerDefault = 100.0; // Default max for setPower() (watts)
-    static constexpr int MaxAlcBars = 7;             // K4 ALC meter scale (marked 1/3/5/7)
-    static constexpr int MaxCompressionDb = 25;      // Compression display max (dB)
-    static constexpr double MaxCurrentAmps = 25.0;   // K4 PA max drain current (amps)
-    static constexpr double MaxSwrScale = 2.0;       // SWR display range: 1.0 to 3.0 (mapped to 0-1)
-    static constexpr double MaxSMeter = 15.0;        // S-meter max (S9+60dB)
-    static constexpr double MinSwr = 1.0;            // SWR bar starts at 1.0, not 0
+    static constexpr double MaxPowerQRO = 110.0;   // K4 max power in QRO mode (watts)
+    static constexpr double MaxPowerQRP = 10.0;    // K4 max power in QRP mode (watts)
+    static constexpr int MaxAlcBars = 7;           // K4 ALC meter scale (marked 1/3/5/7)
+    static constexpr int MaxCompressionDb = 25;    // Compression display max (dB)
+    static constexpr double MaxCurrentAmps = 25.0; // K4 PA max drain current (amps)
+    static constexpr double MaxSwrScale = 2.0;     // SWR display range: 1.0 to 3.0 (mapped to 0-1)
+    static constexpr double MaxSMeter = 15.0;      // S-meter max (S9+60dB)
+    static constexpr double MinSwr = 1.0;          // SWR bar starts at 1.0, not 0
 
     // The scale marks for each meter. Static and public so they can be asserted directly.
     static QList<ScaleMark> sMeterMarks();

@@ -70,31 +70,15 @@ void DisplayPopupWidget::setupTopRow() {
     m_lcdExtGroup = new ToggleGroupWidget("LCD", "EXT", this);
     m_lcdExtGroup->setLeftSelected(m_lcdEnabled);
     m_lcdExtGroup->setRightSelected(m_extEnabled);
-    connect(m_lcdExtGroup, &ToggleGroupWidget::leftClicked, this, [this]() {
-        m_lcdEnabled = true;
-        m_extEnabled = false;
-        m_lcdExtGroup->setLeftSelected(true);
-        m_lcdExtGroup->setRightSelected(false);
-    });
-    connect(m_lcdExtGroup, &ToggleGroupWidget::rightClicked, this, [this]() {
-        m_lcdEnabled = false;
-        m_extEnabled = true;
-        m_lcdExtGroup->setLeftSelected(false);
-        m_lcdExtGroup->setRightSelected(true);
-    });
-    connect(m_lcdExtGroup, &ToggleGroupWidget::bothClicked, this, [this]() {
-        m_lcdEnabled = true;
-        m_extEnabled = true;
-        m_lcdExtGroup->setLeftSelected(true);
-        m_lcdExtGroup->setRightSelected(true);
-    });
+    connect(m_lcdExtGroup, &ToggleGroupWidget::leftClicked, this, [this]() { selectDisplayTarget(true, false); });
+    connect(m_lcdExtGroup, &ToggleGroupWidget::rightClicked, this, [this]() { selectDisplayTarget(false, true); });
+    connect(m_lcdExtGroup, &ToggleGroupWidget::bothClicked, this, [this]() { selectDisplayTarget(true, true); });
     topRow->addWidget(m_lcdExtGroup);
 
     // A & B toggle group
     m_vfoAbGroup = new ToggleGroupWidget("A", "B", this);
     m_vfoAbGroup->setLeftSelected(m_vfoAEnabled);
     m_vfoAbGroup->setRightSelected(m_vfoBEnabled);
-    m_vfoAbGroup->setRightEnabled(m_vfoBAvailable);
     connect(m_vfoAbGroup, &ToggleGroupWidget::leftClicked, this, [this]() {
         m_vfoAEnabled = true;
         m_vfoBEnabled = false;
@@ -104,24 +88,20 @@ void DisplayPopupWidget::setupTopRow() {
         updateSpanControlGroup();     // Sync span display
     });
     connect(m_vfoAbGroup, &ToggleGroupWidget::rightClicked, this, [this]() {
-        if (m_vfoBAvailable) {
-            m_vfoAEnabled = false;
-            m_vfoBEnabled = true;
-            m_vfoAbGroup->setLeftSelected(false);
-            m_vfoAbGroup->setRightSelected(true);
-            updateRefLevelControlGroup(); // Sync ref level display
-            updateSpanControlGroup();     // Sync span display
-        }
+        m_vfoAEnabled = false;
+        m_vfoBEnabled = true;
+        m_vfoAbGroup->setLeftSelected(false);
+        m_vfoAbGroup->setRightSelected(true);
+        updateRefLevelControlGroup(); // Sync ref level display
+        updateSpanControlGroup();     // Sync span display
     });
     connect(m_vfoAbGroup, &ToggleGroupWidget::bothClicked, this, [this]() {
-        if (m_vfoBAvailable) {
-            m_vfoAEnabled = true;
-            m_vfoBEnabled = true;
-            m_vfoAbGroup->setLeftSelected(true);
-            m_vfoAbGroup->setRightSelected(true);
-            updateRefLevelControlGroup(); // Sync ref level display
-            updateSpanControlGroup();     // Sync span display
-        }
+        m_vfoAEnabled = true;
+        m_vfoBEnabled = true;
+        m_vfoAbGroup->setLeftSelected(true);
+        m_vfoAbGroup->setRightSelected(true);
+        updateRefLevelControlGroup(); // Sync ref level display
+        updateSpanControlGroup();     // Sync span display
     });
     topRow->addWidget(m_vfoAbGroup);
 
@@ -299,6 +279,16 @@ QWidget *DisplayPopupWidget::createWaterfallControlPage() {
     layout->addWidget(m_waterfallControlGroup);
 
     return page;
+}
+
+void DisplayPopupWidget::selectDisplayTarget(bool lcd, bool ext) {
+    m_lcdEnabled = lcd;
+    m_extEnabled = ext;
+    m_lcdExtGroup->setLeftSelected(lcd);
+    m_lcdExtGroup->setRightSelected(ext);
+    // The PAN/display-mode labels and the waterfall height are per-target values.
+    updateMenuButtonLabels();
+    updateWaterfallControlGroup();
 }
 
 void DisplayPopupWidget::updateWaterfallControlGroup() {
@@ -530,7 +520,6 @@ void DisplayPopupWidget::updateToggleStyles() {
     if (m_vfoAbGroup) {
         m_vfoAbGroup->setLeftSelected(m_vfoAEnabled);
         m_vfoAbGroup->setRightSelected(m_vfoBEnabled);
-        m_vfoAbGroup->setRightEnabled(m_vfoBAvailable);
     }
 }
 
@@ -557,11 +546,6 @@ void DisplayPopupWidget::updateSpanControlGroup() {
     bool useB = m_vfoBEnabled && !m_vfoAEnabled;
     double value = useB ? m_spanB : m_spanA;
     m_spanControlGroup->setValue(QString::number(value, 'f', 1));
-}
-
-void DisplayPopupWidget::setRefLevelValue(int dB) {
-    // Legacy: forward to A
-    setRefLevelValueA(dB);
 }
 
 void DisplayPopupWidget::setAutoRefLevel(bool enabled) {
@@ -801,12 +785,4 @@ void DisplayPopupWidget::updateMenuButtonLabels() {
     if (m_vfbMode >= 0 && m_vfbMode <= 3) {
         m_menuButtons[6]->setAlternateText(cursorBNames[m_vfbMode]);
     }
-}
-
-QString DisplayPopupWidget::getCommandPrefix() const {
-    // Returns "H" for EXT-only mode, empty string otherwise
-    if (m_extEnabled && !m_lcdEnabled) {
-        return "H";
-    }
-    return "";
 }

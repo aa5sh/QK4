@@ -40,7 +40,7 @@ signals:
     void incrementRequested();
     void decrementRequested();
     void extraButtonClicked();
-    void nrEngineToggleRequested(); // Title label clicked while showing NR ADJUST
+    void nrEngineToggleRequested(); // LMS/NR+ engine button clicked (NR ADJUST only)
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -50,6 +50,7 @@ protected:
 private:
     void setupUi();
     void updateForFeature();
+    static QString nbFilterText(int filter);
 
     QPushButton *m_titleLabel;
     QPushButton *m_toggleBtn;
@@ -61,7 +62,6 @@ private:
 
     Feature m_currentFeature = Attenuator;
     NrEngine m_nrEngine = Lms;
-    bool m_featureEnabled = false;
     int m_value = 0;
     QString m_valueUnit;
     int m_nbFilter = 0;                   // 0=NONE, 1=NARROW, 2=WIDE

@@ -30,7 +30,13 @@ FrequencyDisplayWidget::FrequencyDisplayWidget(QWidget *parent)
 }
 
 void FrequencyDisplayWidget::setFrequency(const QString &frequency) {
-    parseFrequency(frequency);
+    // WHY: while the operator is typing, the radio keeps reporting its frequency. Hold the latest report
+    // instead of overwriting the typed digits; Escape/click-outside then shows the radio's current value.
+    if (m_cursorPosition >= 0) {
+        m_radioDigits = normalizeDigits(frequency);
+        return;
+    }
+    m_digits = normalizeDigits(frequency);
     update();
 }
 
@@ -76,7 +82,7 @@ void FrequencyDisplayWidget::cancelEntry() {
     exitEditMode(false);
 }
 
-void FrequencyDisplayWidget::parseFrequency(const QString &freq) {
+QString FrequencyDisplayWidget::normalizeDigits(const QString &freq) {
     // Remove dots and any non-digit characters
     QString digits;
     for (const QChar &c : freq) {
@@ -93,7 +99,7 @@ void FrequencyDisplayWidget::parseFrequency(const QString &freq) {
         digits = digits.right(kDigits);
     }
 
-    m_digits = digits;
+    return digits;
 }
 
 int FrequencyDisplayWidget::displayStartIndex() const {
@@ -243,7 +249,7 @@ void FrequencyDisplayWidget::enterEditMode(int digitPosition) {
         return;
     }
 
-    m_originalDigits = m_digits;
+    m_radioDigits = m_digits;
     m_cursorPosition = digitPosition;
     setFocus();
     grabMouse(); // Capture all mouse events to detect clicks outside
@@ -265,8 +271,7 @@ void FrequencyDisplayWidget::exitEditMode(bool send) {
         }
         emit frequencyEntered(digits);
     } else {
-        // Restore original frequency
-        m_digits = m_originalDigits;
+        m_digits = m_radioDigits;
     }
 
     m_cursorPosition = -1;

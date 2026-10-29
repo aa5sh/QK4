@@ -14,173 +14,141 @@ QString gradientCssReversed(const char *top, const char *mid1, const char *mid2,
                    "stop:0 %1, stop:0.4 %2, stop:0.6 %3, stop:1 %4)")
         .arg(bottom, mid2, mid1, top);
 }
+
+QString normalGradientCss() {
+    using namespace K4Styles::Colors;
+    return gradientCss(GradientTop, GradientMid1, GradientMid2, GradientBottom);
+}
+
+QString hoverGradientCss() {
+    using namespace K4Styles::Colors;
+    return gradientCss(HoverTop, HoverMid1, HoverMid2, HoverBottom);
+}
+
+QString pressedGradientCss() {
+    using namespace K4Styles::Colors;
+    return gradientCssReversed(GradientTop, GradientMid1, GradientMid2, GradientBottom);
+}
+
+QString selectedGradientCss() {
+    using namespace K4Styles::Colors;
+    return gradientCss(SelectedTop, SelectedMid1, SelectedMid2, SelectedBottom);
+}
+
+// The standard dark gradient button shared by the popup and menu-bar helpers. An empty padding omits
+// the declaration; pressedBorder false keeps the normal border while pressed.
+QString gradientButtonCss(int fontSizePx, const QString &padding, bool pressedBorder) {
+    using namespace K4Styles;
+    const QString paddingDecl = padding.isEmpty() ? QString() : QString("padding: %1;").arg(padding);
+    const QString pressedBorderDecl =
+        pressedBorder ? QString("border: 2px solid %1;").arg(Colors::BorderPressed) : QString();
+    return QString(R"(
+        QPushButton {
+            background: %1;
+            color: %2;
+            border: 2px solid %3;
+            border-radius: 6px;
+            %4
+            font-size: %5px;
+            font-weight: 600;
+        }
+        QPushButton:hover {
+            background: %6;
+            border: 2px solid %7;
+        }
+        QPushButton:pressed {
+            background: %8;
+            %9
+        }
+    )")
+        .arg(normalGradientCss(), Colors::TextWhite, Colors::BorderNormal, paddingDecl, QString::number(fontSizePx),
+             hoverGradientCss(), Colors::BorderHover, pressedGradientCss(), pressedBorderDecl);
+}
 } // anonymous namespace
 
 namespace K4Styles {
 
 QString popupButtonNormal() {
-    return QString(R"(
-        QPushButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                stop:0 #4a4a4a,
-                stop:0.4 #3a3a3a,
-                stop:0.6 #353535,
-                stop:1 #2a2a2a);
-            color: #FFFFFF;
-            border: 2px solid #606060;
-            border-radius: 6px;
-            font-size: %1px;
-            font-weight: 600;
-        }
-        QPushButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                stop:0 #5a5a5a,
-                stop:0.4 #4a4a4a,
-                stop:0.6 #454545,
-                stop:1 #3a3a3a);
-            border: 2px solid #808080;
-        }
-        QPushButton:pressed {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                stop:0 #2a2a2a,
-                stop:0.4 #353535,
-                stop:0.6 #3a3a3a,
-                stop:1 #4a4a4a);
-        }
-    )")
-        .arg(Dimensions::PopupButtonSize);
+    return gradientButtonCss(Dimensions::PopupButtonSize, QString(), false);
 }
 
 QString popupButtonSelected() {
     return QString(R"(
         QPushButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                stop:0 #E0E0E0,
-                stop:0.4 #D0D0D0,
-                stop:0.6 #C8C8C8,
-                stop:1 #B8B8B8);
-            color: #333333;
-            border: 2px solid #AAAAAA;
+            background: %1;
+            color: %2;
+            border: 2px solid %3;
             border-radius: 6px;
-            font-size: %1px;
+            font-size: %4px;
             font-weight: 600;
         }
         QPushButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                stop:0 #F0F0F0,
-                stop:0.4 #E0E0E0,
-                stop:0.6 #D8D8D8,
-                stop:1 #C8C8C8);
+            background: %5;
         }
         QPushButton:pressed {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                stop:0 #B8B8B8,
-                stop:0.4 #C8C8C8,
-                stop:0.6 #D0D0D0,
-                stop:1 #E0E0E0);
+            background: %6;
         }
     )")
-        .arg(Dimensions::PopupButtonSize);
+        .arg(selectedGradientCss(), Colors::TextDark, Colors::BorderSelected,
+             QString::number(Dimensions::PopupButtonSize),
+             gradientCss(Colors::SelectedHoverTop, Colors::SelectedHoverMid1, Colors::SelectedHoverMid2,
+                         Colors::SelectedHoverBottom),
+             gradientCssReversed(Colors::SelectedTop, Colors::SelectedMid1, Colors::SelectedMid2,
+                                 Colors::SelectedBottom));
+}
+
+QString popupValueLabel(const QString &color) {
+    return QString("QPushButton {"
+                   "  color: %1;"
+                   "  font-size: %2px;"
+                   "  font-weight: 600;"
+                   "  background: transparent;"
+                   "  border: %3px solid transparent;"
+                   "  border-radius: %4px;"
+                   "}")
+        .arg(color)
+        .arg(Dimensions::PopupValueSize)
+        .arg(Dimensions::BorderWidth)
+        .arg(Dimensions::BorderRadius);
 }
 
 QString menuBarButton() {
-    return QString(R"(
-        QPushButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                stop:0 #4a4a4a,
-                stop:0.4 #3a3a3a,
-                stop:0.6 #353535,
-                stop:1 #2a2a2a);
-            color: #FFFFFF;
-            border: 2px solid #606060;
-            border-radius: 6px;
-            padding: 6px 12px;
-            font-size: %1px;
-            font-weight: 600;
-        }
-        QPushButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                stop:0 #5a5a5a,
-                stop:0.4 #4a4a4a,
-                stop:0.6 #454545,
-                stop:1 #3a3a3a);
-            border: 2px solid #808080;
-        }
-        QPushButton:pressed {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                stop:0 #2a2a2a,
-                stop:0.4 #353535,
-                stop:0.6 #3a3a3a,
-                stop:1 #4a4a4a);
-            border: 2px solid #909090;
-        }
-    )")
-        .arg(Dimensions::PopupButtonSize);
+    return gradientButtonCss(Dimensions::PopupButtonSize, QStringLiteral("6px 12px"), true);
 }
 
 QString menuBarButtonActive() {
     return QString(R"(
         QPushButton {
-            background: #FFFFFF;
-            color: #666666;
-            border: 2px solid #AAAAAA;
+            background: %1;
+            color: %2;
+            border: 2px solid %3;
             border-radius: 6px;
             padding: 6px 12px;
-            font-size: %1px;
+            font-size: %4px;
             font-weight: 600;
         }
     )")
-        .arg(Dimensions::PopupButtonSize);
+        .arg(Colors::TextWhite, Colors::InactiveGray, Colors::BorderSelected,
+             QString::number(Dimensions::PopupButtonSize));
 }
 
 QString menuBarButtonSmall() {
-    return QString(R"(
-        QPushButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                stop:0 #4a4a4a,
-                stop:0.4 #3a3a3a,
-                stop:0.6 #353535,
-                stop:1 #2a2a2a);
-            color: #FFFFFF;
-            border: 2px solid #606060;
-            border-radius: 6px;
-            font-size: %1px;
-            font-weight: 600;
-        }
-        QPushButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                stop:0 #5a5a5a,
-                stop:0.4 #4a4a4a,
-                stop:0.6 #454545,
-                stop:1 #3a3a3a);
-            border: 2px solid #808080;
-        }
-        QPushButton:pressed {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                stop:0 #2a2a2a,
-                stop:0.4 #353535,
-                stop:0.6 #3a3a3a,
-                stop:1 #4a4a4a);
-            border: 2px solid #909090;
-        }
-    )")
-        .arg(Dimensions::PopupValueSize);
+    return gradientButtonCss(Dimensions::PopupValueSize, QString(), true);
 }
 
 QString menuBarButtonPttPressed() {
     return QString(R"(
         QPushButton {
             background: %1;
-            color: #FFFFFF;
+            color: %2;
             border: 2px solid %1;
             border-radius: 6px;
             padding: 6px 12px;
-            font-size: %2px;
+            font-size: %3px;
             font-weight: 600;
         }
     )")
-        .arg(Colors::TxRed)
-        .arg(Dimensions::PopupButtonSize);
+        .arg(Colors::TxRed, Colors::TextWhite, QString::number(Dimensions::PopupButtonSize));
 }
 
 void drawDropShadow(QPainter &painter, const QRect &contentRect, int cornerRadius) {
@@ -260,13 +228,9 @@ QString checkboxButton(int size) {
     // Uses dark gradient unchecked, same dark gradient + white checkmark when checked
     return QString(R"(
         QPushButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                stop:0 #4a4a4a,
-                stop:0.4 #3a3a3a,
-                stop:0.6 #353535,
-                stop:1 #2a2a2a);
+            background: %3;
             color: transparent;
-            border: 1px solid #606060;
+            border: 1px solid %4;
             border-radius: 3px;
             min-width: %1px;
             max-width: %1px;
@@ -276,84 +240,58 @@ QString checkboxButton(int size) {
             font-weight: bold;
         }
         QPushButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                stop:0 #5a5a5a,
-                stop:0.4 #4a4a4a,
-                stop:0.6 #454545,
-                stop:1 #3a3a3a);
-            border: 1px solid #808080;
+            background: %5;
+            border: 1px solid %6;
         }
         QPushButton:checked {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                stop:0 #4a4a4a,
-                stop:0.4 #3a3a3a,
-                stop:0.6 #353535,
-                stop:1 #2a2a2a);
-            color: #FFFFFF;
-            border: 1px solid #808080;
+            background: %3;
+            color: %7;
+            border: 1px solid %6;
         }
         QPushButton:checked:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                stop:0 #5a5a5a,
-                stop:0.4 #4a4a4a,
-                stop:0.6 #454545,
-                stop:1 #3a3a3a);
+            background: %5;
         }
         QPushButton:disabled {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                stop:0 #3a3a3a,
-                stop:0.4 #2a2a2a,
-                stop:0.6 #252525,
-                stop:1 #1a1a1a);
-            border: 1px solid #404040;
+            background: %8;
+            border: 1px solid %9;
             color: transparent;
         }
         QPushButton:disabled:checked {
-            color: #666666;
+            color: %10;
         }
     )")
-        .arg(size)
-        .arg(size - 4); // Font size slightly smaller than box
+        .arg(QString::number(size), QString::number(size - 4), // Font size slightly smaller than box
+             normalGradientCss(), Colors::BorderNormal, hoverGradientCss(), Colors::BorderHover, Colors::TextWhite,
+             gradientCss(Colors::DisabledGradientTop, Colors::DisabledGradientMid1, Colors::DisabledGradientMid2,
+                         Colors::DisabledGradientBottom),
+             Colors::BorderDisabled)
+        .arg(Colors::InactiveGray);
 }
 
 QString radioButton() {
-    // Font size templated so the helper stays consistent with Dimensions::PopupButtonSize (the
-    // same 11 px baseline popup-selection buttons use). Color literals here are being migrated
-    // away from hex soup as part of a later cleanup; kept inline for now to avoid a full rewrite.
     return QString(R"(
         QPushButton {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                stop:0 #4a4a4a,
-                stop:0.4 #3a3a3a,
-                stop:0.6 #353535,
-                stop:1 #2a2a2a);
-            color: #FFFFFF;
-            border: 2px solid #606060;
+            background: %1;
+            color: %2;
+            border: 2px solid %3;
             border-radius: 6px;
             padding: 6px 12px;
-            font-size: %1px;
+            font-size: %4px;
             font-weight: bold;
             text-align: left;
         }
         QPushButton:hover {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                stop:0 #5a5a5a,
-                stop:0.4 #4a4a4a,
-                stop:0.6 #454545,
-                stop:1 #3a3a3a);
-            border: 2px solid #808080;
+            background: %5;
+            border: 2px solid %6;
         }
         QPushButton:checked {
-            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                stop:0 #E0E0E0,
-                stop:0.4 #D0D0D0,
-                stop:0.6 #C8C8C8,
-                stop:1 #B8B8B8);
-            color: #333333;
-            border: 2px solid #AAAAAA;
+            background: %7;
+            color: %8;
+            border: 2px solid %9;
         }
     )")
-        .arg(Dimensions::PopupButtonSize);
+        .arg(normalGradientCss(), Colors::TextWhite, Colors::BorderNormal, QString::number(Dimensions::PopupButtonSize),
+             hoverGradientCss(), Colors::BorderHover, selectedGradientCss(), Colors::TextDark, Colors::BorderSelected);
 }
 
 QString compactButton() {
@@ -640,8 +578,13 @@ QFont dataFont(int pixelSize, QFont::Weight weight) {
     font.setStyleHint(QFont::SansSerif);
     font.setHintingPreference(QFont::PreferFullHinting);
     font.setStyleStrategy(QFont::PreferAntialias);
-    // Enable tabular figures for consistent digit widths
-    // Tabular figures are set via QFont API (not stylesheet — Qt CSS doesn't support font-feature-settings)
+    // WHY: Inter's default figures are proportional, so a changing frequency or meter readout would shift
+    // sideways. The OpenType `tnum` feature gives every digit one advance. Set through QFont because Qt
+    // style sheets have no font-feature-settings. QFont::setFeature is Qt 6.7+; the CI unit-test job
+    // builds against Ubuntu's Qt 6.4, which keeps proportional figures.
+#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
+    font.setFeature(QFont::Tag("tnum"), 1);
+#endif
     return font;
 }
 

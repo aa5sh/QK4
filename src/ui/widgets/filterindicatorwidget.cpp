@@ -45,7 +45,7 @@ void FilterIndicatorWidget::setFilterPosition(int position) {
 }
 
 void FilterIndicatorWidget::setBandwidth(int bandwidthHz) {
-    int clamped = std::clamp(bandwidthHz, m_minBandwidthHz, m_maxBandwidthHz);
+    int clamped = std::clamp(bandwidthHz, kMinBandwidthHz, kMaxBandwidthHz);
     if (clamped != m_bandwidthHz) {
         m_bandwidthHz = clamped;
         update();
@@ -73,12 +73,6 @@ void FilterIndicatorWidget::setDataSubMode(int subMode) {
         m_dataSubMode = subMode;
         update();
     }
-}
-
-void FilterIndicatorWidget::setBandwidthRange(int minHz, int maxHz) {
-    m_minBandwidthHz = minHz;
-    m_maxBandwidthHz = maxHz;
-    update();
 }
 
 void FilterIndicatorWidget::setShapeColor(const QColor &fill, const QColor &outline) {

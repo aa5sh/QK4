@@ -102,11 +102,24 @@ constexpr const char *SelectedMid1 = "#D0D0D0";
 constexpr const char *SelectedMid2 = "#C8C8C8";
 constexpr const char *SelectedBottom = "#B8B8B8";
 
+// Selected button hover gradients
+constexpr const char *SelectedHoverTop = "#F0F0F0";
+constexpr const char *SelectedHoverMid1 = "#E0E0E0";
+constexpr const char *SelectedHoverMid2 = "#D8D8D8";
+constexpr const char *SelectedHoverBottom = "#C8C8C8";
+
+// Disabled button gradients
+constexpr const char *DisabledGradientTop = "#3a3a3a";
+constexpr const char *DisabledGradientMid1 = "#2a2a2a";
+constexpr const char *DisabledGradientMid2 = "#252525";
+constexpr const char *DisabledGradientBottom = "#1a1a1a";
+
 // Borders
 constexpr const char *BorderNormal = "#606060";
 constexpr const char *BorderHover = "#808080";
 constexpr const char *BorderPressed = "#909090";
 constexpr const char *BorderSelected = "#AAAAAA";
+constexpr const char *BorderDisabled = "#404040";
 
 // Dialog-specific colors
 constexpr const char *DialogBorder = "#333333"; // Dialog borders and separators

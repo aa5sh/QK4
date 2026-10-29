@@ -42,9 +42,6 @@ public:
     // DATA submode (0=DATA-A, 1=AFSK-A, 2=FSK-D, 3=PSK-D)
     void setDataSubMode(int subMode);
 
-    // Bandwidth range for normalization
-    void setBandwidthRange(int minHz, int maxHz);
-
     // Shape color (for VFO A/B color coding)
     void setShapeColor(const QColor &fill, const QColor &outline);
 
@@ -66,12 +63,12 @@ private:
     void drawPskToneTriangle(QPainter &painter, int lineY, int lineWidth);
 
     int m_filterPosition = 2;
-    int m_bandwidthHz = 2400;    // Current bandwidth in Hz
-    int m_shift = 135;           // Shift in decahertz
-    QString m_mode = "USB";      // Mode for shift center calculation
-    int m_dataSubMode = 0;       // DATA submode (0=DATA-A, 1=AFSK-A, 2=FSK-D, 3=PSK-D)
-    int m_minBandwidthHz = 50;   // Minimum bandwidth (triangle)
-    int m_maxBandwidthHz = 5000; // Maximum bandwidth (full trapezoid)
+    int m_bandwidthHz = 2400;                    // Current bandwidth in Hz
+    int m_shift = 135;                           // Shift in decahertz
+    QString m_mode = "USB";                      // Mode for shift center calculation
+    int m_dataSubMode = 0;                       // DATA submode (0=DATA-A, 1=AFSK-A, 2=FSK-D, 3=PSK-D)
+    static constexpr int kMinBandwidthHz = 50;   // Minimum bandwidth (triangle)
+    static constexpr int kMaxBandwidthHz = 5000; // Maximum bandwidth (full trapezoid)
 
     // Gold palette — pulled from K4Styles::Colors::FilterIndicatorGold so a future palette tweak
     // propagates here. Shape fill uses 50% alpha so the passband shape shows through.

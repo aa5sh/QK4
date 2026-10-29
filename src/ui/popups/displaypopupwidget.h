@@ -32,7 +32,6 @@ public slots:
     // Span VALUES are per-VFO (A and B can have different spans)
     void setSpanValueA(double spanKHz);
     void setSpanValueB(double spanKHz);
-    void setRefLevelValue(int dB);      // Legacy: sets A
     void setAutoRefLevel(bool enabled); // GLOBAL - affects both VFOs
     void setScale(int scale);           // GLOBAL - affects both panadapters (10-150)
     // Ref level VALUES are per-VFO (A and B can have different levels)
@@ -106,15 +105,13 @@ private:
     QWidget *createDefaultControlPage();
     void updateNbControlGroupValue();
     void updateWaterfallControlGroup();
+    void selectDisplayTarget(bool lcd, bool ext);
 
     void updateToggleStyles();
     void updateMenuButtonStyles();
     void updateMenuButtonLabels();
     void onMenuItemClicked(MenuItem item);
     void onMenuItemRightClicked(MenuItem item);
-
-    // Helper to get command prefix based on LCD/EXT selection
-    QString getCommandPrefix() const;
 
     // Target toggle groups (bordered containers with triangle)
     ToggleGroupWidget *m_lcdExtGroup;
@@ -123,7 +120,6 @@ private:
     bool m_extEnabled = false;
     bool m_vfoAEnabled = true;
     bool m_vfoBEnabled = false;
-    bool m_vfoBAvailable = true;
 
     // Context-dependent controls
     QStackedWidget *m_controlStack;

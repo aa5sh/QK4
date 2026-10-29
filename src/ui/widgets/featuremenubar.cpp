@@ -54,7 +54,7 @@ void FeatureMenuBar::setupUi() {
     m_nrEngineBtn->hide();
 
     // Extra button (only shown for NB LEVEL - "FILTER NONE/NARROW/WIDE")
-    m_extraBtn = new QPushButton("FILTER\nNONE", this);
+    m_extraBtn = new QPushButton(nbFilterText(m_nbFilter), this);
     m_extraBtn->setMinimumWidth(90);
     m_extraBtn->setFixedHeight(K4Styles::Dimensions::ButtonHeightMedium);
     m_extraBtn->setCursor(Qt::PointingHandCursor);
@@ -66,18 +66,7 @@ void FeatureMenuBar::setupUi() {
     m_valueLabel->setFixedHeight(K4Styles::Dimensions::ButtonHeightMedium);
     m_valueLabel->setMinimumWidth(80);
     m_valueLabel->setFocusPolicy(Qt::NoFocus);
-    m_valueLabel->setStyleSheet(QString("QPushButton {"
-                                        "  color: %1;"
-                                        "  font-size: %2px;"
-                                        "  font-weight: 600;"
-                                        "  background: transparent;"
-                                        "  border: %3px solid transparent;"
-                                        "  border-radius: %4px;"
-                                        "}")
-                                    .arg(K4Styles::Colors::TextWhite)
-                                    .arg(K4Styles::Dimensions::PopupValueSize)
-                                    .arg(K4Styles::Dimensions::BorderWidth)
-                                    .arg(K4Styles::Dimensions::BorderRadius));
+    m_valueLabel->setStyleSheet(K4Styles::popupValueLabel(K4Styles::Colors::TextWhite));
 
     // Decrement button
     m_decrementBtn = new QPushButton("-", this);
@@ -198,7 +187,7 @@ void FeatureMenuBar::updateForFeature() {
         break;
     case NbLevel:
         m_titleLabel->setText("NB LEVEL");
-        m_extraBtn->setText("FILTER\nNONE");
+        m_extraBtn->setText(nbFilterText(m_nbFilter));
         m_extraBtn->show();
         m_nrEngineBtn->hide();
         m_valueUnit = "";
@@ -231,7 +220,6 @@ void FeatureMenuBar::setNrEngine(NrEngine engine) {
 }
 
 void FeatureMenuBar::setFeatureEnabled(bool enabled) {
-    m_featureEnabled = enabled;
     m_toggleBtn->setText(enabled ? "ON" : "OFF");
 }
 
@@ -247,9 +235,12 @@ void FeatureMenuBar::setValueUnit(const QString &unit) {
 
 void FeatureMenuBar::setNbFilter(int filter) {
     m_nbFilter = qBound(0, filter, 2);
-    // Update extra button text to show current filter
-    static const char *filterNames[] = {"FILTER\nNONE", "FILTER\nNARROW", "FILTER\nWIDE"};
-    m_extraBtn->setText(filterNames[m_nbFilter]);
+    m_extraBtn->setText(nbFilterText(m_nbFilter));
+}
+
+QString FeatureMenuBar::nbFilterText(int filter) {
+    static const char *const filterNames[] = {"FILTER\nNONE", "FILTER\nNARROW", "FILTER\nWIDE"};
+    return QString::fromLatin1(filterNames[qBound(0, filter, 2)]);
 }
 
 void FeatureMenuBar::paintEvent(QPaintEvent *event) {

@@ -38,10 +38,12 @@ signals:
     void commandClicked(); // Click on command column
     void labelChanged(const QString &functionId, const QString &label);
     void commandChanged(const QString &functionId, const QString &command);
+    void fieldSwitchRequested(); // Tab/Shift+Tab pressed in the label or command editor
 
 protected:
     void paintEvent(QPaintEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
     void updateDisplay();

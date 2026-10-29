@@ -19,62 +19,6 @@ TxMeterWidget::TxMeterWidget(QWidget *parent) : QWidget(parent) {
     m_decayTimer->start(DecayIntervalMs);
 }
 
-void TxMeterWidget::setPower(double watts, bool isQrp) {
-    m_isQrp = isQrp;
-    double maxPower = isQrp ? MaxPowerQRP : MaxPowerDefault;
-    double ratio = qMin(watts / maxPower, 1.0);
-    m_powerTarget = ratio;
-    if (ratio > m_powerDisplay) {
-        m_powerDisplay = ratio; // Instant rise
-    }
-    if (ratio > m_powerPeak) {
-        m_powerPeak = ratio;
-        m_powerPeakHold = PeakHoldTicks;
-    }
-    update();
-}
-
-void TxMeterWidget::setAlc(int bars) {
-    // K4 ALC meter is 0-7 bars (labeled 1, 3, 5, 7)
-    double ratio = qBound(0, bars, MaxAlcBars) / static_cast<double>(MaxAlcBars);
-    m_alcTarget = ratio;
-    if (ratio > m_alcDisplay) {
-        m_alcDisplay = ratio;
-    }
-    if (ratio > m_alcPeak) {
-        m_alcPeak = ratio;
-        m_alcPeakHold = PeakHoldTicks;
-    }
-    update();
-}
-
-void TxMeterWidget::setCompression(int dB) {
-    double ratio = qBound(0, dB, MaxCompressionDb) / static_cast<double>(MaxCompressionDb);
-    m_compTarget = ratio;
-    if (ratio > m_compDisplay) {
-        m_compDisplay = ratio;
-    }
-    if (ratio > m_compPeak) {
-        m_compPeak = ratio;
-        m_compPeakHold = PeakHoldTicks;
-    }
-    update();
-}
-
-void TxMeterWidget::setSwr(double ratio) {
-    // SWR scale: 1.0 to 3.0, map to 0-1 fill ratio
-    double fillRatio = qMin((qMax(1.0, ratio) - 1.0) / MaxSwrScale, 1.0);
-    m_swrTarget = fillRatio;
-    if (fillRatio > m_swrDisplay) {
-        m_swrDisplay = fillRatio;
-    }
-    if (fillRatio > m_swrPeak) {
-        m_swrPeak = fillRatio;
-        m_swrPeakHold = PeakHoldTicks;
-    }
-    update();
-}
-
 void TxMeterWidget::setCurrent(double amps) {
     double ratio = qMin(qMax(0.0, amps) / MaxCurrentAmps, 1.0);
     m_currentTarget = ratio;
@@ -284,7 +228,7 @@ void TxMeterWidget::paintEvent(QPaintEvent *event) {
 
     // === SWR - Gradient ===
     {
-        // setSwr maps 1.0..3.0 onto the bar, so a mark for SWR s sits at (s - 1) / MaxSwrScale.
+        // setTxMeters maps SWR 1.0..3.0 onto the bar, so a mark for SWR s sits at (s - 1) / MaxSwrScale.
         // The bar clamps at 3, hence "3+" at the right end - the previous infinity symbol occupied
         // a tick slot of its own, which pushed every numbered mark off its true position.
         const QList<ScaleMark> marks = swrMarks();
@@ -414,7 +358,7 @@ QList<TxMeterWidget::ScaleMark> TxMeterWidget::compMarks() {
 }
 
 QList<TxMeterWidget::ScaleMark> TxMeterWidget::swrMarks() {
-    // setSwr maps 1.0..3.0 onto the bar. The bar clamps at 3, hence "3+" at the right end - the
+    // setTxMeters maps SWR 1.0..3.0 onto the bar. The bar clamps at 3, hence "3+" at the right end - the
     // previous infinity symbol occupied a tick slot of its own, which pushed every numbered mark
     // off its true position.
     return affineMarks({1.0, 1.5, 2.0, 2.5, 3.0}, {"1", "1.5", "2", "2.5", "3+"}, MinSwr, MinSwr + MaxSwrScale);

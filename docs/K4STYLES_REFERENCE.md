@@ -142,6 +142,24 @@ rg 'constexpr const char \*' src/ui/styling/k4styles.h      # font-family consta
 | `SelectedMid2` | `#C8C8C8` | 66% |
 | `SelectedBottom` | `#B8B8B8` | 100% (bottom) |
 
+### Button Gradient — Selected Hover State
+
+| Constant | Value | Position |
+|----------|-------|----------|
+| `SelectedHoverTop` | `#F0F0F0` | 0% (top) |
+| `SelectedHoverMid1` | `#E0E0E0` | 33% |
+| `SelectedHoverMid2` | `#D8D8D8` | 66% |
+| `SelectedHoverBottom` | `#C8C8C8` | 100% (bottom) |
+
+### Button Gradient — Disabled State
+
+| Constant | Value | Position |
+|----------|-------|----------|
+| `DisabledGradientTop` | `#3a3a3a` | 0% (top) |
+| `DisabledGradientMid1` | `#2a2a2a` | 33% |
+| `DisabledGradientMid2` | `#252525` | 66% |
+| `DisabledGradientBottom` | `#1a1a1a` | 100% (bottom) |
+
 ### Border Colors
 
 | Constant | Value | Usage |
@@ -150,6 +168,7 @@ rg 'constexpr const char \*' src/ui/styling/k4styles.h      # font-family consta
 | `BorderHover` | `#808080` | Button border on hover |
 | `BorderPressed` | `#909090` | Button border when pressed |
 | `BorderSelected` | `#AAAAAA` | Selected/active button border |
+| `BorderDisabled` | `#404040` | Disabled checkbox-button border |
 
 ### Dialog & Panel Borders
 
@@ -322,7 +341,7 @@ Series colors are aliases, not new values: `ChartSeriesRtt` = `VfoACyan`,
 | Constant | Value | Usage |
 |----------|-------|-------|
 | `Primary` | `"Inter"` | UI text, labels, buttons, menus |
-| `Data` | `"Inter"` | Frequencies, numeric data (uses tabular figures via `font-feature-settings: 'tnum'`) |
+| `Data` | `"Inter"` | Frequencies, numeric data (tabular figures via `QFont::setFeature("tnum")` in `dataFont()`; Qt 6.7+) |
 
 ### Font Helpers
 
@@ -347,6 +366,7 @@ QFont K4Styles::Fonts::dataFont(int pixelSize, QFont::Weight weight = QFont::Bol
 // Popup buttons
 QString K4Styles::popupButtonNormal();    // Dark gradient (unselected band/mode buttons)
 QString K4Styles::popupButtonSelected();  // Light/white selected state
+QString K4Styles::popupValueLabel(const QString &color); // Borderless value readout in a compact popup row
 
 // Menu bar buttons (BottomMenuBar, FeatureMenuBar)
 QString K4Styles::menuBarButton();          // Standard (MENU, Fn, DISPLAY, BAND)

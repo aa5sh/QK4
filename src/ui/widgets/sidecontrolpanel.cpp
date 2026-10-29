@@ -531,12 +531,13 @@ void SideControlPanel::setPower(double power, LevelsState::PowerRange range) {
         label = QStringLiteral("PWR");
     }
     // Swap the label between PWR and mW so the user can see at a glance that
-    // the K4 is operating in transverter range. The DLY label on the alternate
+    // the K4 is operating in transverter range. The DLY label on the other
     // face stays put.
-    m_pwrBtn->setPrimaryLabel(label);
     if (m_pwrIsPrimary) {
+        m_pwrBtn->setPrimaryLabel(label);
         m_pwrBtn->setPrimaryValue(powerStr);
     } else {
+        m_pwrBtn->setAlternateLabel(label);
         m_pwrBtn->setAlternateValue(powerStr);
     }
 }

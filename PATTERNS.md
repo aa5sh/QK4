@@ -171,6 +171,7 @@ Base class for all popup widgets. Defined in `src/ui/k4popupbase.h`.
 | `contentRect()` | Returns QRect of content area for custom painting |
 | `initPopup()` | Sets widget size from contentSize(). **Must call at end of constructor** |
 | `paintContent(QPainter&, QRect&)` | Override for custom painting after background/shadow |
+| `paintCompactRowFrame(QPainter&, QRect&, {widgets})` | For single-row popups (with `CompactRowContentHeight` / `CompactRowContentMargin`): gradient frame plus a delimiter after each visible listed widget. Call from `paintContent()` |
 
 #### What K4PopupBase Handles Automatically
 

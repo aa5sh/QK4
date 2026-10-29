@@ -37,6 +37,10 @@ QString popupButtonNormal();
  */
 QString popupButtonSelected();
 
+/// Read-only value readout in a compact popup row: a QPushButton with no background or visible border
+/// (so its text lines up with the neighbouring buttons), PopupValueSize semibold text in `color`.
+QString popupValueLabel(const QString &color);
+
 // =============================================================================
 // Menu Bar Button Styles (BottomMenuBar, FeatureMenuBar)
 // =============================================================================

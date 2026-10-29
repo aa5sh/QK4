@@ -6,8 +6,6 @@
 #include <QWheelEvent>
 
 namespace {
-const int ContentHeight = 52;
-const int ContentMargin = 12;
 const int MaxLevel = 60;
 const int TitleWidthVoxGain = 160; // "VOX GAIN, VOICE" or "VOX GAIN, DATA"
 const int TitleWidthAntiVox = 110; // "ANTI-VOX"
@@ -21,7 +19,7 @@ VoxPopupWidget::VoxPopupWidget(QWidget *parent) : K4PopupBase(parent) {
 void VoxPopupWidget::setupUi() {
     int sm = K4Styles::Dimensions::ShadowMargin;
     auto *layout = new QHBoxLayout(this);
-    layout->setContentsMargins(sm + ContentMargin, sm + 8, sm + ContentMargin, sm + 8);
+    layout->setContentsMargins(sm + CompactRowContentMargin, sm + 8, sm + CompactRowContentMargin, sm + 8);
     layout->setSpacing(6);
 
     m_titleLabel = new QPushButton("VOX GAIN, VOICE", this);
@@ -37,18 +35,7 @@ void VoxPopupWidget::setupUi() {
     m_valueLabel = new QPushButton(QString::number(m_value), this);
     m_valueLabel->setFixedSize(K4Styles::Dimensions::NavButtonWidth, K4Styles::Dimensions::ButtonHeightMedium);
     m_valueLabel->setFocusPolicy(Qt::NoFocus);
-    m_valueLabel->setStyleSheet(QString("QPushButton {"
-                                        "  color: %1;"
-                                        "  font-size: %2px;"
-                                        "  font-weight: 600;"
-                                        "  background: transparent;"
-                                        "  border: %3px solid transparent;"
-                                        "  border-radius: %4px;"
-                                        "}")
-                                    .arg(K4Styles::Colors::TextWhite)
-                                    .arg(K4Styles::Dimensions::PopupValueSize)
-                                    .arg(K4Styles::Dimensions::BorderWidth)
-                                    .arg(K4Styles::Dimensions::BorderRadius));
+    m_valueLabel->setStyleSheet(K4Styles::popupValueLabel(K4Styles::Colors::TextWhite));
 
     m_decrementBtn = new QPushButton("-", this);
     m_decrementBtn->setFixedSize(K4Styles::Dimensions::NavButtonWidth, K4Styles::Dimensions::ButtonHeightMedium);
@@ -94,11 +81,11 @@ void VoxPopupWidget::setupUi() {
 
 QSize VoxPopupWidget::contentSize() const {
     const int titleWidth = (m_popupMode == VoxGain) ? TitleWidthVoxGain : TitleWidthAntiVox;
-    const int contentWidth = ContentMargin + titleWidth + 6 + K4Styles::Dimensions::PopupButtonWidth + 6 +
+    const int contentWidth = CompactRowContentMargin + titleWidth + 6 + K4Styles::Dimensions::PopupButtonWidth + 6 +
                              K4Styles::Dimensions::NavButtonWidth + 6 + K4Styles::Dimensions::NavButtonWidth + 6 +
                              K4Styles::Dimensions::NavButtonWidth + 6 + K4Styles::Dimensions::NavButtonWidth +
-                             ContentMargin;
-    return QSize(contentWidth, ContentHeight);
+                             CompactRowContentMargin;
+    return QSize(contentWidth, CompactRowContentHeight);
 }
 
 void VoxPopupWidget::setPopupMode(PopupMode mode) {
@@ -171,24 +158,5 @@ void VoxPopupWidget::wheelEvent(QWheelEvent *event) {
 }
 
 void VoxPopupWidget::paintContent(QPainter &painter, const QRect &contentRect) {
-    QLinearGradient grad = K4Styles::buttonGradient(contentRect.top(), contentRect.bottom());
-    painter.setBrush(grad);
-    painter.setPen(QPen(K4Styles::borderColor(), 1));
-    painter.drawRoundedRect(contentRect, K4Styles::Dimensions::BorderRadiusLarge,
-                            K4Styles::Dimensions::BorderRadiusLarge);
-
-    painter.setPen(QPen(K4Styles::borderColor(), 1));
-    int lineTop = contentRect.top() + 7;
-    int lineBottom = contentRect.bottom() - 7;
-
-    auto drawDelimiter = [&](QWidget *widget) {
-        if (widget && widget->isVisible()) {
-            int x = widget->geometry().right() + 3;
-            painter.drawLine(x, lineTop, x, lineBottom);
-        }
-    };
-
-    drawDelimiter(m_titleLabel);
-    drawDelimiter(m_voxBtn);
-    drawDelimiter(m_incrementBtn);
+    paintCompactRowFrame(painter, contentRect, {m_titleLabel, m_voxBtn, m_incrementBtn});
 }

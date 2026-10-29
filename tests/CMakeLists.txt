@@ -570,6 +570,32 @@ target_link_libraries(test_sidecontrolpanel Qt6::Core Qt6::Gui Qt6::Widgets Qt6:
 add_test(NAME SideControlPanelLayoutTests COMMAND test_sidecontrolpanel)
 set_tests_properties(SideControlPanelLayoutTests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
+# Widgets whose screen must match their own state (review findings D-019..D-043), offscreen.
+add_executable(test_widgetstate
+    test_widgetstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/widgets/frequencydisplaywidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/widgets/sidecontrolpanel.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/widgets/dualcontrolbutton.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/widgets/featuremenubar.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/overlays/sidecontroloverlay.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/overlays/monoverlay.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/overlays/baloverlay.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/popups/k4popupbase.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/popups/confirmpopup.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/popups/lineoutpopup.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/popups/fnpopupwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/dialogs/macrodialog.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/styling/k4styles.cpp
+    ${CMAKE_SOURCE_DIR}/src/utils/radioutils.cpp
+    ${CMAKE_SOURCE_DIR}/src/utils/wheelaccumulator.cpp
+    ${CMAKE_SOURCE_DIR}/src/settings/radiosettings.cpp
+)
+target_include_directories(test_widgetstate PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_compile_definitions(test_widgetstate PRIVATE QK4_VERSION="test")
+target_link_libraries(test_widgetstate Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Test)
+add_test(NAME WidgetStateTests COMMAND test_widgetstate)
+set_tests_properties(WidgetStateTests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 # Capture-rate decimation — pure logic, no audio device needed.
 add_executable(test_audiodecimator test_audiodecimator.cpp)
 target_include_directories(test_audiodecimator PRIVATE ${CMAKE_SOURCE_DIR}/src)

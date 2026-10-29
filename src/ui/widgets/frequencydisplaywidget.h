@@ -40,6 +40,7 @@ public:
 
     // Set the displayed frequency (with or without dots)
     // Examples: "7.024.980", "7024980", "14.024.980"
+    // While editing, the value is held and shown only if the entry is cancelled.
     void setFrequency(const QString &frequency);
 
     // Get the current frequency as plain digits (no dots)
@@ -116,12 +117,12 @@ private:
     // Format m_digits as display string with dots (e.g., "7.024.980")
     QString formatWithDots() const;
 
-    // Parse frequency string and normalize to 8 digits
-    void parseFrequency(const QString &freq);
+    // Strip non-digits and normalize to kDigits digits
+    static QString normalizeDigits(const QString &freq);
 
     // Member variables
     QString m_digits;          // 8-digit string, left-padded with zeros
-    QString m_originalDigits;  // Backup for cancel operation
+    QString m_radioDigits;     // Latest radio value while editing; restored on cancel
     int m_cursorPosition = -1; // -1 = not editing, 0-7 = digit position
 
     QColor m_normalColor; // White - normal display color

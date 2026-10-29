@@ -89,6 +89,8 @@ private slots:
 
 private:
     void setupUi();
+    void applyWheelSteps(int steps);
+    MenuItem *selectedMenuItem() const; // nullptr when nothing is selected
     void createSearchPopup();
     void populateItems();
     // Destroy the row widgets and forget the selection. Called before repopulating, and when the

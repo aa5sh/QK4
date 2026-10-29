@@ -173,10 +173,3 @@ QString ButtonRowPopup::buttonLabel(int index) const {
     }
     return QString();
 }
-
-QString ButtonRowPopup::buttonAlternateLabel(int index) const {
-    if (index >= 0 && index < m_buttons.size()) {
-        return m_buttons[index]->alternateText();
-    }
-    return QString();
-}
