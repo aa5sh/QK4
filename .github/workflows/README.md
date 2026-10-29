@@ -36,6 +36,21 @@ or `development: <commit subject>`.
 | `repo-comment-guard.yml` | Hides disguised-download spam from non-maintainers |
 | `_build-macos.yml` `_build-windows.yml` `_build-pi.yml` `_build-flatpak.yml` | The one definition of each platform's build, packaging and packaged-artifact verification |
 
+## macOS packaging
+
+`_build-macos.yml` builds against the Qt Company's binary Qt (`install-qt-action`, version from
+`.github/qt-version`), not Homebrew's; Homebrew supplies only OpenSSL, Opus, hidapi and libusb. The
+app is arm64 only, because those libraries are. Bundling and the release gate are scripts, so a
+local run does exactly what CI does:
+
+- `scripts/macos-bundle.sh <QK4.app> <qt-prefix> [openssl-prefix]` runs macdeployqt, thins Qt's
+  universal binaries to arm64 and copies OpenSSL into `Contents/Frameworks`, which macdeployqt
+  cannot see because Qt's TLS plugin loads it at run time. `cmake --build build --target deploy`
+  calls the same script.
+- `scripts/macos-verify-bundle.sh <QK4.app>` runs on the app inside the mounted DMG: framework
+  symlinks intact, strict codesign, no library or run path outside the bundle except the OS's own,
+  and `QK4 --tls-self-check` passing with libssl loaded from inside the bundle.
+
 ## Renaming a workflow
 
 A rename starts a new entry in the Actions sidebar; the old file's runs stay under the old name.
