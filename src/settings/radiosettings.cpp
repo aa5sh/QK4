@@ -384,7 +384,7 @@ int sanitizeInterfaceScale(int percent) {
 
 double sanitizeAutoScaleFactor(double factor) {
     return std::isfinite(factor) ? std::clamp(factor, WindowFit::kMinScale, WindowFit::kMaxScale)
-                                 : WindowFit::kMaxScale;
+                                 : WindowFit::kNativeScale;
 }
 
 } // namespace
@@ -403,7 +403,7 @@ void RadioSettings::setInterfaceScale(int percent) {
 }
 
 double RadioSettings::autoScaleFactor() const {
-    return sanitizeAutoScaleFactor(m_settings.value("ui/autoScaleFactor", WindowFit::kMaxScale).toDouble());
+    return sanitizeAutoScaleFactor(m_settings.value("ui/autoScaleFactor", WindowFit::kNativeScale).toDouble());
 }
 
 void RadioSettings::setAutoScaleFactor(double factor) {
@@ -418,7 +418,7 @@ double RadioSettings::startupInterfaceScale(bool *isAuto) {
     if (isAuto)
         *isAuto = percent == kInterfaceScaleAuto;
     if (percent == kInterfaceScaleAuto)
-        return sanitizeAutoScaleFactor(store.value("ui/autoScaleFactor", WindowFit::kMaxScale).toDouble());
+        return sanitizeAutoScaleFactor(store.value("ui/autoScaleFactor", WindowFit::kNativeScale).toDouble());
     return percent / 100.0;
 }
 

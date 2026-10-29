@@ -6,7 +6,7 @@ Tab pages for `OptionsDialog`. Each is a `QWidget` that plugs into the dialog's 
 
 - `aboutpage` — version, license, credits.
 - `stationpage` — call sign, grid square, operator name, QTH, and the IARU region that drives the panadapter band-plan overlay (plus its show/hide toggle). Persists via settings.
-- `displaypage` — interface scale: Auto (fit the screen) or a fixed 75–125%, with a Restart Now button, since Qt applies a scale only at startup. Persists via settings; applied by `settings/interfacescale`.
+- `displaypage` — interface scale: Auto (fit the screen: 50–100% in 5% steps, or 125%) or a fixed 75–150%, with a Restart Now button, since Qt applies a scale only at startup. Persists via settings; applied by `settings/interfacescale`.
 - `rigcontrolpage` — CAT server config + radio timing.
 - `tciserverpage` — TCI server enable/port, audio on/off, live status and connected-client list. Talks to `TciController`.
 - `audioinputpage` / `audiooutputpage` — device selection + test.

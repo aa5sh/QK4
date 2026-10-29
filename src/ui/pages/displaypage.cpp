@@ -65,10 +65,11 @@ DisplayPage::DisplayPage(QWidget *parent) : QWidget(parent) {
     buttonRow->addStretch();
     layout->addLayout(buttonRow);
 
-    auto *help = new QLabel("Scales the whole window without rearranging it. Auto shrinks the interface only when the "
-                            "screen is too small for it, and returns to full size on a screen that has room. A new "
-                            "scale takes effect when QK4 restarts.",
-                            this);
+    auto *help =
+        new QLabel("Scales the whole window without rearranging it. Auto shrinks the interface when the screen "
+                   "is too small for it, and enlarges it to 125% on a screen with room for that. A new "
+                   "scale takes effect when QK4 restarts.",
+                   this);
     help->setWordWrap(true);
     help->setStyleSheet(K4Styles::Dialog::helpText());
     layout->addWidget(help);

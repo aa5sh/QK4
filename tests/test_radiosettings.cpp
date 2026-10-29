@@ -299,11 +299,25 @@ private slots:
         s->setInterfaceScale(RadioSettings::kInterfaceScaleAuto);
     }
 
+    void interfaceScaleAcceptsTheLargeSteps() {
+        RadioSettings *s = RadioSettings::instance();
+        for (int percent : {125, 150}) {
+            s->setInterfaceScale(percent);
+            QCOMPARE(s->interfaceScale(), percent);
+            bool isAuto = true;
+            QCOMPARE(RadioSettings::startupInterfaceScale(&isAuto), percent / 100.0);
+            QVERIFY(!isAuto);
+        }
+        s->setInterfaceScale(RadioSettings::kInterfaceScaleAuto);
+    }
+
     void unknownInterfaceScaleFallsBackToAuto() {
         // Hand-edited or from a step since removed. Auto is the one value that cannot leave the
         // window larger than the screen.
         RadioSettings *s = RadioSettings::instance();
         s->setInterfaceScale(83);
+        QCOMPARE(s->interfaceScale(), RadioSettings::kInterfaceScaleAuto);
+        s->setInterfaceScale(175);
         QCOMPARE(s->interfaceScale(), RadioSettings::kInterfaceScaleAuto);
         QSettings raw(QSettings::defaultFormat(), QSettings::UserScope, QStringLiteral("QK4"), QStringLiteral("QK4"));
         raw.setValue(QStringLiteral("ui/interfaceScale"), 300);
@@ -319,8 +333,10 @@ private slots:
         QCOMPARE(RadioSettings::startupInterfaceScale(), 0.75);
         s->setAutoScaleFactor(0.1);
         QCOMPARE(s->autoScaleFactor(), 0.5);
+        s->setAutoScaleFactor(1.25);
+        QCOMPARE(RadioSettings::startupInterfaceScale(), 1.25);
         s->setAutoScaleFactor(3.0);
-        QCOMPARE(s->autoScaleFactor(), 1.0);
+        QCOMPARE(s->autoScaleFactor(), 1.25);
         QSettings raw(QSettings::defaultFormat(), QSettings::UserScope, QStringLiteral("QK4"), QStringLiteral("QK4"));
         raw.setValue(QStringLiteral("ui/autoScaleFactor"), QStringLiteral("nonsense"));
         raw.sync();

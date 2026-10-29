@@ -229,10 +229,10 @@ public:
     // screen. Qt reads the scale once, before QApplication exists, so a change applies at the next
     // launch — see startupInterfaceScale() and settings/interfacescale.h.
     static constexpr int kInterfaceScaleAuto = 0;
-    static constexpr int kInterfaceScales[] = {75, 80, 90, 100, 110, 125};
+    static constexpr int kInterfaceScales[] = {75, 80, 90, 100, 110, 125, 150};
     int interfaceScale() const;
     void setInterfaceScale(int percent);
-    // The factor Auto last fitted to the screen, 0.5 to 1.0.
+    // The factor Auto last fitted to the screen, 0.5 to 1.25.
     double autoScaleFactor() const;
     void setAutoScaleFactor(double factor);
     // The factor to start with, read before QApplication exists and so without this singleton —

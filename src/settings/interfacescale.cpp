@@ -5,6 +5,7 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QProcess>
+#include <QRect>
 #include <QScreen>
 #include <QWidget>
 #include <cmath>
@@ -65,8 +66,10 @@ bool fitNeedsRelaunch(const QWidget &window) {
         return false;
 
     const QSize required = window.minimumSizeHint() + kFrameAllowance;
-    const QSize available = screen->availableGeometry().size();
-    const double fitted = WindowFit::fitScale(required, available, g_applied);
+    const QRect availableGeometry = screen->availableGeometry();
+    const QSize available = availableGeometry.size();
+    const double ceiling = WindowFit::autoScaleCeiling(screen->geometry(), availableGeometry);
+    const double fitted = WindowFit::fitScale(required, available, g_applied, ceiling);
     if (std::abs(fitted - g_applied) < WindowFit::kScaleStep / 2)
         return false;
 
