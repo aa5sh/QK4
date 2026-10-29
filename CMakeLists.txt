@@ -173,6 +173,7 @@ set(SOURCES
     src/settings/radiosettings.cpp
     src/settings/interfacescale.cpp
     src/logging/logcategories.cpp
+    src/logging/logpaths.cpp
     src/models/radiostate.cpp
     src/models/radiostate/antennastate.cpp
     src/models/radiostate/audioeffectsstate.cpp
@@ -323,6 +324,7 @@ set(HEADERS
     src/settings/radiosettings.h
     src/settings/interfacescale.h
     src/logging/logcategories.h
+    src/logging/logpaths.h
     src/models/radiostate.h
     src/models/radiostate/antennastate.h
     src/models/radiostate/datacontrolstate.h

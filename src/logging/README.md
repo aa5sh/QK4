@@ -7,6 +7,12 @@ QK4's diagnostic logging. Links against `Qt6::Core` only, so every piece is test
 - `logcategories.{h,cpp}` — the one declaration and definition of every logging category. Every
   category is defined at `QtInfoMsg`: info and warnings print, debug is off until a rule turns it
   on. `Logging::allCategories()` lists them for tests and the Options page.
+- `logpaths.{h,cpp}` — where the log file goes, as a pure function of platform, environment and home
+  (`LogPathsTests` covers every platform on every runner):
+  macOS `~/Library/Logs/QK4`, Windows `%LOCALAPPDATA%\QK4\Logs`, Linux `$XDG_STATE_HOME/QK4/logs`
+  (default `~/.local/state/QK4/logs`), Flatpak `~/.var/app/io.github.mikeg_dal.QK4/.local/state/QK4/logs`.
+  Reads the environment itself because `QStandardPaths::StateLocation` needs Qt 6.7 and is
+  `~/Library/Preferences` on macOS.
 
 ## Category names
 

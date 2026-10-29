@@ -15,7 +15,10 @@ endif()
 
 # Every logging category is defined in src/logging/logcategories.cpp. Linked into every test below
 # (see the aggregate loop at the end), so a test that compiles a logging source needs nothing extra.
-add_library(qk4_logging STATIC ${CMAKE_SOURCE_DIR}/src/logging/logcategories.cpp)
+add_library(qk4_logging STATIC
+    ${CMAKE_SOURCE_DIR}/src/logging/logcategories.cpp
+    ${CMAKE_SOURCE_DIR}/src/logging/logpaths.cpp
+)
 target_include_directories(qk4_logging PUBLIC ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(qk4_logging PUBLIC Qt6::Core)
 
@@ -689,6 +692,12 @@ target_include_directories(test_logcategories PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_compile_definitions(test_logcategories PRIVATE QK4_SOURCE_DIR="${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(test_logcategories Qt6::Core Qt6::Test)
 add_test(NAME LogCategoriesTests COMMAND test_logcategories)
+
+# Log directory per platform: a pure function of OS, environment and home.
+add_executable(test_logpaths test_logpaths.cpp)
+target_include_directories(test_logpaths PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_logpaths Qt6::Core Qt6::Test)
+add_test(NAME LogPathsTests COMMAND test_logpaths)
 
 # Aggregate target: `cmake --build <dir> --target qk4_tests` builds every
 # test_* executable defined above. CI uses this so adding `add_executable(test_foo)`
