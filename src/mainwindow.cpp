@@ -5,6 +5,7 @@
 #include "ui/dialogs/radiomanagerdialog.h"
 #include "ui/widgets/sidecontrolpanel.h"
 #include "ui/widgets/rightsidepanel.h"
+#include "ui/widgets/sidepanelbutton.h"
 #include "ui/widgets/bottommenubar.h"
 #include "controllers/featuremenucontroller.h"
 #include "controllers/tcicontroller.h"
@@ -1031,42 +1032,18 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     // ===== Memory Buttons Row (M1-M4, REC, STORE, RCL) =====
     centerLayout->addStretch(); // Push buttons to vertical center
 
-    // Helper lambda to create memory button with optional sub-label
-    // Uses sidePanelButton/sidePanelButtonLight styles for consistency
-    // Container: VBox with 2px spacing, button centered, sub-label below
-    // Button: MemoryButtonWidth x ButtonHeightSmall (42x28)
-    // Sub-label: FontSizeSmall (the 10 px floor), AccentAmber color
-    auto createMemoryButton = [centerWidget](const QString &label, const QString &subLabel,
-                                             bool isLighter) -> QWidget * {
-        auto *container = new QWidget(centerWidget);
-        auto *layout = new QVBoxLayout(container);
-        layout->setContentsMargins(0, 0, 0, 0);
-        layout->setSpacing(2);
-
-        auto *btn = new QPushButton(label, container);
-        btn->setFixedSize(K4Styles::Dimensions::MemoryButtonWidth, K4Styles::Dimensions::ButtonHeightSmall);
-        btn->setCursor(Qt::PointingHandCursor);
-        btn->setStyleSheet(isLighter ? K4Styles::sidePanelButtonLight() : K4Styles::sidePanelButton());
-        btn->setAttribute(Qt::WA_LayoutUsesWidgetRect);
-        layout->addWidget(btn, 0, Qt::AlignHCenter);
-
-        // Add sub-label if provided
-        if (!subLabel.isEmpty()) {
-            auto *sub = new QLabel(subLabel, container);
-            sub->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                   .arg(K4Styles::Colors::AccentAmber)
-                                   .arg(K4Styles::Dimensions::FontSizeSmall));
-            sub->setAlignment(Qt::AlignCenter);
-            layout->addWidget(sub);
-        }
-
-        return container;
+    // The memory keys are side-panel buttons narrowed to fit seven across between the VFOs.
+    const QSize memorySize(K4Styles::Dimensions::MemoryButtonWidth, K4Styles::Dimensions::SideButtonHeight);
+    auto createMemoryButton = [centerWidget, memorySize](const QString &label, const QString &subLabel,
+                                                         SidePanelButton::Shade shade) -> QWidget * {
+        QPushButton *btn = nullptr;
+        return SidePanelButton::createWithSubLabel(label, subLabel, shade, btn, centerWidget, memorySize);
     };
 
     // Single row: M1-M4 group, REC, STORE, RCL (all centered)
     auto *memoryRow = new QHBoxLayout();
     memoryRow->setContentsMargins(0, 0, 0, 0);
-    memoryRow->setSpacing(4);
+    memoryRow->setSpacing(K4Styles::Dimensions::SideButtonColumnGap);
 
     memoryRow->addStretch();
 
@@ -1074,22 +1051,15 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     auto *messageGroup = new QWidget(centerWidget);
     auto *messageGroupLayout = new QVBoxLayout(messageGroup);
     messageGroupLayout->setContentsMargins(0, 0, 0, 0);
-    messageGroupLayout->setSpacing(2);
+    messageGroupLayout->setSpacing(K4Styles::Dimensions::SideButtonSubLabelGap);
 
     // M1-M4 button row
     auto *m1m4Row = new QHBoxLayout();
     m1m4Row->setContentsMargins(0, 0, 0, 0);
-    m1m4Row->setSpacing(4);
+    m1m4Row->setSpacing(K4Styles::Dimensions::SideButtonColumnGap);
 
-    // Helper to create just a button (no sub-label container)
-    // Button: MemoryButtonWidth x ButtonHeightSmall (42x28), dark sidePanelButton style
-    auto createSimpleButton = [centerWidget](const QString &label) -> QPushButton * {
-        auto *btn = new QPushButton(label, centerWidget);
-        btn->setFixedSize(K4Styles::Dimensions::MemoryButtonWidth, K4Styles::Dimensions::ButtonHeightSmall);
-        btn->setCursor(Qt::PointingHandCursor);
-        btn->setStyleSheet(K4Styles::sidePanelButton());
-        btn->setAttribute(Qt::WA_LayoutUsesWidgetRect);
-        return btn;
+    auto createSimpleButton = [centerWidget, memorySize](const QString &label) -> QPushButton * {
+        return SidePanelButton::create(label, SidePanelButton::Shade::Dark, centerWidget, memorySize);
     };
 
     QPushButton *m1Btn = createSimpleButton("M1");
@@ -1122,6 +1092,8 @@ void MainWindow::setupVfoSection(QWidget *parent) {
                                .arg(K4Styles::Colors::BorderSelected)
                                .arg(K4Styles::Dimensions::FontSizeSmall));
     msgText->setAlignment(Qt::AlignCenter);
+    // WHY: one sub-label line tall, so MESSAGE sits on the same line as BANK / AF REC / AF PLAY.
+    msgText->setFixedHeight(SidePanelButton::subLabelHeight(msgText));
 
     auto *rightLine = new QFrame(messageLabel);
     rightLine->setFrameShape(QFrame::HLine);
@@ -1136,17 +1108,17 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     memoryRow->addWidget(messageGroup);
 
     // REC (dark grey like M keys, BANK sub-label)
-    auto *recContainer = createMemoryButton("REC", "BANK", false);
+    auto *recContainer = createMemoryButton("REC", "BANK", SidePanelButton::Shade::Dark);
     QPushButton *recBtn = recContainer->findChild<QPushButton *>();
     memoryRow->addWidget(recContainer);
 
     // STORE (lighter grey, AF REC sub-label)
-    auto *storeContainer = createMemoryButton("STORE", "AF REC", true);
+    auto *storeContainer = createMemoryButton("STORE", "AF REC", SidePanelButton::Shade::Light);
     QPushButton *storeBtn = storeContainer->findChild<QPushButton *>();
     memoryRow->addWidget(storeContainer);
 
     // RCL (lighter grey, AF PLAY sub-label)
-    auto *rclContainer = createMemoryButton("RCL", "AF PLAY", true);
+    auto *rclContainer = createMemoryButton("RCL", "AF PLAY", SidePanelButton::Shade::Light);
     QPushButton *rclBtn = rclContainer->findChild<QPushButton *>();
     memoryRow->addWidget(rclContainer);
 

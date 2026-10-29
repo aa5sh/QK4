@@ -1,6 +1,7 @@
 #include "ui/widgets/rightsidepanel.h"
 #include "ui/styling/k4styles.h"
 #include "ui/widgets/kpa1500minipanel.h"
+#include "ui/widgets/sidepanelbutton.h"
 #include <QEvent>
 #include <QGridLayout>
 #include <QMouseEvent>
@@ -17,15 +18,18 @@ void RightSidePanel::setupUi() {
     setFixedWidth(K4Styles::Dimensions::RightSidePanelWidth);
 
     m_layout = new QVBoxLayout(this);
-    m_layout->setContentsMargins(6, 8, 6, 8);
-    m_layout->setSpacing(4);
+    m_layout->setContentsMargins(K4Styles::Dimensions::SidePanelMarginH, K4Styles::Dimensions::SidePanelMarginV,
+                                 K4Styles::Dimensions::SidePanelMarginH, K4Styles::Dimensions::SidePanelMarginV);
+    m_layout->setSpacing(K4Styles::Dimensions::SidePanelItemSpacing);
 
-    // Create 5×2 button grid — constrain width to match left panel button sizing
-    int btnAreaPad = (K4Styles::Dimensions::RightSidePanelWidth - K4Styles::Dimensions::LeftSidePanelWidth) / 2;
-    auto *buttonGrid = new QGridLayout();
-    buttonGrid->setContentsMargins(btnAreaPad, 0, btnAreaPad, 0);
-    buttonGrid->setHorizontalSpacing(4);
-    buttonGrid->setVerticalSpacing(8);
+    // Each grid keeps its own width and sits centred, so its columns line up with the left panel's.
+    auto addGrid = [this](QGridLayout *grid) {
+        m_layout->addLayout(grid);
+        m_layout->setAlignment(grid, Qt::AlignHCenter);
+    };
+
+    // Create 5×2 button grid
+    auto *buttonGrid = SidePanelButton::createGrid();
 
     // Row 0: PRE/ATTN, NB/LEVEL
     buttonGrid->addWidget(createFunctionButton("PRE", "ATTN", m_preBtn), 0, 0);
@@ -47,7 +51,7 @@ void RightSidePanel::setupUi() {
     buttonGrid->addWidget(createFunctionButton("SPOT", "AUTO", m_spotBtn), 4, 0);
     buttonGrid->addWidget(createFunctionButton("MODE", "ALT", m_modeBtn), 4, 1);
 
-    m_layout->addLayout(buttonGrid);
+    addGrid(buttonGrid);
 
     // Connect existing button signals
     connect(m_preBtn, &QPushButton::clicked, this, &RightSidePanel::preClicked);
@@ -77,17 +81,14 @@ void RightSidePanel::setupUi() {
     // Reserve a layout slot for the KPA1500 mini panel — the actual
     // widget is constructed + owned by KPA1500UiController and dropped
     // here via embedKpa1500Panel().
-    m_layout->addSpacing(20);
+    m_layout->addSpacing(K4Styles::Dimensions::SidePanelGroupGap);
     m_kpa1500SlotIdx = m_layout->count();
 
     // Add stretch to push remaining buttons to bottom (above PTT)
     m_layout->addStretch();
 
     // Create 2×2 PF button grid (B SET, CLR, RIT, XIT)
-    auto *pfGrid = new QGridLayout();
-    pfGrid->setContentsMargins(btnAreaPad, 0, btnAreaPad, 0);
-    pfGrid->setHorizontalSpacing(4);
-    pfGrid->setVerticalSpacing(8);
+    auto *pfGrid = SidePanelButton::createGrid();
 
     // Row 0: B SET/PF 1, CLR/PF 2 (lighter grey)
     pfGrid->addWidget(createFunctionButton("B SET", "PF 1", m_bsetBtn, true), 0, 0);
@@ -97,7 +98,7 @@ void RightSidePanel::setupUi() {
     pfGrid->addWidget(createFunctionButton("RIT", "PF 3", m_ritBtn, true), 1, 0);
     pfGrid->addWidget(createFunctionButton("XIT", "PF 4", m_xitBtn, true), 1, 1);
 
-    m_layout->addLayout(pfGrid);
+    addGrid(pfGrid);
 
     // Connect PF button signals
     connect(m_bsetBtn, &QPushButton::clicked, this, &RightSidePanel::bsetClicked);
@@ -111,14 +112,10 @@ void RightSidePanel::setupUi() {
     m_ritBtn->installEventFilter(this);
     m_xitBtn->installEventFilter(this);
 
-    // Add spacing between PF grid and bottom grid (25px gap)
-    m_layout->addSpacing(33);
+    m_layout->addSpacing(K4Styles::Dimensions::SidePanelSectionGap);
 
     // Create 2×2 bottom button grid (FREQ ENT, RATE, LOCK A, SUB)
-    auto *bottomGrid = new QGridLayout();
-    bottomGrid->setContentsMargins(btnAreaPad, 0, btnAreaPad, 0);
-    bottomGrid->setHorizontalSpacing(4);
-    bottomGrid->setVerticalSpacing(8);
+    auto *bottomGrid = SidePanelButton::createGrid();
 
     // Row 0: FREQ ENT/SCAN (stacked text), RATE/KHZ
     bottomGrid->addWidget(createFunctionButton("FREQ\nENT", "SCAN", m_freqEntBtn), 0, 0);
@@ -128,7 +125,7 @@ void RightSidePanel::setupUi() {
     bottomGrid->addWidget(createFunctionButton("LOCK A", "LOCK B", m_lockABtn), 1, 0);
     bottomGrid->addWidget(createFunctionButton("SUB", "DIVERSITY", m_subBtn), 1, 1);
 
-    m_layout->addLayout(bottomGrid);
+    addGrid(bottomGrid);
 
     // Connect bottom button signals
     connect(m_freqEntBtn, &QPushButton::clicked, this, &RightSidePanel::freqEntClicked);
@@ -144,40 +141,8 @@ void RightSidePanel::setupUi() {
 
 QWidget *RightSidePanel::createFunctionButton(const QString &mainText, const QString &subText, QPushButton *&btnOut,
                                               bool isLighter) {
-    // Container widget for button + sub-text label
-    auto *container = new QWidget(this);
-    auto *layout = new QVBoxLayout(container);
-    layout->setContentsMargins(0, 2, 0, 2);
-    layout->setSpacing(4);
-
-    // Button - scaled down from bottom menu bar style (matching left panel TX buttons)
-    auto *btn = new QPushButton(mainText, container);
-    btn->setFixedHeight(K4Styles::Dimensions::ButtonHeightSmall);
-    btn->setCursor(Qt::PointingHandCursor);
-
-    if (isLighter) {
-        btn->setStyleSheet(K4Styles::sidePanelButtonLight());
-    } else {
-        btn->setStyleSheet(K4Styles::sidePanelButton());
-    }
-    btn->setAttribute(Qt::WA_LayoutUsesWidgetRect);
-    btnOut = btn;
-    layout->addWidget(btn);
-
-    // Sub-text label (orange), exactly one line of its font tall. WHY: spacing 4 + this line is
-    // the 17 px the old 5 px spacing + 12 px box (with a 4 px in-label margin) took, so the column
-    // does not grow; the old 8 px content box clipped 10 px text.
-    auto *subLabel = new QLabel(subText, container);
-    subLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                .arg(K4Styles::Colors::AccentAmber)
-                                .arg(K4Styles::Dimensions::FontSizeSmall));
-    subLabel->setAlignment(Qt::AlignCenter);
-    QFont subFont = subLabel->font();
-    subFont.setPixelSize(K4Styles::Dimensions::FontSizeSmall);
-    subLabel->setFixedHeight(qCeil(QFontMetricsF(subFont, subLabel).height()));
-    layout->addWidget(subLabel);
-
-    return container;
+    const auto shade = isLighter ? SidePanelButton::Shade::Light : SidePanelButton::Shade::Dark;
+    return SidePanelButton::createWithSubLabel(mainText, subText, shade, btnOut, this);
 }
 
 bool RightSidePanel::eventFilter(QObject *watched, QEvent *event) {

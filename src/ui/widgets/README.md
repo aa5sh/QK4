@@ -10,12 +10,13 @@ Top-level app widgets that aren't popups, pages, overlays, dialogs, or styling i
 - `filterindicatorwidget` — filter bandwidth indicator on VFO row.
 - `txmeterwidget` — multifunction S / Po / ALC / COMP / SWR / Id meter. Scale marks carry the value they denote alongside their position on the bar (`ScaleMark`), so a mark cannot drift away from the value drawn there; `tests/test_meterscale.cpp` asserts the two agree.
 
-### Menu bars + panels (5)
+### Menu bars + panels (6)
 - `bottommenubar` — MENU, Fn, DISPLAY, BAND, PTT.
 - `featuremenubar` — +/- control bar for ATTN / NB / NR / MANUAL NOTCH.
 - `sidecontrolpanel` — left panel: volume, AF/RF/MIC gain, squelch, BW/SHFT.
 - `rightsidepanel` — right panel: function buttons, memory, KPA1500 mini-panel slot.
 - `kpa1500minipanel` — KPA1500 status + button slab for the right side panel.
+- `sidepanelbutton` — the one builder for side-panel buttons (both panels, memory row, KPA1500 mini-panel): fixed size from the `K4Styles::Dimensions::Side*` tokens, light or dark sheet, measured orange sub-label, the standard two-column grid.
 
 ### Small controls (4)
 - `dualcontrolbutton` — custom split-button for paired controls.

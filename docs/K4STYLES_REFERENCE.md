@@ -217,6 +217,41 @@ rg 'constexpr const char \*' src/ui/styling/k4styles.h      # font-family consta
 | `ButtonHeightSmall` | `28` | Function buttons in side panels (px) |
 | `ButtonHeightMini` | `24` | Compact toggle buttons (MON, NORM, BAL) (px) |
 
+### Side-Panel Button Geometry
+
+One standard for the left and right panels, the memory row and the KPA1500 mini-panel. Light and dark
+buttons share all of it and differ only in colour. Build buttons with `SidePanelButton`
+(`src/ui/widgets/sidepanelbutton.h`), never by hand: `create()` (fixed size, sheet,
+`WA_LayoutUsesWidgetRect`), `createWithSubLabel()`, `createSubLabel()` / `subLabelHeight()` (one line of
+the sub-label font, measured with `QFontMetricsF`), `createGrid()` (two equal columns, add it with
+`Qt::AlignHCenter`). Checked by `SidePanelButtonStandardTests` in `tests/test_sidecontrolpanel.cpp`.
+
+| Constant | Value | Usage |
+|----------|-------|-------|
+| `SideButtonHeight` | `28` (= `ButtonHeightSmall`) | Every side-panel key; two lines of 10 px text inside the 2 px borders |
+| `SideButtonWidth` | `57` | Function keys; the narrowest column every sub-label fits (DIVERSITY) |
+| `SideButtonColumnGap` | `4` | Between keys side by side (grids, memory row, MON/NORM/BAL, icon row) |
+| `SideButtonSubLabelGap` | `4` | Key bottom edge to its orange sub-label (also M1–M4 to MESSAGE) |
+| `SideButtonRowGap` | `12` | Sub-label (or key, where none) to the next row's key |
+| `SideButtonGridWidth` | `118` | `2 × SideButtonWidth + SideButtonColumnGap` |
+| `SidePanelMarginH` / `SidePanelMarginV` | `6` / `8` | Panel edge to content; `MarginH` is also the KPA1500 card's inset |
+| `SidePanelItemSpacing` | `4` | Between consecutive items of one group |
+| `SidePanelGroupGap` | `16` | Between groups (TX grid, each knob pair, KPA1500 slot) |
+| `SidePanelMinorGap` | `8` | Between rows of one block (MON row, sliders, icon row) |
+| `SidePanelSectionGap` | `32` | Right panel: PF keys to the VFO keys below |
+| `SidePanelInnerGap` | `4` | Inside a painted card: label → bar → value, text to the status-box edge |
+| `SideCompactButtonHeight` | `24` | MON / NORM / BAL |
+| `SideCompactBorderWidth` / `SideCompactBorderRadius` | `1` / `4` | `compactButton()` border; status-box radius |
+| `SideIconSize` / `SideIconInset` | `24` / `2` | ? and globe glyph, and its clearance inside the border |
+| `SideIconButtonSize` | `32` | `SideIconSize + 2 × (BorderWidth + SideIconInset)` |
+| `SidePanelMeterAllowance` | `12` | Extra right-panel width per side, for the KPA1500 meters |
+
+The side sheets (`sidePanelButton*()`, `compactButton()`) carry colour, border, radius and font only —
+`padding: 0px` and no size. Size is set on the widget: a style sheet `height` has no effect on widgets and
+`min-height` counts from the content rect (Qt Style Sheets Reference). Spacing is explicit rather than the
+style's `PM_Layout*Spacing`, which follows native guidelines (Aqua spaces push buttons 12 px) and would make
+the panels differ per platform.
+
 ### Popup Layout
 
 | Constant | Value | Usage |
@@ -244,8 +279,8 @@ rg 'constexpr const char \*' src/ui/styling/k4styles.h      # font-family consta
 | `FormLabelWidth` | `80` | Form field labels, numeric value displays (px) |
 | `VfoSquareSize` | `45` | VFO A/B indicator squares and mode labels (px) |
 | `NavButtonWidth` | `54` | Navigation buttons in overlays (px) |
-| `LeftSidePanelWidth` | `105` | Left side panel (volume, controls) (px) |
-| `RightSidePanelWidth` | `130` | Right side panel (function buttons, KPA1500) (px) |
+| `LeftSidePanelWidth` | `130` | Left side panel: `SideButtonGridWidth + 2 × SidePanelMarginH` (px) |
+| `RightSidePanelWidth` | `154` | Right side panel: `LeftSidePanelWidth + 2 × SidePanelMeterAllowance` (px) |
 | `NavPanelWidth` | `130` | Menu overlay navigation/search panel (px) |
 | `MemoryButtonWidth` | `42` | M1–M4, REC, STORE, RCL buttons (px) |
 
@@ -397,9 +432,9 @@ QString K4Styles::checkboxButton(int size = 32);  // Checkable toggle button
 QString K4Styles::radioButton();                  // Mode selection (DISPLAY ALL / USE SUBSET)
 
 // Side panel buttons
-QString K4Styles::compactButton();              // MON, NORM, BAL (dark gradient, 1px border)
-QString K4Styles::sidePanelButton();            // Dark gradient side-panel icons (?, globe)
-QString K4Styles::sidePanelButtonLight();       // Light gradient for TX/PF function buttons
+QString K4Styles::compactButton();              // MON, NORM, BAL (dark gradient, SideCompactBorderWidth border)
+QString K4Styles::sidePanelButton();            // Dark side-panel keys (right panel, memory, KPA1500, ?, globe)
+QString K4Styles::sidePanelButtonLight();       // Light keys (TX, PF, STORE/RCL) — same geometry as dark
 QString K4Styles::panelButtonWithDisabled();    // KPA1500 panel buttons (STANDBY, ATU, ANT, TUNE)
 
 // Dialog + control buttons

@@ -564,6 +564,7 @@ add_test(NAME WindowFitTests COMMAND test_windowfit)
 add_executable(test_sidecontrolpanel
     test_sidecontrolpanel.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/widgets/sidecontrolpanel.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/widgets/sidepanelbutton.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/widgets/rightsidepanel.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/widgets/kpa1500minipanel.cpp
     ${CMAKE_SOURCE_DIR}/src/network/kpa1500antennas.cpp
@@ -586,6 +587,7 @@ add_executable(test_widgetstate
     test_widgetstate.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/widgets/frequencydisplaywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/widgets/sidecontrolpanel.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/widgets/sidepanelbutton.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/widgets/dualcontrolbutton.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/widgets/featuremenubar.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/overlays/sidecontroloverlay.cpp

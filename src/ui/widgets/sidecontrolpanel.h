@@ -8,6 +8,7 @@
 #include <QSlider>
 
 class DualControlButton;
+class QIcon;
 class QGridLayout;
 class MonOverlay;
 class BalOverlay;
@@ -160,7 +161,7 @@ private:
     void setGroup1Active(DualControlButton *activeBtn);
     void setGroup2Active(DualControlButton *activeBtn);
     void setGroup3Active(DualControlButton *activeBtn);
-    QPushButton *createIconButton(const QString &text);
+    QPushButton *createIconButton(const QIcon &icon);
     QWidget *createTxFunctionButton(const QString &mainText, const QString &subText, QPushButton *&btnOut);
 
     // Track mode (CW shows WPM/PTCH, Voice shows MIC/CMP)

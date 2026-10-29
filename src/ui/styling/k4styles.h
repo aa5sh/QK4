@@ -109,8 +109,10 @@ QString compactButton();
 // button by the native style's smaller "layout item rect" (macOS insets push buttons for their
 // focus ring), so on macOS the sub-label below was laid over the button's bottom edge. Qt docs:
 // WA_LayoutUsesWidgetRect "Ignore the layout item rect from the style when laying out this widget".
-// The sheets carry no vertical padding: 28 px minus the 2 px borders leaves exactly the 24 px two
-// lines of 10 px text need (ATU TUNE, FREQ ENT).
+// The sheets carry colour, border, radius and font only — no padding and no size. Every geometry value
+// comes from the Dimensions::Side* tokens through SidePanelButton (src/ui/widgets/sidepanelbutton.h),
+// so light and dark buttons differ in colour alone. 28 px minus the 2 px borders leaves exactly the
+// 24 px two lines of 10 px text need (ATU TUNE, FREQ ENT).
 
 /**
  * @brief Dark gradient button for side panel icons (?, globe).

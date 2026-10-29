@@ -315,12 +315,12 @@ QString compactButton() {
     return QString(R"(
         QPushButton {
             background: %1;
-            border: 1px solid %2;
-            border-radius: 4px;
+            border: %10px solid %2;
+            border-radius: %11px;
             color: %3;
             font-size: %4px;
             font-weight: bold;
-            padding: 4px 1px;
+            padding: 0px;
         }
         QPushButton:hover {
             background: %5;
@@ -331,7 +331,7 @@ QString compactButton() {
         QPushButton:checked {
             background: %7;
             color: %8;
-            border: 1px solid %9;
+            border: %10px solid %9;
         }
     )")
         .arg(gradientCss(Colors::GradientTop, Colors::GradientMid1, Colors::GradientMid2, Colors::GradientBottom))
@@ -343,7 +343,9 @@ QString compactButton() {
                                  Colors::GradientBottom))
         .arg(gradientCss(Colors::SelectedTop, Colors::SelectedMid1, Colors::SelectedMid2, Colors::SelectedBottom))
         .arg(Colors::TextDark)
-        .arg(Colors::BorderSelected);
+        .arg(Colors::BorderSelected)
+        .arg(Dimensions::SideCompactBorderWidth)
+        .arg(Dimensions::SideCompactBorderRadius);
 }
 
 QString sidePanelButton() {

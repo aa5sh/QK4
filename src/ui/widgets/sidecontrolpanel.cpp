@@ -1,5 +1,6 @@
 #include "ui/widgets/sidecontrolpanel.h"
 #include "ui/widgets/dualcontrolbutton.h"
+#include "ui/widgets/sidepanelbutton.h"
 #include "ui/styling/k4styles.h"
 #include "ui/overlays/monoverlay.h"
 #include "ui/overlays/baloverlay.h"
@@ -24,15 +25,12 @@ void SideControlPanel::setupUi() {
     // Note: No explicit size policy - let Qt handle vertical expansion like RightSidePanel
 
     auto *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(K4Styles::Dimensions::PaddingSmall, K4Styles::Dimensions::PopupButtonSpacing,
-                               K4Styles::Dimensions::PaddingSmall, K4Styles::Dimensions::PopupButtonSpacing);
-    layout->setSpacing(4); // Default spacing between buttons in a group
+    layout->setContentsMargins(K4Styles::Dimensions::SidePanelMarginH, K4Styles::Dimensions::SidePanelMarginV,
+                               K4Styles::Dimensions::SidePanelMarginH, K4Styles::Dimensions::SidePanelMarginV);
+    layout->setSpacing(K4Styles::Dimensions::SidePanelItemSpacing);
 
     // ===== TX Function Buttons (2x3 grid) =====
-    auto *txGrid = new QGridLayout();
-    txGrid->setContentsMargins(0, 0, 0, 0);
-    txGrid->setHorizontalSpacing(4);
-    txGrid->setVerticalSpacing(8);
+    auto *txGrid = SidePanelButton::createGrid();
 
     // Row 0: TUNE, XMIT
     txGrid->addWidget(createTxFunctionButton("TUNE", "TUNE LP", m_tuneBtn), 0, 0);
@@ -47,6 +45,7 @@ void SideControlPanel::setupUi() {
     txGrid->addWidget(createTxFunctionButton("RX ANT", "SUB ANT", m_rxAntBtn), 2, 1);
 
     layout->addLayout(txGrid);
+    layout->setAlignment(txGrid, Qt::AlignHCenter);
 
     // ===== Connect TX function button signals and install event filters =====
     // Left-click signals
@@ -65,8 +64,7 @@ void SideControlPanel::setupUi() {
     m_antBtn->installEventFilter(this);
     m_rxAntBtn->installEventFilter(this);
 
-    // ===== Spacing after TX buttons =====
-    layout->addSpacing(16);
+    layout->addSpacing(K4Styles::Dimensions::SidePanelGroupGap);
 
     // ===== Group 1: Global (CW/Power) - Orange bar =====
     m_wpmBtn = new DualControlButton(this);
@@ -87,8 +85,7 @@ void SideControlPanel::setupUi() {
     m_pwrBtn->setShowIndicator(false); // Second button starts inactive
     layout->addWidget(m_pwrBtn);
 
-    // ===== Spacing between groups =====
-    layout->addSpacing(16);
+    layout->addSpacing(K4Styles::Dimensions::SidePanelGroupGap);
 
     // ===== Group 2: Filter (BW/Shift) - Cyan bar - LINKED PAIR =====
     m_bwBtn = new DualControlButton(this);
@@ -109,8 +106,7 @@ void SideControlPanel::setupUi() {
     m_shiftBtn->setShowIndicator(false); // Second button starts inactive
     layout->addWidget(m_shiftBtn);
 
-    // ===== Spacing between groups =====
-    layout->addSpacing(16);
+    layout->addSpacing(K4Styles::Dimensions::SidePanelGroupGap);
 
     // ===== Group 3: RF/Squelch =====
     m_mainRfBtn = new DualControlButton(this);
@@ -132,35 +128,27 @@ void SideControlPanel::setupUi() {
     layout->addWidget(m_subSqlBtn);
 
     // ===== MON/NORM/BAL Buttons =====
-    layout->addSpacing(10);
+    layout->addSpacing(K4Styles::Dimensions::SidePanelMinorGap);
 
-    // Wrap in container widget for proper layout sizing
-    auto *swBtnContainer = new QWidget(this);
-    swBtnContainer->setFixedHeight(K4Styles::Dimensions::ButtonHeightMini);
-    auto *swBtnRow = new QHBoxLayout(swBtnContainer);
+    auto *swBtnRow = new QHBoxLayout();
     swBtnRow->setContentsMargins(0, 0, 0, 0);
-    swBtnRow->setSpacing(2);
-
-    m_monBtn = new QPushButton("MON", swBtnContainer);
-    m_monBtn->setStyleSheet(K4Styles::compactButton());
-    m_monBtn->setAttribute(Qt::WA_LayoutUsesWidgetRect);
-    m_monBtn->setFixedHeight(K4Styles::Dimensions::ButtonHeightMini);
+    swBtnRow->setSpacing(K4Styles::Dimensions::SideButtonColumnGap);
+    auto makeCompact = [this](const QString &text) {
+        auto *btn = new QPushButton(text, this);
+        btn->setStyleSheet(K4Styles::compactButton());
+        btn->setAttribute(Qt::WA_LayoutUsesWidgetRect);
+        btn->setFixedHeight(K4Styles::Dimensions::SideCompactButtonHeight);
+        btn->setMinimumWidth(btn->sizeHint().width());
+        return btn;
+    };
+    m_monBtn = makeCompact("MON");
+    m_normBtn = makeCompact("NORM");
+    m_balBtn = makeCompact("BAL");
     // WHY 3:4:3: NORM is the widest caption; equal thirds clip it at the 10 px text floor.
     swBtnRow->addWidget(m_monBtn, 3);
-
-    m_normBtn = new QPushButton("NORM", swBtnContainer);
-    m_normBtn->setStyleSheet(K4Styles::compactButton());
-    m_normBtn->setAttribute(Qt::WA_LayoutUsesWidgetRect);
-    m_normBtn->setFixedHeight(K4Styles::Dimensions::ButtonHeightMini);
     swBtnRow->addWidget(m_normBtn, 4);
-
-    m_balBtn = new QPushButton("BAL", swBtnContainer);
-    m_balBtn->setStyleSheet(K4Styles::compactButton());
-    m_balBtn->setAttribute(Qt::WA_LayoutUsesWidgetRect);
-    m_balBtn->setFixedHeight(K4Styles::Dimensions::ButtonHeightMini);
     swBtnRow->addWidget(m_balBtn, 3);
-
-    layout->addWidget(swBtnContainer);
+    layout->addLayout(swBtnRow);
 
     // Create overlay widgets (initially hidden)
     m_monOverlay = new MonOverlay(this);
@@ -196,7 +184,7 @@ void SideControlPanel::setupUi() {
     connect(m_balOverlay, &BalOverlay::balanceChangeRequested, this, &SideControlPanel::balChangeRequested);
 
     // ===== Volume Slider =====
-    layout->addSpacing(10);
+    layout->addSpacing(K4Styles::Dimensions::SidePanelMinorGap);
 
     m_volumeLabel = new QLabel("MAIN", this);
     m_volumeLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
@@ -216,7 +204,7 @@ void SideControlPanel::setupUi() {
     connect(m_volumeSlider, &QSlider::valueChanged, this, &SideControlPanel::volumeChanged);
 
     // ===== Sub RX Volume Slider (VFO B) =====
-    layout->addSpacing(6);
+    layout->addSpacing(K4Styles::Dimensions::SidePanelMinorGap);
 
     m_subVolumeLabel = new QLabel("SUB", this);
     m_subVolumeLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
@@ -235,8 +223,10 @@ void SideControlPanel::setupUi() {
 
     connect(m_subVolumeSlider, &QSlider::valueChanged, this, &SideControlPanel::subVolumeChanged);
 
-    // ===== Stretch to push status/icons to bottom =====
-    layout->addStretch();
+    // WHY stretch 1: the status group sits on the panel's bottom edge, level with the bottom of the
+    // panadapter. A factor above 0 gives this spacer every spare pixel before any item, whatever
+    // size policy a control above it ends up with.
+    layout->addStretch(1);
 
     // ===== Status Area (mirrors header data) =====
     m_timeLabel = new QLabel("00:00:00 Z", this);
@@ -266,22 +256,15 @@ void SideControlPanel::setupUi() {
                                              .arg(K4Styles::Dimensions::FontSizeLarge));
     layout->addWidget(m_voltageCurrentLabel);
 
-    // WHY 5, not PopupButtonSpacing (8): the version label below grew 3 px when text reached the
-    // 10 px floor, and this panel sets the window's minimum height. Taking it back here keeps that
-    // minimum where it was.
-    layout->addSpacing(5);
+    layout->addSpacing(K4Styles::Dimensions::SidePanelMinorGap);
 
     // ===== Icon Buttons at bottom =====
     auto *iconRow = new QHBoxLayout();
     iconRow->setContentsMargins(0, 0, 0, 0);
-    iconRow->setSpacing(K4Styles::Dimensions::PopupButtonSpacing);
+    iconRow->setSpacing(K4Styles::Dimensions::SideButtonColumnGap);
 
-    m_helpBtn = createIconButton("");
-    m_helpBtn->setIcon(QIcon(":/icons/help.svg"));
-    m_helpBtn->setIconSize(QSize(24, 24));
-    m_connectBtn = createIconButton("");
-    m_connectBtn->setIcon(QIcon(":/icons/globe.svg"));
-    m_connectBtn->setIconSize(QSize(24, 24));
+    m_helpBtn = createIconButton(QIcon(":/icons/help.svg"));
+    m_connectBtn = createIconButton(QIcon(":/icons/globe.svg"));
     m_connectBtn->setToolTip("Connect to Radio");
 
     iconRow->addWidget(m_helpBtn);
@@ -695,46 +678,17 @@ void SideControlPanel::setServerManagerActive(bool active) {
     m_connectBtn->setStyleSheet(active ? K4Styles::sidePanelButtonActive() : K4Styles::sidePanelButton());
 }
 
-QPushButton *SideControlPanel::createIconButton(const QString &text) {
-    auto *btn = new QPushButton(text, this);
-    btn->setFixedSize(K4Styles::Dimensions::CompactButtonSize, K4Styles::Dimensions::CompactButtonSize);
-    btn->setCursor(Qt::PointingHandCursor);
-    btn->setStyleSheet(K4Styles::sidePanelButton());
-    btn->setAttribute(Qt::WA_LayoutUsesWidgetRect);
+QPushButton *SideControlPanel::createIconButton(const QIcon &icon) {
+    constexpr int side = K4Styles::Dimensions::SideIconButtonSize;
+    auto *btn = SidePanelButton::create(QString(), SidePanelButton::Shade::Dark, this, QSize(side, side));
+    btn->setIcon(icon);
+    btn->setIconSize(QSize(K4Styles::Dimensions::SideIconSize, K4Styles::Dimensions::SideIconSize));
     return btn;
 }
 
 QWidget *SideControlPanel::createTxFunctionButton(const QString &mainText, const QString &subText,
                                                   QPushButton *&btnOut) {
-    // Container widget for button + sub-text label
-    auto *container = new QWidget(this);
-    auto *layout = new QVBoxLayout(container);
-    layout->setContentsMargins(0, 2, 0, 2);
-    layout->setSpacing(4);
-
-    // Button - scaled down from bottom menu bar style
-    auto *btn = new QPushButton(mainText, container);
-    btn->setFixedHeight(K4Styles::Dimensions::ButtonHeightSmall);
-    btn->setCursor(Qt::PointingHandCursor);
-    btn->setStyleSheet(K4Styles::sidePanelButtonLight());
-    btn->setAttribute(Qt::WA_LayoutUsesWidgetRect);
-    btnOut = btn;
-    layout->addWidget(btn);
-
-    // Sub-text label (orange), exactly one line of its font tall. WHY: spacing 4 + this line is
-    // the 17 px the old 5 px spacing + 12 px box (with a 4 px in-label margin) took, so the column
-    // does not grow; the old 8 px content box clipped 10 px text.
-    auto *subLabel = new QLabel(subText, container);
-    subLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                .arg(K4Styles::Colors::AccentAmber)
-                                .arg(K4Styles::Dimensions::FontSizeSmall));
-    subLabel->setAlignment(Qt::AlignCenter);
-    QFont subFont = subLabel->font();
-    subFont.setPixelSize(K4Styles::Dimensions::FontSizeSmall);
-    subLabel->setFixedHeight(qCeil(QFontMetricsF(subFont, subLabel).height()));
-    layout->addWidget(subLabel);
-
-    return container;
+    return SidePanelButton::createWithSubLabel(mainText, subText, SidePanelButton::Shade::Light, btnOut, this);
 }
 
 int SideControlPanel::volume() const {

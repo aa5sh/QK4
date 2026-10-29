@@ -179,6 +179,43 @@ constexpr int ButtonHeightSmall = 28;  // Function buttons (side panels)
 constexpr int ButtonHeightMini = 24;   // Compact toggle buttons (MON, NORM, BAL, etc.)
 
 // =============================================================================
+// Side-Panel Button Geometry — one standard for the left and right panels, the memory row and the
+// KPA1500 mini-panel. Light and dark buttons share all of it and differ only in colour. Built by
+// src/ui/widgets/sidepanelbutton.h; checked by SideControlPanelLayoutTests.
+// =============================================================================
+// WHY 28: the sheets carry no vertical padding, so 28 minus the two 2 px borders leaves the 24 px two
+// lines of 10 px text need (ATU TUNE, FREQ ENT).
+constexpr int SideButtonHeight = ButtonHeightSmall;
+// WHY 57: the narrowest column every sub-label fits at the 10 px text floor, DIVERSITY the widest
+// (measured, not estimated).
+constexpr int SideButtonWidth = 57;
+constexpr int SideButtonColumnGap = 4;   // Between buttons side by side, in every row and panel
+constexpr int SideButtonSubLabelGap = 4; // Button bottom edge to its orange sub-label
+constexpr int SideButtonRowGap = 12;     // Sub-label (or button, where none) to the next row's button
+constexpr int SideButtonGridWidth = 2 * SideButtonWidth + SideButtonColumnGap;
+
+constexpr int SidePanelMarginH = 6;     // Panel edge to content, left and right
+constexpr int SidePanelMarginV = 8;     // Panel edge to content, top and bottom
+constexpr int SidePanelItemSpacing = 4; // Between consecutive items of one group
+constexpr int SidePanelGroupGap = 16;   // Between groups (button grid, each knob pair, KPA1500 slot)
+constexpr int SidePanelMinorGap = 8;    // Between the rows of one block (MON row, sliders, icon row)
+// WHY double: the PF keys and the VFO keys under them are separate blocks on the K4's own panel.
+constexpr int SidePanelSectionGap = 2 * SidePanelGroupGap;
+constexpr int SidePanelInnerGap = 4; // Inside a painted card: label to bar, bar to value, text to box edge
+
+constexpr int SideCompactButtonHeight = ButtonHeightMini; // MON / NORM / BAL
+constexpr int SideCompactBorderWidth = 1;
+constexpr int SideCompactBorderRadius = 4;
+
+constexpr int SideIconSize = 24; // ? and globe glyphs
+constexpr int SideIconInset = 2; // Clearance between the glyph and the button's border
+constexpr int SideIconButtonSize = SideIconSize + 2 * (BorderWidth + SideIconInset);
+
+// WHY: the right panel is wider than the left only so the KPA1500 meters get room; its button grid
+// is the same width and sits centred, this much in from the left panel's inset on each side.
+constexpr int SidePanelMeterAllowance = 12;
+
+// =============================================================================
 // Popup Layout
 // =============================================================================
 constexpr int PopupButtonWidth = 70;
@@ -197,15 +234,15 @@ constexpr int MenuBarHeight = 52;  // Bottom menu bar container height
 // =============================================================================
 // Common UI Widths
 // =============================================================================
-constexpr int SmallIconSize = 20;        // Lock icons, health indicator, small controls
-constexpr int CompactButtonSize = 32;    // Side panel icons, EQ +/- buttons
-constexpr int FormLabelWidth = 80;       // Form field labels, numeric value displays
-constexpr int VfoSquareSize = 45;        // VFO A/B indicator squares and mode labels
-constexpr int NavButtonWidth = 54;       // Navigation buttons in overlays
-constexpr int LeftSidePanelWidth = 130;  // Left side panel (volume, controls)
-constexpr int RightSidePanelWidth = 155; // Right side panel (function buttons, KPA1500)
-constexpr int NavPanelWidth = 130;       // Menu overlay navigation/search panel
-constexpr int MemoryButtonWidth = 42;    // M1-M4, REC, STORE, RCL buttons
+constexpr int SmallIconSize = 20;     // Lock icons, health indicator, small controls
+constexpr int CompactButtonSize = 32; // Side panel icons, EQ +/- buttons
+constexpr int FormLabelWidth = 80;    // Form field labels, numeric value displays
+constexpr int VfoSquareSize = 45;     // VFO A/B indicator squares and mode labels
+constexpr int NavButtonWidth = 54;    // Navigation buttons in overlays
+constexpr int LeftSidePanelWidth = SideButtonGridWidth + 2 * SidePanelMarginH;        // 130
+constexpr int RightSidePanelWidth = LeftSidePanelWidth + 2 * SidePanelMeterAllowance; // 154
+constexpr int NavPanelWidth = 130;    // Menu overlay navigation/search panel
+constexpr int MemoryButtonWidth = 42; // M1-M4, REC, STORE, RCL buttons
 
 // =============================================================================
 // Font Sizes (in pixels) - use with QFont::setPixelSize() or paintFont()

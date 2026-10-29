@@ -189,6 +189,7 @@ set(SOURCES
     src/ui/dialogs/radiomanagerdialog.cpp
     src/ui/widgets/dualcontrolbutton.cpp
     src/ui/widgets/sidecontrolpanel.cpp
+    src/ui/widgets/sidepanelbutton.cpp
     src/ui/widgets/bottommenubar.cpp
     src/ui/overlays/menuoverlay.cpp
     src/ui/overlays/mousevfoindicator.cpp
@@ -330,6 +331,7 @@ set(HEADERS
     src/ui/dialogs/radiomanagerdialog.h
     src/ui/widgets/dualcontrolbutton.h
     src/ui/widgets/sidecontrolpanel.h
+    src/ui/widgets/sidepanelbutton.h
     src/ui/widgets/bottommenubar.h
     src/ui/overlays/menuoverlay.h
     src/ui/overlays/mousevfoindicator.h
