@@ -138,6 +138,12 @@ QString fixedTuneSetCommand(FixedTuneMode mode);
 /// land on the same step boundary the dimmed-digit display indicates.
 qint64 snapFreqToStep(qint64 freq, int stepHz);
 
+/// Frequency a wheel turn of `steps` over a VFO's frequency display tunes that VFO to, or 0 when the
+/// turn must not tune. 0 when the VFO is locked (LK / LK$): the K4's lock holds only its own knob -
+/// the Programmer's Reference gives FA/FB no lock exception - so honouring it is QK4's job, as the
+/// panadapter and KPOD paths already do. Also 0 when the result is not a positive frequency.
+qint64 vfoWheelTuneTarget(quint64 currentHz, int steps, int stepHz, bool locked);
+
 /// GT AGC speed (RadioState::AGCSpeed: 0 off, 1 slow, 2 fast) as the K4 labels it: "AGC", "AGC-S",
 /// "AGC-F". Anything else, including the not-yet-received sentinel, reads as off.
 QString agcLabel(int agcSpeed);

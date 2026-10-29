@@ -190,6 +190,13 @@ qint64 snapFreqToStep(qint64 freq, int stepHz) {
     return (stepHz > 0) ? (freq / stepHz) * stepHz : freq;
 }
 
+qint64 vfoWheelTuneTarget(quint64 currentHz, int steps, int stepHz, bool locked) {
+    if (locked)
+        return 0;
+    const qint64 target = static_cast<qint64>(currentHz) + static_cast<qint64>(steps) * stepHz;
+    return target > 0 ? target : 0;
+}
+
 QString agcLabel(int agcSpeed) {
     switch (agcSpeed) {
     case 1:

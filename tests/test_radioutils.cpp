@@ -292,6 +292,20 @@ private slots:
     void testSnap_zeroFreq() { QCOMPARE(RadioUtils::snapFreqToStep(0, 100), Q_INT64_C(0)); }
     void testSnap_guardZeroStep() { QCOMPARE(RadioUtils::snapFreqToStep(7277380, 0), Q_INT64_C(7277380)); }
 
+    // vfoWheelTuneTarget — wheel over a VFO's frequency display; a locked VFO (LK / LK$) never tunes
+    void testVfoWheel_tunesUnlocked() {
+        QCOMPARE(RadioUtils::vfoWheelTuneTarget(14074000, 3, 100, false), Q_INT64_C(14074300));
+        QCOMPARE(RadioUtils::vfoWheelTuneTarget(14074000, -2, 1000, false), Q_INT64_C(14072000));
+    }
+    void testVfoWheel_lockedNeverTunes() {
+        for (int steps : {-1000, -1, 1, 1000})
+            QCOMPARE(RadioUtils::vfoWheelTuneTarget(14074000, steps, 100, true), Q_INT64_C(0));
+    }
+    void testVfoWheel_nonPositiveRefused() {
+        QCOMPARE(RadioUtils::vfoWheelTuneTarget(500, -1, 1000, false), Q_INT64_C(0));
+        QCOMPARE(RadioUtils::vfoWheelTuneTarget(1000, -1, 1000, false), Q_INT64_C(0));
+    }
+
     // isValidIpv4 — strict dotted-quad
     void testIpv4_simple() { QVERIFY(RadioUtils::isValidIpv4("192.168.1.10")); }
     void testIpv4_zeros() { QVERIFY(RadioUtils::isValidIpv4("0.0.0.0")); }

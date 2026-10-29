@@ -867,9 +867,8 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     connect(m_vfoA, &VFOWidget::frequencyScrolled, this, [this](int steps) {
         if (!m_connectionController->isConnected())
             return;
-        quint64 currentFreq = m_radioState->vfoA();
-        int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStep());
-        qint64 newFreq = static_cast<qint64>(currentFreq) + static_cast<qint64>(steps) * stepHz;
+        const qint64 newFreq = RadioUtils::vfoWheelTuneTarget(
+            m_radioState->vfoA(), steps, RadioUtils::tuningStepToHz(m_radioState->tuningStep()), m_radioState->lockA());
         if (newFreq > 0) {
             QString cmd = QString("FA%1;").arg(static_cast<quint64>(newFreq), 11, 10, QChar('0'));
             m_connectionController->sendCAT(cmd);
@@ -1096,9 +1095,9 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     connect(m_vfoB, &VFOWidget::frequencyScrolled, this, [this](int steps) {
         if (!m_connectionController->isConnected())
             return;
-        quint64 currentFreq = m_radioState->vfoB();
-        int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStepB());
-        qint64 newFreq = static_cast<qint64>(currentFreq) + static_cast<qint64>(steps) * stepHz;
+        const qint64 newFreq = RadioUtils::vfoWheelTuneTarget(m_radioState->vfoB(), steps,
+                                                              RadioUtils::tuningStepToHz(m_radioState->tuningStepB()),
+                                                              m_radioState->lockB());
         if (newFreq > 0) {
             QString cmd = QString("FB%1;").arg(static_cast<quint64>(newFreq), 11, 10, QChar('0'));
             m_connectionController->sendCAT(cmd);
