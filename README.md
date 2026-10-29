@@ -82,23 +82,25 @@ and PipeWire tuning from [@jmeloranta](https://github.com/jmeloranta)'s Arch AUR
 
 ## Building from Source
 
-Qt 6.7 or later is required. The panadapter uses `QRhiWidget`, which first shipped in Qt 6.7.
-Ubuntu 24.04's packaged Qt is 6.4 and cannot build QK4. On Ubuntu 24.04, install Qt from the
-[Qt Online Installer](https://www.qt.io/download-qt-installer) or
-[aqtinstall](https://github.com/miurahr/aqtinstall), or build the Flatpak below.
-Debian Trixie's packaged Qt is new enough.
+Build with the official Qt named in [`.github/qt-version`](.github/qt-version) (currently 6.10.3),
+from the [Qt Online Installer](https://www.qt.io/download-qt-installer) or
+[aqtinstall](https://github.com/miurahr/aqtinstall). Every CI runner builds and tests with exactly
+that version: macOS, Windows, the Raspberry Pi, the unit and sanitizer tests, and CodeQL. The Flatpak
+gets the same minor (6.10) from the KDE runtime, which decides the patch.
 
-CI builds the release packages with Qt 6.10 on macOS, Windows and Flatpak, and with Debian Trixie's
-packaged Qt on the Raspberry Pi.
+Older Qt is not tested. Qt 6.7 is the hard minimum (the panadapter uses `QRhiWidget`), and a distro
+Qt such as Debian Trixie's 6.8 may still build, but CMake warns when the Qt it finds is not the
+pinned version. `scripts/check-qt-version.sh --local` checks the Qt on your machine.
 
 ### Requirements
 
-| Dependency | macOS | Windows (vcpkg + Qt Installer) | Debian Trixie / Raspberry Pi (apt) |
+| Dependency | macOS | Windows (vcpkg + Qt Installer) | Linux / Raspberry Pi (apt + official Qt) |
 |------------|-------|-------------------------------|-----------------------------------|
 | C++ compiler | Xcode Command Line Tools | Visual Studio 2019+ Build Tools | `g++` |
 | CMake | `brew install cmake` | Included with VS Build Tools | `cmake` |
-| Qt 6.7+ | [Qt Online Installer](https://www.qt.io/download-qt-installer) | [Qt Online Installer](https://www.qt.io/download-qt-installer) or [aqtinstall](https://github.com/miurahr/aqtinstall) | `qt6-base-dev qt6-base-private-dev` |
-| Qt modules | Multimedia, Shader Tools, Serial Port, Svg (select in the installer) | Multimedia, Shader Tools, Serial Port, Svg | `qt6-multimedia-dev qt6-shadertools-dev qt6-serialport-dev qt6-svg-dev` |
+| Qt (`.github/qt-version`) | [Qt Online Installer](https://www.qt.io/download-qt-installer) | [Qt Online Installer](https://www.qt.io/download-qt-installer) or [aqtinstall](https://github.com/miurahr/aqtinstall) | [Qt Online Installer](https://www.qt.io/download-qt-installer) or [aqtinstall](https://github.com/miurahr/aqtinstall) |
+| Qt modules | Multimedia, Shader Tools, Serial Port, Svg (select in the installer) | Multimedia, Shader Tools, Serial Port, Svg | Multimedia, Shader Tools, Serial Port, Svg |
+| GL / keyboard headers for Qt | — | — | `libgl-dev libegl-dev libxkbcommon-dev` |
 | libopus | `brew install opus` | from `vcpkg.json` | `libopus-dev` |
 | OpenSSL 3 | `brew install openssl@3` | from `vcpkg.json` | `libssl-dev` |
 | HIDAPI | `brew install hidapi` | from `vcpkg.json` | `libhidapi-dev` |
@@ -140,7 +142,7 @@ libusb from `vcpkg.json` during configure, so no separate `vcpkg install` is nee
 Run these commands from an "x64 Native Tools Command Prompt for VS", so Ninja finds the compiler.
 
 ```powershell
-# Install Qt 6.7+ via the Qt Online Installer or aqtinstall
+# Install the Qt in .github/qt-version via the Qt Online Installer or aqtinstall
 # Required modules: Multimedia, Shader Tools, Serial Port, Svg
 
 # Clone and build (add -DCMAKE_PREFIX_PATH=<Qt>\msvc2022_64 if CMake does not find Qt)
@@ -156,28 +158,39 @@ cmake --build build
 cmake --build build --target deploy
 ```
 
-### Debian Trixie / Raspberry Pi
+### Linux / Raspberry Pi
+
+Use the official Qt, as CI does, not the distribution's. The Qt Online Installer puts it in
+`~/Qt/<version>/gcc_64` on x86_64 and `~/Qt/<version>/gcc_arm64` on ARM64 (Raspberry Pi 4/5);
+aqtinstall does the same without an account.
 
 ```bash
-# Install dependencies
-sudo apt install cmake g++ pkg-config \
-  qt6-base-dev qt6-base-private-dev \
-  qt6-multimedia-dev qt6-shadertools-dev qt6-serialport-dev qt6-svg-dev \
+# Install the non-Qt dependencies (Debian/Ubuntu names)
+sudo apt install cmake g++ pkg-config pipx \
+  libgl-dev libegl-dev libxkbcommon-dev \
   libopus-dev libhidapi-dev libusb-1.0-0-dev libssl-dev libudev-dev \
   libasound2-dev libpulse-dev
 
-# Clone and build
+# Install the pinned Qt with aqtinstall (or use the Qt Online Installer)
 git clone https://github.com/mikeg-dal/QK4.git
 cd QK4
-cmake -B build -DCMAKE_BUILD_TYPE=Release
+QT_VERSION=$(cat .github/qt-version)
+pipx install aqtinstall   # then open a new shell, or: export PATH="$HOME/.local/bin:$PATH"
+aqt install-qt linux desktop "$QT_VERSION" linux_gcc_64 \
+  -m qtmultimedia qtshadertools qtserialport -O "$HOME/Qt"
+# On a Raspberry Pi: aqt install-qt linux_arm64 desktop "$QT_VERSION" linux_gcc_arm64 ...
+
+# Build (gcc_arm64 instead of gcc_64 on a Raspberry Pi)
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$HOME/Qt/$QT_VERSION/gcc_64"
 cmake --build build -j$(nproc)
 
 # Run
 ./build/QK4
 ```
 
-On another distribution, use these steps if its packaged Qt is 6.7 or later. Otherwise install Qt
-with the Qt Online Installer and pass `-DCMAKE_PREFIX_PATH=$HOME/Qt/<version>/gcc_64`.
+A distribution's own Qt 6.7 or later may also work (`qt6-base-dev qt6-base-private-dev
+qt6-multimedia-dev qt6-shadertools-dev qt6-serialport-dev qt6-svg-dev` on Debian), but it is not
+what CI tests, and CMake will warn about the version.
 
 ### Linux x86_64 (Flatpak)
 

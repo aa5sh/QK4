@@ -52,8 +52,8 @@ logical pixels, which Qt's High-DPI scaling still multiplies by the device pixel
 sharp and the layout is the same on every platform. Always `setPixelSize()` with a `FontSize*` token.
 
 `dataFont()` turns on tabular figures with `QFont::setFeature("tnum")`, which needs Qt 6.7. The call
-is guarded, so a build on an older Qt (e.g. the tests-only CI build on Ubuntu's Qt 6.4) keeps
-proportional digits.
+is guarded, so a build on an older Qt keeps proportional digits. CI no longer builds on one: every
+runner uses the Qt in `.github/qt-version`.
 
 ## Contrast policy
 

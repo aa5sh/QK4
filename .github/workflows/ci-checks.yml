@@ -55,6 +55,19 @@ jobs:
           clang-format --version
           find src tests -name '*.cpp' -o -name '*.h' | xargs clang-format --dry-run --Werror
 
+  qt-version:
+    name: Check Qt Version Drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Check every Qt version against .github/qt-version
+        # WHY: workflows read .github/qt-version at run time, but a container image tag, the Flatpak
+        # manifest, the TSan checksum table and the documented install paths cannot. This fails when
+        # any of them, or a newly hard-coded version, disagrees with the file.
+        run: scripts/check-qt-version.sh
+
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest
