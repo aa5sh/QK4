@@ -151,6 +151,7 @@ commit pays for a whole-tree check.
 Before considering a feature complete:
 - [ ] Does it follow existing patterns?
 - [ ] Are signals/slots properly connected?
+- [ ] If it replaces something, is everything only the old code used gone too — code, tests, comments, docs? (Architecture Rule 13)
 - [ ] Is state initialized correctly?
 - [ ] Lint check passes? (REQUIRED - run pre-commit checklist above)
 - [ ] Would another developer understand this code?
@@ -203,14 +204,14 @@ Rules for new widget code:
 
 These rules prevent the architectural issues identified in the 2026-03-30 audit. They are non-negotiable for all new code and refactoring work.
 
-**How rules are enforced:** not all twelve rules have the same bite. The tag at the front of each rule tells a new contributor what happens when they're broken:
+**How rules are enforced:** not all thirteen rules have the same bite. The tag at the front of each rule tells a new contributor what happens when they're broken:
 
 - **[CI]** — a test or lint check in `.github/workflows/ci-checks.yml` fails. The rule *breaks the build*.
 - **[sanitizer]** — ASAN or UBSAN in the sanitizer CI job catches the violation when the offending code path runs.
 - **[review]** — no automation. Enforced by reviewer discipline. Violations ship if reviewers miss them.
 - **[aspirational]** — target not fully met today; documented exemptions exist. Binds new code only.
 
-The CI-enforced rules (4, 6, 10) are the load-bearing ones. Sanitizer rules (11) catch the nastiest violations at runtime. Review-only rules (2, 3, 5, 8, 9, 12) depend on human attention. Aspirational rules (1, 7) mark architectural intent without strict enforcement.
+The CI-enforced rules (4, 6, 10) are the load-bearing ones. Sanitizer rules (11) catch the nastiest violations at runtime. Review-only rules (2, 3, 5, 8, 9, 12, 13) depend on human attention. Aspirational rules (1, 7) mark architectural intent without strict enforcement.
 
 ### 1. [aspirational] No Duplicated Static Functions
 
@@ -304,6 +305,14 @@ Regressing to "throw it on MainWindow" is the single biggest risk for re-driftin
 - No cross-controller reach-in (`controllerA->someGetter()->doThing()`) — communicate via signals.
 
 No automated check; relies on PR review.
+
+### 13. [review] Replacing Code Removes Everything Only It Used
+
+A change that replaces or removes a feature deletes, in the same change, everything that existed only to serve it: signals nothing connects to and the code that emits them, members only that code wrote, helpers only it called, the tests of those helpers, and every comment, README and doc line that still names any of it.
+
+Before the commit, `rg` each removed symbol and file name across `src/`, `tests/`, `docs/` and the module READMEs. A hit outside git history is either a live user (so it wasn't dead) or leftover to remove. For a signal, also check that something still `connect()`s to it — an emit with no receiver compiles and runs silently.
+
+Why: the 2026-10 keyer port deleted `IambicKeyer` but left the HaliKey line-state signal, its dedupe helper and test, and a dozen comments and docs describing the old keyer. Everything compiled and every test passed, so nothing flagged it.
 
 ---
 
