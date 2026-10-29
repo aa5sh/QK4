@@ -408,6 +408,13 @@ if(WIN32)
 endif()
 add_test(NAME RtSchedulingTests COMMAND test_rtscheduling)
 
+# ThreadShutdown: a thread that stops in time is joined and deleted with what lives on it; one that
+# misses its deadline is disowned (unparented, reported, left running) instead of crashing or hanging.
+add_executable(test_threadshutdown test_threadshutdown.cpp ${CMAKE_SOURCE_DIR}/src/utils/threadshutdown.cpp)
+target_include_directories(test_threadshutdown PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_threadshutdown Qt6::Core Qt6::Test)
+add_test(NAME ThreadShutdownTests COMMAND test_threadshutdown)
+
 # CwGate: when the keyer may key and when the sidetone stream is open (#92 idle CPU).
 add_executable(test_cwgate test_cwgate.cpp)
 target_include_directories(test_cwgate PRIVATE ${CMAKE_SOURCE_DIR}/src)

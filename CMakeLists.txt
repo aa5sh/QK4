@@ -158,6 +158,7 @@ set(SOURCES
     src/network/kzegress.cpp
     src/utils/rtscheduling.cpp
     src/utils/rtsemaphore.cpp
+    src/utils/threadshutdown.cpp
     src/network/protocol.cpp
     src/network/networkmetrics.cpp
     src/network/kpa1500client.cpp
@@ -340,6 +341,7 @@ set(HEADERS
     src/utils/latencyhistogram.h
     src/utils/rtscheduling.h
     src/utils/rtsemaphore.h
+    src/utils/threadshutdown.h
     src/utils/spscring.h
     src/network/protocol.h
     src/network/networkmetrics.h
