@@ -10,6 +10,7 @@
 #include <mutex>
 
 class AudioEngine;
+class TxAudioPipeline;
 class ConnectionController;
 class RadioState;
 
@@ -23,9 +24,10 @@ class RadioState;
  *   - OpusDecoder (a plain class) is owned by the RX decode handler connected to
  *     Protocol::audioDataReady, which runs on the I/O thread, and lives exactly as long as that
  *     connection. Nothing else can reach it.
- *   - The TX encode pipeline (OpusEncoder + packet framing) lives on AudioEngine and runs
- *     fully on the audio thread (PR 12). AudioController only forwards PTT toggles and SL
- *     tier changes; the audio thread emits txPacketReady straight to TcpClient::sendRaw.
+ *   - The TX pipeline (microphone, TCI audio, OpusEncoder, packet framing) is TxAudioPipeline on
+ *     `m_txThread` ("AudioTX"), so opening the microphone at PTT never stalls RX playback.
+ *     AudioController forwards PTT toggles and SL tier changes; the TX thread emits
+ *     txPacketReady straight to TcpClient::sendRaw.
  *   Public AudioController methods are safe to call from the main thread (they dispatch via
  *   QMetaObject::invokeMethod / atomics).
  */
@@ -44,7 +46,7 @@ public:
     // PTT control — forwards to AudioEngine (runs on the audio thread).
     void setPttActive(bool active);
 
-    // Which source feeds the transmitter. Mirrors AudioEngine::TxSource so callers need not reach
+    // Which source feeds the transmitter. Mirrors TxAudioPipeline::TxSource so callers need not reach
     // through to the engine (CONVENTIONS.md rule 2).
     //
     // WHY a remote PTT must set this first: setPttActive() opens the microphone, so keying without
@@ -91,7 +93,7 @@ public:
     void setMicGain(float gain); // 0.0 to 1.0
 
     // Transmit level for audio from a TCI client. Separate from setMicGain because the two sources
-    // sit in completely different parts of the same cubic curve — see AudioEngine::feedTciTxAudio.
+    // sit in completely different parts of the same cubic curve — see TxAudioPipeline::feedTciTxAudio.
     void setTciTxGain(float gain); // 0.0 to 1.0
 
 signals:
@@ -133,6 +135,8 @@ private:
 
     AudioEngine *m_audioEngine;
     QThread *m_audioThread = nullptr;
+    TxAudioPipeline *m_txPipeline;
+    QThread *m_txThread = nullptr;
 
     QTimer *m_metricsTimer = nullptr;
     // Counter values at the last RX playout log line, and ticks since it.

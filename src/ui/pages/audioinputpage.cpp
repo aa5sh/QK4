@@ -1,6 +1,6 @@
 #include "ui/pages/audioinputpage.h"
 #include "ui/styling/k4styles.h"
-#include "audio/audioengine.h"
+#include "audio/txaudiopipeline.h"
 #include "controllers/audiocontroller.h"
 #include "settings/radiosettings.h"
 #include "ui/pages/optionspagelayout.h"
@@ -51,7 +51,7 @@ void AudioInputPage::populateMicDevices() {
 
     m_micDeviceCombo->clear();
 
-    auto devices = AudioEngine::availableInputDevices();
+    auto devices = TxAudioPipeline::availableInputDevices();
     QString savedDevice = RadioSettings::instance()->micDevice();
     int selectedIndex = 0;
 

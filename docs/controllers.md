@@ -53,7 +53,7 @@ Count the controllers with `ls src/controllers/*.h | wc -l`.
 | "Top status bar label / KPA1500 badge wrong" | StatusBarController | `src/controllers/statusbarcontroller.cpp` |
 | "Power button does nothing / no power-off confirm" | StatusBarController (owns the `ConfirmPopup`, sends `PS0;`) | `src/controllers/statusbarcontroller.cpp` |
 | "Audio (RX/TX, PTT) not working" | AudioController | `src/controllers/audiocontroller.cpp` |
-| "PTT does nothing in voice modes" / microphone banner on screen | AudioController → AudioEngine | `src/audio/audioengine.cpp` `setupAudioInput()` (rate rule: `src/audio/audioresampler.h`, wording: `src/audio/micrate.h`) |
+| "PTT does nothing in voice modes" / microphone banner on screen | AudioController → TxAudioPipeline | `src/audio/txaudiopipeline.cpp` `setupAudioInput()` (rate rule: `src/audio/audioresampler.h`, wording: `src/audio/micrate.h`) |
 | "Radio stays keyed after I stop transmitting" | TransmitController | `src/controllers/transmitcontroller.cpp` (decision: `src/models/transmitowner.h`) |
 | "PTT indicator lit but nothing is transmitting (or the reverse)" | TransmitController | same |
 | "WSJT-X keyed while I was already transmitting" | TransmitController | same |
@@ -93,7 +93,7 @@ Grouped by concern:
 
 ### Core
 - **ConnectionController** — TCP connection state machine, network I/O thread, CAT send
-- **AudioController** — audio engine, Opus codecs, the PTT gate, audio thread
+- **AudioController** — RX audio engine (audio thread), TX pipeline (AudioTX thread), the PTT gate
 - **TransmitController** — the single owner of "are we transmitting". Every producer (PTT button, XMIT, Esc, CAT client, TCI client, and the radio itself) asks it instead of writing the audio gate and the indicator directly. Records HOW each transmission was keyed so the release is the exact inverse. Esc is not a release: `operatorStop()` also always sends the K4's CW abort (`KY<04>;RX;`), because a KY macro or TCI `cw_macros` is keyed from the radio's buffer and never reaches the arbiter (#173). Decision logic is header-only in `src/models/transmitowner.h` and unit-tested standalone.
 - **SpectrumController** — panadapters, spectrum data routing, click-tune, passband overlays
 - **HardwareController** — constructs + owns KPOD, KPOD+, HaliKey, PaddleKeyer (with its clock, link, sidetone scheduler and timer), SidetoneGenerator + their threads; KPOD tuning-knob → CAT; device-config push; signal forwarding. **Sole owner of USB device lifecycle policy**: holds one `UsbDeviceLifecycle::State` per device and applies the returned effects. The workers report arrival and loss; they do not decide to open. It also emits `kpodPlusOwnsCw(bool)` from that state, which is what the CW gate follows — detection is not ownership.

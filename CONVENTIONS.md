@@ -291,7 +291,6 @@ PR.
 | `src/dsp/panadapter_rhi.cpp` | 1875 | RHI pipeline and buffer management |
 | `src/mainwindow.cpp` | 1455 | Window chrome, layout, event-filter dispatch, lifecycle |
 | `src/models/radiostate.cpp` | 1174 | Handler registry and façade delegation |
-| `src/audio/audioengine.cpp` | 1136 | Split candidate |
 | `src/settings/radiosettings.cpp` | 1074 | Split candidate |
 | `src/controllers/popupmanager.cpp` | 1026 | Registry of the shared popups |
 | `src/controllers/tcicontroller.cpp` | 959 | Split candidate |

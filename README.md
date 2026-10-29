@@ -269,7 +269,7 @@ K4 (TCP 9204 TLS/PSK or 9205) → TcpClient + Protocol (I/O thread) → RadioSta
 UI widgets → controllers → ConnectionController → TcpClient → K4
 
 RX audio: Protocol → OpusDecoder (I/O thread) → AudioEngine (audio thread) → speaker
-TX audio: microphone → AudioEngine (encode + packetize, audio thread) → TcpClient → K4
+TX audio: microphone → TxAudioPipeline (encode + packetize, AudioTX thread) → TcpClient → K4
 Spectrum: Protocol → SpectrumController → PanadapterRhiWidget / MiniPanRhiWidget (GPU)
 ```
 

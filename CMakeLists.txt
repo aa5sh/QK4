@@ -179,6 +179,7 @@ set(SOURCES
     src/audio/opusencoder.cpp
     src/audio/sidetonegenerator.cpp
     src/audio/sidetonescheduler.cpp
+    src/audio/txaudiopipeline.cpp
     src/dsp/panadapter_rhi.cpp
     src/dsp/minipan_rhi.cpp
     src/dsp/bandplanstrip.cpp
@@ -338,6 +339,7 @@ set(HEADERS
     src/audio/opusencoder.h
     src/audio/sidetonegenerator.h
     src/audio/sidetonescheduler.h
+    src/audio/txaudiopipeline.h
     src/dsp/panadapter_rhi.h
     src/dsp/minipan_rhi.h
     src/settings/radiosettings.h
