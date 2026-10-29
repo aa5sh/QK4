@@ -57,6 +57,17 @@ QVector<float> resampleLinear(const QVector<float> &src, int dstSize) {
     return out;
 }
 
+// The amplitude-axis and frequency-scale labels: readout size, Medium weight, tabular figures.
+QFont scaleLabelFont() {
+    return K4Styles::Fonts::dataFont(K4Styles::Dimensions::FontSizeButton, QFont::Medium);
+}
+
+// Amplitude axis geometry: margin, label, gap, tick. kHaloPx is the 1 px ring drawHaloText adds.
+constexpr qreal kAxisLeftMargin = 4.0;
+constexpr qreal kAxisTickGap = 3.0;
+constexpr qreal kAxisTickLength = 4.0;
+constexpr qreal kHaloPx = 1.0;
+
 } // namespace
 
 // Transparent overlay widget for dBm/S-unit scale labels
@@ -93,13 +104,9 @@ protected:
         QPainter painter(this);
         painter.setRenderHint(QPainter::Antialiasing);
 
-        QFont scaleFont = K4Styles::Fonts::dataFont(K4Styles::Dimensions::FontSizeNormal, QFont::Normal);
+        const QFont scaleFont = scaleLabelFont();
         painter.setFont(scaleFont);
-        painter.setPen(Qt::white);
 
-        const qreal leftMargin = 4.0;
-        const qreal tickGap = 3.0;
-        const qreal tickLength = 4.0;
         const int h = height();
 
         const QFontMetricsF fm(scaleFont, this);
@@ -114,6 +121,8 @@ protected:
         // fall inside the window, already spaced far enough apart to read.
         const auto labels = SpectrumScale::labelsFor(m_minDb, m_maxDb, m_useSUnits, h, fm.lineSpacing());
 
+        const QPen tickHalo(QColor(0, 0, 0, 153), 1.0 + 2.0 * kHaloPx);
+        const QPen tickPen(Qt::white, 1.0);
         for (const auto &label : labels) {
             const float frac = SpectrumScale::normalizedForDb(label.dbm, m_minDb, m_maxDb);
             const qreal yPos = std::round((1.0 - frac) * h);
@@ -125,12 +134,16 @@ protected:
             if (yPos < textHeight / 2.0 || yPos > h - textHeight / 2.0)
                 continue;
 
-            painter.drawText(QPointF(leftMargin, yPos + baselineOffset), label.text);
+            K4Styles::drawHaloText(painter, QPointF(kAxisLeftMargin, yPos + baselineOffset), label.text, Qt::white);
             // A tick, because labels no longer coincide with the grid: the grid is a fixed-size
             // cell pattern and these sit at physical dBm values, so the two only align by accident.
             // WHY: after the text, not before it — a tick in front of a minus sign read as "--".
-            const qreal tickX = leftMargin + fm.horizontalAdvance(label.text) + tickGap;
-            painter.drawLine(QPointF(tickX, yPos), QPointF(tickX + tickLength, yPos));
+            const qreal tickX = kAxisLeftMargin + fm.horizontalAdvance(label.text) + kAxisTickGap;
+            const QLineF tick(tickX, yPos + 0.5, tickX + kAxisTickLength, yPos + 0.5);
+            painter.setPen(tickHalo);
+            painter.drawLine(tick);
+            painter.setPen(tickPen);
+            painter.drawLine(tick);
         }
     }
 
@@ -168,14 +181,14 @@ protected:
         painter.setRenderHint(QPainter::Antialiasing);
         painter.setRenderHint(QPainter::TextAntialiasing);
 
-        QFont scaleFont = K4Styles::Fonts::dataFont(K4Styles::Dimensions::FontSizeNormal, QFont::Normal);
+        const QFont scaleFont = scaleLabelFont();
         painter.setFont(scaleFont);
-        painter.setPen(Qt::white);
 
-        QFontMetrics fm(scaleFont);
-        const int textHeight = fm.height();
-        const int w = width();
-        const int h = height();
+        const QFontMetricsF fm(scaleFont, this);
+        const qreal w = width();
+        // The digits' cap height is centred on the spectrum/waterfall boundary, which runs through
+        // the middle of this overlay.
+        const qreal baselineY = height() / 2.0 + fm.capHeight() / 2.0;
 
         // In CW the display centre is offset by the IF shift so the VFO marker appears centred.
         // Labels show dial-equivalent frequencies (round kHz values) positioned via the
@@ -195,34 +208,31 @@ protected:
             firstDialLabel += interval;
 
         // Measure sample label width for spacing check
-        QString sampleLabel = formatFrequency(firstDialLabel);
-        int labelWidth = fm.horizontalAdvance(sampleLabel);
-        int minSpacing = labelWidth + 12; // Minimum gap between labels
+        const qreal labelWidth = fm.horizontalAdvance(formatFrequency(firstDialLabel));
+        const qreal minSpacing = labelWidth + 12; // Minimum gap between labels
 
         // Draw labels at each interval (round dial frequencies)
-        int lastDrawnX = -1000; // Track last drawn position for overlap prevention
+        qreal lastDrawnX = -1000; // Track last drawn position for overlap prevention
         for (qint64 dialFreq = firstDialLabel; dialFreq <= dialEnd; dialFreq += interval) {
             // Position using RF coordinate system (add CW offset back)
             qint64 rfFreq = dialFreq + cwOffset;
-            float normalized = static_cast<float>(rfFreq - startFreq) / static_cast<float>(m_spanHz);
-            int x = qRound(normalized * w);
+            const qreal normalized = static_cast<qreal>(rfFreq - startFreq) / static_cast<qreal>(m_spanHz);
+            const qreal x = std::round(normalized * w);
 
             // Label text shows the dial frequency
-            QString label = formatFrequency(dialFreq);
-            int textWidth = fm.horizontalAdvance(label);
+            const QString label = formatFrequency(dialFreq);
+            const qreal textWidth = fm.horizontalAdvance(label);
 
-            // Center text horizontally on the frequency position
-            int textX = x - textWidth / 2;
+            // Center text horizontally on the frequency position, on a whole pixel
+            const qreal textX = std::round(x - textWidth / 2.0);
 
-            // Skip if too close to previous label or clipped at edges
-            if (textX < 2 || textX + textWidth > w - 2)
+            // Skip if too close to previous label or clipped at edges (the halo needs 1 px too)
+            if (textX < 2 + kHaloPx || textX + textWidth > w - 2 - kHaloPx)
                 continue;
             if (textX < lastDrawnX + minSpacing)
                 continue;
 
-            // Draw text centered vertically in overlay
-            int textY = (h + textHeight) / 2 - 2;
-            painter.drawText(textX, textY, label);
+            K4Styles::drawHaloText(painter, QPointF(textX, baselineY), label, Qt::white);
             lastDrawnX = textX + textWidth;
         }
     }
@@ -401,9 +411,17 @@ void PanadapterRhiWidget::updateDbmScaleOverlay() {
     const int spectrumHeight = static_cast<int>(h * m_spectrumRatio);
 
     // Overlay covers left side of spectrum area
-    m_dbmScaleOverlay->setGeometry(0, 0, kAmplitudeAxisWidthPx, spectrumHeight);
+    m_dbmScaleOverlay->setGeometry(0, 0, amplitudeAxisWidthPx(), spectrumHeight);
     m_dbmScaleOverlay->setDbRange(m_minDb, m_maxDb);
     m_dbmScaleOverlay->raise(); // Ensure it's on top
+}
+
+int PanadapterRhiWidget::amplitudeAxisWidthPx() const {
+    // WHY "-188 dBm": the widest label the axis can print. Figures are tabular (equal width) on
+    // Qt 6.7+; with proportional figures (Qt < 6.7) 8 is among the widest digits.
+    const QFontMetricsF fm(scaleLabelFont(), this);
+    return qCeil(kAxisLeftMargin + fm.horizontalAdvance(QStringLiteral("-188 dBm")) + kAxisTickGap + kAxisTickLength +
+                 kHaloPx);
 }
 
 void PanadapterRhiWidget::updateBandPlanOverlay() {
@@ -447,9 +465,10 @@ void PanadapterRhiWidget::updateFreqScaleOverlay() {
     const int w = width();
     const int spectrumHeight = static_cast<int>(h * m_spectrumRatio);
 
-    // Position overlay centered on the boundary between spectrum and waterfall
-    // Overlay height: 16px, centered on spectrumHeight boundary line
-    const int overlayHeight = 16;
+    // Centred on the boundary between spectrum and waterfall; tall enough for the label font and
+    // its halo, measured rather than fixed so it follows the font size.
+    const QFontMetricsF fm(scaleLabelFont(), this);
+    const int overlayHeight = qCeil(fm.height() + 2.0 * kHaloPx);
     const int overlayY = spectrumHeight - overlayHeight / 2;
 
     m_freqScaleOverlay->setGeometry(0, overlayY, w, overlayHeight);

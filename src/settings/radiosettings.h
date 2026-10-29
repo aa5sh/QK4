@@ -324,7 +324,7 @@ private:
     QVector<DxClusterEntry> m_dxClusters;
     int m_dxClusterSpotAge = 600; // Default 10 minutes
     QString m_dxClusterCallsign;
-    int m_dxClusterSpotFontSize = 11; // K4Styles::Dimensions::FontSizeSpot default; clamped to [8, 16]
+    int m_dxClusterSpotFontSize = 11; // K4Styles::Dimensions::FontSizeSpot default; clamped to FontSizeSpot{Min,Max}
 
     // KPOD+ encode mode (0=KZ, 1=KX). Keyer speed / CW pitch / iambic mode /
     // paddle orientation are not stored — the KPOD+ mirrors the K4.

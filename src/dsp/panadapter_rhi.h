@@ -24,12 +24,12 @@ class PanadapterRhiWidget : public QRhiWidget {
     Q_OBJECT
 
 public:
-    // Width of the dBm / S-unit label column on the left of the spectrum. Overlays that draw text
-    // over the spectrum (DX spots) keep out of it.
-    static constexpr int kAmplitudeAxisWidthPx = 70;
-
     explicit PanadapterRhiWidget(QWidget *parent = nullptr);
     ~PanadapterRhiWidget();
+
+    // Width of the dBm / S-unit label column on the left of the spectrum, measured from the label
+    // font. Overlays that draw text over the spectrum (DX spots) keep out of it.
+    int amplitudeAxisWidthPx() const;
 
     // Update spectrum data from K4 PAN packet (payload + offset avoids deep copy)
     void updateSpectrum(const QByteArray &payload, int binsOffset, int binCount, qint64 centerFreq, qint32 sampleRate,

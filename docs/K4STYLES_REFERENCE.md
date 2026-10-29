@@ -48,7 +48,7 @@ rg 'constexpr const char \*' src/ui/styling/k4styles.h      # font-family consta
 
 | Constant | Value | Usage |
 |----------|-------|-------|
-| `TxRed` | `#FF0000` | TX indicator, transmit state |
+| `TxRed` | `#FF0000` | TX indicator, transmit state — fills, LEDs and markers only, never text (4.35:1 on `Background`); text uses `TextRed` |
 | `StatusGreen` | `#00FF00` | Active/on/connected status indicators |
 
 ### Meter Gradient Colors (S/Po Meter)
@@ -77,7 +77,8 @@ rg 'constexpr const char \*' src/ui/styling/k4styles.h      # font-family consta
 | `TextWhite` | `#FFFFFF` | Primary text, button labels |
 | `TextDark` | `#333333` | Text on light/selected buttons |
 | `TextGray` | `#999999` | Secondary text, labels |
-| `TextFaded` | `#808080` | Faded text (e.g., auto mode values) |
+| `TextFaded` | `#828282` | Faded text (e.g., auto mode values). 4.53:1 on `Background`, the darkest grey at WCAG AA 4.5:1 (was `#808080`, 4.41:1) |
+| `TextRed` | `#FF6666` | Red text (over-S9 meter scale, warnings). 6.09:1 on `Background`; same value as `ErrorRed` |
 | `InactiveGray` | `#666666` | Inactive/disabled elements |
 
 ### Overlay / Indicator Colors
@@ -252,11 +253,17 @@ rg 'constexpr const char \*' src/ui/styling/k4styles.h      # font-family consta
 
 All font sizes are in **pixels** — use with `QFont::setPixelSize()` or `K4Styles::Fonts::paintFont()`. This ensures consistent rendering across macOS (72 PPI) and Windows (96 PPI).
 
+**Floor:** no text is drawn below `FontSizeFloor` (10 px). `static_assert`s in `k4constants.h` hold every
+`FontSize*`, `Popup*Size` and the user-adjustable minimums to it. Text at 12 px or smaller on the dark
+background uses Medium (500) weight or bolder — the app font is Inter Medium, so stylesheet labels get it
+by default; custom-painted text passes `QFont::Medium` to `paintFont()`/`dataFont()`.
+
 | Constant | Value | Usage |
 |----------|-------|-------|
-| `FontSizeTiny` | `7` | Sub-labels (BANK, AF REC, MESSAGE) (px) |
-| `FontSizeSmall` | `8` | Scale fonts, secondary text (px) |
-| `FontSizeNormal` | `9` | Alt/secondary button text (px) |
+| `FontSizeFloor` | `10` | Smallest text size anywhere (px) |
+| `FontSizeTiny` | `10` (= floor; was 7) | Sub-labels (BANK, AF REC, MESSAGE) (px) |
+| `FontSizeSmall` | `10` (= floor; was 8) | Scale fonts, secondary text (px) |
+| `FontSizeNormal` | `10` (= floor; was 9) | Alt/secondary button text (px) |
 | `FontSizeMedium` | `10` | Labels, descriptions (px) |
 | `FontSizeLarge` | `11` | Feature labels, primary labels (px) |
 | `FontSizeButton` | `12` | Button text, value displays (px) |
@@ -273,8 +280,18 @@ User-configurable in Options → DX Cluster (the slider runs `FontSizeSpotMin..F
 | Constant | Value | Usage |
 |----------|-------|-------|
 | `FontSizeSpot` | `11` | Default DX cluster spot-label size (px) |
-| `FontSizeSpotMin` | `8` | Slider minimum for spot label size (px) |
+| `FontSizeSpotMin` | `10` (= floor) | Slider minimum for spot label size (px) |
 | `FontSizeSpotMax` | `16` | Slider maximum for spot label size (px) |
+
+### Text Decode Font Sizes
+
+The decode window's A−/A+ buttons, persisted per receiver by `RadioSettings::textDecodeFontSize()`.
+
+| Constant | Value | Usage |
+|----------|-------|-------|
+| `FontSizeTextDecode` | `11` | Default decoded-text size (px; was 9) |
+| `FontSizeTextDecodeMin` | `10` (= floor) | Smallest A− allows (px; was 7) |
+| `FontSizeTextDecodeMax` | `24` | Largest A+ allows (px) |
 
 ### Popup Menu Font Sizes (horizontal control-bar popups)
 
@@ -404,6 +421,10 @@ QColor K4Styles::borderColorSelected();  // BorderSelected (#AAAAAA)
 
 // Shadow
 void K4Styles::drawDropShadow(QPainter &painter, const QRect &contentRect, int cornerRadius = 8);
+
+// Text over the spectrum/waterfall: 1 px ring of 60 % black, then the text. DX spot labels and the
+// panadapter's amplitude and frequency scales. `baseline` is as for QPainter::drawText(QPointF, QString).
+void K4Styles::drawHaloText(QPainter &painter, const QPointF &baseline, const QString &text, const QColor &color);
 ```
 
 ### Dialog::* Cached Stylesheet Helpers
@@ -528,7 +549,8 @@ Text:
   #FFFFFF ████ TextWhite
   #333333 ████ TextDark
   #999999 ████ TextGray
-  #808080 ████ TextFaded
+  #828282 ████ TextFaded
+  #FF6666 ████ TextRed
   #666666 ████ InactiveGray
 
 Normal Gradient (top→bottom):

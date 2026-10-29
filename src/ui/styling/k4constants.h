@@ -35,7 +35,7 @@ constexpr const char *VfoACyan = "#00BFFF";  // VFO A: cyan theme
 constexpr const char *VfoBGreen = "#00FF00"; // VFO B: green theme
 
 // Status Colors
-constexpr const char *TxRed = "#FF0000";
+constexpr const char *TxRed = "#FF0000"; // Fills, LEDs, markers — never text (4.35:1 on Background); see TextRed
 constexpr const char *StatusGreen = "#00FF00"; // Active/on/connected status indicators
 // Meter Gradient Colors (green → yellow → red progression)
 constexpr const char *MeterGreenDark = "#00CC00";
@@ -54,7 +54,12 @@ constexpr const char *MeterIdLight = "#66BB6A"; // Lighter sage green
 constexpr const char *TextWhite = "#FFFFFF";
 constexpr const char *TextDark = "#333333";
 constexpr const char *TextGray = "#999999";
-constexpr const char *TextFaded = "#808080"; // Faded text (e.g., auto mode values)
+// WHY #828282: the darkest grey that keeps WCAG AA 4.5:1 on Background and the overlay row
+// background. #808080 measured 4.41:1. Checked by FormControlThemeTests.
+constexpr const char *TextFaded = "#828282"; // Faded text (e.g., auto mode values)
+// WHY a separate red for text: TxRed (#FF0000) is 4.35:1 on Background, under the 4.5:1 that
+// small text needs. Same value as ErrorRed (6.09:1).
+constexpr const char *TextRed = "#FF6666"; // Red text: over-S9 meter scale, warnings
 constexpr const char *InactiveGray = "#666666";
 
 // Overlay/Indicator Colors
@@ -205,22 +210,44 @@ constexpr int MemoryButtonWidth = 42;    // M1-M4, REC, STORE, RCL buttons
 // =============================================================================
 // Font Sizes (in pixels) - use with QFont::setPixelSize() or paintFont()
 // =============================================================================
-constexpr int FontSizeTiny = 7;          // Sub-labels (BANK, AF REC, MESSAGE)
-constexpr int FontSizeSmall = 8;         // Scale fonts, secondary text
-constexpr int FontSizeNormal = 9;        // Alt/secondary button text
-constexpr int FontSizeMedium = 10;       // Labels, descriptions
-constexpr int FontSizeLarge = 11;        // Feature labels, primary labels
-constexpr int FontSizeButton = 12;       // Button text, value displays
-constexpr int FontSizeNotification = 13; // Toast / macro-dialog notifications (between Button and Popup)
-constexpr int FontSizePopup = 14;        // Notifications, popup titles
-constexpr int FontSizeTitle = 16;        // Large control buttons (+/-)
-constexpr int FontSizeIndicator = 18;    // TX/RX/SPLIT indicator labels
-constexpr int FontSizeFrequency = 32;    // VFO frequency displays (FrequencyDisplayWidget, VfoWidget)
+// WHY a floor of 10 px: 7–9 px text was unreadable on a 27" 1440p display (0.23 mm/px) and is smaller
+// still once a small screen shrinks the interface. Nothing is drawn below it; text at the floor uses
+// Medium weight or bolder on the dark background. FontSizeTiny/Small/Normal keep their names until the
+// type-scale rename and sit at the floor.
+constexpr int FontSizeFloor = 10;
+constexpr int FontSizeTiny = FontSizeFloor;   // Sub-labels (BANK, AF REC, MESSAGE)
+constexpr int FontSizeSmall = FontSizeFloor;  // Scale fonts, secondary text
+constexpr int FontSizeNormal = FontSizeFloor; // Alt/secondary button text
+constexpr int FontSizeMedium = 10;            // Labels, descriptions
+constexpr int FontSizeLarge = 11;             // Feature labels, primary labels
+constexpr int FontSizeButton = 12;            // Button text, value displays
+constexpr int FontSizeNotification = 13;      // Toast / macro-dialog notifications (between Button and Popup)
+constexpr int FontSizePopup = 14;             // Notifications, popup titles
+constexpr int FontSizeTitle = 16;             // Large control buttons (+/-)
+constexpr int FontSizeIndicator = 18;         // TX/RX/SPLIT indicator labels
+constexpr int FontSizeFrequency = 32;         // VFO frequency displays (FrequencyDisplayWidget, VfoWidget)
 
 // DX cluster spot labels — user-configurable in Options → DX Cluster (FontSizeSpotMin..FontSizeSpotMax).
 constexpr int FontSizeSpot = 11;
-constexpr int FontSizeSpotMin = 8;
+constexpr int FontSizeSpotMin = FontSizeFloor;
 constexpr int FontSizeSpotMax = 16;
+
+// Text Decode window font, adjusted with its A-/A+ buttons and saved per receiver.
+constexpr int FontSizeTextDecode = 11;
+constexpr int FontSizeTextDecodeMin = FontSizeFloor;
+constexpr int FontSizeTextDecodeMax = 24;
+
+static_assert(FontSizeTiny >= FontSizeFloor && FontSizeSmall >= FontSizeFloor && FontSizeNormal >= FontSizeFloor &&
+                  FontSizeMedium >= FontSizeFloor && FontSizeLarge >= FontSizeFloor &&
+                  FontSizeButton >= FontSizeFloor && FontSizeNotification >= FontSizeFloor &&
+                  FontSizePopup >= FontSizeFloor && FontSizeTitle >= FontSizeFloor &&
+                  FontSizeIndicator >= FontSizeFloor && FontSizeFrequency >= FontSizeFloor,
+              "no fixed font size may be below FontSizeFloor");
+static_assert(FontSizeSpotMin >= FontSizeFloor && FontSizeSpotMin <= FontSizeSpot && FontSizeSpot <= FontSizeSpotMax,
+              "DX spot font range must start at the floor and contain the default");
+static_assert(FontSizeTextDecodeMin >= FontSizeFloor && FontSizeTextDecodeMin <= FontSizeTextDecode &&
+                  FontSizeTextDecode <= FontSizeTextDecodeMax,
+              "text-decode font range must start at the floor and contain the default");
 
 // =============================================================================
 // Popup Menu Font Sizes (standardized for horizontal control bar popups)
@@ -228,6 +255,8 @@ constexpr int FontSizeSpotMax = 16;
 constexpr int PopupTitleSize = 12;  // Popup title labels (e.g., "MIC INPUT", "ATTENUATOR")
 constexpr int PopupButtonSize = 11; // Popup selection buttons (e.g., "FRONT", "REAR")
 constexpr int PopupValueSize = 12;  // Value displays (e.g., "6 dB", "184 Hz")
+static_assert(PopupTitleSize >= FontSizeFloor && PopupButtonSize >= FontSizeFloor && PopupValueSize >= FontSizeFloor,
+              "popup font sizes may not be below FontSizeFloor");
 
 // =============================================================================
 // Slider Dimensions

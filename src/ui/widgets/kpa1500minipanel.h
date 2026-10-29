@@ -95,7 +95,7 @@ private:
     static constexpr int BAR_HEIGHT = 7;
     static constexpr int METER_SPACING = 16;
     static constexpr int LABEL_WIDTH = 24;
-    static constexpr int VALUE_WIDTH = 30;
+    static constexpr int VALUE_WIDTH = 36; // "1500W" at the 10 px floor, bold
     static constexpr int METER_START_Y = TOP_PAD + HEADER_HEIGHT + 4;
 
     // LCD constants (occupies the space the LED indicator cards used)

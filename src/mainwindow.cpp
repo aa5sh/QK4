@@ -1035,7 +1035,7 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     // Uses sidePanelButton/sidePanelButtonLight styles for consistency
     // Container: VBox with 2px spacing, button centered, sub-label below
     // Button: MemoryButtonWidth x ButtonHeightSmall (42x28)
-    // Sub-label: FontSizeSmall (8px), AccentAmber color
+    // Sub-label: FontSizeSmall (the 10 px floor), AccentAmber color
     auto createMemoryButton = [centerWidget](const QString &label, const QString &subLabel,
                                              bool isLighter) -> QWidget * {
         auto *container = new QWidget(centerWidget);

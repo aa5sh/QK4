@@ -24,8 +24,9 @@ namespace WindowFit {
 // WHY: 5% steps keep the chosen factor stable — a screen a few pixels different must not produce a
 // new factor, and therefore a relaunch, every time.
 constexpr double kScaleStep = 0.05;
-// WHY: below half size the 8 px secondary text is unreadable at 100% OS scaling. A screen that
-// small gets a window that hangs off the edge rather than one nobody can read.
+// WHY: below half size even the 10 px floor text (K4Styles FontSizeFloor) renders at 5 px and is
+// unreadable at 100% OS scaling. A screen that small gets a window that hangs off the edge rather than one nobody can
+// read.
 constexpr double kMinScale = 0.5;
 constexpr double kNativeScale = 1.0;
 // WHY: Auto grows no further than 125%. A large screen usually shares QK4 with a logger or WSJT-X,

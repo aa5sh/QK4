@@ -238,7 +238,7 @@ void Kpa1500MiniPanel::paintEvent(QPaintEvent *) {
         {"TMP", m_displayTemp, 100.0f, 0.0f, false},
     };
 
-    QFont labelFont = K4Styles::Fonts::paintFont(K4Styles::Dimensions::FontSizeSmall);
+    QFont labelFont = K4Styles::Fonts::paintFont(K4Styles::Dimensions::FontSizeSmall, QFont::Medium);
     QFont valueFont = K4Styles::Fonts::paintFont(K4Styles::Dimensions::FontSizeNormal, QFont::Bold);
 
     int barX = cx + LABEL_WIDTH;
@@ -306,7 +306,7 @@ void Kpa1500MiniPanel::paintEvent(QPaintEvent *) {
         p.setBrush(QColor(0, 0, 0, kLcdShadeAlpha));
         p.drawRoundedRect(cx, lcdY, cw, lcdH, 3, 3);
 
-        p.setFont(K4Styles::Fonts::dataFont(K4Styles::Dimensions::FontSizeSmall, QFont::Bold));
+        p.setFont(K4Styles::Fonts::dataFont(K4Styles::Dimensions::FontSizeSmall, QFont::Medium));
         const int textX = cx + LCD_TEXT_PAD;
         const int textW = cw - LCD_TEXT_PAD * 2;
         const int line1Y = lcdY + 2;

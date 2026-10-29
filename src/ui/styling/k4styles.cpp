@@ -163,6 +163,23 @@ void drawDropShadow(QPainter &painter, const QRect &contentRect, int cornerRadiu
     }
 }
 
+void drawHaloText(QPainter &painter, const QPointF &baseline, const QString &text, const QColor &color) {
+    // WHY 60% black, not opaque: a solid ring turns every glyph into a black blob at 10-12 px and
+    // hides the trace under the label; 60% keeps ≥ 4.5:1 for white text even over the brightest
+    // waterfall colour while the spectrum still shows through.
+    painter.save();
+    painter.setPen(QColor(0, 0, 0, 153));
+    for (int dx = -1; dx <= 1; ++dx) {
+        for (int dy = -1; dy <= 1; ++dy) {
+            if (dx != 0 || dy != 0)
+                painter.drawText(baseline + QPointF(dx, dy), text);
+        }
+    }
+    painter.setPen(color);
+    painter.drawText(baseline, text);
+    painter.restore();
+}
+
 QLinearGradient buttonGradient(int top, int bottom, bool hovered) {
     QLinearGradient grad(0, top, 0, bottom);
     if (hovered) {
@@ -303,7 +320,7 @@ QString compactButton() {
             color: %3;
             font-size: %4px;
             font-weight: bold;
-            padding: 4px 2px;
+            padding: 4px 1px;
         }
         QPushButton:hover {
             background: %5;
@@ -338,7 +355,7 @@ QString sidePanelButton() {
             border-radius: %5px;
             font-size: %6px;
             font-weight: bold;
-            padding: 2px 4px;
+            padding: 2px 0px;
         }
         QPushButton:hover {
             background: %7;
@@ -372,7 +389,7 @@ QString sidePanelButtonActive() {
             border-radius: %5px;
             font-size: %6px;
             font-weight: bold;
-            padding: 2px 4px;
+            padding: 2px 0px;
         }
         QPushButton:hover {
             background: %1;
@@ -401,7 +418,7 @@ QString sidePanelButtonLight() {
             border-radius: %5px;
             font-size: %6px;
             font-weight: bold;
-            padding: 2px 4px;
+            padding: 2px 0px;
         }
         QPushButton:hover {
             border: %3px solid %7;

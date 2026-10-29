@@ -144,17 +144,18 @@ void SideControlPanel::setupUi() {
     m_monBtn = new QPushButton("MON", swBtnContainer);
     m_monBtn->setStyleSheet(K4Styles::compactButton());
     m_monBtn->setFixedHeight(K4Styles::Dimensions::ButtonHeightMini);
-    swBtnRow->addWidget(m_monBtn);
+    // WHY 3:4:3: NORM is the widest caption; equal thirds clip it at the 10 px text floor.
+    swBtnRow->addWidget(m_monBtn, 3);
 
     m_normBtn = new QPushButton("NORM", swBtnContainer);
     m_normBtn->setStyleSheet(K4Styles::compactButton());
     m_normBtn->setFixedHeight(K4Styles::Dimensions::ButtonHeightMini);
-    swBtnRow->addWidget(m_normBtn);
+    swBtnRow->addWidget(m_normBtn, 4);
 
     m_balBtn = new QPushButton("BAL", swBtnContainer);
     m_balBtn->setStyleSheet(K4Styles::compactButton());
     m_balBtn->setFixedHeight(K4Styles::Dimensions::ButtonHeightMini);
-    swBtnRow->addWidget(m_balBtn);
+    swBtnRow->addWidget(m_balBtn, 3);
 
     layout->addWidget(swBtnContainer);
 
@@ -262,7 +263,10 @@ void SideControlPanel::setupUi() {
                                              .arg(K4Styles::Dimensions::FontSizeLarge));
     layout->addWidget(m_voltageCurrentLabel);
 
-    layout->addSpacing(K4Styles::Dimensions::PopupButtonSpacing);
+    // WHY 5, not PopupButtonSpacing (8): the version label below grew 3 px when text reached the
+    // 10 px floor, and this panel sets the window's minimum height. Taking it back here keeps that
+    // minimum where it was.
+    layout->addSpacing(5);
 
     // ===== Icon Buttons at bottom =====
     auto *iconRow = new QHBoxLayout();
@@ -702,7 +706,7 @@ QWidget *SideControlPanel::createTxFunctionButton(const QString &mainText, const
     auto *container = new QWidget(this);
     auto *layout = new QVBoxLayout(container);
     layout->setContentsMargins(0, 2, 0, 2);
-    layout->setSpacing(5);
+    layout->setSpacing(4);
 
     // Button - scaled down from bottom menu bar style
     auto *btn = new QPushButton(mainText, container);
@@ -712,13 +716,17 @@ QWidget *SideControlPanel::createTxFunctionButton(const QString &mainText, const
     btnOut = btn;
     layout->addWidget(btn);
 
-    // Sub-text label (orange) - add top margin to prevent overlap with button
+    // Sub-text label (orange), exactly one line of its font tall. WHY: spacing 4 + this line is
+    // the 17 px the old 5 px spacing + 12 px box (with a 4 px in-label margin) took, so the column
+    // does not grow; the old 8 px content box clipped 10 px text.
     auto *subLabel = new QLabel(subText, container);
-    subLabel->setStyleSheet(QString("color: %1; font-size: %2px; margin-top: 4px;")
+    subLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
                                 .arg(K4Styles::Colors::AccentAmber)
                                 .arg(K4Styles::Dimensions::FontSizeSmall));
     subLabel->setAlignment(Qt::AlignCenter);
-    subLabel->setFixedHeight(K4Styles::Dimensions::PopupContentMargin);
+    QFont subFont = subLabel->font();
+    subFont.setPixelSize(K4Styles::Dimensions::FontSizeSmall);
+    subLabel->setFixedHeight(qCeil(QFontMetricsF(subFont, subLabel).height()));
     layout->addWidget(subLabel);
 
     return container;

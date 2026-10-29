@@ -41,7 +41,7 @@ Label density follows the space available: neighbouring labels stay at least
 `QFontMetricsF::lineSpacing()` against the spectrum area's height after the waterfall split. SCALE,
 REF, the waterfall share, the window size and the font size all change the step (5, 10, 20 … dB)
 with no extra wiring. The tick sits after each label, and DX spot labels keep out of the column
-(`PanadapterRhiWidget::kAmplitudeAxisWidthPx`).
+(`PanadapterRhiWidget::amplitudeAxisWidthPx()`, measured from the label font).
 
 With `qk4.pan.diag` enabled a `CALIB` line compares the radio's reported noise floor against our own
 minimum bin. A persistent gap means `K4_DBM_OFFSET` is wrong and every value on the scale is off by

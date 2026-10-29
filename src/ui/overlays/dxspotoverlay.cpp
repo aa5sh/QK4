@@ -185,31 +185,14 @@ void DxSpotOverlay::paintEvent(QPaintEvent *event) {
     QFont font = K4Styles::Fonts::paintFont(m_fontPixelSize);
     painter.setFont(font);
 
-    QColor textColor(K4Styles::Colors::VfoACyan);
-    QColor badgeColor(K4Styles::Colors::TextGray); // Dimmer for "+N more" badges
-    QColor outlineColor(0, 0, 0, 153);             // Black at 60% alpha
-
-    QPen outlinePen(outlineColor);
-    outlinePen.setWidth(1);
-    QPen textPen(textColor);
+    const QColor textColor(K4Styles::Colors::VfoACyan);
+    const QColor badgeColor(K4Styles::Colors::TextGray); // Dimmer for "+N more" badges
 
     for (const auto &label : m_labels) {
-        int textY = label.rect.y() + label.rect.height() - 2;
-
-        // Text outline (draw text offset in 4 directions for readability)
-        painter.setPen(outlinePen);
-        for (int dx = -1; dx <= 1; ++dx) {
-            for (int dy = -1; dy <= 1; ++dy) {
-                if (dx == 0 && dy == 0)
-                    continue;
-                painter.drawText(label.rect.x() + dx, textY + dy, label.callsign);
-            }
-        }
-
-        // Foreground text — use dimmer color for "+N" overflow badges
-        bool isBadge = label.callsign.startsWith('+');
-        painter.setPen(isBadge ? QPen(badgeColor) : textPen);
-        painter.drawText(label.rect.x(), textY, label.callsign);
+        const int textY = label.rect.y() + label.rect.height() - 2;
+        const bool isBadge = label.callsign.startsWith('+');
+        K4Styles::drawHaloText(painter, QPointF(label.rect.x(), textY), label.callsign,
+                               isBadge ? badgeColor : textColor);
     }
 }
 

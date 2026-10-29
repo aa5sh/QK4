@@ -1,7 +1,10 @@
 #include "ui/widgets/txmeterwidget.h"
 #include "ui/styling/k4styles.h"
-#include <QPainter>
+#include <QFontMetricsF>
 #include <QLinearGradient>
+#include <QPainter>
+#include <cmath>
+#include <limits>
 
 TxMeterWidget::TxMeterWidget(QWidget *parent) : QWidget(parent) {
     // 5 meters, each ~26px high with spacing (matches KPA1500 meter sizing)
@@ -174,8 +177,7 @@ void TxMeterWidget::paintEvent(QPaintEvent *event) {
     labelFont.setBold(true);
     painter.setFont(labelFont);
 
-    QFont scaleFont = font();
-    scaleFont.setPixelSize(K4Styles::Dimensions::FontSizeSmall);
+    const QFont scaleFont = K4Styles::Fonts::dataFont(K4Styles::Dimensions::FontSizeFloor, QFont::Medium);
 
     int y = 0;
 
@@ -292,23 +294,30 @@ void TxMeterWidget::drawMeterRow(QPainter &painter, int y, int rowHeight, const 
         painter.drawLine(peakX - 1, barY, peakX - 1, barY + barHeight);
     }
 
-    // Scale labels below bar, each at its own position along the bar.
+    // Scale labels below bar, each at its own position along the bar. The digits hang from the bar:
+    // baseline one cap height below it, so the glyphs fit the 2 px row spacing plus the gap under
+    // the bar without growing the row (nothing here has a descender).
     painter.setFont(scaleFont);
-    int scaleY = barY + barHeight + 1;
-    for (const ScaleMark &mark : marks) {
+    const QFontMetricsF fm(scaleFont, this);
+    const qreal baselineY = barY + barHeight + 2 + fm.capHeight();
+    // Right to left, so the end label (which carries the unit) always wins; a label that would
+    // touch the one to its right is dropped rather than overprinted on a narrow meter.
+    qreal leftmostDrawn = std::numeric_limits<qreal>::max();
+    for (auto it = marks.crbegin(); it != marks.crend(); ++it) {
+        const ScaleMark &mark = *it;
         if (mark.text.isEmpty())
             continue;
-        // Color +dB labels red (S-meter over S9)
-        if (mark.text.startsWith('+')) {
-            painter.setPen(QColor(K4Styles::Colors::TxRed));
-        } else {
-            painter.setPen(QColor(K4Styles::Colors::TextGray));
-        }
-        int x = barStartX + static_cast<int>(barWidth * mark.pos);
-        // Center the label, but keep the one at the right end from overhanging the bar.
-        int labelW = 20;
-        int labelX = (mark.pos >= 0.999) ? x - labelW : x - labelW / 2;
-        painter.drawText(labelX, scaleY, labelW, 8, Qt::AlignCenter, mark.text);
+        const qreal x = barStartX + static_cast<int>(barWidth * mark.pos);
+        const qreal textW = fm.horizontalAdvance(mark.text);
+        // Center the label; the one at the right end ends at the widget's edge, using the margin
+        // beyond the bar so its neighbour (+40 next to +60) still fits on a narrow meter.
+        const qreal textX = std::round((mark.pos >= 0.999) ? width() - textW : x - textW / 2.0);
+        if (textX + textW + 2.0 > leftmostDrawn)
+            continue;
+        // Over-S9 marks are red. TextRed, not TxRed: pure red is under 4.5:1 on the dark background.
+        painter.setPen(QColor(mark.text.startsWith('+') ? K4Styles::Colors::TextRed : K4Styles::Colors::TextGray));
+        painter.drawText(QPointF(textX, baselineY), mark.text);
+        leftmostDrawn = textX;
     }
 
     // Draw tick marks on the bar

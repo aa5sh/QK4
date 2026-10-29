@@ -207,6 +207,19 @@ QFont dataFont(int pixelSize, QFont::Weight weight = QFont::Bold);
 void drawDropShadow(QPainter &painter, const QRect &contentRect, int cornerRadius = 8);
 
 /**
+ * @brief Draw text with a 1 px dark halo so it stays legible over a moving spectrum or waterfall.
+ *
+ * The halo is the text itself drawn at the eight 1 px offsets, then the text on top. Used by the
+ * DX spot labels and the panadapter's amplitude and frequency scales.
+ *
+ * @param painter Painter with the font already set
+ * @param baseline Left end of the text's baseline, as for QPainter::drawText(QPointF, QString)
+ * @param text The text
+ * @param color Text color
+ */
+void drawHaloText(QPainter &painter, const QPointF &baseline, const QString &text, const QColor &color);
+
+/**
  * @brief Create a standard button gradient for custom-painted widgets.
  *
  * @param top Y coordinate of gradient start

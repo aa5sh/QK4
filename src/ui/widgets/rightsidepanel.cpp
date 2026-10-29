@@ -148,7 +148,7 @@ QWidget *RightSidePanel::createFunctionButton(const QString &mainText, const QSt
     auto *container = new QWidget(this);
     auto *layout = new QVBoxLayout(container);
     layout->setContentsMargins(0, 2, 0, 2);
-    layout->setSpacing(5);
+    layout->setSpacing(4);
 
     // Button - scaled down from bottom menu bar style (matching left panel TX buttons)
     auto *btn = new QPushButton(mainText, container);
@@ -163,13 +163,17 @@ QWidget *RightSidePanel::createFunctionButton(const QString &mainText, const QSt
     btnOut = btn;
     layout->addWidget(btn);
 
-    // Sub-text label (orange) - add top margin to prevent overlap with button
+    // Sub-text label (orange), exactly one line of its font tall. WHY: spacing 4 + this line is
+    // the 17 px the old 5 px spacing + 12 px box (with a 4 px in-label margin) took, so the column
+    // does not grow; the old 8 px content box clipped 10 px text.
     auto *subLabel = new QLabel(subText, container);
-    subLabel->setStyleSheet(QString("color: %1; font-size: %2px; margin-top: 4px;")
+    subLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
                                 .arg(K4Styles::Colors::AccentAmber)
                                 .arg(K4Styles::Dimensions::FontSizeSmall));
     subLabel->setAlignment(Qt::AlignCenter);
-    subLabel->setFixedHeight(12);
+    QFont subFont = subLabel->font();
+    subFont.setPixelSize(K4Styles::Dimensions::FontSizeSmall);
+    subLabel->setFixedHeight(qCeil(QFontMetricsF(subFont, subLabel).height()));
     layout->addWidget(subLabel);
 
     return container;

@@ -166,14 +166,14 @@ void TextDecodeWindow::setupUi() {
 
     // A- / A+ buttons - adjust decoded-text font size, persist per receiver
     connect(m_fontMinusBtn, &QPushButton::clicked, this, [this]() {
-        if (m_textFontSize <= 7)
+        if (m_textFontSize <= K4Styles::Dimensions::FontSizeTextDecodeMin)
             return;
         m_textFontSize -= 1;
         applyTextFontSize();
         RadioSettings::instance()->setTextDecodeFontSize(m_receiver == SubRx, m_textFontSize);
     });
     connect(m_fontPlusBtn, &QPushButton::clicked, this, [this]() {
-        if (m_textFontSize >= 24)
+        if (m_textFontSize >= K4Styles::Dimensions::FontSizeTextDecodeMax)
             return;
         m_textFontSize += 1;
         applyTextFontSize();

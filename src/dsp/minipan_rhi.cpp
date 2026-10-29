@@ -653,7 +653,7 @@ void MiniPanRhiWidget::render(QRhiCommandBuffer *cb) {
             if (notchX >= 0 && notchX < w) {
                 const auto verts = RhiUtils::quadVerts(notchX, 0, notchX + PanadapterConstants::MarkerLineWidth, h);
                 stage(triangles, m_notchVbo.get(), m_notchUniformBuffer.get(), m_notchSrb.get(), verts.data(),
-                      static_cast<int>(verts.size()), QColor(255, 0, 0));
+                      static_cast<int>(verts.size()), QColor(K4Styles::Colors::TxRed));
             }
         }
 
@@ -877,9 +877,8 @@ void MiniPanRhiWidget::resizeEvent(QResizeEvent *event) {
 }
 
 void MiniPanRhiWidget::createFrequencyLabels() {
-    // Small frequency annotations over the mini-pan waterfall. TextGray (#999999) is slightly
-    // darker than the legacy `#CCCCCC`, but matches the rest of the UI's secondary text and is
-    // the single source of truth for label color.
+    // Frequency annotations over the mini-pan waterfall, on a dark backing so they read over any
+    // waterfall colour. TextGray matches the rest of the UI's secondary text.
     QString labelStyle = QString("QLabel {"
                                  "  color: %1;"
                                  "  background-color: rgba(0, 0, 0, 160);"
@@ -889,7 +888,7 @@ void MiniPanRhiWidget::createFrequencyLabels() {
                                  "  border-radius: 2px;"
                                  "}")
                              .arg(K4Styles::Colors::TextGray)
-                             .arg(K4Styles::Dimensions::FontSizeNormal);
+                             .arg(K4Styles::Dimensions::FontSizeLarge);
 
     // Left label (negative frequency offset)
     m_leftFreqLabel = new QLabel(this);

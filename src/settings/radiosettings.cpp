@@ -1,5 +1,6 @@
 #include "radiosettings.h"
 #include "audio/rxoutputstage.h"
+#include "ui/styling/k4constants.h"
 #include "utils/windowfit.h"
 #include <algorithm>
 #include <cmath>
@@ -61,7 +62,8 @@ int dxClusterSpotAgeSeconds(qint64 seconds) {
 }
 
 int dxClusterSpotFontSizePx(qint64 sizePx) {
-    return static_cast<int>(std::clamp<qint64>(sizePx, 8, 16)); // mirrors K4Styles::Dimensions::FontSizeSpot{Min,Max}
+    return static_cast<int>(
+        std::clamp<qint64>(sizePx, K4Styles::Dimensions::FontSizeSpotMin, K4Styles::Dimensions::FontSizeSpotMax));
 }
 
 int percent(qint64 value) {
@@ -285,14 +287,14 @@ void RadioSettings::setSubVolume(int value) {
 }
 
 int RadioSettings::textDecodeFontSize(bool subRx) const {
-    // Default 9 px matches K4Styles::Dimensions::FontSizeNormal — keep first-launch look.
-    const int defaultSize = 9;
-    int value = m_settings.value(subRx ? "textDecode/subFontSize" : "textDecode/mainFontSize", defaultSize).toInt();
-    return qBound(7, value, 24);
+    using namespace K4Styles::Dimensions;
+    const int value =
+        m_settings.value(subRx ? "textDecode/subFontSize" : "textDecode/mainFontSize", FontSizeTextDecode).toInt();
+    return qBound(FontSizeTextDecodeMin, value, FontSizeTextDecodeMax);
 }
 
 void RadioSettings::setTextDecodeFontSize(bool subRx, int sizePx) {
-    sizePx = qBound(7, sizePx, 24);
+    sizePx = qBound(K4Styles::Dimensions::FontSizeTextDecodeMin, sizePx, K4Styles::Dimensions::FontSizeTextDecodeMax);
     m_settings.setValue(subRx ? "textDecode/subFontSize" : "textDecode/mainFontSize", sizePx);
     m_settings.sync();
 }
