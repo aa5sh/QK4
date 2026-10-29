@@ -20,7 +20,7 @@ Top-level app widgets that aren't popups, pages, overlays, dialogs, or styling i
 - `memorykeyrow` — the memory keys between the VFOs: M1–M4 over the MESSAGE bracket, REC / STORE / RCL with sub-labels. Two sets, each one width: REC/STORE/RCL from STORE's text, M1–M4 from what is left of the row.
 
 ### Small controls (4)
-- `dualcontrolbutton` — custom split-button for paired controls (the six knob keys): `KnobButtonWidth` wide, so its edges line up with the key grid; height measured from its two text lines (`measuredHeight`).
+- `dualcontrolbutton` — custom split-button for paired controls (the six knob keys): fixed `KnobButtonWidth`×`KnobButtonHeight` (90×44); `measuredHeight` is the text's minimum, checked by a test.
 - `controlgroupwidget` / `togglegroupwidget` — radio-button-like grouping for option sets.
 - `displaymenubutton` — DISPLAY popup trigger button.
 

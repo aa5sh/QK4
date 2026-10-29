@@ -266,9 +266,11 @@ constexpr int ButtonTextClearance = 4;
 
 // The six knob controls (WPM/PWR, BW/SHFT, M.RF/S.SQL): a panel-wide key, two lines of text. Height is
 // measured from the fonts (DualControlButton::measuredHeight), these two gaps and nothing else.
-constexpr int KnobButtonWidth = SideButtonGridWidth; // Same left and right edges as the key grid above
-constexpr int KnobTextInset = 4;                     // Key edge to the top line, and to the bottom line
-constexpr int KnobLineGap = 4;                       // Between the value line and the amber alternate line
+// WHY 90x44: the maintainer's chosen knob-key proportion (2026-10-29); do not stretch to the grid width.
+constexpr int KnobButtonWidth = 90;
+constexpr int KnobButtonHeight = ButtonHeightLarge; // 44
+constexpr int KnobTextInset = 4;                    // Key edge to the top line, and to the bottom line
+constexpr int KnobLineGap = 4;                      // Between the value line and the amber alternate line
 
 // WHY 24: the smallest pointer target WCAG 2.2 (2.5.8) accepts. Small indicators keep their drawn size
 // and take this much room around it.

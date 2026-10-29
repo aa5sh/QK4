@@ -369,27 +369,17 @@ private slots:
         QCOMPARE(minX, K4Styles::Dimensions::SidePanelMarginH);
     }
 
-    void knobKeysLineUpWithTheKeyGrid() {
-        // The six knob keys were narrower than the grid and sat against its left edge, with a gap on
-        // the right. Now their outer edges are the grid's and the MON row's.
+    void knobKeysKeepTheirSize() {
+        // The knob keys are 90x44, left-aligned under the key grid; an earlier change stretched them to
+        // the grid's width and shrank them to their text, which the maintainer rejected.
         const auto knobs = m_left->findChildren<DualControlButton *>();
         QCOMPARE(knobs.size(), 6);
         for (DualControlButton *knob : knobs) {
             QCOMPARE(knob->x(), K4Styles::Dimensions::SidePanelMarginH);
-            QCOMPARE(knob->width(), K4Styles::Dimensions::SideButtonGridWidth);
-            QCOMPARE(knob->height(), DualControlButton::measuredHeight(knob));
+            QCOMPARE(knob->size(),
+                     QSize(K4Styles::Dimensions::KnobButtonWidth, K4Styles::Dimensions::KnobButtonHeight));
+            QVERIFY(knob->height() >= DualControlButton::measuredHeight(knob));
         }
-        QPushButton *mon = nullptr;
-        QPushButton *bal = nullptr;
-        for (QPushButton *button : m_left->findChildren<QPushButton *>()) {
-            if (button->text() == QLatin1String("MON"))
-                mon = button;
-            if (button->text() == QLatin1String("BAL"))
-                bal = button;
-        }
-        QVERIFY(mon && bal);
-        QCOMPARE(mon->x(), knobs.first()->x());
-        QCOMPARE(bal->geometry().right(), knobs.first()->geometry().right());
     }
 
     void gapsAreDrawnAtTheirTokens() {

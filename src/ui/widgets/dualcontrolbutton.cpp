@@ -38,9 +38,8 @@ int DualControlButton::measuredHeight(const QWidget *context) {
 }
 
 DualControlButton::DualControlButton(QWidget *parent) : QWidget(parent) {
-    // WHY fixed: the six knob keys never resize with the window, and the width is the key grid's so
-    // all their edges line up with the grid and the MON row.
-    setFixedSize(D::KnobButtonWidth, measuredHeight(this));
+    // WHY fixed: the six knob keys never resize with the window.
+    setFixedSize(D::KnobButtonWidth, D::KnobButtonHeight);
     setCursor(Qt::PointingHandCursor);
     setMouseTracking(true);
 }
