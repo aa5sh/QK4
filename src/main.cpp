@@ -6,16 +6,14 @@
 #include <QFontDatabase>
 #include <QMessageBox>
 #include <QSettings>
-#include <QSslSocket>
 #include <rhi/qrhi.h>
 #ifdef Q_OS_MACOS
 #include <QtGui/private/qguiapplication_p.h>
 #include <QtGui/qpa/qplatformintegration.h>
 #include <cstdlib>
-#include <QDir>
-#include <QFileInfo>
 #endif
 #include <QTextStream>
+#include "network/tlsbackend.h"
 #include "settings/radiosettings.h"
 #include "mainwindow.h"
 #include "settings/interfacescale.h"
@@ -155,64 +153,9 @@ static void reportToOperator(const QString &text, QMessageBox::Icon icon) {
     box.exec();
 }
 
-// WHY: Windows ships both the Schannel and OpenSSL TLS backends, and Qt may activate
-// Schannel — which has no TLS-PSK support at all, so the K4's port-9204 PSK handshake can
-// never complete under it. Must run before the first QSslSocket is constructed (TcpClient
-// creates one in its constructor). No-op on macOS and Linux, where OpenSSL is already active.
-void selectTlsBackend() {
-    if (QSslSocket::activeBackend() == QLatin1String("openssl"))
-        return;
-
-    if (QSslSocket::availableBackends().contains(QLatin1String("openssl"))) {
-        if (!QSslSocket::setActiveBackend(QStringLiteral("openssl")))
-            qWarning() << "Failed to activate the OpenSSL TLS backend - TLS/PSK unavailable";
-    } else {
-        qWarning() << "OpenSSL TLS backend unavailable (active:" << QSslSocket::activeBackend()
-                   << ") - TLS/PSK connections will fail";
-    }
-}
-
 int main(int argc, char *argv[]) {
     // Install message filter to suppress known benign Qt warnings
     originalHandler = qInstallMessageHandler(messageFilter);
-
-#ifdef Q_OS_MACOS
-    // Enable OpenSSL for TLS/PSK support
-    // Qt's OpenSSL backend dynamically loads libssl/libcrypto at runtime
-    // Check bundled location first (inside .app bundle), then Homebrew locations
-
-    // Get the path to the executable to find the Frameworks folder
-    QString execPath = QString::fromLocal8Bit(argv[0]);
-    QString bundledFrameworks;
-    if (execPath.contains(".app/Contents/MacOS/")) {
-        bundledFrameworks = QFileInfo(execPath).absolutePath() + "/../Frameworks";
-    }
-
-    QStringList opensslPaths;
-    if (!bundledFrameworks.isEmpty()) {
-        opensslPaths << bundledFrameworks; // Check bundled first
-    }
-    opensslPaths << "/opt/homebrew/opt/openssl@3/lib" // Homebrew on Apple Silicon
-                 << "/usr/local/opt/openssl@3/lib"    // Homebrew on Intel Mac
-                 << "/opt/homebrew/opt/openssl/lib"   // Homebrew openssl (latest)
-                 << "/usr/local/opt/openssl/lib";     // Homebrew openssl on Intel
-
-    QString currentPath = QString::fromLocal8Bit(qgetenv("DYLD_LIBRARY_PATH"));
-    bool foundOpenSSL = false;
-
-    for (const QString &opensslPath : opensslPaths) {
-        // Check if libssl exists in this location
-        if (QFileInfo::exists(opensslPath + "/libssl.3.dylib") || QFileInfo::exists(opensslPath + "/libssl.dylib")) {
-            if (!currentPath.contains(opensslPath)) {
-                QString newPath = currentPath.isEmpty() ? opensslPath : QString("%1:%2").arg(opensslPath, currentPath);
-                qputenv("DYLD_LIBRARY_PATH", newPath.toLocal8Bit());
-            }
-            foundOpenSSL = true;
-            break;
-        }
-    }
-    Q_UNUSED(foundOpenSSL);
-#endif
 
     // Enable HiDPI scaling for crisp rendering on Retina/4K displays
     QApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
@@ -248,7 +191,7 @@ int main(int argc, char *argv[]) {
     app.setStyleSheet(K4Styles::applicationStyleSheet());
 
     // Must precede MainWindow — its controllers construct the first QSslSocket
-    selectTlsBackend();
+    TlsBackend::selectOpenSsl();
 
     // --connect <name> opens one particular saved radio, overriding the list's auto-connect tick,
     // so one install can carry a desktop shortcut per K4.
@@ -267,6 +210,10 @@ int main(int argc, char *argv[]) {
         QStringLiteral("Connect at startup to the saved radio named <name>, whatever the list is set to."),
         QStringLiteral("name"));
     parser.addOption(connectOption);
+    const QCommandLineOption tlsSelfCheckOption(
+        QStringLiteral("tls-self-check"),
+        QStringLiteral("Report the TLS backend and OpenSSL library in use, then exit (0 = TLS-PSK available)."));
+    parser.addOption(tlsSelfCheckOption);
     const QStringList arguments = QCoreApplication::arguments();
     const bool parsedCleanly = parser.parse(arguments);
     // WHY: not showHelp()/showVersion() - both call ::exit(), which ends the process without
@@ -287,6 +234,8 @@ int main(int argc, char *argv[]) {
         reportToOperator(parser.helpText(), QMessageBox::Information);
         return 0;
     }
+    if (parser.isSet(tlsSelfCheckOption))
+        return TlsBackend::runSelfCheck();
     if (parser.isSet(versionOption)) {
         reportToOperator(QCoreApplication::applicationName() + QStringLiteral(" ") +
                              QCoreApplication::applicationVersion() + QStringLiteral("\n"),
