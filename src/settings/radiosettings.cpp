@@ -444,6 +444,14 @@ void RadioSettings::setLogGroups(const QStringList &groups) {
     }
 }
 
+Logging::LogConfig RadioSettings::logConfig() const {
+    Logging::LogConfig config;
+    config.level = Logging::levelFromId(logLevel());
+    config.groups = logGroups();
+    config.bench = logBench();
+    return config;
+}
+
 QStringList RadioSettings::logBench() const {
     return m_logBench;
 }

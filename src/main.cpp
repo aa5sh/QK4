@@ -350,12 +350,8 @@ int main(int argc, char *argv[]) {
     Logging::setCommandLine(logCommandLine);
     Logging::setSessionHeader(sessionHeader());
     auto applyLogging = [] {
-        RadioSettings *settings = RadioSettings::instance();
-        Logging::LogConfig config;
-        config.level = Logging::levelFromId(settings->logLevel());
-        config.groups = settings->logGroups();
-        config.bench = settings->logBench();
-        Logging::apply(settings->logFileEnabled(), config);
+        const RadioSettings *settings = RadioSettings::instance();
+        Logging::apply(settings->logFileEnabled(), settings->logConfig());
     };
     applyLogging();
     QObject::connect(RadioSettings::instance(), &RadioSettings::loggingChanged, RadioSettings::instance(),

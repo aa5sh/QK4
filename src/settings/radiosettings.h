@@ -1,6 +1,7 @@
 #ifndef RADIOSETTINGS_H
 #define RADIOSETTINGS_H
 
+#include "logging/logrules.h"
 #include <QMap>
 #include <QObject>
 #include <QSettings>
@@ -251,6 +252,8 @@ public:
     void setLogGroups(const QStringList &groups);
     QStringList logBench() const;
     void setLogBench(const QStringList &bench);
+    // The four above as one value, ready for Logging::apply().
+    Logging::LogConfig logConfig() const;
 
 signals:
     void radiosChanged();

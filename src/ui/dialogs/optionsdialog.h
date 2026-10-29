@@ -27,11 +27,12 @@ class CwKeyerPage;
 class KpodPage;
 class Kpa1500Page;
 class DxClusterPage;
+class DiagnosticsPage;
 
 /**
  * @brief Tabbed Options dialog. Left QListWidget drives a QStackedWidget holding the option
  *        pages (About, Station, Display, Audio Input/Output, Rig Control, TCI Server, CW Keyer,
- *        KPOD, KPA1500, DX Cluster).
+ *        KPOD, KPA1500, DX Cluster, Diagnostics).
  *        Pages are lazy-constructed on first tab activation via @c ensurePageCreated.
  */
 class OptionsDialog : public QDialog {
@@ -50,6 +51,7 @@ public:
         PageKpod,
         PageKpa1500,
         PageDxCluster,
+        PageDiagnostics,
         PageCount
     };
 
@@ -93,6 +95,7 @@ private:
     KpodPage *m_kpodPage = nullptr;
     Kpa1500Page *m_kpa1500Page = nullptr;
     DxClusterPage *m_dxClusterPage = nullptr;
+    DiagnosticsPage *m_diagnosticsPage = nullptr;
 };
 
 #endif // OPTIONSDIALOG_H

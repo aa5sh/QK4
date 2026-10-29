@@ -222,6 +222,7 @@ set(SOURCES
     src/ui/pages/kpodpage.cpp
     src/ui/pages/kpa1500page.cpp
     src/ui/pages/dxclusterpage.cpp
+    src/ui/pages/diagnosticspage.cpp
     src/ui/pages/optionspagelayout.cpp
     src/ui/overlays/dxspotoverlay.cpp
     src/ui/widgets/rightsidepanel.cpp
@@ -373,6 +374,7 @@ set(HEADERS
     src/ui/pages/kpodpage.h
     src/ui/pages/kpa1500page.h
     src/ui/pages/dxclusterpage.h
+    src/ui/pages/diagnosticspage.h
     src/ui/pages/optionspagelayout.h
     src/ui/overlays/dxspotoverlay.h
     src/ui/widgets/rightsidepanel.h

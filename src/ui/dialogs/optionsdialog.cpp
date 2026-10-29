@@ -11,6 +11,7 @@
 #include "ui/pages/kpa1500page.h"
 #include "ui/pages/optionspagelayout.h"
 #include "ui/pages/dxclusterpage.h"
+#include "ui/pages/diagnosticspage.h"
 #include "ui/styling/k4constants.h"
 #include "ui/styling/k4styles.h"
 #include "controllers/audiocontroller.h"
@@ -58,6 +59,7 @@ void OptionsDialog::setupUi() {
     m_tabList->addItem("K-Pod");
     m_tabList->addItem("KPA1500");
     m_tabList->addItem("DX Cluster");
+    m_tabList->addItem("Diagnostics");
     m_tabList->setCurrentRow(0);
 
     // Right side: stacked pages -- lazy creation (only About page created eagerly)
@@ -148,6 +150,10 @@ void OptionsDialog::ensurePageCreated(int index) {
         m_dxClusterPage = new DxClusterPage(m_dxClusterController, this);
         page = m_dxClusterPage;
         break;
+    case PageDiagnostics:
+        m_diagnosticsPage = new DiagnosticsPage(this);
+        page = m_diagnosticsPage;
+        break;
     default:
         return;
     }
@@ -199,6 +205,10 @@ void OptionsDialog::refreshPage(int index) {
     case PageDxCluster:
         if (m_dxClusterPage)
             m_dxClusterPage->refresh();
+        break;
+    case PageDiagnostics:
+        if (m_diagnosticsPage)
+            m_diagnosticsPage->refresh();
         break;
     default:
         break;

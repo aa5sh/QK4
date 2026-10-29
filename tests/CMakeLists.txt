@@ -720,6 +720,19 @@ target_include_directories(test_logrules PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_logrules Qt6::Core Qt6::Test)
 add_test(NAME LogRulesTests COMMAND test_logrules)
 
+# Options -> Diagnostics: switches reach RadioSettings and change the real categories live. Offscreen.
+add_executable(test_diagnosticspage
+    test_diagnosticspage.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/pages/diagnosticspage.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/pages/optionspagelayout.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/styling/k4styles.cpp
+    ${CMAKE_SOURCE_DIR}/src/settings/radiosettings.cpp
+)
+target_include_directories(test_diagnosticspage PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_diagnosticspage Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Test)
+add_test(NAME DiagnosticsPageTests COMMAND test_diagnosticspage)
+set_tests_properties(DiagnosticsPageTests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 # Aggregate target: `cmake --build <dir> --target qk4_tests` builds every
 # test_* executable defined above. CI uses this so adding `add_executable(test_foo)`
 # automatically gets the new test built — no parallel maintenance of an explicit
