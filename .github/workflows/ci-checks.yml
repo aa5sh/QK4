@@ -159,3 +159,85 @@ jobs:
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
           ASAN_OPTIONS: detect_leaks=1:strict_string_checks=1
         run: ctest --test-dir build-san --output-on-failure
+
+  rtsan-tests:
+    # RealtimeSanitizer (CONVENTIONS Rule 16). Every function marked QK4_NONBLOCKING
+    # (src/utils/rtsan.h), and everything it calls, fails the test that reaches it if it
+    # allocates, takes an unmarked lock, sleeps outside an RtSan::Allow, or does I/O.
+    #
+    # WHY here, on every push, and not in scheduled-sanitizers.yml with TSan: RTSan checks nothing
+    # outside a marked function, so the suites run at full speed; it intercepts the C library, so a
+    # malloc or a mutex inside Qt is seen without an instrumented Qt (TSan needs a qtbase built from
+    # source); and a violation on a tested path fails every run, not one run in many. That is the
+    # cost and the determinism of the ASAN/UBSAN job above, and it keeps a regression out of the
+    # branch instead of reporting it a week later.
+    #
+    # WHY every suite rather than a list of threaded ones: only marked functions are checked, so
+    # a suite that never reaches one costs nothing, and a new suite that does is covered with no
+    # edit here. RtSanSelfTest* (tests/test_rtsanselftest.cpp) fails if the build checks nothing.
+    name: RealtimeSanitizer Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # RTSan is Clang 20+. Ubuntu 24.04's own archive stops at older majors, so Clang comes from
+      # apt.llvm.org, which carries the last two releases. 22 matches Homebrew's llvm@22, the local
+      # reproducer on macOS. When apt.llvm.org drops it, the install step fails; bump this.
+      LLVM_MAJOR: '22'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Install Clang from apt.llvm.org
+        # WHY the key is checked against a fingerprint: the repository is a third party, and this
+        # job runs its compiler. The fingerprint is the LLVM apt signing key's (Sylvestre Ledru,
+        # Debian LLVM packages), as published on apt.llvm.org. No llvm.sh: piping a script into a
+        # root shell would run whatever it says that day.
+        run: |
+          set -euo pipefail
+          curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key -o llvm.asc
+          fpr=$(gpg --show-keys --with-colons llvm.asc | awk -F: '/^fpr/ {print $10; exit}')
+          if [ "$fpr" != "6084F3CF814B57C1CF12EFD515CF4D18AF4F7421" ]; then
+            echo "::error::apt.llvm.org signing key fingerprint is $fpr, expected 6084F3CF814B57C1CF12EFD515CF4D18AF4F7421"
+            exit 1
+          fi
+          gpg --dearmor < llvm.asc | sudo tee /usr/share/keyrings/apt.llvm.org.gpg > /dev/null
+          codename=$(. /etc/os-release && echo "$VERSION_CODENAME")
+          echo "deb [signed-by=/usr/share/keyrings/apt.llvm.org.gpg] http://apt.llvm.org/${codename}/ llvm-toolchain-${codename}-${LLVM_MAJOR} main" \
+            | sudo tee /etc/apt/sources.list.d/llvm.list
+          sudo apt-get update
+          # libclang-rt-N-dev holds the RTSan runtime; llvm-N the symbolizer for readable reports.
+          sudo apt-get install -y "clang-${LLVM_MAJOR}" "libclang-rt-${LLVM_MAJOR}-dev" "llvm-${LLVM_MAJOR}"
+          "clang++-${LLVM_MAJOR}" --version
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get install -y \
+            libopus-dev libhidapi-dev libusb-1.0-0-dev libssl-dev libudev-dev libasound2-dev
+
+      - name: Read Qt version
+        # Same Qt as the unit-tests job; see there.
+        run: echo "QT_VERSION=$(tr -d '[:space:]' < .github/qt-version)" >> "$GITHUB_ENV"
+
+      - name: Install Qt
+        # WHY no extra modules: QK4_TESTS_ONLY configures only the tests, which need qtbase alone.
+        uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4.5.0
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: 'linux'
+          target: 'desktop'
+          arch: 'linux_gcc_64'
+          cache: true
+
+      - name: Configure CMake (RealtimeSanitizer on for tests)
+        run: >-
+          cmake -B build-rtsan -DCMAKE_BUILD_TYPE=RelWithDebInfo -DQK4_TESTS_ONLY=ON -DQK4_TESTS_RTSAN=ON
+          "-DCMAKE_C_COMPILER=clang-${LLVM_MAJOR}" "-DCMAKE_CXX_COMPILER=clang++-${LLVM_MAJOR}"
+
+      - name: Build instrumented tests
+        # See unit-tests job comment for why this uses the qk4_tests aggregate.
+        run: cmake --build build-rtsan --target qk4_tests --parallel
+
+      - name: Run instrumented tests
+        # halt_on_error: the first violation ends the test, red. The self-tests set their own.
+        run: |
+          export RTSAN_OPTIONS="halt_on_error=1:external_symbolizer_path=/usr/lib/llvm-${LLVM_MAJOR}/bin/llvm-symbolizer"
+          ctest --test-dir build-rtsan --output-on-failure

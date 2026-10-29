@@ -25,12 +25,12 @@ or `development: <commit subject>`.
 
 | File | What it does |
 |---|---|
-| `ci-checks.yml` | clang-format gate, Qt version drift check (`scripts/check-qt-version.sh`), unit tests and ASAN + UBSAN on the pinned official Qt |
+| `ci-checks.yml` | clang-format gate, Qt version drift check (`scripts/check-qt-version.sh`), unit tests, ASAN + UBSAN, and RealtimeSanitizer (Clang from apt.llvm.org, `-DQK4_TESTS_RTSAN=ON`: every `QK4_NONBLOCKING` function a test reaches must not allocate, lock, sleep or do I/O), all on the pinned official Qt |
 | `ci-codeql.yml` | CodeQL static analysis → Security tab; also weekly |
 | `ci-packaging.yml` | Builds and packages all four platforms, unsigned, through the same `_build-*.yml` builders a release uses. Skips docs-only changes. Its `Packaging result` job is the one to require |
 | `build-signed.yml` | Signed, notarized artifacts for every platform, one run page. Dispatch it on `development` for a tester build. No Release, no gh-pages |
 | `release.yml` | The same builders, then the GitHub Release and gh-pages. Refuses a tag unless an on-demand `build-signed.yml` run succeeded on the same shipped code, so what testers approved is what ships |
-| `scheduled-sanitizers.yml` | Weekly ThreadSanitizer; failures go to a sticky issue. Builds and caches its own TSan-instrumented qtbase (`scripts/build-qtbase-tsan.sh`) and configures the tests with `-DQK4_TESTS_ONLY=ON`: a distro Qt hides its locking from TSan (#172) |
+| `scheduled-sanitizers.yml` | Weekly ThreadSanitizer over every ctest suite (no list to keep up to date); failures go to a sticky issue. Builds and caches its own TSan-instrumented qtbase (`scripts/build-qtbase-tsan.sh`) and configures the tests with `-DQK4_TESTS_ONLY=ON`: a distro Qt hides its locking from TSan (#172) |
 | `scheduled-qt611-canary.yml` | Monthly: is there an aqtinstall release newer than 3.3.0, and does it install Qt 6.11 for Windows (red if not)? A control job installs 6.11 with aqtinstall from its fix commit, so a broken probe is red too. Delete once the 6.11 bump lands |
 | `repo-issue-triage.yml` | First-pass triage of new issues |
 | `repo-comment-guard.yml` | Hides disguised-download spam from non-maintainers |
@@ -65,7 +65,7 @@ Every runner builds with the one exact Qt in `.github/qt-version`. A workflow re
 
 | Runner | Qt |
 |---|---|
-| macOS, Windows, CodeQL, unit tests, ASAN/UBSAN | official Qt from install-qt-action |
+| macOS, Windows, CodeQL, unit tests, ASAN/UBSAN, RTSan | official Qt from install-qt-action |
 | Raspberry Pi | official `linux_arm64` Qt, installed on `ubuntu-24.04-arm` and mounted into a `debian:trixie` build container; `check-pi-deps.sh` then runs `ldd` on the tarball in a clean Trixie container |
 | TSan | qtbase built from source by `scripts/build-qtbase-tsan.sh`, checked against its per-version sha256 table |
 | Flatpak | the KDE runtime branch with the same major.minor (`kde-X.Y` image, `runtime-version`); the runtime decides the patch |
@@ -75,6 +75,24 @@ table, the documented `~/Qt/<version>/macos` paths) are checked by `scripts/chec
 `ci-checks.yml`. To move Qt: change `.github/qt-version`, then fix whatever the script reports.
 A step that deliberately installs another version (the 6.11 canary) marks its `version:` line
 `# qt-version: probe`.
+
+## RealtimeSanitizer
+
+The `rtsan-tests` job in `ci-checks.yml` builds the tests with `-DQK4_TESTS_RTSAN=ON` and runs all
+of them; only functions marked `QK4_NONBLOCKING` (`src/utils/rtsan.h`) are checked, so the rest run
+at full speed. The RtSanSelfTest cases fail if the build checks nothing. Clang comes from
+apt.llvm.org, pinned to one major (`LLVM_MAJOR` in the job) with the signing key checked by
+fingerprint; apt.llvm.org keeps two releases, so bump the major when the install step fails. The
+same check runs on macOS with Homebrew's LLVM (Apple Clang has no RTSan runtime):
+
+```bash
+cmake -B build-rtsan -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DQK4_TESTS_ONLY=ON -DQK4_TESTS_RTSAN=ON \
+  -DCMAKE_C_COMPILER=/opt/homebrew/opt/llvm@22/bin/clang -DCMAKE_CXX_COMPILER=/opt/homebrew/opt/llvm@22/bin/clang++ \
+  -DCMAKE_PREFIX_PATH="$HOME/Qt/6.10.3/macos"
+cmake --build build-rtsan --target qk4_tests && ctest --test-dir build-rtsan --output-on-failure
+```
+
+`RTSAN_OPTIONS=halt_on_error=0` lists every violation in a run instead of stopping at the first.
 
 ## Renaming a workflow
 

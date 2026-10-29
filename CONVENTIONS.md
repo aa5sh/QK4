@@ -214,7 +214,7 @@ keys, the fixed 90×44 knob keys, and removed names. Values live only in
 | 13 Replacing code removes everything only it used | review |
 | 14 Threads and object affinity | review |
 | 15 No new singletons | aspirational |
-| 16 Nothing on a real-time thread formats, allocates, locks or does I/O | review |
+| 16 Nothing on a real-time thread formats, allocates, locks or does I/O | CI (RealtimeSanitizer, on `QK4_NONBLOCKING` functions a test reaches) + review |
 | 17 Logging goes through `src/logging/` | CI (`LogCategoriesTests`, `LogRulesTests`) + review |
 
 ### 1. [review] No Duplicated Static Functions
@@ -442,7 +442,7 @@ support that: "creating QObjects before the QApplication is not supported … st
 QObject are also not supported" (*Threads and QObjects*). Treat it as tracked debt; do not copy the
 shape.
 
-### 16. [review] Real-Time Threads Do Not Log, Allocate, Lock or Block
+### 16. [CI + review] Real-Time Threads Do Not Log, Allocate, Lock or Block
 
 The keyer, the HaliKey serial poller, the RtMidi callback, the KPOD+ EP02 reader, the sidetone and
 the audio thread run against deadlines. Code on them must never format a string, allocate, take a
@@ -474,6 +474,22 @@ per-edge, per-packet or per-frame `qCDebug`/`qCInfo` on these threads, even behi
 - A thread that must never block on logging is marked with `Logging::markRealtimeOnStart(thread)`
   (connected before any `started()` connection that enters a loop); the handler then only
   try-locks its queue and drops and counts instead of waiting.
+
+**Enforcement.** Mark the work a real-time thread does between wake-ups `noexcept QK4_NONBLOCKING`
+(`src/utils/rtsan.h`): per element, edge, packet or block, not the loop that waits, not
+configuration. The RealtimeSanitizer job in `ci-checks.yml` then fails any test in which such a
+function, or anything it calls, allocates, takes a lock, sleeps or does I/O. It sees only what a
+test reaches; the rest is review.
+
+- The short locks this rule allows are `RtSan::BoundedMutex`, not `std::mutex`. Its contract is the
+  rule's: no holder a real-time thread can wait on holds it across a sleep, a wait, a send or an
+  allocation, or calls out into code that does. RTSan cannot check that; review does.
+- `RtSan::Allow` exempts one statement that is bounded by construction (a non-blocking wake-up
+  write) or is the thread's own wait between wake-ups (the keyer's deadline sleep). Every use has a
+  `// WHY allowed:`. Test doubles that record what they are sent use it too; the real
+  implementation they stand in for is checked on its own.
+- No `std::deque` or `std::function` in a marked path: both can allocate in steady use. Use
+  `RingDeque` and `FunctionRef` (`src/utils/`), or a preallocated ring.
 
 ### 17. [CI] Logging Goes Through `src/logging/`
 
