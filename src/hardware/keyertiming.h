@@ -24,6 +24,9 @@ public:
     virtual ~Clock() = default;
     virtual double now() = 0;
     virtual void sleep(double seconds) = 0;
+    // Sleep until now() reaches `when`. A real clock waits for the absolute deadline, so time lost
+    // between deciding to sleep and sleeping (a preemption, a signal) is not added to the wait.
+    virtual void sleepUntil(double when) { sleep(when - now()); }
 };
 
 // WHY a view: the keyer formats each frame into a stack buffer and the egress copies it into a

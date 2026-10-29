@@ -669,7 +669,7 @@ double PaddleKeyer::wholeMs(double seconds) {
 std::optional<double> PaddleKeyer::sleepUntil(double when) {
     const double wait = when - m_clock.now();
     if (wait > 0) {
-        m_clock.sleep(wait);
+        m_clock.sleepUntil(when);
         return m_clock.now() - when;
     }
     return std::nullopt;

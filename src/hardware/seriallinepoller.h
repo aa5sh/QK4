@@ -12,8 +12,8 @@
 #include "hardware/paddlekeyer.h"
 
 #include <functional>
+#include <cstddef>
 #include <optional>
-#include <vector>
 
 class SerialLinePoller {
 public:
@@ -25,6 +25,17 @@ public:
         double deltaTime;
     };
 
+    // At most one change per line per poll, held in place: polling never allocates.
+    struct Changes {
+        Change items[2];
+        size_t count = 0;
+        bool empty() const { return count == 0; }
+        size_t size() const { return count; }
+        const Change &operator[](size_t i) const { return items[i]; }
+        const Change *begin() const { return items; }
+        const Change *end() const { return items + count; }
+    };
+
     static constexpr double kStraightKeyDebounceSeconds = 0.020;
 
     SerialLinePoller(PaddleKeyer::Signal dit, PaddleKeyer::Signal dah, bool straightKeying);
@@ -32,7 +43,7 @@ public:
     // Reads the rest state. False if the port could not be read.
     bool start(const ReadLine &read);
     // One poll at time `now`. Returns what to report, dit first.
-    std::vector<Change> poll(const ReadLine &read, double now);
+    Changes poll(const ReadLine &read, double now);
 
 private:
     PaddleKeyer::Signal m_dit;

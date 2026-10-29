@@ -13,13 +13,17 @@
 #include <atomic>
 #include <functional>
 
-// std::chrono::steady_clock in seconds. sleep() is as precise as the platform allows: a
-// high-resolution waitable timer on Windows (the default timer tick there is 15.6 ms), and the
-// native sleep elsewhere. The keyer learns and subtracts whatever overrun is left (wake_overrun).
+// std::chrono::steady_clock in seconds. Sleeps are as precise as the platform allows:
+//   - macOS: mach_wait_until on an absolute mach_absolute_time deadline;
+//   - Linux: clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME), with the calling thread's timer slack
+//     cut from the default 50 µs to 1 ns on its first sleep;
+//   - Windows: a high-resolution waitable timer (the default timer tick there is 15.6 ms).
+// The keyer learns and subtracts whatever overrun is left (wake_overrun).
 class SteadyKeyerClock : public CwKeying::Clock {
 public:
     double now() override;
     void sleep(double seconds) override;
+    void sleepUntil(double when) override;
 };
 
 // Forwards each command to a target link set at runtime (the K4 connection's KZ egress), or drops

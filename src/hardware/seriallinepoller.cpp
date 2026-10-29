@@ -18,8 +18,8 @@ bool SerialLinePoller::start(const ReadLine &read) {
     return true;
 }
 
-std::vector<SerialLinePoller::Change> SerialLinePoller::poll(const ReadLine &read, double now) {
-    std::vector<Change> out;
+SerialLinePoller::Changes SerialLinePoller::poll(const ReadLine &read, double now) {
+    Changes out;
     const bool ditState = read(m_dit);
     const bool dahState = read(m_dah) && !m_straight;
     if (ditState != m_ditState) {
@@ -32,13 +32,13 @@ std::vector<SerialLinePoller::Change> SerialLinePoller::poll(const ReadLine &rea
     }
     if (m_ditTime && now - *m_ditTime >= m_debounce) {
         const double delta = m_previousDitTime ? *m_ditTime - *m_previousDitTime : 0;
-        out.push_back({m_dit, ditState, delta});
+        out.items[out.count++] = {m_dit, ditState, delta};
         m_previousDitTime = m_ditTime;
         m_ditTime.reset();
     }
     if (m_dahTime && now - *m_dahTime >= m_debounce) {
         const double delta = m_previousDahTime ? *m_dahTime - *m_previousDahTime : 0;
-        out.push_back({m_dah, dahState, delta});
+        out.items[out.count++] = {m_dah, dahState, delta};
         m_previousDahTime = m_dahTime;
         m_dahTime.reset();
     }

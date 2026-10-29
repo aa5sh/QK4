@@ -231,16 +231,27 @@ void HaliKeyV14Worker::monitorLoop() {
         due.QuadPart = -10000LL; // first fire in 1 ms (100 ns units, negative = relative)
         SetWaitableTimer(pollTimer, &due, 1 /* ms period */, nullptr, nullptr, FALSE);
     }
+#else
+    // WHY absolute deadlines on a 1 ms grid: usleep(1000) sleeps at least 1 ms after whatever the
+    // poll itself took, so every period ran long and the error accumulated. After a stall of more
+    // than a few periods the grid restarts from now rather than polling back-to-back to catch up.
+    constexpr double kPollSeconds = 0.001;
+    constexpr double kMaxBehindSeconds = 0.005;
+    double nextPoll = clock.now();
 #endif
 
     while (!stopRequested()) {
 #ifdef Q_OS_WIN
+        // The periodic timer keeps its own 1 ms grid, so it does not drift either.
         if (pollTimer)
             WaitForSingleObject(pollTimer, 5); // ~1 ms tick; 5 ms cap bounds stop latency
         else
             Sleep(1);
 #else
-        usleep(1000);
+        nextPoll += kPollSeconds;
+        if (clock.now() - nextPoll > kMaxBehindSeconds)
+            nextPoll = clock.now() + kPollSeconds;
+        clock.sleepUntil(nextPoll);
 #endif
         if (!sample()) {
             fail();
