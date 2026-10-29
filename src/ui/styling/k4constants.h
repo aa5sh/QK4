@@ -91,7 +91,7 @@ constexpr const char *BorderSelected = TextSecondaryOnRaised;
 // Overlay panels (Menu, Macros)
 // =============================================================================
 // WHY bluish: these five near-blacks carry a slight blue cast that sets the full-screen overlays
-// apart from the neutral main window. Not merged into the neutral surfaces; see K4STYLES_REFERENCE.md.
+// apart from the neutral main window. Not merged into the neutral surfaces; see docs/styling.md.
 constexpr const char *OverlayContentBg = "#18181C";        // Main content area background
 constexpr const char *OverlayHeaderBg = "#222228";         // Header bar + nav panel background
 constexpr const char *OverlayColumnHeaderBg = "#1E1E24";   // Column header background
