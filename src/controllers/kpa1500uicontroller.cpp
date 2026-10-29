@@ -8,6 +8,7 @@
 #include "ui/widgets/rightsidepanel.h"
 
 #include <QLoggingCategory>
+#include <QSizePolicy>
 #include <QString>
 
 Q_LOGGING_CATEGORY(qk4Kpa, "qk4.kpa1500")
@@ -20,6 +21,7 @@ KPA1500UiController::KPA1500UiController(StatusBarController *statusBar, RightSi
     // Hand the mini panel to RightSidePanel for layout placement —
     // RightSidePanel takes Qt parent ownership.
     m_miniPanel->setVisible(false);
+    reserveCardSpace(RadioSettings::instance()->kpa1500Enabled());
     rightSidePanel->embedKpa1500Panel(m_miniPanel);
 
     // === Connection lifecycle signals ===
@@ -126,7 +128,19 @@ void KPA1500UiController::onPollIntervalChanged(int intervalMs) {
     m_client->startPolling(intervalMs);
 }
 
+void KPA1500UiController::reserveCardSpace(bool reserve) {
+    // WHY: the card is shown only while the amplifier is connected. Without a reserved slot, showing
+    // it raised the right column's minimum by ~190 px and the window jumped taller on connect. With
+    // the amplifier enabled, the layout keeps the card's space while it is hidden ("the layout will
+    // not be changed by hiding the widget" - QSizePolicy::setRetainSizeWhenHidden), so the window is
+    // sized for it from launch; with it disabled, no space is spent on a card that never appears.
+    QSizePolicy policy = m_miniPanel->sizePolicy();
+    policy.setRetainSizeWhenHidden(reserve);
+    m_miniPanel->setSizePolicy(policy);
+}
+
 void KPA1500UiController::onEnabledChanged(bool enabled) {
+    reserveCardSpace(enabled);
     if (enabled) {
         const QString host = RadioSettings::instance()->kpa1500Host();
         if (!host.isEmpty()) {

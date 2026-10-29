@@ -58,6 +58,7 @@ private:
     void onDisconnected();
     void onError(const QString &error);
     void onEnabledChanged(bool enabled);
+    void reserveCardSpace(bool reserve);
     void onSettingsChanged();
     void onPollIntervalChanged(int intervalMs);
     void updateStatus();

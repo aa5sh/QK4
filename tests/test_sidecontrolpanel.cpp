@@ -167,6 +167,22 @@ private slots:
         QVERIFY2(clipped.isEmpty(), qPrintable(clipped));
     }
 
+    void showingAReservedKpaCardDoesNotGrowThePanel() {
+        // The window jumped taller when the amplifier connected: the card, shown only while
+        // connected, raised the right column's minimum by ~190 px. With the amplifier enabled the
+        // controller reserves its space, so showing it must not change the panel's minimum.
+        RightSidePanel panel;
+        auto *card = new Kpa1500MiniPanel(&panel);
+        QSizePolicy policy = card->sizePolicy();
+        policy.setRetainSizeWhenHidden(true);
+        card->setSizePolicy(policy);
+        panel.embedKpa1500Panel(card);
+        card->setVisible(false);
+        const int hidden = panel.minimumSizeHint().height();
+        card->setVisible(true);
+        QCOMPARE(panel.minimumSizeHint().height(), hidden);
+    }
+
     void everyRightPanelSubLabelFits() {
         // At the 10 px text floor DIVERSITY, under SUB, was cut to "IVERSITY".
         auto *panel = new RightSidePanel;
