@@ -19,7 +19,7 @@ RtSemaphore::~RtSemaphore() {
     dispatch_release(static_cast<dispatch_semaphore_t>(m_sem));
 }
 
-void RtSemaphore::post() {
+void RtSemaphore::post() noexcept {
     dispatch_semaphore_signal(static_cast<dispatch_semaphore_t>(m_sem));
 }
 
@@ -36,7 +36,7 @@ RtSemaphore::~RtSemaphore() {
         CloseHandle(static_cast<HANDLE>(m_sem));
 }
 
-void RtSemaphore::post() {
+void RtSemaphore::post() noexcept {
     ReleaseSemaphore(static_cast<HANDLE>(m_sem), 1, nullptr);
 }
 
@@ -54,7 +54,7 @@ RtSemaphore::~RtSemaphore() {
     sem_destroy(&m_sem);
 }
 
-void RtSemaphore::post() {
+void RtSemaphore::post() noexcept {
     sem_post(&m_sem);
 }
 

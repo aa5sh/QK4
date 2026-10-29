@@ -14,6 +14,7 @@
 
 #include "audio/sidetonescheduler.h"
 #include "hardware/paddlekeyer.h"
+#include "utils/rtsan.h"
 
 #include <algorithm>
 #include <cmath>
@@ -247,7 +248,12 @@ private:
     public:
         explicit SimLink(Run &r) : m_run(r) {}
         void send(std::string_view command) override {
-            m_run.m_sent.emplace_back(command);
+            {
+                // WHY allowed: the simulation's record of what was sent. The real link,
+                // KzEgress::post, is checked on its own; the simulated audio below still is.
+                RtSan::Allow allow;
+                m_run.m_sent.emplace_back(command);
+            }
             m_run.advance(m_run.m_now + .0002);
         }
 

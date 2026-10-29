@@ -32,7 +32,9 @@ public slots:
     void start() override;
 
 private:
-    static void midiCallback(double deltaTime, std::vector<unsigned char> *message, void *userData);
+    // RtMidi's thread, per message: real-time.
+    static void midiCallback(double deltaTime, std::vector<unsigned char> *message,
+                             void *userData) noexcept QK4_NONBLOCKING;
 
     // Has the port we opened disappeared from the enumeration? Runs on the worker thread.
     void checkPortPresence();

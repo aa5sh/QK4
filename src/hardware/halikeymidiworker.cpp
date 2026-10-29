@@ -166,8 +166,13 @@ void HaliKeyMidiWorker::start() {
     emit portOpened();
 }
 
-void HaliKeyMidiWorker::midiCallback(double deltaTime, std::vector<unsigned char> *message, void *userData) {
-    Logging::markRealtimeThread();
+void HaliKeyMidiWorker::midiCallback(double deltaTime, std::vector<unsigned char> *message, void *userData) noexcept {
+    {
+        // WHY allowed: it sets a thread_local flag. The platform may allocate a thread's TLS block
+        // on its first access, once per thread, which RTSan would report.
+        RtSan::Allow allow;
+        Logging::markRealtimeThread();
+    }
     auto *self = static_cast<HaliKeyMidiWorker *>(userData);
     if (self->stopRequested())
         return;

@@ -28,6 +28,7 @@ bench-logs/
 /build/
 /build-san/
 /build-asan/
+/build-rtsan/
 *.o
 *.d
 *.a

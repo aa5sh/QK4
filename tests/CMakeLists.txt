@@ -13,6 +13,27 @@ if(QK4_TESTS_SANITIZE AND NOT MSVC)
     add_link_options(-fsanitize=address -fsanitize=undefined)
 endif()
 
+# Optional RealtimeSanitizer build: pass -DQK4_TESTS_RTSAN=ON, with Clang 20 or later, to check every
+# function marked QK4_NONBLOCKING (src/utils/rtsan.h) for allocation, locks, sleeps and I/O while the
+# tests run (CONVENTIONS Rule 16). Run by the RealtimeSanitizer job in ci-checks.yml.
+# WHY Qt need not be instrumented, unlike for TSan: RTSan intercepts the C library calls themselves,
+# so a malloc or a mutex inside Qt is seen however Qt was built. Outside a marked function it checks
+# nothing, so every suite runs at full speed and all of them run.
+option(QK4_TESTS_RTSAN "Build tests with RealtimeSanitizer (Clang 20+)" OFF)
+
+if(QK4_TESTS_RTSAN)
+    if(QK4_TESTS_SANITIZE)
+        message(FATAL_ERROR "QK4_TESTS_RTSAN cannot be combined with QK4_TESTS_SANITIZE")
+    endif()
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_VERSION VERSION_LESS 20)
+        message(FATAL_ERROR "QK4_TESTS_RTSAN needs Clang 20 or later, found "
+                            "${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
+    endif()
+    message(STATUS "QK4 tests: RealtimeSanitizer enabled")
+    add_compile_options(-fsanitize=realtime -fno-omit-frame-pointer -g)
+    add_link_options(-fsanitize=realtime)
+endif()
+
 # Every logging category is defined in src/logging/logcategories.cpp. Linked into every test below
 # (see the aggregate loop at the end), so a test that compiles a logging source needs nothing extra.
 add_library(qk4_logging STATIC
@@ -816,6 +837,24 @@ target_include_directories(test_diagnosticspage PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_diagnosticspage Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Test)
 add_test(NAME DiagnosticsPageTests COMMAND test_diagnosticspage)
 set_tests_properties(DiagnosticsPageTests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+# RealtimeSanitizer self-test, RTSan builds only: proves the build checks anything, so a lost flag
+# or a QK4_NONBLOCKING that expands to nothing fails instead of passing every suite unchecked. The
+# two violation cases pass only on RTSan's report; abort_on_error=0 makes it exit rather than abort.
+if(QK4_TESTS_RTSAN)
+    add_executable(test_rtsanselftest test_rtsanselftest.cpp)
+    target_include_directories(test_rtsanselftest PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    add_test(NAME RtSanSelfTestMalloc COMMAND test_rtsanselftest malloc)
+    add_test(NAME RtSanSelfTestMutex COMMAND test_rtsanselftest mutex)
+    add_test(NAME RtSanSelfTestAllowed COMMAND test_rtsanselftest allowed)
+    set_tests_properties(RtSanSelfTestMalloc PROPERTIES
+        ENVIRONMENT "RTSAN_OPTIONS=halt_on_error=1:abort_on_error=0"
+        PASS_REGULAR_EXPRESSION "RealtimeSanitizer: unsafe-library-call.*malloc")
+    set_tests_properties(RtSanSelfTestMutex PROPERTIES
+        ENVIRONMENT "RTSAN_OPTIONS=halt_on_error=1:abort_on_error=0"
+        PASS_REGULAR_EXPRESSION "RealtimeSanitizer: unsafe-library-call.*pthread_mutex_lock")
+    set_tests_properties(RtSanSelfTestAllowed PROPERTIES PASS_REGULAR_EXPRESSION "allowed: no report")
+endif()
 
 # Aggregate target: `cmake --build <dir> --target qk4_tests` builds every
 # test_* executable defined above. CI uses this so adding `add_executable(test_foo)`

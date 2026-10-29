@@ -16,6 +16,7 @@
 
 #include "hardware/keyertiming.h"
 #include "utils/ringdeque.h"
+#include "utils/rtsan.h"
 
 #include <functional>
 #include <mutex>
@@ -43,21 +44,23 @@ public:
     int minimumSidetoneMs() const;
 
     // ---- keyer side (keyer thread, device thread) ----
-    bool scheduleDown(double downAt, bool late = false);
-    void scheduleUp(double upAt);
-    void keyNow(bool down); // straight key: key as soon as the next block allows
-    std::optional<double> downHeardAt() const;
-    std::optional<double> downDeadline(double downAt) const;
-    std::optional<double> edgeDeadline(double heardAt, std::optional<double> offset = std::nullopt) const;
-    bool cancelDown(); // true when the edge was dropped (or never asked for) rather than placed
-    double delay() const;
-    std::optional<double> delayFloor() const;
-    std::optional<double> downShift() const;
+    bool scheduleDown(double downAt, bool late = false) noexcept QK4_NONBLOCKING;
+    void scheduleUp(double upAt) noexcept QK4_NONBLOCKING;
+    void keyNow(bool down) noexcept QK4_NONBLOCKING; // straight key: key as soon as the next block allows
+    std::optional<double> downHeardAt() const noexcept QK4_NONBLOCKING;
+    std::optional<double> downDeadline(double downAt) const noexcept QK4_NONBLOCKING;
+    std::optional<double> edgeDeadline(double heardAt,
+                                       std::optional<double> offset = std::nullopt) const noexcept QK4_NONBLOCKING;
+    // True when the edge was dropped (or never asked for) rather than placed.
+    bool cancelDown() noexcept QK4_NONBLOCKING;
+    double delay() const noexcept QK4_NONBLOCKING;
+    std::optional<double> delayFloor() const noexcept QK4_NONBLOCKING;
+    std::optional<double> downShift() const noexcept QK4_NONBLOCKING;
 
     // ---- callback side (audio thread) ----
-    void noteBlockTiming(double dacTime, double currentTime, double blockSeconds);
-    std::optional<Edge> nextKeyEdge(int start, int frames, double dacTime, int sampleRate);
-    void easeLag(double seconds);
+    void noteBlockTiming(double dacTime, double currentTime, double blockSeconds) noexcept QK4_NONBLOCKING;
+    std::optional<Edge> nextKeyEdge(int start, int frames, double dacTime, int sampleRate) noexcept QK4_NONBLOCKING;
+    void easeLag(double seconds) noexcept QK4_NONBLOCKING;
 
     // ---- state the harness and the mixer inspect ----
     bool pendingEdgeHeld() const;
@@ -89,7 +92,7 @@ private:
     // field read and tuple assignment atomic. A short mutex gives the same guarantee with the
     // same code shape. It is never held across a sleep, a send or a call out, so the audio
     // callback waits at most a few hundred nanoseconds.
-    mutable std::mutex m_mutex;
+    mutable RtSan::BoundedMutex m_mutex;
 
     int m_minimumSidetoneMs = 0;
 

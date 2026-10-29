@@ -9,6 +9,7 @@
 #include "audio/sidetonescheduler.h"
 #include "hardware/keyerruntime.h"
 #include "hardware/paddlekeyer.h"
+#include "utils/rtsan.h"
 
 #include <QtTest/QtTest>
 #include <atomic>
@@ -22,6 +23,9 @@ namespace {
 class CaptureLink : public CwKeying::Link {
 public:
     void send(std::string_view c) override {
+        // WHY allowed: a test double recording what the keyer sends. The real link, KzEgress::post,
+        // is checked on its own.
+        RtSan::Allow allow;
         std::lock_guard lock(m_mutex);
         m_sent.emplace_back(c);
     }
@@ -95,6 +99,7 @@ std::string kzFault(const std::vector<std::string> &sent) {
 class SlowMuteLink : public CaptureLink {
 public:
     void send(std::string_view c) override {
+        RtSan::Allow allow; // WHY allowed: a test double that stalls on purpose
         if (c == "ML0000;")
             std::this_thread::sleep_for(std::chrono::microseconds(1500));
         CaptureLink::send(c);
@@ -127,6 +132,7 @@ struct StraightRaceRig {
 class GateLink : public CaptureLink {
 public:
     void send(std::string_view c) override {
+        RtSan::Allow allow; // WHY allowed: a test double that blocks the keyer on purpose
         {
             std::unique_lock lock(m_gateMutex);
             m_entered = true;

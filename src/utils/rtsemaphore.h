@@ -9,6 +9,8 @@
 #ifndef RTSEMAPHORE_H
 #define RTSEMAPHORE_H
 
+#include "utils/rtsan.h"
+
 #include <QtGlobal>
 
 #if defined(Q_OS_LINUX)
@@ -22,8 +24,8 @@ public:
     RtSemaphore(const RtSemaphore &) = delete;
     RtSemaphore &operator=(const RtSemaphore &) = delete;
 
-    void post(); // any thread
-    void wait(); // blocks until a post is available, and takes it
+    void post() noexcept QK4_NONBLOCKING; // any thread
+    void wait();                          // blocks until a post is available, and takes it
 
 private:
 #if defined(Q_OS_LINUX)

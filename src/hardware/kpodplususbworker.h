@@ -3,6 +3,7 @@
 
 #include "hardware/keyertiming.h"
 #include "kpodplusdevice.h" // KpodPlusDeviceInfo struct
+#include "utils/rtsan.h"
 #include <QByteArray>
 #include <QObject>
 #include <QString>
@@ -40,7 +41,7 @@ public:
     static void buildEncodeModeCmd(int mode, unsigned char out[8]);
     static void buildStuckTimeoutCmd(int seconds, unsigned char out[8]);
     // Length of an EP02 transfer without its trailing NUL padding.
-    static int ep02PayloadLength(const unsigned char *data, int size);
+    static int ep02PayloadLength(const unsigned char *data, int size) noexcept QK4_NONBLOCKING; // EP02 thread
 
     // EP01 response decoder result. The worker turns these flags into Qt
     // signals; tests inspect them directly.

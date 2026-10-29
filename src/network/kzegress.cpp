@@ -61,7 +61,7 @@ std::int64_t KzEgress::nowNs() {
     return duration_cast<nanoseconds>(steady_clock::now().time_since_epoch()).count();
 }
 
-bool KzEgress::post(std::string_view frame) {
+bool KzEgress::post(std::string_view frame) noexcept {
     if (frame.empty() || frame.size() > kMaxFrameBytes) {
         m_dropped.fetch_add(1, std::memory_order_relaxed);
         return false;
@@ -96,13 +96,19 @@ bool KzEgress::post(std::string_view frame) {
     return true;
 }
 
-void KzEgress::wake() {
+void KzEgress::wake() noexcept {
     if (!m_notifier) {
         // Only if the OS refused a pipe or event at construction: a queued call still gets the
         // frame out, at the cost of an allocation on the posting thread.
+        // WHY allowed: a degraded fallback that a working OS never reaches; losing the frame instead
+        // could leave the radio keyed.
+        RtSan::Allow allow;
         QMetaObject::invokeMethod(this, &KzEgress::onWake, Qt::QueuedConnection);
         return;
     }
+    // WHY allowed: the wake-up is one system call that cannot wait. The pipe is non-blocking (a full
+    // one returns at once) and the event is auto-reset. RTSan reports any write() as I/O.
+    RtSan::Allow allow;
 #ifdef Q_OS_WIN
     SetEvent(static_cast<HANDLE>(m_event));
 #else

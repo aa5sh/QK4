@@ -27,6 +27,7 @@
 #include "hardware/keyertiming.h"
 #include "utils/functionref.h"
 #include "utils/ringdeque.h"
+#include "utils/rtsan.h"
 #include "utils/rtsemaphore.h"
 #include "utils/spscring.h"
 
@@ -79,9 +80,10 @@ public:
     double interElementSeconds() const;
 
     // ---- device threads ----
-    void paddleEvent(Event event, double deltaTime, std::optional<double> timestamp = std::nullopt);
-    void midiMessage(int status, int note, int velocity, double rtmidiDelta);
-    void serialSignalChanged(Signal signal, bool asserted, double deltaTime);
+    void paddleEvent(Event event, double deltaTime,
+                     std::optional<double> timestamp = std::nullopt) noexcept QK4_NONBLOCKING;
+    void midiMessage(int status, int note, int velocity, double rtmidiDelta) noexcept QK4_NONBLOCKING;
+    void serialSignalChanged(Signal signal, bool asserted, double deltaTime) noexcept QK4_NONBLOCKING;
 
     // Ends whatever is keyed: the running burst stops at its next element boundary with the
     // current element sent whole; a straight key held down gets its KZU from the keyer thread,
@@ -91,8 +93,10 @@ public:
 
     // ---- keyer thread ----
     bool hasPendingEvents() const;
-    Event processNextEvent(); // one pass of the keyer loop; blocks until an event arrives
-    void run();               // the keyer loop, until Close
+    // One pass of the keyer loop; blocks until an event arrives. Real-time throughout, except its two
+    // waits: for the next event, and for an element's deadline (sleepUntil).
+    Event processNextEvent() noexcept QK4_NONBLOCKING;
+    void run(); // the keyer loop, until Close
     // Releases, posts Close and refuses everything after. A straight key held down gets its KZU
     // before the keyer sees Close. The owner joins the keyer thread.
     void close();
@@ -197,7 +201,10 @@ private:
     RtSemaphore m_wake; // one post per push
 
     // ---- paddle state (device thread writes, keyer reads) ----
-    mutable std::mutex m_paddleMutex;
+    // Locks the keyer and the device threads share (RtSan::BoundedMutex): held for a few
+    // assignments, a queue push or a sidetone scheduler call, never across a sleep, a send or an
+    // allocation. Only the requesters take m_requestMutex, never the keyer.
+    mutable RtSan::BoundedMutex m_paddleMutex;
     Stamps m_stamps{0, 0, 0, 0};
     // Capped at kHistoryLength; preallocated with room for the two a release inserts past it.
     RingDeque<std::pair<double, Event>> m_history{kHistoryLength * 2};
@@ -210,7 +217,7 @@ private:
     std::optional<double> m_midiClockOffset;
 
     // ---- first element / straight key: K4-Companion's first_element_lock ----
-    std::mutex m_firstElementMutex;
+    RtSan::BoundedMutex m_firstElementMutex;
     std::optional<FirstElement> m_firstElementScheduled;
     std::atomic<bool> m_inBurst{false};
     std::atomic<bool> m_closed{false};
@@ -218,7 +225,7 @@ private:
     double m_straightKeyDownAt = 0.0; // read only under m_firstElementMutex, like its writer
 
     // ---- straight-key on-air state (keyer thread; m_paddleTimestamp also the device thread) ----
-    std::mutex m_straightMutex;
+    RtSan::BoundedMutex m_straightMutex;
     double m_paddleTimestamp = 0;
     double m_previousKeyDownTimestamp = 0;
     double m_previousKeyUpTimestamp = 0;

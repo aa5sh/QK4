@@ -59,7 +59,7 @@ void KpodPlusUsbWorker::buildStuckTimeoutCmd(int seconds, unsigned char out[8]) 
     out[3] = static_cast<unsigned char>((seconds >> 8) & 0xFF);
 }
 
-int KpodPlusUsbWorker::ep02PayloadLength(const unsigned char *data, int size) {
+int KpodPlusUsbWorker::ep02PayloadLength(const unsigned char *data, int size) noexcept {
     while (size > 0 && data[size - 1] == '\0')
         --size;
     return size;

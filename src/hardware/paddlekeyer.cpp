@@ -285,7 +285,7 @@ void PaddleKeyer::close() {
 
 // ---- input ----
 
-void PaddleKeyer::midiMessage(int status, int note, int velocity, double rtmidiDelta) {
+void PaddleKeyer::midiMessage(int status, int note, int velocity, double rtmidiDelta) noexcept {
     if (status == 0xb0 || status == 0xa0) {
         m_midiDelta = (velocity * 126) / 1000.0;
         return;
@@ -339,7 +339,7 @@ double PaddleKeyer::midiEventTimestamp(double delta) {
     return m_midiDeviceClock + *m_midiClockOffset;
 }
 
-void PaddleKeyer::serialSignalChanged(Signal signal, bool asserted, double deltaTime) {
+void PaddleKeyer::serialSignalChanged(Signal signal, bool asserted, double deltaTime) noexcept {
     const Signal dit = m_ditSignal.load();
     const Signal dah = m_dahSignal.load();
     if (signal == dit)
@@ -348,7 +348,7 @@ void PaddleKeyer::serialSignalChanged(Signal signal, bool asserted, double delta
         paddleEvent(asserted ? Event::DahDown : Event::DahUp, deltaTime);
 }
 
-void PaddleKeyer::paddleEvent(Event event, double deltaTime, std::optional<double> timestamp) {
+void PaddleKeyer::paddleEvent(Event event, double deltaTime, std::optional<double> timestamp) noexcept {
     if (event != Event::DitDown && event != Event::DitUp && event != Event::DahDown && event != Event::DahUp)
         return;
     // WHY one lock from the inhibit check to the queue: releasePaddles takes it too, so an event
@@ -436,7 +436,7 @@ void PaddleKeyer::run() {
 // WHY wait first and dispatch after: the mode in force is the one when the event arrives, not the
 // one when the thread started waiting. K4-Companion gets the same by closing and reopening its
 // keyer whenever straight keying is switched (set_device_type).
-PaddleKeyer::Event PaddleKeyer::processNextEvent() {
+PaddleKeyer::Event PaddleKeyer::processNextEvent() noexcept {
     PaddleEventItem item;
     while (true) {
         const bool released = applyPendingReleases();
@@ -469,7 +469,12 @@ PaddleKeyer::Event PaddleKeyer::processNextEvent() {
         reconcileLostEdges();
         if (!m_events.empty())
             continue;
-        m_wake.wait();
+        {
+            // WHY allowed: this is where the keyer blocks between wake-ups, as a real-time thread
+            // must (CONVENTIONS Rule 16).
+            RtSan::Allow allow;
+            m_wake.wait();
+        }
     }
     switch (item.event) {
     case Event::Close:
@@ -772,7 +777,12 @@ double PaddleKeyer::wholeMs(double seconds) {
 std::optional<double> PaddleKeyer::sleepUntil(double when) {
     const double wait = when - m_clock.now();
     if (wait > 0) {
-        m_clock.sleepUntil(when);
+        {
+            // WHY allowed: the keyer's deadline wait. Elements are timed by sleeping until they are
+            // due, which is blocking by design, not work done late.
+            RtSan::Allow allow;
+            m_clock.sleepUntil(when);
+        }
         return m_clock.now() - when;
     }
     return std::nullopt;
@@ -896,6 +906,8 @@ void PaddleKeyer::waitUntilSidetoneHeard() {
         const double now = m_clock.now();
         if (now >= giveUpAt)
             return;
+        // WHY allowed: a deadline wait, as in sleepUntil.
+        RtSan::Allow allow;
         m_clock.sleep(std::min(kSidetoneHeardPollSeconds, giveUpAt - now));
     }
     const double ditSidetoneSeconds = elementSidetone(wholeMs(ditSeconds())).first;

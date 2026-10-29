@@ -43,7 +43,7 @@ std::optional<std::pair<double, double>> SidetoneScheduler::edgeClockOffsetLocke
     return std::make_pair(streamOffset, streamOffset);
 }
 
-bool SidetoneScheduler::scheduleDown(double downAt, bool late) {
+bool SidetoneScheduler::scheduleDown(double downAt, bool late) noexcept {
     std::lock_guard lock(m_mutex);
     const auto offsets = edgeClockOffsetLocked();
     if (!offsets) {
@@ -57,7 +57,7 @@ bool SidetoneScheduler::scheduleDown(double downAt, bool late) {
     return true;
 }
 
-void SidetoneScheduler::scheduleUp(double upAt) {
+void SidetoneScheduler::scheduleUp(double upAt) noexcept {
     std::lock_guard lock(m_mutex);
     if (!m_scheduleOffset)
         return;
@@ -66,7 +66,7 @@ void SidetoneScheduler::scheduleUp(double upAt) {
     m_keyEvents.push_back({upAt + offset, false});
 }
 
-void SidetoneScheduler::keyNow(bool down) {
+void SidetoneScheduler::keyNow(bool down) noexcept {
     std::lock_guard lock(m_mutex);
     const auto offsets = edgeClockOffsetLocked();
     if (!offsets)
@@ -83,7 +83,7 @@ std::optional<std::pair<double, double>> SidetoneScheduler::placedDownLocked() c
     return m_downPlaced;
 }
 
-std::optional<double> SidetoneScheduler::downHeardAt() const {
+std::optional<double> SidetoneScheduler::downHeardAt() const noexcept {
     std::lock_guard lock(m_mutex);
     const auto placed = placedDownLocked();
     if (!m_scheduleOffset || !placed)
@@ -91,7 +91,7 @@ std::optional<double> SidetoneScheduler::downHeardAt() const {
     return placed->second - *m_scheduleOffset;
 }
 
-std::optional<double> SidetoneScheduler::downDeadline(double downAt) const {
+std::optional<double> SidetoneScheduler::downDeadline(double downAt) const noexcept {
     std::lock_guard lock(m_mutex);
     const auto offsets = edgeClockOffsetLocked();
     if (!offsets)
@@ -99,7 +99,7 @@ std::optional<double> SidetoneScheduler::downDeadline(double downAt) const {
     return edgeDeadlineLocked(downAt + m_lag, offsets->first);
 }
 
-bool SidetoneScheduler::cancelDown() {
+bool SidetoneScheduler::cancelDown() noexcept {
     double giveUpAt;
     std::optional<double> asked;
     {
@@ -120,6 +120,9 @@ bool SidetoneScheduler::cancelDown() {
         }
         if (m_clock.now() >= giveUpAt)
             return true;
+        // WHY allowed: the keyer waits here, for at most kCancelWaitSeconds, for the audio thread
+        // to place or drop the edge. A deadline wait on the keyer thread, as in its sleepUntil.
+        RtSan::Allow allow;
         m_clock.sleep(kCancelPollSeconds);
     }
 }
@@ -134,22 +137,22 @@ std::optional<double> SidetoneScheduler::edgeDeadlineLocked(double heardAt, std:
     return t.dac + blocks * t.block - t.lead - *offset;
 }
 
-std::optional<double> SidetoneScheduler::edgeDeadline(double heardAt, std::optional<double> offset) const {
+std::optional<double> SidetoneScheduler::edgeDeadline(double heardAt, std::optional<double> offset) const noexcept {
     std::lock_guard lock(m_mutex);
     return edgeDeadlineLocked(heardAt, offset);
 }
 
-double SidetoneScheduler::delay() const {
+double SidetoneScheduler::delay() const noexcept {
     std::lock_guard lock(m_mutex);
     return m_edgeShift ? *m_edgeShift : m_lag;
 }
 
-std::optional<double> SidetoneScheduler::delayFloor() const {
+std::optional<double> SidetoneScheduler::delayFloor() const noexcept {
     std::lock_guard lock(m_mutex);
     return wantedLagLocked();
 }
 
-std::optional<double> SidetoneScheduler::downShift() const {
+std::optional<double> SidetoneScheduler::downShift() const noexcept {
     std::lock_guard lock(m_mutex);
     const auto placed = placedDownLocked();
     if (!placed)
@@ -159,7 +162,7 @@ std::optional<double> SidetoneScheduler::downShift() const {
 
 // ---- callback side ----
 
-void SidetoneScheduler::noteBlockTiming(double dacTime, double currentTime, double blockSeconds) {
+void SidetoneScheduler::noteBlockTiming(double dacTime, double currentTime, double blockSeconds) noexcept {
     std::lock_guard lock(m_mutex);
     const double lead = dacTime - currentTime;
     if (!m_blockLeadWindowEnd || dacTime >= *m_blockLeadWindowEnd) {
@@ -186,7 +189,7 @@ std::optional<double> SidetoneScheduler::firstEdgeLagLocked() const {
     return wantedLagLocked();
 }
 
-void SidetoneScheduler::easeLag(double seconds) {
+void SidetoneScheduler::easeLag(double seconds) noexcept {
     std::lock_guard lock(m_mutex);
     const auto wanted = wantedLagLocked();
     if (!wanted || m_lag <= *wanted)
@@ -203,7 +206,7 @@ std::optional<std::pair<double, bool>> SidetoneScheduler::peekKeyEventLocked() {
 }
 
 std::optional<SidetoneScheduler::Edge> SidetoneScheduler::nextKeyEdge(int start, int frames, double dacTime,
-                                                                      int sampleRate) {
+                                                                      int sampleRate) noexcept {
     std::lock_guard lock(m_mutex);
     bool dragged = false;
     double eventTime = 0;

@@ -15,6 +15,7 @@
 #define KZEGRESS_H
 
 #include "hardware/keyertiming.h"
+#include "utils/rtsan.h"
 
 #include <QObject>
 #include <QtGlobal>
@@ -48,7 +49,7 @@ public:
 
     // Any thread. Copies the frame and wakes the owning thread. False, and counted as dropped, when
     // the frame is empty or longer than kMaxFrameBytes or the queue is full.
-    bool post(std::string_view frame);
+    bool post(std::string_view frame) noexcept QK4_NONBLOCKING;
     void send(std::string_view command) override { post(command); }
 
     // Owning thread. Calls fn(std::string_view frame, std::int64_t enqueuedNs) for every frame
@@ -86,7 +87,7 @@ private:
     static constexpr std::size_t kMask = kCapacity - 1;
     static_assert((kCapacity & kMask) == 0, "capacity must be a power of two");
 
-    void wake();
+    void wake() noexcept;
     void onWake();
 
     std::unique_ptr<Slot[]> m_slots;

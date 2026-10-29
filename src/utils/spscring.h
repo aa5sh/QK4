@@ -7,6 +7,8 @@
 #ifndef SPSCRING_H
 #define SPSCRING_H
 
+#include "utils/rtsan.h"
+
 #include <array>
 #include <atomic>
 #include <cstddef>
@@ -18,7 +20,7 @@ template <typename T, std::size_t Capacity> class SpscRing {
 
 public:
     // Producer. False when full; the item is not queued.
-    bool push(const T &item) {
+    bool push(const T &item) noexcept QK4_NONBLOCKING {
         const std::size_t head = m_head.load(std::memory_order_relaxed);
         if (head - m_tail.load(std::memory_order_acquire) == Capacity)
             return false;
@@ -28,7 +30,7 @@ public:
     }
 
     // Consumer. False when empty.
-    bool pop(T &out) {
+    bool pop(T &out) noexcept QK4_NONBLOCKING {
         const std::size_t tail = m_tail.load(std::memory_order_relaxed);
         if (tail == m_head.load(std::memory_order_acquire))
             return false;
@@ -38,7 +40,7 @@ public:
     }
 
     // Consumer. The oldest item without removing it; false when empty.
-    bool peek(T &out) const {
+    bool peek(T &out) const noexcept QK4_NONBLOCKING {
         const std::size_t tail = m_tail.load(std::memory_order_relaxed);
         if (tail == m_head.load(std::memory_order_acquire))
             return false;
@@ -47,7 +49,9 @@ public:
     }
 
     // Either side; a snapshot.
-    bool empty() const { return m_head.load(std::memory_order_acquire) == m_tail.load(std::memory_order_acquire); }
+    bool empty() const noexcept QK4_NONBLOCKING {
+        return m_head.load(std::memory_order_acquire) == m_tail.load(std::memory_order_acquire);
+    }
 
 private:
     std::array<T, Capacity> m_items{};

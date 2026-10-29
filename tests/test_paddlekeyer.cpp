@@ -8,6 +8,7 @@
 #include "audio/sidetonescheduler.h"
 #include "hardware/paddlekeyer.h"
 #include "paddlekeyersim.h"
+#include "utils/rtsan.h"
 
 #include <QtTest/QtTest>
 
@@ -29,7 +30,12 @@ public:
 class CaptureLink : public CwKeying::Link {
 public:
     std::vector<std::string> sent;
-    void send(std::string_view c) override { sent.emplace_back(c); }
+    void send(std::string_view c) override {
+        // WHY allowed: a test double recording what the keyer sends. The real link,
+        // KzEgress::post, is checked on its own.
+        RtSan::Allow allow;
+        sent.emplace_back(c);
+    }
 };
 
 class NullTimer : public CwKeying::OneShotTimer {

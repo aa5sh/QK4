@@ -4,6 +4,9 @@
 #include <QLoggingCategory>
 #include <QObject>
 #include <QString>
+
+#include "utils/rtsan.h"
+
 #include <atomic>
 #include <functional>
 #include <memory>
@@ -36,14 +39,17 @@ struct HaliKeyMidiSink {
         // WHY the old target dies here, after the unlock: destroying it can free memory, and
         // RtMidi's thread may be waiting for the lock.
     }
-    void call(int status, int note, int velocity, double deltaTime) {
+    void call(int status, int note, int velocity, double deltaTime) noexcept QK4_NONBLOCKING {
         std::lock_guard lock(mutex);
         if (target)
             target(status, note, velocity, deltaTime);
     }
 
 private:
-    std::mutex mutex;
+    // WHY bounded (RtSan::BoundedMutex): set() holds it for a swap of two std::functions, which
+    // neither allocates nor frees. call() holds it across the keyer, which only ever keeps set(),
+    // on the main thread, waiting.
+    RtSan::BoundedMutex mutex;
     Fn target;
 };
 

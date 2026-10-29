@@ -10,6 +10,7 @@
 #define SERIALLINEPOLLER_H
 
 #include "hardware/paddlekeyer.h"
+#include "utils/rtsan.h"
 
 #include <functional>
 #include <cstddef>
@@ -43,7 +44,7 @@ public:
     // Reads the rest state. False if the port could not be read.
     bool start(const ReadLine &read);
     // One poll at time `now`. Returns what to report, dit first.
-    Changes poll(const ReadLine &read, double now);
+    Changes poll(const ReadLine &read, double now) noexcept QK4_NONBLOCKING;
 
 private:
     PaddleKeyer::Signal m_dit;

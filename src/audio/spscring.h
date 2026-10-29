@@ -1,6 +1,8 @@
 #ifndef SPSCRING_H
 #define SPSCRING_H
 
+#include "utils/rtsan.h"
+
 #include <array>
 #include <atomic>
 #include <cstddef>
@@ -27,7 +29,7 @@ public:
 
     // Producer. The slot to fill, or nullptr when the ring is full. Calling it twice without a
     // commitWrite() returns the same slot.
-    T *beginWrite() {
+    T *beginWrite() noexcept QK4_NONBLOCKING {
         const std::size_t tail = m_tail.load(std::memory_order_relaxed);
         if (tail - m_head.load(std::memory_order_acquire) >= Capacity)
             return nullptr;
@@ -35,10 +37,12 @@ public:
     }
 
     // Producer. Publish the slot beginWrite() returned.
-    void commitWrite() { m_tail.store(m_tail.load(std::memory_order_relaxed) + 1, std::memory_order_release); }
+    void commitWrite() noexcept QK4_NONBLOCKING {
+        m_tail.store(m_tail.load(std::memory_order_relaxed) + 1, std::memory_order_release);
+    }
 
     // Consumer. The oldest published slot, or nullptr when empty.
-    T *front() {
+    T *front() noexcept QK4_NONBLOCKING {
         const std::size_t head = m_head.load(std::memory_order_relaxed);
         if (head == m_tail.load(std::memory_order_acquire))
             return nullptr;
@@ -47,7 +51,7 @@ public:
 
     // Consumer. The i-th published slot from the front (0 = front()), or nullptr past the end.
     // Lets the consumer look at what is queued - for the jitter policy - without popping it.
-    T *peek(std::size_t i) {
+    T *peek(std::size_t i) noexcept QK4_NONBLOCKING {
         const std::size_t head = m_head.load(std::memory_order_relaxed);
         if (i >= m_tail.load(std::memory_order_acquire) - head)
             return nullptr;
@@ -55,13 +59,17 @@ public:
     }
 
     // Consumer. Release front() back to the producer. Must not be called on an empty ring.
-    void pop() { m_head.store(m_head.load(std::memory_order_relaxed) + 1, std::memory_order_release); }
+    void pop() noexcept QK4_NONBLOCKING {
+        m_head.store(m_head.load(std::memory_order_relaxed) + 1, std::memory_order_release);
+    }
 
     // Consumer. Number of published slots. Exact on the consumer thread (only the producer can make
     // it grow meanwhile); approximate anywhere else.
-    std::size_t size() const { return m_tail.load(std::memory_order_acquire) - m_head.load(std::memory_order_relaxed); }
+    std::size_t size() const noexcept QK4_NONBLOCKING {
+        return m_tail.load(std::memory_order_acquire) - m_head.load(std::memory_order_relaxed);
+    }
 
-    bool empty() const { return size() == 0; }
+    bool empty() const noexcept QK4_NONBLOCKING { return size() == 0; }
 
 private:
     // Separate cache lines so the two sides do not false-share their indices.

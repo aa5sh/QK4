@@ -18,7 +18,7 @@ bool SerialLinePoller::start(const ReadLine &read) {
     return true;
 }
 
-SerialLinePoller::Changes SerialLinePoller::poll(const ReadLine &read, double now) {
+SerialLinePoller::Changes SerialLinePoller::poll(const ReadLine &read, double now) noexcept {
     Changes out;
     const bool ditState = read(m_dit);
     const bool dahState = read(m_dah) && !m_straight;
