@@ -143,17 +143,20 @@ void SideControlPanel::setupUi() {
 
     m_monBtn = new QPushButton("MON", swBtnContainer);
     m_monBtn->setStyleSheet(K4Styles::compactButton());
+    m_monBtn->setAttribute(Qt::WA_LayoutUsesWidgetRect);
     m_monBtn->setFixedHeight(K4Styles::Dimensions::ButtonHeightMini);
     // WHY 3:4:3: NORM is the widest caption; equal thirds clip it at the 10 px text floor.
     swBtnRow->addWidget(m_monBtn, 3);
 
     m_normBtn = new QPushButton("NORM", swBtnContainer);
     m_normBtn->setStyleSheet(K4Styles::compactButton());
+    m_normBtn->setAttribute(Qt::WA_LayoutUsesWidgetRect);
     m_normBtn->setFixedHeight(K4Styles::Dimensions::ButtonHeightMini);
     swBtnRow->addWidget(m_normBtn, 4);
 
     m_balBtn = new QPushButton("BAL", swBtnContainer);
     m_balBtn->setStyleSheet(K4Styles::compactButton());
+    m_balBtn->setAttribute(Qt::WA_LayoutUsesWidgetRect);
     m_balBtn->setFixedHeight(K4Styles::Dimensions::ButtonHeightMini);
     swBtnRow->addWidget(m_balBtn, 3);
 
@@ -697,6 +700,7 @@ QPushButton *SideControlPanel::createIconButton(const QString &text) {
     btn->setFixedSize(K4Styles::Dimensions::CompactButtonSize, K4Styles::Dimensions::CompactButtonSize);
     btn->setCursor(Qt::PointingHandCursor);
     btn->setStyleSheet(K4Styles::sidePanelButton());
+    btn->setAttribute(Qt::WA_LayoutUsesWidgetRect);
     return btn;
 }
 
@@ -713,6 +717,7 @@ QWidget *SideControlPanel::createTxFunctionButton(const QString &mainText, const
     btn->setFixedHeight(K4Styles::Dimensions::ButtonHeightSmall);
     btn->setCursor(Qt::PointingHandCursor);
     btn->setStyleSheet(K4Styles::sidePanelButtonLight());
+    btn->setAttribute(Qt::WA_LayoutUsesWidgetRect);
     btnOut = btn;
     layout->addWidget(btn);
 

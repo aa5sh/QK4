@@ -1047,6 +1047,7 @@ void MainWindow::setupVfoSection(QWidget *parent) {
         btn->setFixedSize(K4Styles::Dimensions::MemoryButtonWidth, K4Styles::Dimensions::ButtonHeightSmall);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setStyleSheet(isLighter ? K4Styles::sidePanelButtonLight() : K4Styles::sidePanelButton());
+        btn->setAttribute(Qt::WA_LayoutUsesWidgetRect);
         layout->addWidget(btn, 0, Qt::AlignHCenter);
 
         // Add sub-label if provided
@@ -1087,6 +1088,7 @@ void MainWindow::setupVfoSection(QWidget *parent) {
         btn->setFixedSize(K4Styles::Dimensions::MemoryButtonWidth, K4Styles::Dimensions::ButtonHeightSmall);
         btn->setCursor(Qt::PointingHandCursor);
         btn->setStyleSheet(K4Styles::sidePanelButton());
+        btn->setAttribute(Qt::WA_LayoutUsesWidgetRect);
         return btn;
     };
 

@@ -8,6 +8,7 @@
 // pairs, and every other control, stay apart.
 
 #include "ui/widgets/rightsidepanel.h"
+#include "ui/styling/k4styles.h"
 #include "ui/widgets/sidecontrolpanel.h"
 
 #include <QApplication>
@@ -35,6 +36,8 @@ private slots:
         QVERIFY(m_tempDir.isValid());
         QSettings::setDefaultFormat(QSettings::IniFormat);
         QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, m_tempDir.path());
+        // The app runs with this sheet installed (main.cpp); it changes how every widget is laid out.
+        qApp->setStyleSheet(K4Styles::applicationStyleSheet());
     }
 
     // The first overlap found with the panel at `height`, or an empty string.
@@ -112,6 +115,42 @@ private slots:
                 return QString("\"%1\" needs %2 px, has %3").arg(label->text()).arg(needed).arg(label->width());
         }
         return {};
+    }
+
+    // Buttons in `panel` that break the side-panel button rules, or an empty string.
+    static QString firstBadButton(QWidget &panel) {
+        QWidget host;
+        panel.setParent(&host);
+        panel.setGeometry(0, 0, panel.minimumSizeHint().width(), panel.minimumSizeHint().height());
+        host.resize(panel.size());
+        host.show();
+        QCoreApplication::processEvents();
+        for (QPushButton *button : panel.findChildren<QPushButton *>()) {
+            if (!button->isVisible())
+                continue;
+            const QString name = QString(button->text()).replace('\n', ' ');
+            // WHY: on macOS the native style's smaller layout rect let the sub-label be laid over
+            // the button's bottom edge; the offscreen style used here cannot show that, so the rule
+            // that prevents it is asserted directly.
+            if (!button->testAttribute(Qt::WA_LayoutUsesWidgetRect))
+                return QString("'%1' lacks Qt::WA_LayoutUsesWidgetRect").arg(name);
+            const QSize need = button->sizeHint();
+            if (!button->text().isEmpty() && need.height() > button->height())
+                return QString("'%1' needs %2 px of height, has %3").arg(name).arg(need.height()).arg(button->height());
+        }
+        return {};
+    }
+
+    void leftPanelButtonsKeepTheirFullHeight() {
+        auto *panel = new SideControlPanel;
+        const QString bad = firstBadButton(*panel);
+        QVERIFY2(bad.isEmpty(), qPrintable(bad));
+    }
+
+    void rightPanelButtonsKeepTheirFullHeight() {
+        auto *panel = new RightSidePanel;
+        const QString bad = firstBadButton(*panel);
+        QVERIFY2(bad.isEmpty(), qPrintable(bad));
     }
 
     void everyLeftPanelSubLabelFits() {

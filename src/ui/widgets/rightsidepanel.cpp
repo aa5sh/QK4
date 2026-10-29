@@ -160,6 +160,7 @@ QWidget *RightSidePanel::createFunctionButton(const QString &mainText, const QSt
     } else {
         btn->setStyleSheet(K4Styles::sidePanelButton());
     }
+    btn->setAttribute(Qt::WA_LayoutUsesWidgetRect);
     btnOut = btn;
     layout->addWidget(btn);
 

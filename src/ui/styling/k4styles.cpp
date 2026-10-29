@@ -355,7 +355,7 @@ QString sidePanelButton() {
             border-radius: %5px;
             font-size: %6px;
             font-weight: bold;
-            padding: 2px 0px;
+            padding: 0px;
         }
         QPushButton:hover {
             background: %7;
@@ -389,7 +389,7 @@ QString sidePanelButtonActive() {
             border-radius: %5px;
             font-size: %6px;
             font-weight: bold;
-            padding: 2px 0px;
+            padding: 0px;
         }
         QPushButton:hover {
             background: %1;
@@ -418,7 +418,7 @@ QString sidePanelButtonLight() {
             border-radius: %5px;
             font-size: %6px;
             font-weight: bold;
-            padding: 2px 0px;
+            padding: 0px;
         }
         QPushButton:hover {
             border: %3px solid %7;

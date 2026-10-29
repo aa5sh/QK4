@@ -104,6 +104,14 @@ QString radioButton();
  */
 QString compactButton();
 
+// WHY: a QPushButton given any of the three sidePanelButton*() sheets (or compactButton()) must also set
+// Qt::WA_LayoutUsesWidgetRect. These sheets draw the whole widget rect, but layouts still space the
+// button by the native style's smaller "layout item rect" (macOS insets push buttons for their
+// focus ring), so on macOS the sub-label below was laid over the button's bottom edge. Qt docs:
+// WA_LayoutUsesWidgetRect "Ignore the layout item rect from the style when laying out this widget".
+// The sheets carry no vertical padding: 28 px minus the 2 px borders leaves exactly the 24 px two
+// lines of 10 px text need (ATU TUNE, FREQ ENT).
+
 /**
  * @brief Dark gradient button for side panel icons (?, globe).
  * Includes normal, hover, and pressed states.

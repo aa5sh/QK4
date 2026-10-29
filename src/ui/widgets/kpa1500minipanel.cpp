@@ -30,6 +30,7 @@ Kpa1500MiniPanel::Kpa1500MiniPanel(QWidget *parent) : QWidget(parent) {
         btnOut->setFixedHeight(K4Styles::Dimensions::ButtonHeightSmall);
         btnOut->setCursor(Qt::PointingHandCursor);
         btnOut->setStyleSheet(K4Styles::sidePanelButton());
+        btnOut->setAttribute(Qt::WA_LayoutUsesWidgetRect);
         vbox->addWidget(btnOut);
         return container;
     };
