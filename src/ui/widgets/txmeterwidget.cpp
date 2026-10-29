@@ -3,6 +3,7 @@
 #include <QFontMetricsF>
 #include <QLinearGradient>
 #include <QPainter>
+#include <algorithm>
 #include <cmath>
 #include <limits>
 
@@ -309,9 +310,7 @@ void TxMeterWidget::drawMeterRow(QPainter &painter, int y, int rowHeight, const 
             continue;
         const qreal x = barStartX + static_cast<int>(barWidth * mark.pos);
         const qreal textW = fm.horizontalAdvance(mark.text);
-        // Center the label; the one at the right end ends at the widget's edge, using the margin
-        // beyond the bar so its neighbour (+40 next to +60) still fits on a narrow meter.
-        const qreal textX = std::round((mark.pos >= 0.999) ? width() - textW : x - textW / 2.0);
+        const qreal textX = std::round(scaleLabelLeft(x, textW, barStartX, barStartX + barWidth));
         if (textX + textW + 2.0 > leftmostDrawn)
             continue;
         // Over-S9 marks are red. TextRed, not TxRed: pure red is under 4.5:1 on the dark background.
@@ -326,6 +325,11 @@ void TxMeterWidget::drawMeterRow(QPainter &painter, int y, int rowHeight, const 
         int x = barStartX + static_cast<int>(barWidth * mark.pos);
         painter.drawLine(x, barY, x, barY + 2);
     }
+}
+
+qreal TxMeterWidget::scaleLabelLeft(qreal markX, qreal textWidth, qreal barLeft, qreal barRight) {
+    const qreal maxLeft = std::max(barLeft, barRight - textWidth);
+    return std::clamp(markX - textWidth / 2.0, barLeft, maxLeft);
 }
 
 namespace {

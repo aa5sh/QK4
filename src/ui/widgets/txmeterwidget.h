@@ -65,6 +65,10 @@ public:
     static QList<ScaleMark> swrMarks();
     static QList<ScaleMark> currentMarks();
 
+    // Left edge of a scale label of textWidth for a mark at markX: centred on the mark, but kept
+    // within [barLeft, barRight] so the end labels (0, +60, 25dB) never overhang the bar.
+    static qreal scaleLabelLeft(qreal markX, qreal textWidth, qreal barLeft, qreal barRight);
+
     // Set all TX meters at once (from txMeterChanged signal)
     void setTxMeters(int alc, int compDb, double fwdPower, double swr);
 
