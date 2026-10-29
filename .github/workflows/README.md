@@ -11,7 +11,7 @@ because the Actions sidebar sorts by display name, not by file.
 
 | Prefix | Runs when | Display name |
 |---|---|---|
-| `ci-` | every PR, and every push to `development` / `main` | `CI · …` |
+| `ci-` | PRs to `development` / `main`, and pushes to them (`ci-packaging.yml`: pushes to `development` only; `ci-codeql.yml` also weekly and skips Markdown/`docs/` changes) | `CI · …` |
 | `build-` | on demand, and on push to `main` | `Build · …` |
 | `release.yml` | a `v*` tag (dispatch is a rehearsal that publishes nothing) | `Release` |
 | `scheduled-` | a cron schedule | `Scheduled · …` |

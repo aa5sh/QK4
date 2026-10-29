@@ -10,24 +10,29 @@ A cross-platform desktop application for remote control of Elecraft K4 radios ov
 
 | Platform | Minimum Version | Architecture |
 |----------|-----------------|--------------|
-| macOS | 14 (Sonoma) | Apple Silicon (M1/M2/M3/M4) |
+| macOS | 15 (Sequoia) — set by `LSMinimumSystemVersion` in `resources/Info.plist.in` | Apple Silicon |
 | Windows | 11 | x64 |
-| Linux | Debian Trixie / Ubuntu 24.04+ | ARM64 (Raspberry Pi 4/5) |
+| Linux | Raspberry Pi OS / Debian Trixie | ARM64 (Raspberry Pi 4/5) |
 | Linux | Any distribution with Flatpak | x86_64 |
 
 ## Features
 
-- **TLS/PSK Encrypted Connection** — Secure connection via TLS v1.2 with Pre-Shared Key on port 9204
-- **Dual VFO Display** — Frequency, mode, S-meter, and tuning rate indicator for VFO A and B
-- **GPU-Accelerated Spectrum** — Real-time panadapter with waterfall via Qt RHI (Metal/DirectX/Vulkan)
-- **Mini-Pan Widget** — Compact spectrum view in VFO area with mode-dependent bandwidth
-- **Dual-Channel Audio** — Opus-encoded stereo with independent MAIN/SUB volume controls
-- **Radio Controls** — Full control panel with mode-dependent controls, TX functions, and feature popups
-- **Band Selection** — Quick band switching via popup menu
-- **KPOD / KPOD+ Support** — USB integration with Elecraft KPOD tuning knob and KPOD+ CW keyer
-- **KPA1500 Support** — Optional integration with Elecraft KPA1500 amplifier
-- **CAT Server** — Built-in CAT server (port 9299) for integration with third-party logging and contest software
-- **Self-Contained Releases** — macOS DMG, Windows ZIP, Raspberry Pi tarball, and Linux Flatpak include all dependencies
+- **TLS/PSK encrypted connection** — TLS 1.2 or later with a pre-shared key on port 9204. PSK needs Qt's OpenSSL TLS backend; the packages ship it. Port 9205 is the unencrypted connection.
+- **Dual VFO display** — frequency, mode, S-meter and tuning rate for VFO A and B
+- **GPU spectrum** — panadapter and waterfall drawn with Qt RHI: Metal on macOS, Direct3D 11 on Windows, OpenGL on Linux
+- **Mini-pan** — compact spectrum view in each VFO area
+- **Band-plan strip** — IARU region 1/2/3 segments across the top of the panadapter
+- **Dual-channel audio** — MAIN and SUB receiver audio (Opus or uncompressed, chosen per radio), with separate volume and balance
+- **Radio controls** — side panels, feature popups, band and mode selection, K4 menu access
+- **Text decode** — windows for the K4's own decoder output (CW, AFSK, FSK, PSK, DATA, SSB), one per receiver
+- **Macros** — CAT command macros on the Fn and PF keys, KPOD buttons, keyboard F1–F12, and a startup macro run on connect
+- **HaliKey CW keyer** — paddles or straight key through a HaliKey (serial V1.4 or MIDI), keyed by QK4's built-in iambic keyer with a local sidetone
+- **KPOD / KPOD+** — Elecraft KPOD tuning knob and the KPOD+ CW keyer over USB
+- **KPA1500** — control and status for the Elecraft KPA1500 amplifier
+- **CAT server** — native K4 CAT on TCP port 9299 (default) for WSJT-X, loggers and contest software
+- **TCI server** — TCI 2.0 over WebSocket on port 50001 (default), with RX/TX audio for digital-mode programs
+- **DX cluster** — one or more telnet cluster connections, with spots shown on the panadapter
+- **Self-contained releases** — macOS DMG, Windows ZIP, Raspberry Pi tarball and Linux Flatpak include all dependencies
 
 ## Download
 
@@ -71,69 +76,91 @@ and PipeWire tuning from [@jmeloranta](https://github.com/jmeloranta)'s Arch AUR
 
 ### Raspberry Pi Prerequisites
 
-- Raspberry Pi 4 or 5 with a desktop environment (X11 or Wayland)
-- Debian Trixie or Ubuntu 24.04+
-- **First run requires `sudo`** — the launcher (`run.sh`) installs a udev rule to grant non-root access to the Elecraft KPOD and KPOD+ USB devices. Without this rule, the Linux kernel restricts access to `/dev/hidraw*` and USB device nodes. After the first run, `sudo` is no longer needed. If you don't have a KPOD or KPOD+, `sudo` is not required.
+- Raspberry Pi 4 or 5 with a desktop session. QK4 runs on the X11 (xcb) platform plugin; under Wayland it runs through XWayland.
+- Raspberry Pi OS or Debian based on Trixie. The tarball is built in a Debian Trixie container and needs Trixie's libraries.
+- **First run asks for `sudo`.** The launcher (`run.sh`) installs a udev rule that gives non-root access to the KPOD and KPOD+ USB devices. Without it, the kernel restricts `/dev/hidraw*` and the USB device nodes. If you decline, QK4 still starts, but a KPOD or KPOD+ will not work. Once the rule is installed, `run.sh` no longer asks.
 
 ## Building from Source
 
+Qt 6.7 or later is required. The panadapter uses `QRhiWidget`, which first shipped in Qt 6.7.
+Ubuntu 24.04's packaged Qt is 6.4 and cannot build QK4. On Ubuntu 24.04, install Qt from the
+[Qt Online Installer](https://www.qt.io/download-qt-installer) or
+[aqtinstall](https://github.com/miurahr/aqtinstall), or build the Flatpak below.
+Debian Trixie's packaged Qt is new enough.
+
+CI builds the release packages with Qt 6.10 on macOS, Windows and Flatpak, and with Debian Trixie's
+packaged Qt on the Raspberry Pi.
+
 ### Requirements
 
-| Dependency | macOS (Homebrew) | Windows (vcpkg + Qt Installer) | Linux / Raspberry Pi (apt) |
-|------------|------------------|-------------------------------|---------------------------|
-| C++ compiler | Xcode Command Line Tools | Visual Studio 2019+ Build Tools | `apt install g++` |
-| CMake | `brew install cmake` | Included with VS Build Tools | `apt install cmake` |
-| Qt 6.7+ | `brew install qt` | [Qt Online Installer](https://www.qt.io/download-qt-installer) or [aqtinstall](https://github.com/miurahr/aqtinstall) | `apt install qt6-base-dev qt6-base-private-dev` |
-| Qt modules | Included with Homebrew Qt | Multimedia, ShaderTools, SerialPort, Svg | `apt install qt6-multimedia-dev qt6-shadertools-dev qt6-serialport-dev qt6-svg-dev` |
-| libopus | `brew install opus` | `vcpkg install opus:x64-windows` | `apt install libopus-dev` |
-| OpenSSL 3 | `brew install openssl@3` | `vcpkg install openssl:x64-windows` | `apt install libssl-dev` |
-| HIDAPI | `brew install hidapi` | `vcpkg install hidapi:x64-windows` | `apt install libhidapi-dev` |
-| libusb 1.0 | `brew install libusb` | `vcpkg install libusb:x64-windows` | `apt install libusb-1.0-0-dev` |
-| Audio | Included with macOS | N/A | `apt install libasound2-dev libpulse-dev` |
+| Dependency | macOS | Windows (vcpkg + Qt Installer) | Debian Trixie / Raspberry Pi (apt) |
+|------------|-------|-------------------------------|-----------------------------------|
+| C++ compiler | Xcode Command Line Tools | Visual Studio 2019+ Build Tools | `g++` |
+| CMake | `brew install cmake` | Included with VS Build Tools | `cmake` |
+| Qt 6.7+ | [Qt Online Installer](https://www.qt.io/download-qt-installer) | [Qt Online Installer](https://www.qt.io/download-qt-installer) or [aqtinstall](https://github.com/miurahr/aqtinstall) | `qt6-base-dev qt6-base-private-dev` |
+| Qt modules | Multimedia, Shader Tools, Serial Port, Svg (select in the installer) | Multimedia, Shader Tools, Serial Port, Svg | `qt6-multimedia-dev qt6-shadertools-dev qt6-serialport-dev qt6-svg-dev` |
+| libopus | `brew install opus` | from `vcpkg.json` | `libopus-dev` |
+| OpenSSL 3 | `brew install openssl@3` | from `vcpkg.json` | `libssl-dev` |
+| HIDAPI | `brew install hidapi` | from `vcpkg.json` | `libhidapi-dev` |
+| libusb 1.0 | `brew install libusb` | from `vcpkg.json` | `libusb-1.0-0-dev` |
+| udev, pkg-config | — | — | `libudev-dev pkg-config` |
+| Audio / MIDI | Included with macOS | Included with Windows | `libasound2-dev libpulse-dev` |
 
 ### macOS
 
-```bash
-# Install dependencies
-brew install qt opus openssl@3 hidapi libusb cmake
+Use Qt from the Qt Online Installer, not Homebrew's `qt`. A local build against Homebrew Qt cannot
+load Qt's OpenSSL TLS backend. It falls back to Secure Transport, which has no PSK cipher suites, so
+the encrypted connection on port 9204 fails. `CMakeLists.txt` looks for opus, hidapi and libusb
+under `/opt/homebrew/opt/`, so the build expects Homebrew on Apple Silicon.
 
-# Clone and build
+```bash
+# Install the non-Qt dependencies
+brew install cmake opus openssl@3 hidapi libusb
+
+# Check which Qt version the installer put in ~/Qt
+ls ~/Qt
+
+# Clone and build (replace 6.10.1 with your Qt version)
 git clone https://github.com/mikeg-dal/QK4.git
 cd QK4
-cmake -B build -DCMAKE_PREFIX_PATH="$(brew --prefix qt)"
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$HOME/Qt/6.10.1/macos"
 cmake --build build
 
 # Run
 ./build/QK4.app/Contents/MacOS/QK4
 
-# Create distributable app bundle (optional)
+# Create a self-contained app bundle (optional)
 cmake --build build --target deploy
 ```
 
 ### Windows
 
+The vcpkg toolchain file runs vcpkg in manifest mode. It installs opus, hidapi, OpenSSL and
+libusb from `vcpkg.json` during configure, so no separate `vcpkg install` is needed.
+Run these commands from an "x64 Native Tools Command Prompt for VS", so Ninja finds the compiler.
+
 ```powershell
-# Install vcpkg dependencies
-vcpkg install opus:x64-windows hidapi:x64-windows openssl:x64-windows libusb:x64-windows
+# Install Qt 6.7+ via the Qt Online Installer or aqtinstall
+# Required modules: Multimedia, Shader Tools, Serial Port, Svg
 
-# Install Qt 6.7+ via Qt Online Installer or aqtinstall
-# Required modules: Multimedia, ShaderTools, SerialPort, Svg
-
-# Clone and build
+# Clone and build (add -DCMAKE_PREFIX_PATH=<Qt>\msvc2022_64 if CMake does not find Qt)
 git clone https://github.com/mikeg-dal/QK4.git
 cd QK4
-cmake -B build -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
-cmake --build build --config Release
+cmake -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake -DCMAKE_BUILD_TYPE=Release
+cmake --build build
 
 # Run
-.\build\Release\QK4.exe
+.\build\QK4.exe
+
+# Copy the Qt DLLs and plugins next to the executable (optional)
+cmake --build build --target deploy
 ```
 
-### Linux / Raspberry Pi
+### Debian Trixie / Raspberry Pi
 
 ```bash
-# Install dependencies (Debian Trixie / Ubuntu 24.04+)
-sudo apt install cmake g++ pkg-config file patchelf \
+# Install dependencies
+sudo apt install cmake g++ pkg-config \
   qt6-base-dev qt6-base-private-dev \
   qt6-multimedia-dev qt6-shadertools-dev qt6-serialport-dev qt6-svg-dev \
   libopus-dev libhidapi-dev libusb-1.0-0-dev libssl-dev libudev-dev \
@@ -148,6 +175,9 @@ cmake --build build -j$(nproc)
 # Run
 ./build/QK4
 ```
+
+On another distribution, use these steps if its packaged Qt is 6.7 or later. Otherwise install Qt
+with the Qt Online Installer and pass `-DCMAKE_PREFIX_PATH=$HOME/Qt/<version>/gcc_64`.
 
 ### Linux x86_64 (Flatpak)
 
@@ -174,58 +204,63 @@ overrides both to pin the released commit and stamp the real version.
 
 ## Testing
 
-QK4 includes a unit test suite built with the Qt Test framework. Tests run automatically in CI on every push and PR.
+The unit tests use the Qt Test framework. CI runs them on every push and pull request.
 
 ```bash
-# Run all tests
+# Build every test target, then run them all
+cmake --build build --target qk4_tests
 ctest --test-dir build --output-on-failure
 
-# Build and run only tests (no GUI dependencies needed)
-cmake --build build --target test_radiostate test_radioutils test_protocol test_catserver
-ctest --test-dir build --output-on-failure
+# Configure the tests alone. From Qt this needs only qtbase; the non-Qt libraries above are still needed
+cmake -B build-tests -DQK4_TESTS_ONLY=ON
+cmake --build build-tests --target qk4_tests
+ctest --test-dir build-tests --output-on-failure
 ```
 
-| Suite | Tests | Coverage |
-|-------|-------|----------|
-| **RadioState** | 34 | CAT command parsing: frequency, mode, power, filters, notch, lock, split, edge cases |
-| **RadioUtils** | 28 | Shared utilities: tuning steps, band detection, span stepping |
-| **Protocol** | 14 | K4 binary packet framing, routing, roundtrip, overflow recovery |
-| **CatServer** | 26 | TCP CAT server: GET responses, SET forwarding, PTT, multi-command |
+`ctest --test-dir build -N` lists the suites. `tests/CMakeLists.txt` defines them.
 
 ## Usage
 
-1. Launch QK4
-2. Click the **globe icon** on the left side panel to open the Radio Manager
-3. Enter your K4's IP address
-4. **For encrypted connection**: Check "Use TLS", enter your PSK, port auto-sets to 9204
-5. **For unencrypted connection**: Leave TLS unchecked, port defaults to 9205
-6. Click **Connect**
+1. Launch QK4.
+2. Click the **globe icon** on the left side panel to open the **Server Manager**.
+3. Click **Add**, then enter a name and your K4's host name or IP address. **Scan** finds K4s on the local network.
+4. **Encrypted connection:** check **Use TLS (Encrypted)** and enter the radio's PSK as the password. The port changes to 9204.
+5. **Unencrypted connection:** leave TLS unchecked. The port is 9205.
+6. Click **Connect**. **Save** keeps the entry in the list for next time.
 
-Once connected, the application displays real-time spectrum, audio, and radio state from your K4.
+Application settings are under **Tools → Settings…** (on macOS, **QK4 → Settings…**), which opens the **Options** dialog.
 
 ## Architecture
 
 ```
-Radio (TCP:9204 TLS / 9205 unencrypted) → TcpClient → Protocol → RadioState / DSP Widgets
-                                                               ↓
-                                                        OpusDecoder → AudioEngine → Speaker
-Microphone → AudioEngine → OpusEncoder → Protocol → TcpClient → Radio
+K4 (TCP 9204 TLS/PSK or 9205) → TcpClient + Protocol (I/O thread) → RadioState → controllers → UI widgets
+UI widgets → controllers → ConnectionController → TcpClient → K4
+
+RX audio: Protocol → OpusDecoder (I/O thread) → AudioEngine (audio thread) → speaker
+TX audio: microphone → AudioEngine (encode + packetize, audio thread) → TcpClient → K4
+Spectrum: Protocol → SpectrumController → PanadapterRhiWidget / MiniPanRhiWidget (GPU)
 ```
+
+The thread map and the controller list are in `CLAUDE.md` and `docs/controllers.md`.
 
 ## Project Structure
 
 ```
 src/
-├── main.cpp              # Application entry point
-├── mainwindow.cpp        # Main window and UI orchestration
-├── network/              # TCP client and K4 protocol handling
-├── audio/                # Opus codec and Qt audio engine
-├── dsp/                  # Panadapter and spectrum widgets
-├── models/               # Radio state model
-├── settings/             # QSettings persistence
-├── ui/                   # UI components (VFO, S-meter, controls)
-└── hardware/             # KPOD, KPOD+, HaliKey USB device support
+├── main.cpp              # Entry point: settings migration, TLS backend, fonts
+├── mainwindow.cpp        # Main window and cross-controller wiring
+├── controllers/          # One controller per I/O owner or UI slice
+├── network/              # K4 link, CAT server, TCI server, DX cluster, KPA1500, discovery
+├── audio/                # Audio engine, Opus codecs, resampling, sidetone
+├── dsp/                  # GPU panadapter, waterfall and mini-pan
+├── models/               # RadioState and the K4 menu model
+├── settings/             # Persisted settings (RadioSettings)
+├── utils/                # Shared helpers (RadioUtils, window fit, macro ids)
+├── ui/                   # Widgets, popups, overlays, dialogs, Options pages, styling
+└── hardware/             # KPOD, KPOD+, HaliKey and the CW keyer
 ```
+
+Each directory has a `README.md` describing its files.
 
 ## License
 
