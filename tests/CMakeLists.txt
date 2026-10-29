@@ -352,6 +352,17 @@ target_include_directories(test_menumodel PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_menumodel Qt6::Core Qt6::Test)
 add_test(NAME MenuModelTests COMMAND test_menumodel)
 
+# Menu overlay across disconnect/reconnect (#124) — the overlay against a real MenuModel, offscreen.
+add_executable(test_menuoverlay test_menuoverlay.cpp
+    ${CMAKE_SOURCE_DIR}/src/models/menumodel.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/overlays/menuoverlay.cpp
+    ${CMAKE_SOURCE_DIR}/src/utils/wheelaccumulator.cpp
+)
+target_include_directories(test_menuoverlay PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_menuoverlay Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
+add_test(NAME MenuOverlayTests COMMAND test_menuoverlay)
+set_tests_properties(MenuOverlayTests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 # NetworkMetrics sparkline history + jitter tests
 add_executable(test_networkmetrics test_networkmetrics.cpp
     ${CMAKE_SOURCE_DIR}/src/network/networkmetrics.cpp

@@ -2,6 +2,7 @@
 #include <QSet>
 #include <QUrl>
 #include <algorithm>
+#include <utility>
 
 MenuModel::MenuModel(QObject *parent) : QObject(parent) {}
 
@@ -45,77 +46,26 @@ void MenuModel::addSyntheticDisplayFpsItem(int currentValue) {
     addMenuItem(item);
 }
 
-MenuItem *MenuModel::getMenuItem(int menuId) {
-    if (m_items.contains(menuId)) {
-        return &m_items[menuId];
-    }
-    return nullptr;
-}
-
 const MenuItem *MenuModel::getMenuItem(int menuId) const {
-    auto it = m_items.find(menuId);
-    if (it != m_items.end()) {
-        return &it.value();
-    }
-    return nullptr;
+    auto it = m_items.constFind(menuId);
+    return it != m_items.constEnd() ? &it.value() : nullptr;
 }
 
-MenuItem *MenuModel::getMenuItemByName(const QString &name) {
-    for (auto it = m_items.begin(); it != m_items.end(); ++it) {
-        if (it.value().name == name) {
-            return &it.value();
+QList<int> MenuModel::itemIds(const QString &nameFilter) const {
+    QList<const MenuItem *> matches;
+    for (const MenuItem &item : m_items) {
+        if (nameFilter.isEmpty() || item.name.contains(nameFilter, Qt::CaseInsensitive)) {
+            matches.append(&item);
         }
     }
-    return nullptr;
-}
-
-const MenuItem *MenuModel::getMenuItemByName(const QString &name) const {
-    for (auto it = m_items.constBegin(); it != m_items.constEnd(); ++it) {
-        if (it.value().name == name) {
-            return &it.value();
-        }
+    std::sort(matches.begin(), matches.end(),
+              [](const MenuItem *a, const MenuItem *b) { return a->name.compare(b->name, Qt::CaseInsensitive) < 0; });
+    QList<int> ids;
+    ids.reserve(matches.size());
+    for (const MenuItem *item : std::as_const(matches)) {
+        ids.append(item->id);
     }
-    return nullptr;
-}
-
-QVector<MenuItem *> MenuModel::getAllItems() {
-    QVector<MenuItem *> result;
-    for (auto it = m_items.begin(); it != m_items.end(); ++it) {
-        result.append(&it.value());
-    }
-    // Sort alphabetically by name
-    std::sort(result.begin(), result.end(),
-              [](MenuItem *a, MenuItem *b) { return a->name.toLower() < b->name.toLower(); });
-    return result;
-}
-
-QVector<MenuItem *> MenuModel::getItemsByCategory(const QString &category) {
-    QVector<MenuItem *> result;
-    for (auto it = m_items.begin(); it != m_items.end(); ++it) {
-        if (it.value().category == category) {
-            result.append(&it.value());
-        }
-    }
-    // Sort alphabetically by name
-    std::sort(result.begin(), result.end(),
-              [](MenuItem *a, MenuItem *b) { return a->name.toLower() < b->name.toLower(); });
-    return result;
-}
-
-QVector<MenuItem *> MenuModel::filterByName(const QString &pattern) {
-    if (pattern.isEmpty()) {
-        return getAllItems();
-    }
-    QVector<MenuItem *> result;
-    for (auto it = m_items.begin(); it != m_items.end(); ++it) {
-        if (it.value().name.contains(pattern, Qt::CaseInsensitive)) {
-            result.append(&it.value());
-        }
-    }
-    // Sort alphabetically by name
-    std::sort(result.begin(), result.end(),
-              [](MenuItem *a, MenuItem *b) { return a->name.toLower() < b->name.toLower(); });
-    return result;
+    return ids;
 }
 
 QStringList MenuModel::getCategories() const {
@@ -130,10 +80,6 @@ QStringList MenuModel::getCategories() const {
 
 void MenuModel::clear() {
     m_items.clear();
-    // WHY this has to be announced: getMenuItem/getAllItems/filterByName hand out raw MenuItem *
-    // into m_items, and the menu overlay keeps one per row for the lifetime of the overlay. A
-    // silent clear left those rows pointing at freed memory, and the next ME update after a
-    // reconnect dereferenced them.
     emit modelCleared();
 }
 

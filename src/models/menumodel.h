@@ -4,7 +4,7 @@
 #include <QObject>
 #include <QString>
 #include <QStringList>
-#include <QVector>
+#include <QList>
 #include <QMap>
 
 // Single menu item from MEDF response
@@ -72,14 +72,13 @@ public:
     void addSyntheticDisplayFpsItem(int currentValue);
     void updateValue(int menuId, int value);
 
-    // Access menu items
-    MenuItem *getMenuItem(int menuId);
+    // For reading at the call site only. The item belongs to the model and dies with clear(), so
+    // anything that outlives the call keeps the id and looks the item up again.
     const MenuItem *getMenuItem(int menuId) const;
-    MenuItem *getMenuItemByName(const QString &name);
-    const MenuItem *getMenuItemByName(const QString &name) const;
-    QVector<MenuItem *> getAllItems();
-    QVector<MenuItem *> getItemsByCategory(const QString &category);
-    QVector<MenuItem *> filterByName(const QString &pattern);
+
+    // Ids of every item whose name contains nameFilter (case-insensitive; empty matches all),
+    // ordered by name for display.
+    QList<int> itemIds(const QString &nameFilter = QString()) const;
     QStringList getCategories() const;
 
     int count() const { return m_items.size(); }
@@ -101,9 +100,8 @@ signals:
     void menuItemAdded(int menuId);
     void menuValueChanged(int menuId, int newValue);
 
-    // Every MenuItem this model handed out is about to be destroyed. Anything holding a
-    // MenuItem * — the menu overlay's row widgets do — must drop it on this signal, because the
-    // pointers dangle the moment clear() returns.
+    // Every item is gone (disconnect). Views built from the item ids drop them; the radio resends
+    // the menu as menuItemAdded on the next connect.
     void modelCleared();
 
 private:

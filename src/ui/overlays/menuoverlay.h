@@ -10,6 +10,7 @@
 #include <QPushButton>
 #include <QLineEdit>
 #include <QList>
+#include <QTimer>
 #include <QWheelEvent>
 #include "models/menumodel.h"
 #include "utils/wheelaccumulator.h"
@@ -22,14 +23,15 @@ class MenuItemWidget : public QWidget {
     Q_OBJECT
 
 public:
-    // model is used to resolve "<n>" placeholders in item->name (XVTR Band rows).
-    explicit MenuItemWidget(MenuItem *item, const MenuModel *model, QWidget *parent = nullptr);
+    // WHY: the row keeps the id, never a MenuItem *. The model owns its items and clears them on
+    // every disconnect; a row holding a pointer outlived them and crashed on reconnect (#124).
+    explicit MenuItemWidget(int menuId, const MenuModel *model, QWidget *parent = nullptr);
 
     void setSelected(bool selected);
     void setEditMode(bool editing);
     bool isSelected() const { return m_selected; }
     bool isEditing() const { return m_editing; }
-    MenuItem *menuItem() const { return m_item; }
+    int menuId() const { return m_menuId; }
     void updateDisplay();
 
 signals:
@@ -42,7 +44,7 @@ protected:
 private:
     void updateLabelColors();
 
-    MenuItem *m_item;
+    int m_menuId;
     const MenuModel *m_model;
     QLabel *m_nameLabel;
     QLabel *m_valueLabel;
@@ -84,17 +86,18 @@ private slots:
     void closeOverlay();
     void resetToDefault();
     void onMenuValueChanged(int menuId, int newValue);
+    void onMenuItemAdded();
+    void onModelCleared();
     void toggleSearchPopup();
     void onSearchTextChanged(const QString &text);
 
 private:
     void setupUi();
     void applyWheelSteps(int steps);
-    MenuItem *selectedMenuItem() const; // nullptr when nothing is selected
+    const MenuItem *selectedMenuItem() const; // nullptr when nothing is selected
     void createSearchPopup();
     void populateItems();
-    // Destroy the row widgets and forget the selection. Called before repopulating, and when the
-    // model clears — each row holds a MenuItem * that the clear has just invalidated.
+    void repopulateKeepingSelection();
     void clearItemWidgets();
     void updateSelection();
     void ensureSelectedVisible();
@@ -125,6 +128,8 @@ private:
     QLineEdit *m_searchInput;
     QString m_currentFilter;
     WheelAccumulator m_wheelAccumulator;
+
+    QTimer *m_repopulateTimer;
 };
 
 #endif // MENUOVERLAY_H

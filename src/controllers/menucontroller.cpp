@@ -82,7 +82,7 @@ void MenuController::setDisplayFps(int fps) {
 void MenuController::onMenuValueChangeRequested(int menuId, const QString &action) {
     // Synthetic Display FPS — doesn't use ME command, uses #FPS.
     if (menuId == MenuModel::SYNTHETIC_DISPLAY_FPS_ID) {
-        MenuItem *item = m_menuModel->getMenuItem(menuId);
+        const MenuItem *item = m_menuModel->getMenuItem(menuId);
         if (!item)
             return;
 
@@ -110,7 +110,7 @@ void MenuController::onMenuValueChangeRequested(int menuId, const QString &actio
     qCDebug(lcUiMenu) << "Menu value change:" << cmd;
 
     // Optimistic local update.
-    MenuItem *item = m_menuModel->getMenuItem(menuId);
+    const MenuItem *item = m_menuModel->getMenuItem(menuId);
     if (item) {
         int newValue = item->currentValue;
         if (action == "+") {

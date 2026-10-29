@@ -7,8 +7,8 @@
 
 // ============== MenuItemWidget ==============
 
-MenuItemWidget::MenuItemWidget(MenuItem *item, const MenuModel *model, QWidget *parent)
-    : QWidget(parent), m_item(item), m_model(model) {
+MenuItemWidget::MenuItemWidget(int menuId, const MenuModel *model, QWidget *parent)
+    : QWidget(parent), m_menuId(menuId), m_model(model) {
     setFixedHeight(K4Styles::Dimensions::MenuItemHeight);
     setCursor(Qt::PointingHandCursor);
 
@@ -16,24 +16,18 @@ MenuItemWidget::MenuItemWidget(MenuItem *item, const MenuModel *model, QWidget *
     layout->setContentsMargins(15, 5, 15, 5);
     layout->setSpacing(10);
 
-    // Name label — resolved through the model so "<n>" placeholders in XVTR Band
-    // rows render with the current XVTR Band # Select value.
-    m_nameLabel = new QLabel(m_model ? m_model->resolvedName(*item) : item->name, this);
+    m_nameLabel = new QLabel(this);
     m_nameLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
                                    .arg(K4Styles::Colors::TextSecondary)
                                    .arg(K4Styles::Dimensions::FontSizeHeading)); // Initial unselected state
     layout->addWidget(m_nameLabel, 1);
 
-    // Lock icon (for read-only items)
     m_lockLabel = new QLabel(this);
-    if (item->isReadOnly()) {
-        m_lockLabel->setText("\xF0\x9F\x94\x92"); // Lock emoji
-    }
     m_lockLabel->setFixedWidth(K4Styles::Dimensions::SmallIconSize);
     layout->addWidget(m_lockLabel);
 
     // Value label
-    m_valueLabel = new QLabel(item->displayValue(), this);
+    m_valueLabel = new QLabel(this);
     m_valueLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
                                     .arg(K4Styles::Colors::TextSecondary)
                                     .arg(K4Styles::Dimensions::FontSizeHeading)); // Initial unselected state
@@ -42,6 +36,7 @@ MenuItemWidget::MenuItemWidget(MenuItem *item, const MenuModel *model, QWidget *
     layout->addWidget(m_valueLabel);
 
     setLayout(layout);
+    updateDisplay();
 }
 
 void MenuItemWidget::setSelected(bool selected) {
@@ -89,10 +84,14 @@ void MenuItemWidget::setEditMode(bool editing) {
 }
 
 void MenuItemWidget::updateDisplay() {
-    m_valueLabel->setText(m_item->displayValue());
-    if (m_model) {
-        m_nameLabel->setText(m_model->resolvedName(*m_item));
+    const MenuItem *item = m_model->getMenuItem(m_menuId);
+    if (!item) {
+        return;
     }
+    // Resolved so "<n>" in the XVTR Band rows shows the current XVTR Band # Select value.
+    m_nameLabel->setText(m_model->resolvedName(*item));
+    m_lockLabel->setText(item->isReadOnly() ? QString::fromUtf8("\xF0\x9F\x94\x92") : QString()); // Lock emoji
+    m_valueLabel->setText(item->displayValue());
 }
 
 void MenuItemWidget::paintEvent(QPaintEvent *event) {
@@ -144,13 +143,16 @@ MenuOverlayWidget::MenuOverlayWidget(MenuModel *model, QWidget *parent) : QWidge
 
     setupUi();
 
-    connect(m_model, &MenuModel::menuValueChanged, this, &MenuOverlayWidget::onMenuValueChanged);
+    // WHY: the radio sends its menu as one MEDF line per item, so an open overlay rebuilds once
+    // per burst rather than once per item. A zero interval runs after the pending events.
+    m_repopulateTimer = new QTimer(this);
+    m_repopulateTimer->setSingleShot(true);
+    m_repopulateTimer->setInterval(0);
+    connect(m_repopulateTimer, &QTimer::timeout, this, &MenuOverlayWidget::repopulateKeepingSelection);
 
-    // The row widgets hold raw MenuItem * into the model's map. On disconnect MenuController
-    // clears that map, so they have to go with it — otherwise the next ME update after a
-    // reconnect walks m_itemWidgets and dereferences freed memory. Reopening the menu
-    // repopulates from the new items.
-    connect(m_model, &MenuModel::modelCleared, this, &MenuOverlayWidget::clearItemWidgets);
+    connect(m_model, &MenuModel::menuValueChanged, this, &MenuOverlayWidget::onMenuValueChanged);
+    connect(m_model, &MenuModel::menuItemAdded, this, &MenuOverlayWidget::onMenuItemAdded);
+    connect(m_model, &MenuModel::modelCleared, this, &MenuOverlayWidget::onModelCleared);
 }
 
 void MenuOverlayWidget::setupUi() {
@@ -354,11 +356,9 @@ void MenuOverlayWidget::clearItemWidgets() {
 void MenuOverlayWidget::populateItems() {
     clearItemWidgets();
 
-    // Add menu items (filtered if search is active)
-    QVector<MenuItem *> items =
-        m_currentFilter.isEmpty() ? m_model->getAllItems() : m_model->filterByName(m_currentFilter);
-    for (MenuItem *item : items) {
-        MenuItemWidget *widget = new MenuItemWidget(item, m_model, m_listContainer);
+    const QList<int> ids = m_model->itemIds(m_currentFilter);
+    for (const int id : ids) {
+        MenuItemWidget *widget = new MenuItemWidget(id, m_model, m_listContainer);
         connect(widget, &MenuItemWidget::clicked, this, [this, widget]() {
             int index = m_itemWidgets.indexOf(widget);
             if (index >= 0) {
@@ -389,7 +389,40 @@ void MenuOverlayWidget::populateItems() {
     m_scrollArea->verticalScrollBar()->setValue(0);
 }
 
+void MenuOverlayWidget::repopulateKeepingSelection() {
+    const MenuItem *selected = selectedMenuItem();
+    const int selectedId = selected ? selected->id : 0;
+    const bool hadSelection = selected != nullptr;
+    populateItems();
+    if (!hadSelection) {
+        return;
+    }
+    for (int i = 0; i < m_itemWidgets.size(); ++i) {
+        if (m_itemWidgets[i]->menuId() == selectedId) {
+            m_selectedIndex = i;
+            updateSelection();
+            updateNormButton();
+            ensureSelectedVisible();
+            return;
+        }
+    }
+}
+
+void MenuOverlayWidget::onMenuItemAdded() {
+    if (isVisible()) {
+        m_repopulateTimer->start();
+    }
+}
+
+void MenuOverlayWidget::onModelCleared() {
+    m_repopulateTimer->stop();
+    clearItemWidgets();
+    updateButtonLabels();
+    updateNormButton();
+}
+
 void MenuOverlayWidget::show() {
+    m_repopulateTimer->stop();
     populateItems();
     QWidget::show();
     setFocus();
@@ -446,11 +479,11 @@ void MenuOverlayWidget::keyPressEvent(QKeyEvent *event) {
         break;
     case Qt::Key_Plus:
     case Qt::Key_Equal:
-        if (MenuItem *item = selectedMenuItem())
+        if (const MenuItem *item = selectedMenuItem())
             emit menuValueChangeRequested(item->id, "+");
         break;
     case Qt::Key_Minus:
-        if (MenuItem *item = selectedMenuItem())
+        if (const MenuItem *item = selectedMenuItem())
             emit menuValueChangeRequested(item->id, "-");
         break;
     default:
@@ -492,16 +525,16 @@ void MenuOverlayWidget::applyWheelSteps(int steps) {
     }
 }
 
-MenuItem *MenuOverlayWidget::selectedMenuItem() const {
+const MenuItem *MenuOverlayWidget::selectedMenuItem() const {
     if (m_selectedIndex < 0 || m_selectedIndex >= m_itemWidgets.size())
         return nullptr;
-    return m_itemWidgets[m_selectedIndex]->menuItem();
+    return m_model->getMenuItem(m_itemWidgets[m_selectedIndex]->menuId());
 }
 
 void MenuOverlayWidget::navigateUp() {
     if (m_editMode) {
         // In edit mode, up increments value
-        if (MenuItem *item = selectedMenuItem())
+        if (const MenuItem *item = selectedMenuItem())
             emit menuValueChangeRequested(item->id, "+");
     } else {
         // In browse mode, up moves selection
@@ -517,7 +550,7 @@ void MenuOverlayWidget::navigateUp() {
 void MenuOverlayWidget::navigateDown() {
     if (m_editMode) {
         // In edit mode, down decrements value
-        if (MenuItem *item = selectedMenuItem())
+        if (const MenuItem *item = selectedMenuItem())
             emit menuValueChangeRequested(item->id, "-");
     } else {
         // In browse mode, down moves selection
@@ -531,7 +564,7 @@ void MenuOverlayWidget::navigateDown() {
 }
 
 void MenuOverlayWidget::selectCurrent() {
-    MenuItem *item = selectedMenuItem();
+    const MenuItem *item = selectedMenuItem();
     if (!item)
         return;
     if (item->isReadOnly()) {
@@ -556,20 +589,19 @@ void MenuOverlayWidget::closeOverlay() {
 }
 
 void MenuOverlayWidget::resetToDefault() {
-    MenuItem *item = selectedMenuItem();
+    const MenuItem *item = selectedMenuItem();
     if (!item)
         return;
     if (item->isReadOnly()) {
         return;
     }
 
-    // Set value to default
-    int defaultVal = item->defaultValue;
-    QString cmd = QString("%1").arg(defaultVal, 4, 10, QChar('0'));
-    emit menuValueChangeRequested(item->id, cmd);
+    const int id = item->id;
+    const int defaultVal = item->defaultValue;
+    emit menuValueChangeRequested(id, QString("%1").arg(defaultVal, 4, 10, QChar('0')));
 
     // Also update local model immediately
-    m_model->updateValue(item->id, defaultVal);
+    m_model->updateValue(id, defaultVal);
 }
 
 void MenuOverlayWidget::updateSelection() {
@@ -629,7 +661,7 @@ void MenuOverlayWidget::updateNormButton() {
                                 .arg(K4Styles::Dimensions::FontSizeCaption)
                                 .arg(K4Styles::Colors::White);
 
-    MenuItem *item = selectedMenuItem();
+    const MenuItem *item = selectedMenuItem();
     if (!item) {
         m_normBtn->setStyleSheet(normBtnDisabled);
         return;
@@ -649,20 +681,11 @@ void MenuOverlayWidget::updateNormButton() {
 
 void MenuOverlayWidget::onMenuValueChanged(int menuId, int newValue) {
     Q_UNUSED(newValue);
-    // Find and update the widget for this menu item
+    // XVTR Band # Select renames every "<n>" row, so it refreshes them all.
+    const bool everyRow = menuId == MenuModel::XVTR_BAND_SELECT_ID;
     for (auto *widget : m_itemWidgets) {
-        if (widget->menuItem()->id == menuId) {
+        if (everyRow || widget->menuId() == menuId) {
             widget->updateDisplay();
-            break;
-        }
-    }
-    // XVTR Band # Select changes the substitution for every "<n>" row — refresh
-    // those widgets so their resolved name picks up the new band number.
-    if (menuId == MenuModel::XVTR_BAND_SELECT_ID) {
-        for (auto *widget : m_itemWidgets) {
-            if (widget->menuItem()->name.contains(QStringLiteral("<n>"))) {
-                widget->updateDisplay();
-            }
         }
     }
     updateNormButton();
