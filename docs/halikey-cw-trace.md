@@ -25,7 +25,12 @@ forwarded, so a KPOD+ session can be A/B'd against a HaliKey session.
 
 ## Enabling the trace
 
-macOS / Linux:
+Easiest, on any platform: Options → Diagnostics → **Write a log file**, check **CW keying**, and under
+Bench diagnostics **CAT traffic** (for the `TX@` lines). Key, then **Open Log Folder** and take
+`qk4.log`. Every line carries a millisecond timestamp and the thread (`[Keyer]`, `[HaliKey]`,
+`[Sidetone]`). The same from a terminal, with the rules below, is `--log-file --log-rules "<rules>"`.
+
+Or with the environment, to the console. macOS / Linux:
 
 ```bash
 QT_LOGGING_RULES="qk4.cw.halikey.debug=true;qk4.cw.midi.debug=true;qk4.cat.tx.debug=true;qk4.audio.sidetone.debug=true" \
@@ -50,7 +55,8 @@ what the `QT_LOGGING_RULES` in the examples above do.
 
 > **Windows logging gotcha.** Qt's default handler writes to stderr only if it thinks a console is
 > attached. Redirected to a file, `GetConsoleMode` fails and Qt routes everything to
-> `OutputDebugString` — the log stays empty. `QT_FORCE_STDERR_LOGGING=1` fixes that.
+> `OutputDebugString` — the log stays empty. `QT_FORCE_STDERR_LOGGING=1` fixes that, or use the log
+> file above, which does not depend on a console.
 
 ## Reading the wire
 

@@ -10,7 +10,7 @@ QK4 source tree. Qt 6 C++ desktop app for remote control of an Elecraft K4 ham r
 | `controllers/` | One controller per I/O owner or UI slice: signal wiring + CAT dispatch. `ls src/controllers/*.h \| wc -l` gives the count. See `docs/controllers.md` for the symptom → controller map. |
 | `dsp/` | GPU-accelerated spectrum + waterfall (Qt RHI). Shader pipelines. |
 | `hardware/` | USB / serial / MIDI device wrappers (KPOD, KPOD+, HaliKey variants, iambic keyer). |
-| `logging/` | Logging: every category (`qk4.*`), and later the log file, rules and paths. Qt Core only. |
+| `logging/` | Logging: every category (`qk4.*`), the asynchronous log file, rules from the Diagnostics page, per-platform log folder. Qt Core only. |
 | `models/` | `RadioState` façade + plain-struct subsystems (`ls src/models/radiostate/*.h`), `MenuModel`, `TransmitOwner`. |
 | `network/` | TCP/TLS/PSK transport, K4 binary protocol, CAT server, TCI 2.0 server over WebSocket, DX cluster, KPA1500 client, K4 discovery by UDP broadcast. |
 | `settings/` | `RadioSettings`: `QSettings`-backed persistence for radio profiles, DX clusters, audio, CAT/TCI, hardware and interface-scale preferences. |
@@ -18,7 +18,7 @@ QK4 source tree. Qt 6 C++ desktop app for remote control of an Elecraft K4 ham r
 | `utils/` | Shared helpers: frequency/band/span math, window fit, wheel accumulation, macro ids. Architecture Rule 1 lives here. |
 
 Top-level:
-- `main.cpp` — Qt app bootstrap: settings identity migration (AI5QK → KF5O), High-DPI rounding policy and interface scale, OpenSSL TLS backend, message filter, fonts.
+- `main.cpp` — Qt app bootstrap: settings identity migration (AI5QK → KF5O), High-DPI rounding policy and interface scale, OpenSSL TLS backend, the log handler and `--log-*` options (`logging/`), fonts.
 - `mainwindow.cpp` / `mainwindow.h` — top-level window, layout construction, controller coordination.
 
 ## Architecture rules

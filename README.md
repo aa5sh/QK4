@@ -230,6 +230,25 @@ ctest --test-dir build-tests --output-on-failure
 
 Application settings are under **Tools → Settings…** (on macOS, **QK4 → Settings…**), which opens the **Options** dialog.
 
+## Reporting a Bug: Log Files
+
+QK4 can write a log file that shows what it was doing when something went wrong. It is off until you turn it on:
+
+1. Open **Options → Diagnostics** and check **Write a log file**. It applies at once; no restart.
+2. Reproduce the problem. If a developer asked for more detail, check the subsystem they named (for example **CW keying**), or set **Level** to **Everything**. **Bench diagnostics** (every CAT command, audio frames) are very verbose and switch themselves off when QK4 restarts.
+3. Click **Open Log Folder** and attach `qk4.log` to the issue. If QK4 crashed or was restarted since, attach `qk4.1.log` as well: every launch starts a new `qk4.log` and moves the previous one to `qk4.1.log`. Five files of up to 10 MB each are kept.
+
+| Platform | Log folder |
+|---|---|
+| macOS | `~/Library/Logs/QK4` (also listed in Console.app under Log Reports) |
+| Windows | `%LOCALAPPDATA%\QK4\Logs` (paste it into the Explorer address bar) |
+| Linux, Raspberry Pi | `~/.local/state/QK4/logs` (or `$XDG_STATE_HOME/QK4/logs`) |
+| Linux Flatpak | `~/.var/app/io.github.mikeg_dal.QK4/.local/state/QK4/logs` |
+
+A log contains connection attempts with your radio's address, audio device names and, with bench diagnostics on, the CAT commands sent to the radio. It never contains your radio password or PSK.
+
+From the command line, `--log-file` writes a log for that launch only, `--log-rules "qk4.cw.*.debug=true"` adds Qt logging rules, and `--log-stderr` keeps printing to the terminal while a file is written. `QT_LOGGING_RULES` works as Qt documents it and overrides the Diagnostics page. Category names are listed in [`src/logging/README.md`](src/logging/README.md).
+
 ## Architecture
 
 ```
