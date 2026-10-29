@@ -67,6 +67,8 @@ constexpr qreal kAxisLeftMargin = 4.0;
 constexpr qreal kAxisTickGap = 3.0;
 constexpr qreal kAxisTickLength = 4.0;
 constexpr qreal kHaloPx = 1.0;
+// Clear space between neighbouring frequency-scale labels.
+constexpr qreal kLabelGapPx = 12.0;
 
 } // namespace
 
@@ -200,19 +202,21 @@ protected:
         qint64 dialStart = startFreq - cwOffset;
         qint64 dialEnd = dialStart + m_spanHz;
 
-        int interval = m_labelInterval;
+        // First round dial frequency on a multiple of `step` at or after the left edge.
+        const auto firstOnStep = [dialStart](qint64 step) {
+            qint64 first = (dialStart / step) * step;
+            return first < dialStart ? first + step : first;
+        };
 
-        // Find first label at a round dial frequency boundary
-        qint64 firstDialLabel = (dialStart / interval) * interval;
-        if (firstDialLabel < dialStart)
-            firstDialLabel += interval;
+        // One step for the whole scale, wide enough for the widest label in view, so labels stay on
+        // grid lines and evenly spaced.
+        qreal widestLabel = 0.0;
+        for (qint64 f = firstOnStep(m_labelInterval); f <= dialEnd; f += m_labelInterval)
+            widestLabel = std::max(widestLabel, fm.horizontalAdvance(formatFrequency(f)));
+        const qint64 interval =
+            SpectrumGeometry::frequencyLabelStepHz(m_labelInterval, m_spanHz, w, widestLabel, kLabelGapPx);
+        const qint64 firstDialLabel = firstOnStep(interval);
 
-        // Measure sample label width for spacing check
-        const qreal labelWidth = fm.horizontalAdvance(formatFrequency(firstDialLabel));
-        const qreal minSpacing = labelWidth + 12; // Minimum gap between labels
-
-        // Draw labels at each interval (round dial frequencies)
-        qreal lastDrawnX = -1000; // Track last drawn position for overlap prevention
         for (qint64 dialFreq = firstDialLabel; dialFreq <= dialEnd; dialFreq += interval) {
             // Position using RF coordinate system (add CW offset back)
             qint64 rfFreq = dialFreq + cwOffset;
@@ -226,14 +230,11 @@ protected:
             // Center text horizontally on the frequency position, on a whole pixel
             const qreal textX = std::round(x - textWidth / 2.0);
 
-            // Skip if too close to previous label or clipped at edges (the halo needs 1 px too)
+            // Skip a label the widget edge would cut (the halo needs 1 px too)
             if (textX < 2 + kHaloPx || textX + textWidth > w - 2 - kHaloPx)
-                continue;
-            if (textX < lastDrawnX + minSpacing)
                 continue;
 
             K4Styles::drawHaloText(painter, QPointF(textX, baselineY), label, Qt::white);
-            lastDrawnX = textX + textWidth;
         }
     }
 

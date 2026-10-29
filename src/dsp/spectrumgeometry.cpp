@@ -87,4 +87,19 @@ int usableBinCount(qsizetype payloadSize, int binsOffset, int binCount, int maxB
     return binCount;
 }
 
+int frequencyLabelStepHz(int gridIntervalHz, int spanHz, double widthPx, double widestLabelPx, double gapPx) {
+    if (gridIntervalHz <= 0 || spanHz <= 0 || widthPx <= 0.0)
+        return gridIntervalHz;
+    const double pxPerHz = widthPx / static_cast<double>(spanHz);
+    const double neededPx = widestLabelPx + gapPx;
+    static constexpr int kMultipliers[] = {1, 2, 5};
+    for (qint64 decade = 1;; decade *= 10) {
+        for (int m : kMultipliers) {
+            const qint64 step = static_cast<qint64>(gridIntervalHz) * m * decade;
+            if (static_cast<double>(step) * pxPerHz >= neededPx || step >= spanHz)
+                return static_cast<int>(step);
+        }
+    }
+}
+
 } // namespace SpectrumGeometry

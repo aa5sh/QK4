@@ -27,6 +27,9 @@ private slots:
     void binCountWiderThanTheTextureIsRejected();
     void binsPastThePayloadAreRejected();
     void degenerateFramesAreRejected();
+
+    void frequencyLabelsTakeOneEvenStep();
+    void frequencyLabelStepIsTheSmallestThatFits();
 };
 
 void TestSpectrumGeometry::modeParsesRadioStateSpelling() {
@@ -146,6 +149,51 @@ void TestSpectrumGeometry::degenerateFramesAreRejected() {
     QCOMPARE(usableBinCount(1040, 16, 0, 4096), 0);
     QCOMPARE(usableBinCount(1040, 16, -5, 4096), 0);
     QCOMPARE(usableBinCount(1040, -1, 1024, 4096), 0);
+}
+
+void TestSpectrumGeometry::frequencyLabelsTakeOneEvenStep() {
+    // The reported case: a 10 kHz span across ~1580 px with a 1 kHz grid and 4-decimal labels about
+    // 70 px wide. Labels were dropped one by one where the wider "-0.00x0" collided, leaving
+    // -0.004, -0.002, 0.000, 0.001, 0.002 ... One step now serves the whole scale.
+    const int step = frequencyLabelStepHz(1000, 10000, 1580.0, 70.0, 12.0);
+    QCOMPARE(step, 1000);
+    // Narrow pane: the step widens to the next round multiple of the grid, still one step.
+    QCOMPARE(frequencyLabelStepHz(1000, 10000, 600.0, 70.0, 12.0), 2000);
+    QCOMPARE(frequencyLabelStepHz(1000, 10000, 300.0, 70.0, 12.0), 5000);
+}
+
+void TestSpectrumGeometry::frequencyLabelStepIsTheSmallestThatFits() {
+    static constexpr int kGrids[] = {100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000};
+    for (int grid : kGrids) {
+        for (int span : {1000, 2000, 5000, 10000, 27000, 50000, 100000, 200000, 368000, 1000000}) {
+            if (grid > span)
+                continue;
+            for (double width : {200.0, 400.0, 800.0, 1200.0, 1600.0, 2400.0}) {
+                for (double widest : {30.0, 50.0, 70.0, 90.0}) {
+                    const double needed = widest + 12.0;
+                    const int step = frequencyLabelStepHz(grid, span, width, widest, 12.0);
+                    QVERIFY2(step % grid == 0, "step must stay on the grid");
+                    int m = step / grid;
+                    while (m % 10 == 0)
+                        m /= 10;
+                    QVERIFY2(m == 1 || m == 2 || m == 5, "step must be grid x 1, 2 or 5 x 10^n");
+                    const double pitch = static_cast<double>(step) * width / span;
+                    if (step < span)
+                        QVERIFY2(pitch >= needed, qPrintable(QString("grid %1 span %2 width %3: %4 px < %5")
+                                                                 .arg(grid)
+                                                                 .arg(span)
+                                                                 .arg(width)
+                                                                 .arg(pitch)
+                                                                 .arg(needed)));
+                    if (step > grid) {
+                        // The next finer step on the 1-2-5 series would not have fitted.
+                        const int finer = (m == 2 ? step / 2 : m == 5 ? step * 2 / 5 : step / 2);
+                        QVERIFY(static_cast<double>(finer) * width / span < needed);
+                    }
+                }
+            }
+        }
+    }
 }
 
 QTEST_APPLESS_MAIN(TestSpectrumGeometry)

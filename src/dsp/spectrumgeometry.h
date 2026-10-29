@@ -46,6 +46,12 @@ Passband passbandFor(Mode mode, DataSubMode subMode, qint64 tunedFreqHz, int ban
 // read straight off the wire, so it is validated here rather than assumed to be 1024.
 int usableBinCount(qsizetype payloadSize, int binsOffset, int binCount, int maxBins);
 
+// Step between frequency-scale labels: the smallest of gridIntervalHz x {1, 2, 5, 10, 20, 50, ...}
+// whose on-screen spacing leaves room for the widest label plus gapPx. One step for the whole scale
+// keeps labels on grid lines and evenly spaced; dropping labels one by one where they collided left
+// uneven gaps. Returns gridIntervalHz for degenerate input.
+int frequencyLabelStepHz(int gridIntervalHz, int spanHz, double widthPx, double widestLabelPx, double gapPx);
+
 } // namespace SpectrumGeometry
 
 #endif // SPECTRUMGEOMETRY_H
