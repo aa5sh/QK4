@@ -24,6 +24,10 @@ class PanadapterRhiWidget : public QRhiWidget {
     Q_OBJECT
 
 public:
+    // Width of the dBm / S-unit label column on the left of the spectrum. Overlays that draw text
+    // over the spectrum (DX spots) keep out of it.
+    static constexpr int kAmplitudeAxisWidthPx = 70;
+
     explicit PanadapterRhiWidget(QWidget *parent = nullptr);
     ~PanadapterRhiWidget();
 

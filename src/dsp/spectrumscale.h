@@ -42,13 +42,22 @@ struct Label {
     QString text; // "S9", "S9+20", "-110 dBm"
 };
 
+// Minimum distance between neighbouring labels, in lines of text.
+//
+// WHY: 2.5 and not 1 — one line only stops labels overlapping, which on a ~300 px chart at SCALE 80
+// still printed a label every 5 dB — sixteen of them, touching, and colliding with DX spot calls.
+// 2.5 lines leaves a clear gap of at least a line and a half, so the axis is read at a glance.
+constexpr float kLabelPitchLines = 2.5f;
+
 // Labels for the visible window, in descending dBm (top of the chart first).
 //
 // A value is emitted only when its true dBm falls inside [minDb, maxDb] — never clamped into
 // range, which is what printed S1 twice. Spacing is decimated so that neighbouring labels stay at
-// least labelHeightPx apart: availablePx is the chart height the labels are drawn across, and
-// labelHeightPx the height of one line of text.
-QVector<Label> labelsFor(float minDb, float maxDb, bool useSUnits, int availablePx, int labelHeightPx);
+// least kLabelPitchLines * lineSpacingPx apart: availablePx is the chart height the labels are
+// drawn across and lineSpacingPx one line of the label font (QFontMetricsF::lineSpacing()), both
+// in logical pixels, so the step follows SCALE, the waterfall split, the window height and the
+// font size automatically.
+QVector<Label> labelsFor(float minDb, float maxDb, bool useSUnits, int availablePx, float lineSpacingPx);
 
 } // namespace SpectrumScale
 

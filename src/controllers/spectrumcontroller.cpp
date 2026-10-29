@@ -372,6 +372,7 @@ void SpectrumController::createPanOverlays(PanUi &ui, const QString &buttonStyle
 
     // DX Spot overlay (transparent child widget for callsign labels)
     ui.spotOverlay = new DxSpotOverlay(ui.pad);
+    ui.spotOverlay->setLeftReservedPx(PanadapterRhiWidget::kAmplitudeAxisWidthPx);
     ui.spotOverlay->show();
 
     layoutPanOverlays(ui, ui.pad->size());

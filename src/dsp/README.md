@@ -36,6 +36,13 @@ S-units follow the amateur convention — S9 = -73 dBm, 6 dB per unit, round dec
 are drawn at their true dBm positions rather than at even divisions of the widget. Labels outside
 the window are omitted, never clamped; clamping is what once printed S1 at two different heights.
 
+Label density follows the space available: neighbouring labels stay at least
+`SpectrumScale::kLabelPitchLines` (2.5) lines of the label font apart, measured with
+`QFontMetricsF::lineSpacing()` against the spectrum area's height after the waterfall split. SCALE,
+REF, the waterfall share, the window size and the font size all change the step (5, 10, 20 … dB)
+with no extra wiring. The tick sits after each label, and DX spot labels keep out of the column
+(`PanadapterRhiWidget::kAmplitudeAxisWidthPx`).
+
 With `qk4.pan.diag` enabled a `CALIB` line compares the radio's reported noise floor against our own
 minimum bin. A persistent gap means `K4_DBM_OFFSET` is wrong and every value on the scale is off by
 that amount.

@@ -27,6 +27,21 @@ void DxSpotOverlay::setFrequencyRange(qint64 centerFreq, int spanHz) {
     }
 }
 
+void DxSpotOverlay::setLeftReservedPx(int px) {
+    const int clamped = qMax(0, px);
+    if (m_leftReservedPx == clamped)
+        return;
+    m_leftReservedPx = clamped;
+    layoutLabels();
+    update();
+}
+
+int DxSpotOverlay::labelLeftFor(int xCenter, int textWidth) const {
+    const int maxLeft = qMax(0, width() - textWidth);
+    const int minLeft = qMin(m_leftReservedPx, maxLeft);
+    return qBound(minLeft, xCenter - textWidth / 2, maxLeft);
+}
+
 void DxSpotOverlay::setFontPixelSize(int px) {
     const int clamped = qBound(K4Styles::Dimensions::FontSizeSpotMin, px, K4Styles::Dimensions::FontSizeSpotMax);
     if (m_fontPixelSize == clamped)
@@ -105,17 +120,8 @@ void DxSpotOverlay::layoutLabels() {
             continue;
 
         int textWidth = fm.horizontalAdvance(spot->spottedCall);
-        int labelLeft = xInt - textWidth / 2;
+        int labelLeft = labelLeftFor(xInt, textWidth);
         int labelRight = labelLeft + textWidth;
-
-        // Clamp to widget bounds
-        if (labelLeft < 0) {
-            labelLeft = 0;
-            labelRight = textWidth;
-        } else if (labelRight > width()) {
-            labelRight = width();
-            labelLeft = labelRight - textWidth;
-        }
 
         // Find first available row (top-down)
         int assignedRow = -1;
@@ -161,7 +167,7 @@ void DxSpotOverlay::layoutLabels() {
         }
         int badgeRow = qMin(lastRow + 1, maxRows - 1);
         int tw = fm.horizontalAdvance(label.callsign);
-        int lx = label.xPixel - tw / 2;
+        int lx = labelLeftFor(label.xPixel, tw);
         label.row = badgeRow;
         int y = qBound(TOP_MARGIN, stackBase - (badgeRow + 1) * rh, height() - rh);
         label.rect = QRect(lx, y, tw, rh);

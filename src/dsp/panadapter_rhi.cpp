@@ -7,6 +7,7 @@
 #include "dashgeometry.h"
 #include "rhi_utils.h"
 #include "ui/styling/k4styles.h"
+#include <QFontMetrics>
 #include <QLoggingCategory>
 #include <QMouseEvent>
 #include <QPainter>
@@ -96,34 +97,40 @@ protected:
         painter.setFont(scaleFont);
         painter.setPen(Qt::white);
 
-        const int leftMargin = 4;
+        const qreal leftMargin = 4.0;
+        const qreal tickGap = 3.0;
+        const qreal tickLength = 4.0;
         const int h = height();
 
-        QFontMetrics fm(scaleFont);
-        const int textHeight = fm.height();
+        const QFontMetricsF fm(scaleFont, this);
+        const qreal textHeight = fm.height();
+        // Baseline offset that centres the digits (cap height) on the label's dBm line.
+        const qreal baselineOffset = fm.capHeight() / 2.0;
 
         // WHY labels are placed by value rather than by dividing the widget: S-units sit at fixed
         // dBm (S9 = -73, 6 dB apart), which does not divide the display range. Sampling even
         // divisions and naming whichever S-unit was nearest skipped some and, once clamped at the
         // ends, printed S1 at two different heights. SpectrumScale emits only values that genuinely
         // fall inside the window, already spaced far enough apart to read.
-        const auto labels = SpectrumScale::labelsFor(m_minDb, m_maxDb, m_useSUnits, h, textHeight);
+        const auto labels = SpectrumScale::labelsFor(m_minDb, m_maxDb, m_useSUnits, h, fm.lineSpacing());
 
         for (const auto &label : labels) {
             const float frac = SpectrumScale::normalizedForDb(label.dbm, m_minDb, m_maxDb);
-            const int yPos = static_cast<int>(std::lround((1.0f - frac) * h));
+            const qreal yPos = std::round((1.0 - frac) * h);
 
             // Skip labels that would fall under the band-plan strip.
             if (yPos < m_topReserved)
                 continue;
             // Keep the text fully on the widget at both ends.
-            if (yPos < textHeight / 2 || yPos > h - textHeight / 3)
+            if (yPos < textHeight / 2.0 || yPos > h - textHeight / 2.0)
                 continue;
 
+            painter.drawText(QPointF(leftMargin, yPos + baselineOffset), label.text);
             // A tick, because labels no longer coincide with the grid: the grid is a fixed-size
             // cell pattern and these sit at physical dBm values, so the two only align by accident.
-            painter.drawLine(0, yPos, 3, yPos);
-            painter.drawText(leftMargin, yPos + textHeight / 3, label.text);
+            // WHY: after the text, not before it — a tick in front of a minus sign read as "--".
+            const qreal tickX = leftMargin + fm.horizontalAdvance(label.text) + tickGap;
+            painter.drawLine(QPointF(tickX, yPos), QPointF(tickX + tickLength, yPos));
         }
     }
 
@@ -394,7 +401,7 @@ void PanadapterRhiWidget::updateDbmScaleOverlay() {
     const int spectrumHeight = static_cast<int>(h * m_spectrumRatio);
 
     // Overlay covers left side of spectrum area
-    m_dbmScaleOverlay->setGeometry(0, 0, 70, spectrumHeight);
+    m_dbmScaleOverlay->setGeometry(0, 0, kAmplitudeAxisWidthPx, spectrumHeight);
     m_dbmScaleOverlay->setDbRange(m_minDb, m_maxDb);
     m_dbmScaleOverlay->raise(); // Ensure it's on top
 }

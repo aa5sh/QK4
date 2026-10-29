@@ -1,5 +1,7 @@
 #include <QtTest>
 
+#include <algorithm>
+
 #include "dsp/spectrumscale.h"
 
 // Amplitude-axis arithmetic. The bug that prompted these tests — "S1" printed at two different
@@ -165,6 +167,107 @@ private slots:
     void anEmptyOrInvertedWindowYieldsNothing() {
         QVERIFY(SpectrumScale::labelsFor(-60.0f, -120.0f, true, 600, 14).isEmpty());
         QVERIFY(SpectrumScale::labelsFor(-60.0f, -60.0f, true, 600, 14).isEmpty());
+    }
+
+    // ---- readable spacing ----------------------------------------------------------------
+
+    void aShortPaneLabelsEveryTenDbNotEveryFive() {
+        // The reported case: a ~300 px spectrum area at SCALE 75 printed -55, -60 … -130 dBm,
+        // sixteen labels touching each other. Line spacing 11 px is the 9 px Inter label font.
+        const auto labels = SpectrumScale::labelsFor(-130.0f, -55.0f, false, 300, 11.0f);
+        QVERIFY(labels.size() >= 2);
+        QVERIFY(labels.size() <= 9);
+        QCOMPARE(labels[0].dbm - labels[1].dbm, 10.0f);
+
+        // Giving most of the pane to the waterfall leaves ~180 px: the step widens again.
+        const auto shorter = SpectrumScale::labelsFor(-130.0f, -55.0f, false, 180, 11.0f);
+        QVERIFY(shorter.size() >= 2);
+        QCOMPARE(shorter[0].dbm - shorter[1].dbm, 20.0f);
+    }
+
+    void everySettingKeepsLabelsAReadableDistanceApart() {
+        // REF and SCALE over the radio's whole range, every chart height from a near-hidden
+        // spectrum to a tall one, and label fonts from the smallest to a large interface scale.
+        static constexpr int kNiceSteps[] = {1, 2, 5, 10, 20, 25, 50, 100};
+        for (int ref = -200; ref <= 50; ref += 5) {
+            for (int scale = 10; scale <= 150; scale += 5) {
+                const float lo = static_cast<float>(ref);
+                const float hi = static_cast<float>(ref + scale);
+                for (int px : {60, 120, 180, 240, 300, 400, 600, 900, 1400}) {
+                    for (float line : {9.0f, 11.0f, 14.0f, 18.0f}) {
+                        const float minPitch = SpectrumScale::kLabelPitchLines * line - 0.5f;
+                        for (bool sUnits : {true, false}) {
+                            const auto labels = SpectrumScale::labelsFor(lo, hi, sUnits, px, line);
+                            for (int i = 1; i < labels.size(); ++i) {
+                                const float pitch = (labels[i - 1].dbm - labels[i].dbm) / (hi - lo) * px;
+                                QVERIFY2(pitch >= minPitch,
+                                         qPrintable(QString("%1/%2 %3 px apart (min %4) ref %5 scale %6 px %7 line %8")
+                                                        .arg(labels[i - 1].text, labels[i].text)
+                                                        .arg(pitch)
+                                                        .arg(minPitch)
+                                                        .arg(ref)
+                                                        .arg(scale)
+                                                        .arg(px)
+                                                        .arg(line)));
+                            }
+                            if (sUnits || labels.size() < 2)
+                                continue;
+                            const int step = static_cast<int>(labels[0].dbm - labels[1].dbm);
+                            QVERIFY2(std::find(std::begin(kNiceSteps), std::end(kNiceSteps), step) !=
+                                             std::end(kNiceSteps) ||
+                                         step % 100 == 0,
+                                     qPrintable(QString("step %1 dB is not a round value").arg(step)));
+                            for (const auto &l : labels)
+                                QCOMPARE(static_cast<int>(l.dbm) % step, 0);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    void theStepIsTheSmallestThatStaysReadable() {
+        // Not just "far enough apart": one notch finer would have been too close. Pins that the
+        // axis thins only as much as it must.
+        static constexpr int kNiceSteps[] = {1, 2, 5, 10, 20, 25, 50, 100};
+        for (int scale = 10; scale <= 150; scale += 5) {
+            for (int px : {120, 300, 600, 1400}) {
+                const float lo = -140.0f, hi = lo + static_cast<float>(scale);
+                const auto labels = SpectrumScale::labelsFor(lo, hi, false, px, 11.0f);
+                if (labels.size() < 2)
+                    continue;
+                const int step = static_cast<int>(labels[0].dbm - labels[1].dbm);
+                const auto it = std::find(std::begin(kNiceSteps), std::end(kNiceSteps), step);
+                if (it == std::end(kNiceSteps) || it == std::begin(kNiceSteps))
+                    continue;
+                const float finerPitch = static_cast<float>(*(it - 1)) / static_cast<float>(scale) * px;
+                QVERIFY2(finerPitch < SpectrumScale::kLabelPitchLines * 11.0f,
+                         qPrintable(QString("scale %1 px %2 chose %3 dB but %4 dB was already readable")
+                                        .arg(scale)
+                                        .arg(px)
+                                        .arg(step)
+                                        .arg(*(it - 1))));
+            }
+        }
+    }
+
+    void aTallerPaneNeverShowsFewerLabels() {
+        for (int scale = 10; scale <= 150; scale += 10) {
+            for (bool sUnits : {true, false}) {
+                int previous = 0;
+                for (int px = 60; px <= 1400; px += 20) {
+                    const int count =
+                        SpectrumScale::labelsFor(-140.0f, -140.0f + static_cast<float>(scale), sUnits, px, 11.0f)
+                            .size();
+                    QVERIFY2(count >= previous, qPrintable(QString("scale %1: %2 labels at %3 px after %4")
+                                                               .arg(scale)
+                                                               .arg(count)
+                                                               .arg(px)
+                                                               .arg(previous)));
+                    previous = count;
+                }
+            }
+        }
     }
 };
 

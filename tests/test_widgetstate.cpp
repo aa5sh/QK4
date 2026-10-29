@@ -5,6 +5,7 @@
 // behind the dialog's back. Rendered offscreen.
 
 #include "ui/dialogs/macrodialog.h"
+#include "ui/overlays/dxspotoverlay.h"
 #include "ui/popups/confirmpopup.h"
 #include "ui/popups/lineoutpopup.h"
 #include "ui/widgets/dualcontrolbutton.h"
@@ -212,6 +213,27 @@ private slots:
         QCOMPARE(QApplication::focusWidget(), labelEdit);
         QVERIFY(labelEdit->isVisible());
         QVERIFY(!commandEdit->isVisible());
+    }
+
+    void spotLabelsKeepOutOfTheAmplitudeAxisColumn() {
+        // A spot whose frequency falls under the dBm/S-unit labels used to be drawn on top of them.
+        // Its label now starts just right of the reserved column, and still tunes to the spot.
+        DxSpotOverlay overlay;
+        overlay.resize(400, 200);
+        overlay.setFrequencyRange(14'000'000, 10'000); // 14.000 MHz +/- 5 kHz across 400 px
+        overlay.setLeftReservedPx(70);
+        DxSpot spot;
+        spot.spottedCall = QStringLiteral("EA1EYL");
+        spot.frequencyHz = 13'995'500; // x = 20 px, inside the column
+        overlay.setSpots({spot});
+
+        QSignalSpy clicked(&overlay, &DxSpotOverlay::spotClicked);
+        const int rowY = 200 / 2 - 8; // inside row 0, which sits just above the midpoint
+        QTest::mouseClick(&overlay, Qt::LeftButton, {}, QPoint(20, rowY));
+        QCOMPARE(clicked.count(), 0);
+        QTest::mouseClick(&overlay, Qt::LeftButton, {}, QPoint(75, rowY));
+        QCOMPARE(clicked.count(), 1);
+        QCOMPARE(clicked.at(0).at(0).toLongLong(), 13'995'500LL);
     }
 };
 

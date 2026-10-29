@@ -593,6 +593,7 @@ add_executable(test_widgetstate
     ${CMAKE_SOURCE_DIR}/src/ui/popups/lineoutpopup.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/popups/fnpopupwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/dialogs/macrodialog.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/overlays/dxspotoverlay.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/styling/k4styles.cpp
     ${CMAKE_SOURCE_DIR}/src/utils/radioutils.cpp
     ${CMAKE_SOURCE_DIR}/src/utils/wheelaccumulator.cpp
