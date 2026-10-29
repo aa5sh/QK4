@@ -85,11 +85,12 @@ Items 1 and 2 fix what goes on air. Items 3 to 6 fix the feel and the monitoring
 
 **Kept exactly as is (KPOD+)**
 - `kpodplusdevice.*`, `kpodplususbworker.*`, the EP02 thread.
-- `cwcontroller.cpp:261-262` (EP02 → `TcpClient::sendCATBytes`), moved verbatim if the file is
-  restructured.
-- `ConnectionController::m_kpodPlusKeyerActive` and `HardwareController::kpodPlusOwnsCw` →
-  `CwController::setKpodPlusGate`. `PaddleKeyer` must refuse to key while the gate is set:
-  `releasePaddles()` when it closes, and drop events while it's set.
+- The `KpodPlusDevice::keyerDataReceived` → `TcpClient::sendCATBytes` connection in
+  `CwController`, moved verbatim.
+- The KPOD+ ownership gate → `CwController::setKpodPlusGate`, which raises the keyer's inhibit:
+  `PaddleKeyer` refuses to key while it is set. (`ConnectionController::m_kpodPlusKeyerActive`,
+  which the old HaliKey KZ lambdas read on the I/O thread, had no reader left after the port and
+  was removed 2026-10-29. The KPOD+ path never read it.)
 - The `keyerSpeedChanged` / `keyerPaddleChanged` / `cwPitchChanged` lambdas keep their
   `m_kpodPlus->set…` calls unchanged.
 - `test_kpodplususbworker` must stay green and untouched.

@@ -77,8 +77,7 @@ keyer, keeps every paddle edge in a time-stamped history. Each decision reads th
 when it was due* (`paddleTimestamps(asOf)`), and the memories are measured from when the previous
 element was *heard*. Iambic A keeps only the dit memory; Iambic B adds the dah memory, the
 squeeze-release memories and the Dit Memory Delay. The rules are pinned by Dale Farnsworth's 554
-recorded runs (`tests/test_paddlekeyersweeps.cpp`). The latch scheme this section used to
-describe went with `IambicKeyer`.
+recorded runs (`tests/test_paddlekeyersweeps.cpp`).
 
 See section 8 below for the KZ keying protocol that carries these elements to the K4.
 
