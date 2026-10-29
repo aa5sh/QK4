@@ -42,9 +42,14 @@ public:
     Q_INVOKABLE void setFrequency(int hz);
     Q_INVOKABLE void setVolume(float volume);
 
-    // Initialize/shutdown audio (called on sidetone thread via invokeMethod)
+    // start() promotes the sidetone thread; stop() closes the stream. Both on the sidetone thread
+    // via invokeMethod.
     Q_INVOKABLE void start();
     Q_INVOKABLE void stop();
+    // Open the output stream and run the pump only while CW keying can happen (CwGate). While it
+    // is closed nothing runs on this thread and the scheduler refuses sidetone, as it does with no
+    // output device.
+    Q_INVOKABLE void setStreamWanted(bool wanted);
     Q_INVOKABLE void setOutputDevice(const QString &deviceId);
 
     // The sidetone's own clock, as the scheduler sees it: the keyer clock while a stream is open,
@@ -70,6 +75,7 @@ private:
     QString m_activeOutputDeviceId;          // id of the device the sink was actually opened on
     QMediaDevices *m_mediaDevices = nullptr; // OS device/default-change monitor
     QAudioFormat m_format;
+    bool m_streamWanted = false; // sidetone thread only
 
     std::atomic<bool> m_streamActive{false};
     std::atomic<int> m_frequency{600};

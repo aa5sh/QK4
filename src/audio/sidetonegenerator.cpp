@@ -130,23 +130,35 @@ void SidetoneGenerator::closeAudio() {
     m_streamActive.store(false, std::memory_order_release);
     if (m_pumpTimer)
         m_pumpTimer->stop();
+    if (!m_audioSink)
+        return;
     m_pushDevice = nullptr;
-    if (m_audioSink) {
-        m_audioSink->stop();
-        delete m_audioSink;
-        m_audioSink = nullptr;
-    }
+    m_audioSink->stop();
+    delete m_audioSink;
+    m_audioSink = nullptr;
     m_scheduler.clear();
 }
 
 void SidetoneGenerator::start() {
     RtScheduling::promoteCurrentThread(RtScheduling::Class::RealTime, "Sidetone");
-    initAudio();
 }
 
 void SidetoneGenerator::stop() {
+    m_streamWanted = false;
     closeAudio();
     m_activeOutputDeviceId.clear();
+}
+
+void SidetoneGenerator::setStreamWanted(bool wanted) {
+    if (wanted == m_streamWanted)
+        return;
+    m_streamWanted = wanted;
+    if (wanted) {
+        initAudio();
+    } else {
+        closeAudio();
+        qCInfo(lcAudio) << "SidetoneGenerator: sidetone off until CW keying is possible again";
+    }
 }
 
 void SidetoneGenerator::onSystemDefaultOutputChanged() {

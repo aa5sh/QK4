@@ -5,6 +5,7 @@
 
 #include "audio/sidetonegenerator.h"
 #include "connectioncontroller.h"
+#include "hardware/cwgate.h"
 #include "hardware/halikeydevice.h"
 #include "hardware/keyerruntime.h"
 #include "hardware/kpodplusdevice.h"
@@ -129,7 +130,11 @@ CwController::CwController(RadioState *radioState, ConnectionController *connect
     });
 
     // A lost device releases the key: a held paddle's release would otherwise never arrive.
-    connect(m_halikey, &HalikeyDevice::disconnected, this, [this]() { m_keyer->releasePaddles(); });
+    connect(m_halikey, &HalikeyDevice::disconnected, this, [this]() {
+        m_keyer->releasePaddles();
+        updateInhibit(); // the sidetone stream closes with the last keying source
+    });
+    connect(m_halikey, &HalikeyDevice::connected, this, [this]() { updateInhibit(); });
 
     // =========================================================================
     // KPOD+ EP02 keyer data
@@ -190,9 +195,17 @@ void CwController::applyReversal() {
 
 void CwController::updateInhibit() {
     const auto mode = m_radioState->mode();
-    const bool inCw = mode == RadioState::CW || mode == RadioState::CW_R;
-    const bool inhibited = !m_radioReady || !inCw || m_kpodPlusGate;
-    m_keyer->setInhibited(inhibited);
+    CwGate::Inputs in;
+    in.radioReady = m_radioReady;
+    in.inCwMode = mode == RadioState::CW || mode == RadioState::CW_R;
+    in.kpodPlusOwnsCw = m_kpodPlusGate;
+    in.halikeyOpen = m_halikey->isConnected();
+    m_keyer->setInhibited(CwGate::keyerInhibited(in));
+    const bool wanted = CwGate::sidetoneStreamWanted(in);
+    if (wanted != m_sidetoneStreamWanted) {
+        m_sidetoneStreamWanted = wanted;
+        QMetaObject::invokeMethod(m_sidetone, "setStreamWanted", Qt::QueuedConnection, Q_ARG(bool, wanted));
+    }
 }
 
 void CwController::onPaddle(bool dah, bool asserted, double deltaTime) {

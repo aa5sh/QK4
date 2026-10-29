@@ -408,6 +408,12 @@ if(WIN32)
 endif()
 add_test(NAME RtSchedulingTests COMMAND test_rtscheduling)
 
+# CwGate: when the keyer may key and when the sidetone stream is open (#92 idle CPU).
+add_executable(test_cwgate test_cwgate.cpp)
+target_include_directories(test_cwgate PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_cwgate Qt6::Core Qt6::Test)
+add_test(NAME CwGateTests COMMAND test_cwgate)
+
 # CW by CAT: the TCI macro grammar (speed markers, prosign brackets, escaped separators) and the
 # KY/KS commands it becomes. One target because the interesting cases are at the seam, where TCI
 # and the K4 use the same characters for different things.

@@ -451,6 +451,7 @@ set(HEADERS
     src/hardware/halikeyportscan.h
     src/hardware/paddlekeyer.h
     src/hardware/keyertiming.h
+    src/hardware/cwgate.h
     src/hardware/keyerruntime.h
     src/hardware/seriallinepoller.h
 )
