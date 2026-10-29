@@ -21,9 +21,7 @@ RX and TX audio pipeline. Owned by `controllers/audiocontroller.cpp`.
 ## Threading
 
 - `AudioEngine` lives on `AudioController::m_audioThread` (`moveToThread` right after construction). Its feed and mic-poll timers are its children, so they move with it. The feed is a 5 ms `Qt::PreciseTimer` (the small sink depends on it); the mic poll is a 10 ms default timer. The feed writes by bytes free, not by tick count, so a late tick does not drop audio.
-- `OpusDecoder` is created on the main thread and keeps main-thread affinity, but it is only called from the lambda on `Protocol::audioDataReady`, whose context object is `Protocol`. That lambda runs on the I/O thread, so decoding is single-threaded on the I/O thread.
-- `OpusEncoder` is created by `AudioEngine`'s constructor with no parent, so it keeps main-thread affinity when `AudioEngine` moves. `AudioEngine` calls it directly on the audio thread. No signals are involved.
-- Both Opus wrappers are `QObject`s with no signals or slots, used off their affinity thread. Qt does not guarantee that calling a `QObject`'s functions from another thread works (Qt docs, "Threads and QObjects" → QObject Reentrancy). This is a known gap in the code, not a pattern to copy.
+- `OpusDecoder` and `OpusEncoder` are plain classes, not `QObject`s, so neither has a thread affinity to get wrong. The decoder is owned by the handler on `Protocol::audioDataReady` (context `Protocol`, so it runs on the I/O thread) and lives exactly as long as that connection; `~AudioController` disconnects it on the I/O thread, so no decode can be in flight afterwards. The encoder is a member of the TX pipeline, by value, used only on the thread that pipeline runs on.
 - `SidetoneGenerator` lives on `HardwareController::m_sidetoneThread` (`QThread::HighPriority`). Its pump timer is a `Qt::PreciseTimer`.
 
 ## RX path

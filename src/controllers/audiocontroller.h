@@ -2,6 +2,7 @@
 #define AUDIOCONTROLLER_H
 
 #include <QObject>
+#include <QPointer>
 #include <QThread>
 #include <QTimer>
 
@@ -9,7 +10,6 @@
 #include <mutex>
 
 class AudioEngine;
-class OpusDecoder;
 class ConnectionController;
 class RadioState;
 
@@ -20,8 +20,9 @@ class RadioState;
  *
  * Threading:
  *   - AudioEngine is moved to `m_audioThread` (single moveToThread at construction).
- *   - OpusDecoder keeps main-thread affinity but is only called from the IO-thread lambda
- *     wired to Protocol::audioDataReady — effectively single-threaded on the IO thread.
+ *   - OpusDecoder (a plain class) is owned by the RX decode handler connected to
+ *     Protocol::audioDataReady, which runs on the I/O thread, and lives exactly as long as that
+ *     connection. Nothing else can reach it.
  *   - The TX encode pipeline (OpusEncoder + packet framing) lives on AudioEngine and runs
  *     fully on the audio thread (PR 12). AudioController only forwards PTT toggles and SL
  *     tier changes; the audio thread emits txPacketReady straight to TcpClient::sendRaw.
@@ -132,16 +133,16 @@ private:
 
     AudioEngine *m_audioEngine;
     QThread *m_audioThread = nullptr;
-    OpusDecoder *m_opusDecoder;
 
     QTimer *m_metricsTimer = nullptr;
     // Counter values at the last RX playout log line, and ticks since it.
     quint32 m_loggedUnderruns = 0;
     quint32 m_loggedDrops = 0;
     int m_ticksSinceRxLog = 0;
-    // The RX decode handler. Its context is Protocol, not this, so Qt never drops it when this
-    // object is destroyed; the destructor has to.
+    // The RX decode handler, which owns the decoder. Its context is Protocol, not this, so Qt
+    // never drops it when this object is destroyed; the destructor has to, on the I/O thread.
     QMetaObject::Connection m_rxDecodeConnection;
+    QPointer<QObject> m_rxDecodeContext;
 
     // Orders the two ways the TX source is written. Every write takes the next generation; a
     // setTxSourceAfterPtt() switch still in the queue applies only if no write has happened since

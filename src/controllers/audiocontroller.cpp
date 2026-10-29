@@ -20,11 +20,7 @@ constexpr int kRxLogEveryTicks = 2000 / kMetricsSampleMs;
 
 AudioController::AudioController(ConnectionController *connController, RadioState *radioState, QObject *parent)
     : QObject(parent), m_connectionController(connController), m_radioState(radioState),
-      m_audioEngine(new AudioEngine(nullptr)), m_opusDecoder(new OpusDecoder(nullptr)) {
-    // Initialize Opus decoder (K4 sends 12kHz stereo: left=Main, right=Sub).
-    // The TX-side OpusEncoder is owned by AudioEngine and lives on the audio
-    // thread (PR 12); AudioController no longer touches it.
-    m_opusDecoder->initialize(12000, 2);
+      m_audioEngine(new AudioEngine(nullptr)) {
 
     // Load saved audio device settings BEFORE moveToThread (only stores strings/floats,
     // no Qt audio objects exist yet, so direct calls are safe)
@@ -46,27 +42,33 @@ AudioController::AudioController(ConnectionController *connController, RadioStat
     m_audioEngine->moveToThread(m_audioThread);
     m_audioThread->start();
 
-    // RX audio path: Protocol → decode → enqueue (runs entirely on I/O thread)
-    // m_opusDecoder is only called from this lambda → single-threaded on I/O thread
+    // RX audio path: Protocol → decode → enqueue, entirely on the I/O thread.
+    //
+    // WHY the decoder is captured by the handler rather than held here: it is used only on the I/O
+    // thread, so its lifetime belongs to the handler that runs there. Qt keeps a slot object alive
+    // for the duration of a call, so the decoder cannot be freed underneath a decode in progress;
+    // it goes when the connection does. (K4 sends 12 kHz stereo: left = Main, right = Sub.)
+    //
     // m_audioEngine->enqueueAudio() is the producer side of a single-producer ring: this lambda,
     // on the I/O thread, is its only caller.
+    auto decoder = std::make_shared<OpusDecoder>();
+    decoder->initialize(12000, 2);
     auto *protocol = m_connectionController->tcpClient()->protocol();
-    m_rxDecodeConnection = connect(protocol, &Protocol::audioDataReady, protocol, [this](const QByteArray &payload) {
-        QByteArray pcmData = m_opusDecoder->decodeK4Packet(payload);
-        if (!pcmData.isEmpty()) {
-            m_audioEngine->enqueueAudio(pcmData);
-            // Fan-out for TCI listeners. Deliberately after enqueueAudio so the speaker path is
-            // never delayed by a consumer, and deliberately not downstream of it so a listener does
-            // not inherit the jitter buffer's drop-oldest policy.
-            //
-            // NOT free when nobody is connected, which this comment used to claim. The signal is
-            // emitted for every received packet whatever the TCI server is doing, so a queued
-            // cross-thread event is posted to TciAudioBridge::onRxAudio, which then returns early.
-            // Small, but paid by everyone including people who never enable TCI. Connecting this in
-            // TciController::start and disconnecting it in stop would remove it.
-            emit rxAudioAvailable(pcmData);
-        }
-    });
+    m_rxDecodeContext = protocol;
+    m_rxDecodeConnection =
+        connect(protocol, &Protocol::audioDataReady, protocol, [this, decoder](const QByteArray &payload) {
+            QByteArray pcmData = decoder->decodeK4Packet(payload);
+            if (!pcmData.isEmpty()) {
+                m_audioEngine->enqueueAudio(pcmData);
+                // Fan-out for TCI listeners. Deliberately after enqueueAudio so the speaker path is
+                // never delayed by a consumer, and deliberately not downstream of it so a listener does
+                // not inherit the jitter buffer's drop-oldest policy.
+                //
+                // Posts a cross-thread event only while TciController has the fan-out connected (between
+                // its start and stop); with no receiver the emit is a no-op.
+                emit rxAudioAvailable(pcmData);
+            }
+        });
 
     // Audio buffer status → network health metrics
     connect(protocol, &Protocol::audioSequenceReceived, m_connectionController->networkMetrics(),
@@ -115,13 +117,23 @@ AudioController::AudioController(ConnectionController *connController, RadioStat
 }
 
 AudioController::~AudioController() {
-    // WHY first, ahead of deleting the decoder it uses: this handler runs on the I/O thread and
-    // lives as long as Protocol. On the normal quit path ConnectionController, and Protocol with
-    // it, is already gone and this is a no-op; it is what keeps an AudioController destroyed
-    // before the I/O link from leaving a handler bound to freed memory. It stops new calls only;
-    // it does not wait for a decode already running on the I/O thread.
-    disconnect(m_rxDecodeConnection);
-    delete m_opusDecoder;
+    // WHY first, and ON the I/O thread: the decode handler runs there and uses this object and the
+    // engine. On the normal quit path ConnectionController, and Protocol with it, is already gone,
+    // the handler went with it, and this is a no-op. If the I/O link outlives this controller, the
+    // disconnect is run as a blocking call on the I/O thread: that thread runs one event at a time,
+    // so once the call returns no decode is in flight and none can start. Safe from deadlock
+    // because the I/O thread never waits on the main thread (only main → I/O blocking calls
+    // exist). With the thread not running, nothing can be in flight and a plain disconnect does.
+    if (QObject *context = m_rxDecodeContext.data()) {
+        QThread *ioThread = context->thread();
+        if (ioThread && ioThread->isRunning() && ioThread != QThread::currentThread()) {
+            QMetaObject::invokeMethod(
+                context, [connection = m_rxDecodeConnection]() { QObject::disconnect(connection); },
+                Qt::BlockingQueuedConnection);
+        } else {
+            disconnect(m_rxDecodeConnection);
+        }
+    }
 
     if (m_audioThread) {
         QMetaObject::invokeMethod(m_audioEngine, "stop", Qt::BlockingQueuedConnection);

@@ -13,9 +13,8 @@
 #include <atomic>
 
 #include "audio/audioresampler.h"
+#include "audio/opusencoder.h"
 #include "audio/spscring.h"
-
-class OpusEncoder;
 
 /**
  * @brief Qt audio I/O + Opus pipeline for both RX (speaker) and TX (microphone) paths.
@@ -338,7 +337,7 @@ private:
 
     // TX encode pipeline state. Lives here (audio thread) instead of in
     // AudioController (main thread) so a busy GUI doesn't stall voice TX.
-    OpusEncoder *m_opusEncoder = nullptr; // Owned, deleted in destructor
+    OpusEncoder m_opusEncoder;            // by value: used only on the audio thread, no affinity of its own
     quint8 m_txSequence = 0;              // Audio-thread-only — no atomic needed
     std::atomic<int> m_encodeMode{3};     // EM3 (Opus float) default
     std::atomic<bool> m_pttActive{false}; // TX gate; read on every mic frame

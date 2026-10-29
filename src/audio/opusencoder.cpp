@@ -2,7 +2,7 @@
 #include "logging/logcategories.h"
 #include <QDebug>
 
-OpusEncoder::OpusEncoder(QObject *parent) : QObject(parent), m_encoder(nullptr), m_sampleRate(12000), m_channels(1) {}
+OpusEncoder::OpusEncoder() : m_encoder(nullptr), m_sampleRate(12000), m_channels(1) {}
 
 OpusEncoder::~OpusEncoder() {
     if (m_encoder) {

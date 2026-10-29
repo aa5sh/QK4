@@ -3,7 +3,6 @@
 #include "audio/micrate.h"              // what the operator is told when a rate is unusable
 #include "audio/audiodeviceselection.h" // which device a stream belongs on
 #include "logging/logcategories.h"
-#include "audio/opusencoder.h"
 #include "audio/rawaudioformat.h" // EM0/EM1 wire format
 #include "audio/rxoutputstage.h"  // RX boost + soft limiter
 #include "audio/rxplayout.h"      // RX sink size and jitter policy
@@ -15,14 +14,14 @@
 
 AudioEngine::AudioEngine(QObject *parent)
     : QObject(parent), m_audioSink(nullptr), m_audioSinkDevice(nullptr), m_audioSource(nullptr),
-      m_audioSourceDevice(nullptr), m_opusEncoder(new OpusEncoder(nullptr)), m_micPollTimer(nullptr) {
+      m_audioSourceDevice(nullptr), m_micPollTimer(nullptr) {
 
     // Opus encoder for TX. 12kHz mono — K4 expects mono frames (mono → stereo
     // duplication for EM0/EM1 happens inline below; Opus encoder handles its
     // own mono-to-stereo encoding internally for EM2/EM3). Initialized here so
     // the audio thread (where encode runs) has it ready before the first
     // setPttActive(true) call.
-    m_opusEncoder->initialize(12000, 1);
+    m_opusEncoder.initialize(12000, 1);
 
     // Output format: K4 uses 12kHz stereo Float32 PCM (L=Main RX, R=Sub RX)
     m_outputFormat.setSampleRate(12000);
@@ -83,8 +82,6 @@ AudioEngine::AudioEngine(QObject *parent)
 
 AudioEngine::~AudioEngine() {
     stop();
-    delete m_opusEncoder;
-    m_opusEncoder = nullptr;
 }
 
 bool AudioEngine::start() {
@@ -893,8 +890,7 @@ void AudioEngine::encodeAndSendFrame(const QByteArray &f32MonoFrame, int frameSa
     case 3: // EM3 — Opus float
     default:
         // Opus takes float natively, so these never quantise.
-        if (m_opusEncoder)
-            audioData = m_opusEncoder->encodeFloat(f32MonoFrame, frameSamples);
+        audioData = m_opusEncoder.encodeFloat(f32MonoFrame, frameSamples);
         break;
     }
 

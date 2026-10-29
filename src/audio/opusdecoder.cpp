@@ -2,7 +2,7 @@
 #include "logging/logcategories.h"
 #include <QDebug>
 
-OpusDecoder::OpusDecoder(QObject *parent) : QObject(parent), m_decoder(nullptr), m_sampleRate(12000), m_channels(2) {}
+OpusDecoder::OpusDecoder() : m_decoder(nullptr), m_sampleRate(12000), m_channels(2) {}
 
 OpusDecoder::~OpusDecoder() {
     if (m_decoder) {
@@ -49,8 +49,8 @@ QByteArray OpusDecoder::decodeK4Packet(const QByteArray &packet) {
 
     unsigned char encodeMode = static_cast<unsigned char>(packet[3]);
 
-    // Extract audio data starting at byte 7
-    QByteArray audioData = packet.mid(7);
+    // Audio data starts at byte 7. A view, not a copy: it is read once, within this call.
+    const QByteArray audioData = QByteArray::fromRawData(packet.constData() + 7, packet.size() - 7);
 
     if (audioData.isEmpty()) {
         return QByteArray();
