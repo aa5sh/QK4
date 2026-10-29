@@ -11,7 +11,7 @@ is in `docs/cw-keyer-port-plan.md`.
 |---|---|---|
 | `hw.halikey` | `src/hardware/halikeyv14worker.cpp` | `HaliKeyV14Worker: dit down after 312 ms` per line change; on Windows also `raw pins CTS:.. DCD:.. DSR:..` per modem-line transition |
 | `hw.midi` | `src/hardware/halikeymidiworker.cpp` | `HaliKeyMidiWorker: note 20 down`, `MoMIDI detected, version N`, port open and presence-poll lines |
-| `CAT.TX` | `src/network/tcpclient.cpp` | `TX@HH:mm:ss.zzz [ KZD0060; ]`, `[ KZU0060; ]` (KZ-prefixed CAT only), plus `ML0000;`/`ML0nnn;` if the monitor mute is on |
+| `CAT.TX` | `src/network/tcpclient.cpp` | `TX@HH:mm:ss.zzz [ KZD0060; ]`, `[ KZU0060; ]` for KZ-prefixed CAT only. Every command, KZ or not, also logs `sent: "…"`, so the monitor mute shows as `sent: "ML0000;"` / `sent: "ML0nnn;"`, never as a `TX@` line |
 | `qk4.audio.sidetone` | `src/audio/sidetonegenerator.cpp` | `tone on: delay … ms, lag … ms, block lead … ms, queued … ms, frame …/…` per tone onset |
 | `cw.keyer` | `src/controllers/cwcontroller.cpp` | the KPOD+ keyer gate only |
 
@@ -41,8 +41,13 @@ $env:QT_MESSAGE_PATTERN = "%{time process} %{category}: %{message}"
 .\build\Release\QK4.exe 2> qk4-cw-trace.log
 ```
 
-Category strings are case-sensitive: `CAT.TX`, not `cat.tx`. Disabled categories cost nothing on the
-hot path.
+Use the category names exactly as written: `CAT.TX`, not `cat.tx`.
+
+**Debug output is off by default.** Every QK4 category is declared with `QtInfoMsg` as its default
+severity (`Q_LOGGING_CATEGORY(name, "string", QtInfoMsg)`), so `qCDebug` lines are skipped, arguments
+and all, until a rule turns them on. That is what the `QT_LOGGING_RULES` in the examples above do.
+Category names are being moved to one `qk4.<area>.<detail>` scheme; check `src/logging/` for the
+current names if one of the names above no longer matches.
 
 > **Windows logging gotcha.** Qt's default handler writes to stderr only if it thinks a console is
 > attached. Redirected to a file, `GetConsoleMode` fails and Qt routes everything to
@@ -51,13 +56,13 @@ hot path.
 ## Reading the wire
 
 Each element is one pair: `KZDnnnn;` (the gap before key-down, in ms) then `KZUnnnn;` (how long it
-was down). The K4 replays those intervals behind its KZL key-down delay, so the `TX@` send times can
+was down). `docs/k4-protocol-quirks.md` §8 is the reference for these forms. The K4 replays those intervals behind its KZL key-down delay, so the `TX@` send times can
 jitter without changing anything on the air — read the numbers, not the timestamps.
 
 A clean `C` (dah dit dah dit) at 20 WPM, weight 1.00, sent from idle:
 
 ```
-TX@... [ KZD0000; ]    ← first element of a burst after idle: gap 0
+TX@... [ KZD0000; ]    ← first element of the first burst since start: gap 0 (see below)
 TX@... [ KZU0180; ]    ← dah
 TX@... [ KZD0060; ]    ← inter-element gap
 TX@... [ KZU0060; ]    ← dit
@@ -67,8 +72,9 @@ TX@... [ KZD0060; ]
 TX@... [ KZU0060; ]
 ```
 
-The first `KZD` of a burst carries the measured gap since the previous burst's last element
-(0 if more than 5 s), which is how the operator's character and word spacing reaches the air.
+The first `KZD` of a burst carries the measured gap since the previous burst's last element,
+which is how the operator's character and word spacing reaches the air. It is 0 only for the first
+burst since start, or when the gap is negative or over 5 s (`PaddleKeyer`, the first-element branch).
 Every later `KZD` in a burst is the nominal gap. Element and gap lengths follow the K4's KS speed and
 KP weight.
 
@@ -79,7 +85,8 @@ KP weight.
   decision rules — and the recorded runs that pin them — are in `tests/test_paddlekeyersweeps.cpp`;
   reproduce the edge sequence there before changing the keyer.
 - **Right on the wire, wrong on the air:** the K4's reproduction, not QK4. Check KZL is the value
-  you set on the CW Keyer page.
+  you set in Options → HaliKey → Remote Keying → Key-Down Delay. What KZL means:
+  `docs/k4-protocol-quirks.md` §8, the canonical description of the KZ wire forms.
 - **Sidetone delay or wobble:** `qk4.audio.sidetone` shows the delay the scheduler holds and the
   block lead per tone. A lead that moves from tone to tone is the sidetone clock, not the keyer.
 - **MIDI on Windows:** WinMM delivers MIDI input in bursts — a press and release 60 ms apart can

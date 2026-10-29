@@ -1,26 +1,41 @@
 # CW keyer port: K4-Companion's keyer into QK4
 
-**Status:** phase 1 code complete, **not yet bench-tested** (2026-10-27).
-- `99e4d6e`: keyer, sidetone scheduler and serial poller ported. Dale's 554 recorded runs replay
-  byte for byte.
-- Wired into the app: `PaddleKeyer` replaces `IambicKeyer` on the HaliKey path. V1.4 lines and raw
-  MIDI feed it; it sends `KZD`/`KZU`. `SidetoneGenerator` is now a paced push-mode output driven by
-  `SidetoneScheduler`, still on its own sink (phase 2 moves it into the RX output). **Bench
-  2026-10-27, Mac mini speakers, HaliKey MIDI: sidetone delay "perfect".** It got there in three
-  steps:
-  - Pull mode held ~100 ms. Qt on macOS asked for up to ~85 ms per read even with a 20 ms buffer,
-    and the scheduler rightly held the delay above that.
-  - Pushing with a fixed 8 ms queue ran dry every ~11 ms device period, which sounded awful.
-  - The queue now starts at 8 ms and rises one 4 ms block per dry-out. It settled at 12 ms and
-    stayed clean.
-  On-air (RF) keying is still to be confirmed by testers on the next release. The HaliKey page
-  has the keyer mode, input type, dit memory delay and monitor mute. Threaded test is clean under
-  ThreadSanitizer.
-- Serial path follows Dale's too: the V1.4 worker polls every 1 ms on every platform through
+> **Status (2026-10-29).** This began as the port plan (2026-10-27) and is now its design record.
+> Phase 1 has landed. Phase 2 (sidetone in the RX output) has not been started. Phase 3 (the
+> monitor-mute decision) is open. Sections written as plans say so; "What changes, file by file"
+> and "Decisions" record what was planned, and the notes in them say where the code differs.
+> Code comments in `cwcontroller.h`, `paddlekeyer.h`, `keyertiming.h`, `sidetonescheduler.h`,
+> `sidetonegenerator.h` and `tests/CMakeLists.txt` point here.
+
+**Phase 1 — landed.**
+- `99e4d6e` (2026-10-27): keyer, sidetone scheduler and serial poller ported. Dale's 554 recorded
+  runs replay byte for byte.
+- `32c6891` (2026-10-27): `PaddleKeyer` replaces `IambicKeyer` on the HaliKey path. V1.4 lines and
+  raw MIDI feed it; it sends `KZD`/`KZU`.
+- `742a276` (2026-10-27): the V1.4 worker polls every 1 ms on every platform through
   `SerialLinePoller` (rest state at open, 20 ms straight-key debounce, per-line deltas). This
-  replaced the per-platform loops, including Linux's `TIOCMIWAIT`. The Windows 1 ms high-resolution
-  timer, the DTR/RTS power and the native port handling are unchanged. Bench this on all three
-  OSes; it touches the hardware-verified Windows stuck-paddle fix's loop.
+  replaced the per-platform loops, including Linux's `TIOCMIWAIT`. The Windows 1 ms
+  high-resolution timer, the DTR/RTS power and the native port handling are unchanged. Why it
+  polls: [halikey-cw-trace.md](halikey-cw-trace.md), "Why V1.4 polls instead of waiting for line
+  events".
+- `72025df` (2026-10-27): sidetone delay cut from ~100 ms to ~12 ms. See "Sidetone" below.
+- `b54cf06` (2026-10-29): removed what the port left behind (`iambickeyer.*`, `halikey_edge.h`,
+  their tests, `ConnectionController::m_kpodPlusKeyerActive`).
+- `08abff6` (2026-10-29): CW docs brought up to date.
+
+**Bench.** 2026-10-27, Mac mini speakers, HaliKey MIDI: sidetone delay "perfect". 2026-10-29: the
+maintainer bench-verified HaliKey V1.4 (serial) and MIDI keying as working. On-air (RF) keying is
+still to be confirmed by testers on the next release. The threaded test is clean under
+ThreadSanitizer.
+
+**Phase 2 — not started.** `SidetoneGenerator` is still the live sidetone output, on its own sink
+and thread. Nothing in `AudioEngine` renders sidetone yet.
+
+**Phase 3 — open.** Waits on bench question 2.
+
+The HaliKey options page (Options → HaliKey) has the keyer mode, input type, dit memory delay,
+monitor mute and Key-Down Delay.
+
 **Source:** Dale Farnsworth's [K4-Companion](https://github.com/DaleFarnsworth/K4-Companion),
 commit `040f711` (v2.2), GPL-3.0, the same licence as QK4. Ported files carry an SPDX header and
 credit him.
@@ -29,7 +44,10 @@ credit him.
 
 ## Why his keying is more reliable
 
-| # | K4-Companion | QK4 today | Effect |
+The middle column is QK4 **before the port** (pre-`99e4d6e`). Its file:line citations point at
+code that has since been replaced.
+
+| # | K4-Companion | QK4 before the port | Effect |
 |---|---|---|---|
 | 1 | `KZD####` / `KZU####`: the timing travels in the command (gap before, length of) | `KZ.` / `KZ-` sent at element start, untimed (`cwcontroller.cpp:139-170`) | The K4 replays exact intervals, so network jitter and thread stalls can't change what goes on air |
 | 2 | Edges stamped at capture: MoMIDI's own clock, 1 ms serial poll. Decisions read the paddles **as of when they were due**, from a 64-entry history | MIDI time discarded (`halikeymidiworker.cpp:174`); decisions read the live lever when the timer fires | A 0.44 s host stall no longer turns S + T into V |
@@ -47,7 +65,8 @@ Items 1 and 2 fix what goes on air. Items 3 to 6 fix the feel and the monitoring
   often do. The clock source sits behind `SidetoneScheduler::StreamTimeFn` and the block-timing
   call, so PortAudio could be added later without touching the keyer.
 - **Sidetone mixed into the RX output** (one device, one clock). The tone crossfades over RX
-  audio as Dale's does. This replaces `SidetoneGenerator`'s separate sink.
+  audio as Dale's does. This replaces `SidetoneGenerator`'s separate sink. *Decided, not built:
+  phase 2.*
 - **K4 monitor mute: built, off by default.** If the bench shows the K4 already suppresses its
   monitor for `KZD`/`KZU` (it does for `KZ.`/`KZ-`), it stays off and the K4 menu setting covers
   the rest.
@@ -67,13 +86,16 @@ Items 1 and 2 fix what goes on air. Items 3 to 6 fix the feel and the monitoring
 - `src/hardware/seriallinepoller.{h,cpp}`: the port of `SerialInput.signal_loop`
   (`18890-18970`).
 - Production seams: steady_clock plus a precise sleep (Windows high-resolution waitable timer, as
-  the V1.4 worker already uses); a `Link` onto `TcpClient::sendCAT` on the I/O thread; a QTimer for
-  the monitor restore.
+  the V1.4 worker already uses); a `Link` onto `TcpClient::sendCAT`, which marshals the call to the
+  I/O thread with a queued `invokeMethod`; a QTimer for the monitor restore.
 
 **Replaced** (HaliKey only)
-- `IambicKeyer` → `PaddleKeyer`, on the existing "Keyer" HighPriority thread. `run()` blocks on
-  its event queue, so the thread has no Qt event loop.
-- `SidetoneGenerator` → `SidetoneScheduler` plus a mixer stage in `AudioEngine`'s output.
+- `IambicKeyer` → `PaddleKeyer`, on the existing "Keyer" thread, started with
+  `QThread::HighPriority`. `run()` blocks on its event queue (a `std::condition_variable`), so the
+  thread has no Qt event loop. Qt ignores the priority on systems without thread-priority support,
+  Linux among them (Qt 6.8 `QThread::start()`), so on Linux and the Pi the keyer gets no boost.
+- `SidetoneGenerator` → `SidetoneScheduler` plus a mixer stage in `AudioEngine`'s output. *Only
+  the scheduler half is done. `SidetoneGenerator` stays as the output until phase 2.*
 - `HalikeyDevice` / `halikey_edge.h`: edge dedupe moves into the keyer (MIDI up-without-down) and
   the poller (rest state, straight-key debounce).
 - `halikeyv14worker`: the per-platform loops become one 1 ms poll through `SerialLinePoller`,
@@ -95,27 +117,46 @@ Items 1 and 2 fix what goes on air. Items 3 to 6 fix the feel and the monitoring
   `m_kpodPlus->set…` calls unchanged.
 - `test_kpodplususbworker` must stay green and untouched.
 
-**Retired**
-- `iambickeyer.*`, `sidetonegenerator.*`, `halikey_edge.h`
+**Retired** (in `b54cf06`)
+- `iambickeyer.*`, `halikey_edge.h`
 - `test_iambickeyer`, `test_halikeydevice`. Their cases are superseded by the sweeps; the
   Iambic A semantics change, see below.
+- `sidetonegenerator.*` retires in phase 2, not before. It is the live sidetone output today.
 
 **Docs:** `src/hardware/README.md`, `src/audio/README.md`, `docs/k4-protocol-quirks.md` §8,
 `docs/halikey-cw-trace.md`, `docs/controllers.md`, and the CLAUDE.md test table.
 
 ## Phases
 
-1. **Keyer on the air.** `PaddleKeyer`, `SerialLinePoller` and the MIDI path; `KZD`/`KZU` out.
-   `SidetoneScheduler` lands too, because the keyer's decisions depend on when a tone was heard.
-   Until phase 2 it's fed by a stand-in block clock (a QTimer at the old sink's block rate), so
-   on-air keying can be bench-tested alone. Tests: all four suites below.
-2. **Sidetone in the RX output.** A mixer stage in `AudioEngine`'s output callback calls
+1. **Keyer on the air — landed.** `PaddleKeyer`, `SerialLinePoller` and the MIDI path; `KZD`/`KZU`
+   out. `SidetoneScheduler` landed too, because the keyer's decisions depend on when a tone was
+   heard. Until phase 2 it is fed by `SidetoneGenerator` (see "Sidetone"). Tests: all five suites
+   below.
+2. **Sidetone in the RX output — not started.** A mixer stage in `AudioEngine`'s output callback calls
    `noteBlockTiming` / `nextKeyEdge` per block, with DAC time = time of fill + frames still
    queued in the sink. Envelope and tone come from Dale (4 ms raised cosine, exact-period table,
    continuous phase). Pull mode is out: on macOS Qt pulls ~85 ms ahead (see Status). Phase 2 needs
    the same paced, adaptive push that `SidetoneGenerator::pump()` does now. Check that first: it's part of
    the audio path currently being reworked.
-3. **Monitor mute decision** from the bench, then remove or keep the setting.
+3. **Monitor mute decision — open.** From the bench, then remove or keep the setting.
+
+## Sidetone
+
+What runs now (phase 1). `SidetoneScheduler` decides when each tone edge plays.
+`SidetoneGenerator` renders it on its own `QAudioSink`, on the "Sidetone" thread (started with
+`QThread::HighPriority`; the same Linux caveat applies). Its `pump()` runs on a 1 ms
+`Qt::PreciseTimer` and pushes 4 ms blocks into an adaptive queue. The queue starts at 8 ms and grows
+one block each time the device runs dry. It reports play-out time back to the scheduler through
+`streamTime()`. Volume comes from `RadioSettings::sidetoneVolume()`, not from the K4's `ML`.
+
+How it got there (bench 2026-10-27, `72025df`):
+- Pull mode held ~100 ms. Qt on macOS asked for up to ~85 ms per read even with a 20 ms buffer,
+  and the scheduler rightly held the delay above that.
+- Pushing with a fixed 8 ms queue ran dry every ~11 ms device period, which sounded awful.
+- The adaptive queue settled at 12 ms on a Mac mini and stayed clean.
+
+What phase 2 changes: the render moves into `AudioEngine`'s output, one device and one clock, as
+planned under "Phases".
 
 ## Tests (registered, passing)
 
@@ -124,6 +165,7 @@ Items 1 and 2 fix what goes on air. Items 3 to 6 fix the feel and the monitoring
 | PaddleKeyerSweepsTests | `tests/test_paddlekeyersweeps.cpp` | **Golden replay of Dale's 554 recorded runs, byte for byte** (`tests/data/paddlekeyer/`); squeeze rule at 20–50 WPM; squeeze rule at Dit Mem 33 % and proof the setting bites; dah-first and stall verdicts at 20–50 WPM; KZU always nominal; mute off changes nothing but the ML |
 | PaddleKeyerTests | `tests/test_paddlekeyer.cpp` | MoMIDI velocity/aftertouch decoding, velocity 0/127 → host delta, note-on vel 0 = down, unmatched up dropped; straight key: 5 s cap, minimum tone, single KZU, release closes an open KZD; close; every KZD closed in every run; release mid-squeeze; Ultimatic, Plain Iambic, Iambic A; weighting; monitor restore |
 | SerialLinePollerTests | `tests/test_seriallinepoller.cpp` | Rest state not an edge; paddles on the same poll with per-line delta; dit first; 20 ms straight-key debounce and bounce restart; dah ignored when straight |
+| PaddleKeyerThreadedTests | `tests/test_paddlekeyerthreaded.cpp` | The keyer on its own thread with a real steady clock; events and releases from other threads; no KZD left open; `close()` sends a held straight key's KZU before the join. Run under ThreadSanitizer too |
 | SidetoneSchedulerTests | `tests/test_sidetonescheduler.cpp` | First edge fixes delay at lead + block; keyer-late and skipped-block downs dragged; other late downs raise the delay; late ups dragged; exact-frame placement; cancel before/after placement; ease in silence; edge deadline |
 
 `tests/paddlekeyersim.h` is the C++ port of `paddle_sweep.py`'s `sim()`: virtual clock, 48 kHz,
@@ -145,10 +187,15 @@ changing either.
   `0x90`/`0x80` advances the device clock. CC/aftertouch value × 126 ms. Velocity 0 or 127 →
   RtMidi's delta. Re-anchor when a delta or an offset jump reaches 1 s. Velocity is an `int`: the
   harness sends aftertouch counts above 127, as Dale's does.
-- Serial: open the port with DTR and RTS asserted (pyserial's default, which `QSerialPort` doesn't
-  apply), and treat the line state at open as rest.
-- Shutdown: `releasePaddles()` → post Close → join the keyer thread → detach the device callbacks
-  → `releasePaddles(true)`. Detaching before the join can hang the join.
+- Serial: open the port with DTR and RTS asserted, as pyserial does by default, and treat the line
+  state at open as rest. QK4 does not use `QSerialPort` for the V1.4: `HaliKeyV14Worker` opens a
+  native handle and asserts both lines itself (`DTR_CONTROL_ENABLE`/`RTS_CONTROL_ENABLE` on
+  Windows, `TIOCMBIS` on POSIX). `QSerialPortInfo` only lists the ports.
+- Shutdown, as built in `HardwareController`'s teardown: close the HaliKey port first, so no new
+  paddle events arrive → `PaddleKeyer::close()` (`releasePaddles()` → post Close →
+  `releasePaddles(true)`) → join the keyer thread (2 s) → clear the keyer's link. The link is
+  cleared only after the join because `close()` may still send a KZU for a held straight key;
+  `ConnectionController` is still alive at that point. Then the sidetone thread stops.
 - Shared state written by the audio callback and read by the keyer (`sidetone_block_timing`,
   `sidetone_down_placed`, the lag and edge shift, the asked/late/cancelled/dropped stamps, the
   key-event queue) sits behind one short `SidetoneScheduler` mutex. K4-Companion relies on the GIL
@@ -167,13 +214,13 @@ changing either.
 - **Iambic A changes meaning.** QK4's current A reads live paddles only, after the CW-015/016 fix.
   Dale's A keeps the dit memory (a dit closed after a dah was heard is sent) but no dah memory and
   no squeeze-release memory. The port follows Dale; `iambicAKeepsDitMemoryOnly` pins it.
-- **Serial pin map becomes a per-paddle setting.** Defaults have to keep today's HaliKey V1.4
-  wiring (dit = CTS, dah = DCD or DSR). Dale's model has one line per paddle, so the dah default
-  needs either "DCD or DSR" support in the poller or a check of which line the V1.4 actually
-  drives. Decide before phase 1 lands.
+- **Serial pin map — stayed fixed.** The plan was a per-paddle setting. What landed is the
+  bench-verified V1.4 wiring, hard-coded in `HaliKeyV14Worker::readPinState`: dit = CTS,
+  dah = DCD ∥ DSR (the V1.4 asserts both together). `PaddleKeyer::setDitSignal` / `setDahSignal` /
+  `serialSignalChanged` exist but only tests call them.
 - Weighting follows the K4's `KP`, which QK4 already parses.
 
-## Bench questions (before phase 1 ships)
+## Bench questions
 
 1. ~~What does `KZL` mean?~~ **Answered 2026-10-27** from the K4 CAT reference: remote paddle
    key-down initial delay, 0–1000 ms, default 80. QK4 had been overwriting it with 1200 / WPM.
@@ -182,6 +229,10 @@ changing either.
    See `k4-protocol-quirks.md` §8.
 2. Does the K4 suppress its own monitor for `KZD`/`KZU`, as it does for `KZ.`/`KZ-`? This decides
    phase 3.
-3. Is `ML0000;` echoed? If it is, the local sidetone volume must not follow the echo.
+3. Is `ML0000;` echoed? The local sidetone volume is safe either way: it comes from
+   `RadioSettings`. The hazard is the keyer's own restore. `CwController` feeds every
+   `monitorLevelChanged` for CW into `PaddleKeyer::setMonitorLevel`, so an echoed `ML0000` would
+   become the level the keyer restores, and the unmute would send `ML0000` again.
 4. Does `KY \x04;RX;` (Esc) stop `KZD` playback already queued in the K4?
-5. Which modem line does the HaliKey V1.4 assert for dah: DCD, DSR or both?
+5. ~~Which modem line does the HaliKey V1.4 assert for dah?~~ **Answered:** DCD and DSR together
+   (`HaliKeyV14Worker::readPinState`).
