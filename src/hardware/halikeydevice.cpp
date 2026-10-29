@@ -38,6 +38,7 @@ bool HalikeyDevice::openPort(const QString &portName) {
     }
 
     m_workerThread = new QThread(this);
+    m_workerThread->setObjectName(QStringLiteral("HaliKey"));
     m_worker->moveToThread(m_workerThread);
 
     // Straight through, on the worker thread: the keyer stamps the edge on arrival.

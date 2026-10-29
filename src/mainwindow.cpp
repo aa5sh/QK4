@@ -424,7 +424,7 @@ void MainWindow::setupCatServer() {
 
     // Surface CAT server bind failures to the user
     connect(m_catServer, &CatServer::errorOccurred, this,
-            [this](const QString &error) { qWarning() << "CAT server:" << error; });
+            [this](const QString &error) { qCWarning(lcCatServer) << "CAT server:" << error; });
 
     // TX;/RX; from external apps. StreamedFromHere, not RadioLocal: CatServer deliberately does
     // not forward TX;/RX; to the K4 because the audio stream itself keys it, which is
@@ -498,20 +498,20 @@ void MainWindow::connectToStartupRadio() {
             for (const RadioEntry &entry : radios) {
                 known << entry.name;
             }
-            qWarning() << "No saved radio named" << m_startupRadioOverride << "- known:" << known;
+            qCWarning(lcApp) << "No saved radio named" << m_startupRadioOverride << "- known:" << known;
             QMessageBox::warning(
                 this, "Radio Not Found",
                 QString("No saved radio is named \"%1\".\n\nSaved radios: %2")
                     .arg(m_startupRadioOverride, known.isEmpty() ? QStringLiteral("(none)") : known.join(", ")));
             return;
         }
-        qInfo() << "Connecting to" << radios[index].name << "from the command line";
+        qCInfo(lcApp) << "Connecting to" << radios[index].name << "from the command line";
     } else {
         index = RadioSettings::instance()->connectAtStartupIndex();
         if (index < 0) {
             return;
         }
-        qInfo() << "Auto-connecting to" << radios[index].name << "at startup";
+        qCInfo(lcApp) << "Auto-connecting to" << radios[index].name << "at startup";
     }
 
     if (index >= radios.size()) {

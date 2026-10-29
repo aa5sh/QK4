@@ -1,4 +1,5 @@
 #include <QApplication>
+#include "logging/logcategories.h"
 #include <QCommandLineParser>
 #include <QDebug>
 #include <QSysInfo>
@@ -53,7 +54,7 @@ void setupFonts() {
 
     // Verify fonts loaded (only warn on failure)
     if (interRegular < 0 || interMedium < 0) {
-        qWarning() << "Failed to load Inter font - using system default";
+        qCWarning(lcApp) << "Failed to load Inter font - using system default";
     }
 
     // Set Inter Medium as the default application font (crisper than Regular)
@@ -294,7 +295,7 @@ int main(int argc, char *argv[]) {
     // in its own words. Anything still unparsed at this point is an option QK4 never
     // declared, which is ignored on purpose.
     if (!parsedCleanly) {
-        qWarning() << "Ignoring command line:" << parser.errorText();
+        qCWarning(lcApp) << "Ignoring command line:" << parser.errorText();
     }
 
     int exitCode = 0;

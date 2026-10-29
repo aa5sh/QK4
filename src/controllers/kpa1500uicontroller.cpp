@@ -118,7 +118,7 @@ void KPA1500UiController::onDisconnected() {
 }
 
 void KPA1500UiController::onError(const QString &error) {
-    qWarning() << "KPA1500: Error -" << error;
+    qCWarning(lcKpa1500Ui) << "KPA1500: Error -" << error;
 }
 
 void KPA1500UiController::onPollIntervalChanged(int intervalMs) {

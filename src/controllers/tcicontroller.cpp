@@ -1,4 +1,5 @@
 #include "controllers/tcicontroller.h"
+#include "logging/logcategories.h"
 
 #include <QMetaEnum>
 
@@ -658,9 +659,9 @@ void TciController::sendCwMacro(const QVector<CwMacroSegment> &segments) {
     // surprising side effect of a text command; and in the DATA modes the radio sends the text as
     // data, which is a legitimate use this must not refuse.
     if (m_radioState && !CatFrames::modeKeysCwText(m_radioState->mode())) {
-        qWarning() << "TCI: CW text sent while the radio is in"
-                   << QMetaEnum::fromType<RadioState::Mode>().valueToKey(m_radioState->mode())
-                   << "- the K4 keys KY only in CW and DATA modes, so this will be silently ignored";
+        qCWarning(lcTci) << "TCI: CW text sent while the radio is in"
+                         << QMetaEnum::fromType<RadioState::Mode>().valueToKey(m_radioState->mode())
+                         << "- the K4 keys KY only in CW and DATA modes, so this will be silently ignored";
     }
 
     // What to send is decided in CwMacro::plan, which is tested; this only carries it out.
@@ -889,8 +890,8 @@ TciController::~TciController() {
     // QThread that is still running - which aborts. Disown it instead. The thread, and whatever it
     // still holds, is leaked; at application exit that costs nothing, where the abort cost the user
     // a crash on every quit slow enough to reach this line.
-    qWarning() << "TCI thread did not stop within" << kThreadShutdownMs
-               << "ms - leaving it running rather than destroying it underneath itself";
+    qCWarning(lcTci) << "TCI thread did not stop within" << kThreadShutdownMs
+                     << "ms - leaving it running rather than destroying it underneath itself";
     m_tciThread->setParent(nullptr);
     m_tciThread = nullptr;
 }

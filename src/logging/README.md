@@ -12,10 +12,12 @@ QK4's diagnostic logging. Links against `Qt6::Core` only, so every piece is test
 
 One scheme: `qk4.<area>[.<detail>]`, lower case, dots only. C++ symbols are `lc<Area><Detail>`.
 Add a category here, never with a local `Q_LOGGING_CATEGORY` (`LogCategoriesTests` fails the build).
+Every call names its category: `qCWarning(lcApp)`, never `qWarning()`, which logs to Qt's `default`
+category that no rule or Options switch can address. The same test enforces it.
 
 | Category | Symbol | Covers | Before 2026-10-29 |
 |---|---|---|---|
-| `qk4.app` | `lcApp` | startup, fonts, TLS backend, command line, interface scale | uncategorised |
+| `qk4.app` | `lcApp` | startup, fonts, TLS backend, command line, interface scale | uncategorised `qWarning`/`qInfo` |
 | `qk4.ui` | `lcUi` | MainWindow | `qk4.main` |
 | `qk4.ui.menu` | `lcUiMenu` | K4 menu overlay | `qk4.menu` |
 | `qk4.ui.bandnav` | `lcUiBandNav` | band navigation | `qk4.bandnav` |

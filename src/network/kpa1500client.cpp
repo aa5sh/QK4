@@ -79,7 +79,7 @@ KPA1500Client::ConnectionState KPA1500Client::connectionState() const {
 
 void KPA1500Client::sendCommand(const QString &command) {
     if (m_state != Connected) {
-        qWarning() << "KPA1500Client: Cannot send command, not connected";
+        qCWarning(lcKpa1500) << "KPA1500Client: Cannot send command, not connected";
         return;
     }
 

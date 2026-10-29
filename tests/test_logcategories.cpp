@@ -138,6 +138,13 @@ const QRegularExpression &categoryDefinition() {
     return re;
 }
 
+// qDebug()/qInfo()/qWarning()/qCritical() log to the "default" category, which no rule or Options
+// switch can address.
+const QRegularExpression &uncategorisedCall() {
+    static const QRegularExpression re(QStringLiteral(R"(\bq(Debug|Info|Warning|Critical)\s*\()"));
+    return re;
+}
+
 bool inLoggingDir(const QString &rel) {
     return rel.startsWith(QStringLiteral("logging/"));
 }
@@ -176,6 +183,28 @@ private slots:
         QVERIFY2(scanned > 50, "source scan found too few files - is QK4_SOURCE_DIR right?");
         QVERIFY2(violations.isEmpty(), qPrintable(QStringLiteral("define categories in src/logging/logcategories:\n") +
                                                   describe(violations)));
+    }
+
+    void everyLogCallNamesACategory() {
+        const auto violations = scanSources(uncategorisedCall(), inLoggingDir);
+        QVERIFY2(violations.isEmpty(),
+                 qPrintable(QStringLiteral("use qCDebug/qCInfo/qCWarning/qCCritical with a category from "
+                                           "logging/logcategories.h:\n") +
+                            describe(violations)));
+    }
+
+    void uncategorisedScanSeesARawCallButNotACategorisedOne() {
+        const QString code = codeOnly(QStringLiteral("qCWarning(lcApp) << \"qWarning() in text\";\n"
+                                                     "qWarning() << 1;\n"
+                                                     "qInfo (\"x\");\n"
+                                                     "// qDebug() in a comment\n"));
+        int hits = 0;
+        auto it = uncategorisedCall().globalMatch(code);
+        while (it.hasNext()) {
+            it.next();
+            ++hits;
+        }
+        QCOMPARE(hits, 2);
     }
 
     void scannerIgnoresCommentsAndStringsButSeesCode() {

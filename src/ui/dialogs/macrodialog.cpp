@@ -672,7 +672,7 @@ void MacroDialog::onCommandChanged(const QString &functionId, const QString &com
     if (functionId == MacroIds::Startup && !command.isEmpty()) {
         QString forbidden = MacroIds::checkForbiddenStartupCommand(command);
         if (!forbidden.isEmpty()) {
-            qWarning() << "Startup macro rejected: contains forbidden command" << forbidden;
+            qCWarning(lcUiMacro) << "Startup macro rejected: contains forbidden command" << forbidden;
             // Revert the widget to the previous saved command
             auto settings = RadioSettings::instance();
             MacroEntry macro = settings->macro(functionId);

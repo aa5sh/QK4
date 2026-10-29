@@ -59,7 +59,7 @@ void ConnectionController::connectToRadio(const RadioEntry &radio) {
     if (!macroToSend.isEmpty()) {
         QString forbidden = MacroIds::checkForbiddenStartupCommand(macroToSend);
         if (!forbidden.isEmpty()) {
-            qWarning() << "Startup macro blocked: contains forbidden command" << forbidden;
+            qCWarning(lcLink) << "Startup macro blocked: contains forbidden command" << forbidden;
             macroToSend.clear();
         }
     }

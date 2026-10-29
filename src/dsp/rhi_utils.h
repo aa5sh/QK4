@@ -2,6 +2,7 @@
 #define RHI_UTILS_H
 
 #include <QColor>
+#include "logging/logcategories.h"
 #include <QFile>
 #include <QVector>
 #include <rhi/qrhi.h>
@@ -73,7 +74,7 @@ inline QShader loadShader(const QString &path) {
     if (f.open(QIODevice::ReadOnly)) {
         return QShader::fromSerialized(f.readAll());
     }
-    qWarning() << "RhiUtils: Failed to load shader:" << path;
+    qCWarning(lcSpectrumRender) << "RhiUtils: Failed to load shader:" << path;
     return QShader();
 }
 

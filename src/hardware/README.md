@@ -27,7 +27,7 @@ USB / serial / MIDI device wrappers. Owned by `controllers/hardwarecontroller.cp
 - `PaddleKeyer::run()` on `HardwareController::m_keyerThread` (HighPriority, a `QThread::create` with no event loop: the keyer blocks on its own event queue and sleeps to its deadlines).
 - `SidetoneGenerator` on `HardwareController::m_sidetoneThread` (HighPriority); a 1 ms timer there pushes one 4 ms block at a time, keeping the sink's queue at the shortest level the device sustains (starts at 8 ms, rises a block per dry-out).
 - MIDI paddle edges reach the keyer on RtMidi's own thread; V1.4 edges on the HaliKey worker thread.
-- `HalikeyDevice` has its own `m_workerThread` for the V1.4 and MIDI workers. It is started with no priority, so it inherits the starting thread's priority (`QThread::InheritPriority`), although it runs the V1.4 1 ms poll.
+- `HalikeyDevice` has its own `m_workerThread` ("HaliKey" in log lines) for the V1.4 and MIDI workers. It is started with no priority, so it inherits the starting thread's priority (`QThread::InheritPriority`), although it runs the V1.4 1 ms poll.
 - `HaliKeyPortScan` runs each port scan on a short-lived `QThread::create` thread and delivers the list queued to the caller's thread.
 - `KpodDevice` owns `m_hidThread`; all hidapi I/O is on it. On Linux `KpodHidWorker` starts a second thread for the udev hotplug poll.
 - `KpodPlusDevice` owns `m_usbThread` (EP01 + config) and `m_ep02Thread` (keyer reader, HighPriority).

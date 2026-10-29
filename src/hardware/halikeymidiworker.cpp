@@ -105,7 +105,7 @@ void HaliKeyMidiWorker::start() {
         midiIn = std::make_unique<RtMidiIn>();
     } catch (RtMidiError &error) {
         QString msg = QString("Failed to create MIDI input: %1").arg(QString::fromStdString(error.getMessage()));
-        qWarning() << "HaliKeyMidiWorker:" << msg;
+        qCWarning(lcCwMidi) << "HaliKeyMidiWorker:" << msg;
         emit errorOccurred(msg);
         return;
     }
@@ -125,7 +125,7 @@ void HaliKeyMidiWorker::start() {
 
     if (foundPort < 0) {
         QString msg = QString("MIDI device '%1' not found (%2 ports available)").arg(m_portName).arg(portCount);
-        qWarning() << "HaliKeyMidiWorker:" << msg;
+        qCWarning(lcCwMidi) << "HaliKeyMidiWorker:" << msg;
         emit errorOccurred(msg);
         return;
     }
@@ -134,7 +134,7 @@ void HaliKeyMidiWorker::start() {
         midiIn->openPort(static_cast<unsigned int>(foundPort));
     } catch (RtMidiError &error) {
         QString msg = QString("Failed to open MIDI port: %1").arg(QString::fromStdString(error.getMessage()));
-        qWarning() << "HaliKeyMidiWorker:" << msg;
+        qCWarning(lcCwMidi) << "HaliKeyMidiWorker:" << msg;
         emit errorOccurred(msg);
         return;
     }

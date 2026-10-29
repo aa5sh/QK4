@@ -1,4 +1,5 @@
 #include "settings/interfacescale.h"
+#include "logging/logcategories.h"
 #include "settings/radiosettings.h"
 #include "utils/windowfit.h"
 
@@ -73,8 +74,8 @@ bool fitNeedsRelaunch(const QWidget &window) {
     if (std::abs(fitted - g_applied) < WindowFit::kScaleStep / 2)
         return false;
 
-    qInfo() << "Interface scale: window needs" << required << "on a" << available << "screen at" << g_applied
-            << "- relaunching at" << fitted;
+    qCInfo(lcApp) << "Interface scale: window needs" << required << "on a" << available << "screen at" << g_applied
+                  << "- relaunching at" << fitted;
     RadioSettings::instance()->setAutoScaleFactor(fitted);
     return true;
 }
@@ -104,7 +105,7 @@ bool relaunch() {
     process.setProcessEnvironment(env);
     const bool started = process.startDetached();
     if (!started)
-        qWarning() << "Interface scale: could not relaunch" << QCoreApplication::applicationFilePath();
+        qCWarning(lcApp) << "Interface scale: could not relaunch" << QCoreApplication::applicationFilePath();
     return started;
 }
 
