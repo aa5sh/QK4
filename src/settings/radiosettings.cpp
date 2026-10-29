@@ -4,6 +4,7 @@
 #include "audio/rxoutputstage.h"
 #include "ui/styling/k4constants.h"
 #include "utils/windowfit.h"
+#include <numeric>
 #include <algorithm>
 #include <cmath>
 
@@ -168,8 +169,20 @@ void RadioSettings::setConnectAtStartupRadio(int index) {
     }
 }
 
+// WHY the saved radio becomes the selected one: the Radio Manager reselects lastSelectedIndex when
+// radiosChanged() refreshes it, and the radio just saved is the one the operator is working on.
+// Before this, the list re-sorted under a stale index and the form refilled from another entry -
+// an SL3 save appeared to bounce back to SL0 when the row under the old index still said SL0.
 void RadioSettings::addRadio(const RadioEntry &radio) {
-    m_radios.append(sanitized(radio));
+    // The same radio (name, host, port) saved again is an update, not a second copy.
+    const int existing = m_radios.indexOf(radio);
+    if (existing >= 0) {
+        m_radios[existing] = sanitized(radio);
+        m_lastSelectedIndex = existing;
+    } else {
+        m_radios.append(sanitized(radio));
+        m_lastSelectedIndex = static_cast<int>(m_radios.size()) - 1;
+    }
     sortRadios();
     save();
     emit radiosChanged();
@@ -178,8 +191,12 @@ void RadioSettings::addRadio(const RadioEntry &radio) {
 void RadioSettings::removeRadio(int index) {
     if (index >= 0 && index < m_radios.size()) {
         m_radios.removeAt(index);
-        if (m_lastSelectedIndex >= m_radios.size()) {
-            m_lastSelectedIndex = m_radios.isEmpty() ? -1 : m_radios.size() - 1;
+        // The selection follows its radio: an earlier removal moves it up one. Removing the selected
+        // radio selects its neighbour (the Radio Manager shows that entry next), none if the list is empty.
+        if (index == m_lastSelectedIndex) {
+            m_lastSelectedIndex = m_radios.isEmpty() ? -1 : std::min(index, static_cast<int>(m_radios.size()) - 1);
+        } else if (index < m_lastSelectedIndex) {
+            --m_lastSelectedIndex;
         }
         save();
         emit radiosChanged();
@@ -189,6 +206,7 @@ void RadioSettings::removeRadio(int index) {
 void RadioSettings::updateRadio(int index, const RadioEntry &radio) {
     if (index >= 0 && index < m_radios.size()) {
         m_radios[index] = sanitized(radio);
+        m_lastSelectedIndex = index; // see addRadio
         sortRadios();
         save();
         emit radiosChanged();
@@ -1032,12 +1050,28 @@ void RadioSettings::load() {
     }
 }
 
+// Sorts by display name and keeps lastSelectedIndex on the same entry. WHY by position and not by
+// RadioEntry::operator==: two entries can compare equal (same name, host and port), and the
+// selection must stay on the one it was on.
 void RadioSettings::sortRadios() {
-    std::sort(m_radios.begin(), m_radios.end(), [](const RadioEntry &a, const RadioEntry &b) {
-        QString nameA = a.name.isEmpty() ? a.host : a.name;
-        QString nameB = b.name.isEmpty() ? b.host : b.name;
+    QVector<int> order(m_radios.size());
+    std::iota(order.begin(), order.end(), 0);
+    std::stable_sort(order.begin(), order.end(), [this](int a, int b) {
+        const QString nameA = m_radios[a].name.isEmpty() ? m_radios[a].host : m_radios[a].name;
+        const QString nameB = m_radios[b].name.isEmpty() ? m_radios[b].host : m_radios[b].name;
         return nameA.compare(nameB, Qt::CaseInsensitive) < 0;
     });
+    QVector<RadioEntry> sorted;
+    sorted.reserve(m_radios.size());
+    int selected = -1;
+    for (int pos = 0; pos < order.size(); ++pos) {
+        sorted.append(m_radios[order[pos]]);
+        if (order[pos] == m_lastSelectedIndex) {
+            selected = pos;
+        }
+    }
+    m_radios = std::move(sorted);
+    m_lastSelectedIndex = selected;
 }
 
 void RadioSettings::save() {

@@ -180,6 +180,50 @@ private slots:
         }
     }
 
+    // The Radio Manager reselects lastSelectedIndex after every save, and the list re-sorts on save.
+    // The index must stay on the radio just saved, or the form refills from a different entry: an
+    // SL3 save looked as if it bounced back to SL0 (2026-10-29, two entries for one K4).
+    void savingSelectsTheSavedRadioAcrossTheSort() {
+        RadioSettings *s = RadioSettings::instance();
+        s->addRadio(makeRadio(QStringLiteral("B"), QStringLiteral("10.0.0.2")));
+        s->addRadio(makeRadio(QStringLiteral("C"), QStringLiteral("10.0.0.3")));
+        s->addRadio(makeRadio(QStringLiteral("A"), QStringLiteral("10.0.0.1"))); // sorts to the front
+        QCOMPARE(s->radios().at(s->lastSelectedIndex()).name, QStringLiteral("A"));
+
+        // Rename C to "0" so the update moves it to the front; the selection goes with it.
+        RadioEntry c = s->radios().at(2);
+        c.name = QStringLiteral("0");
+        c.streamingLatency = 3;
+        s->updateRadio(2, c);
+        QCOMPARE(s->radios().at(s->lastSelectedIndex()).name, QStringLiteral("0"));
+        QCOMPARE(s->radios().at(s->lastSelectedIndex()).streamingLatency, 3);
+    }
+
+    void sameRadioSavedAgainIsUpdatedNotDuplicated() {
+        RadioSettings *s = RadioSettings::instance();
+        RadioEntry k4 = makeRadio(QStringLiteral("K4"), QStringLiteral("10.0.0.1"));
+        k4.streamingLatency = 0;
+        s->addRadio(k4);
+        k4.streamingLatency = 3;
+        s->addRadio(k4);
+        QCOMPARE(s->radios().size(), 1);
+        QCOMPARE(s->radios().first().streamingLatency, 3);
+    }
+
+    void removingARadioKeepsTheSelectionOnItsRadio() {
+        RadioSettings *s = RadioSettings::instance();
+        s->addRadio(makeRadio(QStringLiteral("A"), QStringLiteral("10.0.0.1")));
+        s->addRadio(makeRadio(QStringLiteral("B"), QStringLiteral("10.0.0.2")));
+        s->addRadio(makeRadio(QStringLiteral("C"), QStringLiteral("10.0.0.3")));
+        s->setLastSelectedIndex(2); // C
+        s->removeRadio(0);
+        QCOMPARE(s->radios().at(s->lastSelectedIndex()).name, QStringLiteral("C"));
+        s->removeRadio(s->lastSelectedIndex()); // removing the selected one selects its neighbour
+        QCOMPARE(s->radios().at(s->lastSelectedIndex()).name, QStringLiteral("B"));
+        s->removeRadio(0);
+        QCOMPARE(s->lastSelectedIndex(), -1);
+    }
+
     void noRadioIsFlaggedByDefault() {
         RadioSettings *s = RadioSettings::instance();
         s->addRadio(makeRadio(QStringLiteral("A"), QStringLiteral("10.0.0.1")));
