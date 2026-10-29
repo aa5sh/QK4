@@ -370,12 +370,7 @@ void TciController::wireTransmit() {
             emit transmittingChanged(active);
         });
 
-        // Queued: decoding lands on the TCI thread, the encode pipeline lives on the audio thread.
-        connect(m_server, &TciServer::txAudioReceived, this, [this](const QByteArray &mono48k) {
-            if (m_audioEnabled) {
-                m_audioController->feedTciTxAudio(mono48k);
-            }
-        });
+        // TX audio itself is routed in setAudioEnabled: TCI thread -> TX thread, not through here.
     }
 }
 
@@ -598,8 +593,8 @@ void TciController::setAudioEnabled(bool enabled) {
     // TURNING AUDIO OFF UNDER A TRANSMITTING CLIENT HAS TO END THE TRANSMISSION.
     //
     // A TCI client keys with Route::StreamedFromHere - the audio stream IS the keying mechanism,
-    // there is no TX; behind it - and the flag just written is what gates that stream, at the
-    // txAudioReceived handler in wireTransmit. So switching audio off starves the transmitter
+    // there is no TX; behind it - and the transmit audio route, cut below, is what carries that
+    // stream. So switching audio off starves the transmitter
     // while leaving the gate asserted and the arbiter still recording TciClient as the holder.
     // That is the worst of the three states: keyed, no audio reaching the radio, and the
     // microphone locked out because the source is still Tci.
@@ -613,6 +608,16 @@ void TciController::setAudioEnabled(bool enabled) {
     // same value, which is what construction does, must not touch anyone's transmitter.
     if (was && !enabled) {
         releaseClientTransmitter();
+    }
+
+    // The transmit audio route IS the audio gate. Connected straight from the server (TCI thread) to
+    // the TX pipeline (TX thread), so transmit audio never waits on this thread's event loop.
+    // Disconnecting is thread-safe and takes effect for every frame emitted after it returns.
+    if (enabled && !m_txAudioRoute && m_audioController) {
+        m_txAudioRoute = m_audioController->routeTciTxAudio(m_server);
+    } else if (!enabled && m_txAudioRoute) {
+        disconnect(m_txAudioRoute);
+        m_txAudioRoute = {};
     }
 
     // The bridge lives on the TCI thread; its flag is a plain bool read on that thread only.

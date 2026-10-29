@@ -22,8 +22,9 @@
 >   Route::StreamedFromHere)` / `release`, not `AudioController::setPttActive` directly.
 > - **WebSocket transport is hand-rolled** (`src/network/websocketserver.h`, `websocketframe.h`).
 >   Qt WebSockets was not adopted.
-> - **TX audio** has its own level (`AudioEngine`'s TCI TX gain, the "TX Level" slider, setting
->   `tci/txGain`) and goes through `AudioController::feedTciTxAudio` to the shared decimator.
+> - **TX audio** has its own level (`TxAudioPipeline`'s TCI TX gain, the "TX Level" slider, setting
+>   `tci/txGain`) and goes from the TCI thread straight to the TX thread
+>   (`AudioController::routeTciTxAudio`) and the shared decimator, never through the GUI thread.
 >
 > Sections below carry short *As built* notes where they differ. The phase log keeps its dates.
 
@@ -174,7 +175,7 @@ QK4 must refuse `trx:1,*` explicitly rather than rely on `trx_count` steering th
 still does, with `trx_count:2`: only receiver 0 has a transmitter.
 
 **Consequence: QK4 must upsample its native 12 kHz K4 audio to 48 kHz for RX.** TX needs no
-resampler — WSJT-X sends 48 kHz, which is exactly what `AudioEngine`'s TX path already wants.
+resampler — WSJT-X sends 48 kHz, which is exactly what the TX path (`TxAudioPipeline`) already wants.
 
 ---
 
@@ -488,14 +489,16 @@ frequency *and* mode arrives as two queued events.
   live reads, or a client can be seeded with a frequency and mode that never coexisted.
 - Diff before broadcasting, so a message means something actually moved.
 
-**3. TX audio — TCI thread → audio thread.** *As built:* `TciServer::txAudioReceived` →
-`TciController` → `AudioController::feedTciTxAudio` → queued `AudioEngine::feedTciTxAudio`, which
+**3. TX audio — TCI thread → TX thread.** *As built:* `TciServer::txAudioReceived` → queued
+`TxAudioPipeline::feedTciTxAudio`, connected by `AudioController::routeTciTxAudio` while TCI audio
+is enabled (the connection is the gate; `TciController::setAudioEnabled` makes and cuts it). It
+used to hop through `TciController` on the GUI thread, so a busy GUI delayed transmit audio. It
 decimates 48→12 kHz through the shared `resampleTo12k` / `AudioDecimator` path, applies the TCI TX
 gain, and joins the normal frame/encode path. (The design named `resample48kTo12k`, which no
 longer exists.)
 
-**Never touch the microphone buffer from the TCI thread** — `AudioEngine` declares its mic state
-audio-thread-only, deliberately, so a busy GUI cannot stall voice TX.
+**Never touch the microphone buffer from the TCI thread** — `TxAudioPipeline` declares its frame
+state TX-thread-only, deliberately, so neither a busy GUI nor the TCI thread can stall voice TX.
 
 **4. RX audio — I/O thread → TCI thread.** *As built:* `AudioController::rxAudioAvailable` carries
 decoded 12 kHz stereo Float32 (L = Main, R = Sub) **before** the jitter buffer and before
@@ -564,14 +567,14 @@ coverage §12.3.
 client -> TX_AUDIO frame
        -> locate the live window (TciAudioFrame; see "two candidate windows" above)
        -> deduplicate stereo pairs -> 1024 mono samples @ 48 kHz
-       -> TciController -> AudioController::feedTciTxAudio -> [queued] AudioEngine::feedTciTxAudio
+       -> [queued, TCI thread -> TX thread] TxAudioPipeline::feedTciTxAudio
        -> resampleTo12k (AudioDecimator) -> TCI TX gain -> SL-tier frame -> encode -> K4
 ```
 
 (Updated to the code; the design read "take the FIRST `hdr.length` floats", which the window trap
 above disproved.)
 
-The seam is the microphone's `readAll()` in `AudioEngine::onMicDataReady` — the only
+The seam is the microphone's `readAll()` in `TxAudioPipeline::onMicDataReady` — the only
 source-specific line.
 Everything below it is source-agnostic, and QK4's TX path natively wants 48 kHz mono Float32, which
 is exactly what WSJT-X sends.

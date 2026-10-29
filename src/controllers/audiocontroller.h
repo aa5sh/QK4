@@ -11,6 +11,7 @@
 
 class AudioEngine;
 class TxAudioPipeline;
+class TciServer;
 class ConnectionController;
 class RadioState;
 
@@ -65,6 +66,15 @@ public:
 
     // One block of TCI transmit audio, 48 kHz mono Float32. Ignored unless the source is Tci.
     void feedTciTxAudio(const QByteArray &f32Mono48k);
+
+    // Route a TCI server's transmit audio straight to the TX thread, queued, without passing
+    // through the main thread. Returns the connection; disconnecting it stops the audio.
+    //
+    // WHY a direct sender-to-pipeline connection rather than a hop through a controller: the server
+    // lives on the TCI thread and the encoder on the TX thread, and a busy GUI (a resize, a
+    // full-rate panadapter) used to delay transmit audio that had no business waiting on it. Qt
+    // removes the connection itself if either end is destroyed, so no lifetime rule rides on it.
+    QMetaObject::Connection routeTciTxAudio(TciServer *server);
     bool isPttActive() const;
 
     // Volume/mix controls (atomic — safe from any thread)

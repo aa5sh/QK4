@@ -31,6 +31,8 @@ class TransmitController;
  *   - RX audio arrives from AudioController::rxAudioAvailable on the I/O thread and crosses to the
  *     TCI thread by queued connection, so resampling is paid off the I/O thread - which also
  *     carries the K4 control stream.
+ *   - TX audio goes from TciServer (TCI thread) straight to the TX pipeline (TX thread) on a queued
+ *     connection made by AudioController::routeTciTxAudio, never through the main thread.
  *   - RadioState is NOT read from the TCI thread. It is main-thread-only and CI-enforced
  *     (CONVENTIONS.md rule 4); the server keeps its own snapshot instead.
  *
@@ -151,6 +153,9 @@ private:
     QPointer<TransmitController> m_transmitController;
     ConnectionController *m_connectionController;
     bool m_audioEnabled = true;
+    // TCI transmit audio, server (TCI thread) -> TX pipeline (TX thread), never through main. Held
+    // only while audio is enabled: disconnecting it is the gate. See AudioController::routeTciTxAudio.
+    QMetaObject::Connection m_txAudioRoute;
     RadioState *m_radioState;
     TciServer *m_server;
     TciAudioBridge *m_bridge;

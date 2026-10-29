@@ -8,6 +8,7 @@
 #include "models/radiostate.h"
 #include "network/networkmetrics.h"
 #include "network/protocol.h"
+#include "network/tciserver.h"
 #include "network/tcpclient.h"
 #include "settings/radiosettings.h"
 #include "utils/radioutils.h"
@@ -292,6 +293,13 @@ void AudioController::feedTciTxAudio(const QByteArray &f32Mono48k) {
         return;
     // Queued: the encode pipeline runs on the TX thread.
     QMetaObject::invokeMethod(m_txPipeline, "feedTciTxAudio", Qt::QueuedConnection, Q_ARG(QByteArray, f32Mono48k));
+}
+
+QMetaObject::Connection AudioController::routeTciTxAudio(TciServer *server) {
+    if (!m_txPipeline || !server)
+        return {};
+    return connect(server, &TciServer::txAudioReceived, m_txPipeline, &TxAudioPipeline::feedTciTxAudio,
+                   Qt::QueuedConnection);
 }
 
 bool AudioController::isPttActive() const {
