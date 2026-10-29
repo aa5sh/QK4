@@ -389,7 +389,7 @@ set(HEADERS
 )
 
 if(UNIX AND NOT APPLE)
-    list(APPEND HEADERS src/hardware/kpodudevworker.h)
+    list(APPEND HEADERS src/hardware/kpodudevworker.h src/hardware/kpodudevmatch.h)
 endif()
 
 # On macOS, create an app bundle

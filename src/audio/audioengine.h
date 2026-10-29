@@ -5,6 +5,7 @@
 #include <QAudioSink>
 #include <QAudioSource>
 #include <QAudioFormat>
+#include <QElapsedTimer>
 #include <QIODevice>
 #include <QMediaDevices>
 #include <QTimer>
@@ -143,7 +144,7 @@ signals:
     // encode pipeline here from AudioController (main thread) so a busy GUI
     // event loop can no longer stall voice TX packet emission.
     void txPacketReady(const QByteArray &packet);
-    void bufferStatus(int queueBytes, int maxBytes, bool prebuffering);
+    void bufferStatus(int queueBytes, int maxBytes);
 
     // The microphone could not be opened, with the reason as a sentence for the operator. The
     // operator has to act - a different device, or a different rate.
@@ -226,7 +227,7 @@ private:
     // that ordinary buffer starvation never trips it, short enough that the operator learns within
     // one over rather than after the contact.
     static constexpr qint64 MIC_SILENCE_WARN_MS = 500;
-    qint64 m_firstEmptyPollMs = 0;
+    QElapsedTimer m_micSilenceTimer;
     bool m_micSilenceReported = false;
 
     // Loudest mic sample since PTT engaged, tracked across EVERY frame while qk4.audio.tx is on.

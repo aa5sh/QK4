@@ -162,7 +162,13 @@ void KpodHidWorker::shutdown() {
         m_udevWorker->stop();
     if (m_udevThread) {
         m_udevThread->quit();
-        m_udevThread->wait(2000);
+        if (!m_udevThread->wait(2000)) {
+            // WHY detached: it is a child of this worker, and destroying a running QThread aborts.
+            qCWarning(hwKpod) << "KPOD: udev thread did not stop within 2 s; detaching it";
+            m_udevThread->setParent(nullptr);
+            m_udevThread = nullptr;
+            m_udevWorker = nullptr;
+        }
     }
 #endif
     releaseHandle();

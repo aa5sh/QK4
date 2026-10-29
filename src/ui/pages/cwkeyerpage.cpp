@@ -51,8 +51,8 @@ CwKeyerPage::CwKeyerPage(HalikeyDevice *halikeyDevice, RadioState *radioState, C
     connect(m_cwKeyerDeviceTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
         int type = m_cwKeyerDeviceTypeCombo->itemData(index).toInt();
         RadioSettings::instance()->setHalikeyDeviceType(type);
-        // Disconnect if connected, since device type changed
-        if (m_halikeyDevice && m_halikeyDevice->isConnected()) {
+        // Close even a port still opening: it was opened as the old device type.
+        if (m_halikeyDevice) {
             m_halikeyDevice->closePort();
         }
         updateCwKeyerDescription();
@@ -176,10 +176,15 @@ CwKeyerPage::CwKeyerPage(HalikeyDevice *halikeyDevice, RadioState *radioState, C
                                    .arg(K4Styles::Colors::TextWhite)
                                    .arg(K4Styles::Dimensions::FontSizePopup));
     ditMemValue->setFixedWidth(K4Styles::Dimensions::SliderValueLabelWidth);
-    connect(ditMemSlider, &QSlider::valueChanged, this, [ditMemValue](int value) {
+    // WHY applied on release, not on every value: each setting is a full save of every setting.
+    // Keyboard and click steps arrive with the slider up and are applied at once.
+    connect(ditMemSlider, &QSlider::valueChanged, this, [ditMemSlider, ditMemValue](int value) {
         ditMemValue->setText(QString("%1%").arg(value));
-        RadioSettings::instance()->setHalikeyDitMemoryDelay(value);
+        if (!ditMemSlider->isSliderDown())
+            RadioSettings::instance()->setHalikeyDitMemoryDelay(value);
     });
+    connect(ditMemSlider, &QSlider::sliderReleased, this,
+            [ditMemSlider]() { RadioSettings::instance()->setHalikeyDitMemoryDelay(ditMemSlider->value()); });
     addRow("Dit Memory Delay:", ditMemSlider, ditMemValue);
 
     auto *muteCheck = new QCheckBox("Mute the K4's CW monitor while keying", this);
@@ -229,10 +234,14 @@ CwKeyerPage::CwKeyerPage(HalikeyDevice *halikeyDevice, RadioState *radioState, C
                                                   .arg(K4Styles::Dimensions::FontSizePopup));
     m_sidetoneVolumeValueLabel->setFixedWidth(K4Styles::Dimensions::SliderValueLabelWidth);
 
+    // Applied on release for the same reason as Dit Memory Delay above.
     connect(m_sidetoneVolumeSlider, &QSlider::valueChanged, this, [this](int value) {
         m_sidetoneVolumeValueLabel->setText(QString("%1%").arg(value));
-        RadioSettings::instance()->setSidetoneVolume(value);
+        if (!m_sidetoneVolumeSlider->isSliderDown())
+            RadioSettings::instance()->setSidetoneVolume(value);
     });
+    connect(m_sidetoneVolumeSlider, &QSlider::sliderReleased, this,
+            [this]() { RadioSettings::instance()->setSidetoneVolume(m_sidetoneVolumeSlider->value()); });
 
     volumeLayout->addWidget(volumeLabel);
     volumeLayout->addWidget(m_sidetoneVolumeSlider, 1);

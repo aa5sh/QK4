@@ -1,4 +1,5 @@
 #include "sidetonegenerator.h"
+#include "audio/audiodeviceselection.h"
 #include "audio/audiologging.h"
 #include "audio/sidetonescheduler.h"
 #include <QAudioFormat>
@@ -152,15 +153,28 @@ void SidetoneGenerator::stop() {
 }
 
 void SidetoneGenerator::onSystemDefaultOutputChanged() {
-    // Only follow the OS default when the user hasn't pinned a specific device.
-    if (!m_selectedOutputDeviceId.isEmpty())
+    bool pinnedPresent = false;
+    if (!m_selectedOutputDeviceId.isEmpty()) {
+        for (const QAudioDevice &d : QMediaDevices::audioOutputs()) {
+            if (d.id() == m_selectedOutputDeviceId) {
+                pinnedPresent = true;
+                break;
+            }
+        }
+    }
+
+    // Same decision as AudioEngine's output: follow the OS default when nothing is pinned, and
+    // reclaim a pinned device the moment it reappears. See audio/audiodeviceselection.h.
+    const auto decision = AudioDeviceSelection::onDeviceListChanged(
+        m_selectedOutputDeviceId.toStdString(), m_activeOutputDeviceId.toStdString(),
+        QMediaDevices::defaultAudioOutput().id().toStdString(), pinnedPresent, m_audioSink != nullptr);
+
+    qCDebug(qk4Audio, "SidetoneGenerator: output device list changed (selection=\"%s\", active=\"%s\") -> %s",
+            m_selectedOutputDeviceId.isEmpty() ? "system default" : qUtf8Printable(m_selectedOutputDeviceId),
+            qUtf8Printable(m_activeOutputDeviceId), decision.reason);
+
+    if (decision.action != AudioDeviceSelection::Action::SwitchTo)
         return;
-    // Nothing built yet (or stop() already ran) — the next initAudio() resolves fresh.
-    if (!m_audioSink)
-        return;
-    const QString newDefault = QMediaDevices::defaultAudioOutput().id();
-    if (newDefault.isEmpty() || newDefault == m_activeOutputDeviceId)
-        return; // effective default unchanged
     closeAudio();
     initAudio();
 }

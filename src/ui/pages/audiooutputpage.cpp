@@ -37,8 +37,10 @@ AudioOutputPage::AudioOutputPage(AudioController *audioController, QWidget *pare
     m_speakerDeviceCombo = new QComboBox(this);
     m_speakerDeviceCombo->setStyleSheet(K4Styles::Dialog::comboBox());
     populateSpeakerDevices();
-    connect(m_speakerDeviceCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-            &AudioOutputPage::onSpeakerDeviceChanged);
+    // WHY activated, not currentIndexChanged: repopulating the list changes the current index (and
+    // falls back to System Default while a pinned device is absent). Only an operator's pick may
+    // move the saved device or the stream.
+    connect(m_speakerDeviceCombo, &QComboBox::activated, this, &AudioOutputPage::onSpeakerDeviceChanged);
     layout->addWidget(m_speakerDeviceCombo);
 
     layout->addSpacing(K4Styles::Dimensions::PaddingMedium);

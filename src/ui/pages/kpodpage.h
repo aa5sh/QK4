@@ -44,6 +44,7 @@ private:
     // KPOD+ configuration controls. Keyer speed / CW pitch / iambic mode /
     // paddle orientation are no longer configured here — they mirror the K4
     // (see CwController). Encode mode has no K4 equivalent and stays manual.
+    QFrame *m_keyerSeparator = nullptr; // the line above m_keyerConfigWidget, shown with it
     QWidget *m_keyerConfigWidget = nullptr;
     QComboBox *m_encodeModeCombo = nullptr;
 };

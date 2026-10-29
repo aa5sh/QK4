@@ -43,7 +43,7 @@ void HaliKeyMidiWorker::prepareShutdown() {
 }
 
 void HaliKeyMidiWorker::checkPortPresence() {
-    if (!m_running.load(std::memory_order_acquire)) {
+    if (stopRequested()) {
         return;
     }
 
@@ -95,8 +95,14 @@ void HaliKeyMidiWorker::checkPortPresence() {
 }
 
 void HaliKeyMidiWorker::start() {
+    if (stopRequested())
+        return;
+
+    // Built in a local and published under m_midiMutex: prepareShutdown() resets m_midiIn from the
+    // main thread and may run while this is still opening the port.
+    std::unique_ptr<RtMidiIn> midiIn;
     try {
-        m_midiIn = std::make_unique<RtMidiIn>();
+        midiIn = std::make_unique<RtMidiIn>();
     } catch (RtMidiError &error) {
         QString msg = QString("Failed to create MIDI input: %1").arg(QString::fromStdString(error.getMessage()));
         qWarning() << "HaliKeyMidiWorker:" << msg;
@@ -106,12 +112,12 @@ void HaliKeyMidiWorker::start() {
 
     // Find the MIDI port matching our device name. The same matcher the presence poll uses, so
     // "the port we opened" and "the port that disappeared" can never be decided differently.
-    unsigned int portCount = m_midiIn->getPortCount();
+    unsigned int portCount = midiIn->getPortCount();
     qCDebug(hwMidi) << "HaliKeyMidiWorker: searching for device" << m_portName << "among" << portCount << "MIDI ports";
     QStringList portNames;
     portNames.reserve(static_cast<int>(portCount));
     for (unsigned int i = 0; i < portCount; i++) {
-        portNames << QString::fromStdString(m_midiIn->getPortName(i));
+        portNames << QString::fromStdString(midiIn->getPortName(i));
         qCDebug(hwMidi) << "HaliKeyMidiWorker: MIDI port" << i << ":" << portNames.last();
     }
     const int foundPort = HalikeyMidiPorts::findPort(portNames, m_portName);
@@ -120,27 +126,30 @@ void HaliKeyMidiWorker::start() {
         QString msg = QString("MIDI device '%1' not found (%2 ports available)").arg(m_portName).arg(portCount);
         qWarning() << "HaliKeyMidiWorker:" << msg;
         emit errorOccurred(msg);
-        m_midiIn.reset();
         return;
     }
 
     try {
-        m_midiIn->openPort(static_cast<unsigned int>(foundPort));
+        midiIn->openPort(static_cast<unsigned int>(foundPort));
     } catch (RtMidiError &error) {
         QString msg = QString("Failed to open MIDI port: %1").arg(QString::fromStdString(error.getMessage()));
         qWarning() << "HaliKeyMidiWorker:" << msg;
         emit errorOccurred(msg);
-        m_midiIn.reset();
         return;
     }
 
     // Ignore sysex, timing, and active sensing messages
-    m_midiIn->ignoreTypes(true, true, true);
+    midiIn->ignoreTypes(true, true, true);
 
     // Set callback — RtMidi calls this from its internal thread
-    m_midiIn->setCallback(&HaliKeyMidiWorker::midiCallback, this);
+    midiIn->setCallback(&HaliKeyMidiWorker::midiCallback, this);
 
-    m_running = true;
+    {
+        QMutexLocker lock(&m_midiMutex);
+        if (stopRequested())
+            return; // shutdown began while opening; the local closes the port
+        m_midiIn = std::move(midiIn);
+    }
 
     // Presence poll. Created here because start() runs ON the worker thread, so the timer belongs
     // to that thread's event loop and fires there — the same thread that owns m_midiIn — and dies
@@ -156,7 +165,7 @@ void HaliKeyMidiWorker::start() {
 
 void HaliKeyMidiWorker::midiCallback(double deltaTime, std::vector<unsigned char> *message, void *userData) {
     auto *self = static_cast<HaliKeyMidiWorker *>(userData);
-    if (!self->m_running)
+    if (self->stopRequested())
         return;
     if (!message || message->size() < 3)
         return;

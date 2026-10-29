@@ -22,16 +22,15 @@ HaliKeyV14Worker::~HaliKeyV14Worker() {
 }
 
 void HaliKeyV14Worker::prepareShutdown() {
-    // Nothing to unblock: the monitor loop polls every 1 ms and sees m_running go false within a
+    // Nothing to unblock: the monitor loop polls every 1 ms and sees the stop request within a
     // poll. The port is closed by the worker thread itself as the loop exits, never from here.
 }
 
 void HaliKeyV14Worker::start() {
-    if (!openNativePort()) {
+    if (stopRequested() || !openNativePort()) {
         return;
     }
     emit portOpened();
-    m_running = true;
     monitorLoop();
 }
 
@@ -207,7 +206,7 @@ void HaliKeyV14Worker::monitorLoop() {
     const SerialLinePoller::ReadLine read = [&](Signal s) { return s == Signal::CTS ? ditLine : dahLine; };
 
     auto fail = [this]() {
-        if (!m_running)
+        if (stopRequested())
             return;
 #ifdef Q_OS_WIN
         const QString error = QStringLiteral("Failed to read pin state");
@@ -244,10 +243,10 @@ void HaliKeyV14Worker::monitorLoop() {
     }
 #endif
 
-    while (m_running) {
+    while (!stopRequested()) {
 #ifdef Q_OS_WIN
         if (pollTimer)
-            WaitForSingleObject(pollTimer, 5); // ~1 ms tick; 5 ms cap bounds m_running latency
+            WaitForSingleObject(pollTimer, 5); // ~1 ms tick; 5 ms cap bounds stop latency
         else
             Sleep(1);
 #else

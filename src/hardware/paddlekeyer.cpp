@@ -162,12 +162,14 @@ bool PaddleKeyer::hasPendingEvents() const {
 
 void PaddleKeyer::releasePaddles(bool closing) {
     bool straightKeyDown;
+    double straightKeyDownAt;
     std::optional<FirstElement> scheduled;
     {
         std::lock_guard lock(m_firstElementMutex);
         if (closing)
             m_closed = true;
         straightKeyDown = m_straightKeyDown;
+        straightKeyDownAt = m_straightKeyDownAt;
         m_straightKeyDown = false;
         scheduled = m_firstElementScheduled;
         m_firstElementScheduled.reset();
@@ -182,19 +184,19 @@ void PaddleKeyer::releasePaddles(bool closing) {
     }
     if (straightKeyDown) {
         m_sidetone.keyNow(false);
-        endStraightKeyOnAir();
+        endStraightKeyOnAir(straightKeyDownAt);
     } else if (scheduled && !m_sidetone.cancelDown()) {
         m_sidetone.keyNow(false);
     }
 }
 
-void PaddleKeyer::endStraightKeyOnAir() {
+void PaddleKeyer::endStraightKeyOnAir(double keyDownAt) {
     if (!m_k4Keyed.exchange(false))
         return;
     long long ms;
     {
         std::lock_guard lock(m_straightMutex);
-        const double seconds = m_clock.now() - m_straightKeyDownAt;
+        const double seconds = m_clock.now() - keyDownAt;
         m_previousKeyUpTimestamp = m_previousKeyDownTimestamp + seconds;
         m_paddleTimestamp = std::max(m_paddleTimestamp, m_previousKeyUpTimestamp);
         ms = straightKeyMs(seconds);

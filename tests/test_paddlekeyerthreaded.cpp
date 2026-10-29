@@ -11,6 +11,7 @@
 #include "hardware/paddlekeyer.h"
 
 #include <QtTest/QtTest>
+#include <atomic>
 #include <mutex>
 #include <thread>
 
@@ -146,6 +147,31 @@ private slots:
         QCOMPARE(sent[1].substr(0, 3), std::string("KZU"));
         const int ms = std::stoi(sent[1].substr(3, 4));
         QVERIFY2(ms >= 90 && ms < 1000, sent[1].c_str());
+    }
+
+    // A straight key worked on the device thread while another thread releases: the release reads
+    // the key-down time the device thread writes, so ThreadSanitizer flags any read outside the
+    // writer's lock. Plainly, every KZU stays within the 5 s cap and nothing is left open.
+    void straightKeyReleaseRacesKeyDown() {
+        Rig rig(30);
+        rig.keyer.setStraightKeying(true);
+        std::atomic<bool> done{false};
+        std::thread device([&] {
+            for (int i = 0; i < 5000; ++i) {
+                rig.keyer.paddleEvent(PaddleKeyer::Event::DitDown, 0.001);
+                rig.keyer.paddleEvent(PaddleKeyer::Event::DitUp, 0.001);
+            }
+            done = true;
+        });
+        while (!done)
+            rig.keyer.releasePaddles();
+        device.join();
+        rig.keyer.close();
+        rig.thread.join();
+        const auto sent = rig.link.sent();
+        QCOMPARE(openKzd(sent), 0);
+        for (const auto &c : sent)
+            QVERIFY2(std::stoi(c.substr(3, 4)) <= 5000, c.c_str());
     }
 
     // Close with nothing keyed returns promptly: the loop wakes on the Close event.

@@ -8,7 +8,6 @@
 #include "audio/rxoutputstage.h"  // RX boost + soft limiter
 #include "network/protocol.h"     // buildAudioPacket
 #include "utils/radioutils.h"     // RX jitter-buffer watermarks
-#include <QDateTime>
 #include <QMediaDevices>
 #include <QAudioDevice>
 #include <QDebug>
@@ -421,7 +420,6 @@ void AudioEngine::feedAudioDevice() {
     // is a member to avoid constructing a fresh QList on every 10 ms tick.
     m_feedBatch.clear();
     int preDrainQueueBytes;
-    bool snapshotPrebuffering;
     {
         QMutexLocker lock(&m_queueMutex);
 
@@ -437,7 +435,6 @@ void AudioEngine::feedAudioDevice() {
 
         // Snapshot queue depth BEFORE draining (steady-state depth)
         preDrainQueueBytes = m_queueBytes;
-        snapshotPrebuffering = m_prebuffering;
 
         // Drain packets that fit in the sink's free space
         while (!m_audioQueue.isEmpty()) {
@@ -452,14 +449,14 @@ void AudioEngine::feedAudioDevice() {
         }
     }
 
-    emit bufferStatus(preDrainQueueBytes, MAX_QUEUE_BYTES, snapshotPrebuffering);
+    emit bufferStatus(preDrainQueueBytes, MAX_QUEUE_BYTES);
 
     // Apply mix/volume and write to audio sink without holding the lock
     for (QByteArray &packet : m_feedBatch) {
         applyMixAndVolume(packet);
-        qint64 written = m_audioSinkDevice->write(packet.constData(), packet.size());
+        const qint64 written = qMax<qint64>(0, m_audioSinkDevice->write(packet.constData(), packet.size()));
         if (written < packet.size()) {
-            // Partial write — save remainder for next feed cycle
+            // Partial or failed write — save remainder for next feed cycle
             m_writeBuffer.append(packet.constData() + written, packet.size() - static_cast<int>(written));
         }
     }
@@ -723,10 +720,9 @@ void AudioEngine::onMicDataReady() {
         // An empty read is normal between polls. Silence that PERSISTS while the operator is
         // keying is not - see the watchdog members for why this is worth distinguishing.
         if (m_pttActive.load(std::memory_order_acquire) && txSource() == TxSource::Microphone) {
-            const qint64 now = QDateTime::currentMSecsSinceEpoch();
-            if (m_firstEmptyPollMs == 0) {
-                m_firstEmptyPollMs = now;
-            } else if (!m_micSilenceReported && now - m_firstEmptyPollMs > MIC_SILENCE_WARN_MS) {
+            if (!m_micSilenceTimer.isValid()) {
+                m_micSilenceTimer.start();
+            } else if (!m_micSilenceReported && m_micSilenceTimer.elapsed() > MIC_SILENCE_WARN_MS) {
                 m_micSilenceReported = true;
 
                 // ON SCREEN, not only here. A local PTT press keys the K4 by streaming audio, so a
@@ -750,7 +746,7 @@ void AudioEngine::onMicDataReady() {
                           "Bluetooth headsets are the usual cause: they must switch to HFP for the "
                           "microphone, which cannot happen while a stereo (A2DP) playback stream is open "
                           "on the same device - ours is on \"%s\".",
-                          static_cast<long long>(now - m_firstEmptyPollMs),
+                          static_cast<long long>(m_micSilenceTimer.elapsed()),
                           qUtf8Printable(m_activeMicDeviceId.isEmpty() ? QByteArray("(default)") : m_activeMicDeviceId),
                           actual.sampleRate(), actual.channelCount(),
                           m_audioSource ? static_cast<int>(m_audioSource->state()) : -1,
@@ -761,7 +757,7 @@ void AudioEngine::onMicDataReady() {
         }
         return;
     }
-    m_firstEmptyPollMs = 0;
+    m_micSilenceTimer.invalidate();
     m_micSilenceReported = false;
 
     // WHY drain but discard when TCI owns TX: the QAudioSource stays open across the whole
@@ -800,8 +796,8 @@ void AudioEngine::bufferAndEmitTxFrames(const QByteArray &pcm12k, float gain) {
     // m_micReadOffset advances per emitted frame instead of remove(0, n)'s O(N)
     // memmove on every poll. We compact only when the offset has grown past
     // half the buffer's size — keeps amortized work O(1) per frame.
-    const int frameBytes = m_frameSamples.load(std::memory_order_relaxed) * static_cast<int>(sizeof(float));
     const int frameSamples = m_frameSamples.load(std::memory_order_relaxed);
+    const int frameBytes = frameSamples * static_cast<int>(sizeof(float));
     const bool pttActive = m_pttActive.load(std::memory_order_acquire);
     const int encodeMode = m_encodeMode.load(std::memory_order_relaxed);
 

@@ -25,9 +25,9 @@ HalikeyDevice::~HalikeyDevice() {
 }
 
 bool HalikeyDevice::openPort(const QString &portName) {
-    if (m_connected) {
-        closePort();
-    }
+    // Unconditionally, not only when connected: a worker still opening has not reported
+    // portOpened yet, and replacing it without a teardown would orphan its thread.
+    closePort();
 
     m_portName = portName;
 
@@ -75,8 +75,15 @@ void HalikeyDevice::closePort() {
 
     if (m_workerThread) {
         m_workerThread->quit();
-        m_workerThread->wait(2000);
-        m_workerThread->deleteLater();
+        if (m_workerThread->wait(2000)) {
+            m_workerThread->deleteLater();
+        } else {
+            // WHY not deleted: destroying a running QThread aborts the process. Detach it so this
+            // device's destruction cannot take it down, and free it if it ever finishes.
+            qCWarning(hwHalikey) << "HalikeyDevice: worker thread did not stop within 2 s; detaching it";
+            m_workerThread->setParent(nullptr);
+            connect(m_workerThread, &QThread::finished, m_workerThread, &QObject::deleteLater);
+        }
         m_workerThread = nullptr;
     }
 

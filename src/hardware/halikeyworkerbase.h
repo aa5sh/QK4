@@ -22,7 +22,7 @@ Q_DECLARE_LOGGING_CATEGORY(hwHalikey)
  *
  * WHY `prepareShutdown()` exists: it runs on the main thread before the worker thread is joined.
  * The MIDI worker uses it to close the port, which stops RtMidi's callback thread. The serial loop
- * sees `m_running` go false within a poll, so it needs nothing.
+ * sees the stop request within a poll, so it needs nothing.
  */
 // Where raw MIDI messages go, called straight from RtMidi's own thread with no hop: the keyer
 // stamps a paddle edge the moment it arrives, so a queued hop would be timing error. Shared
@@ -61,7 +61,7 @@ public:
 
 public slots:
     virtual void start() = 0; // Called when thread starts
-    void stop();              // Sets atomic flag to exit loop
+    void stop();              // Requests the worker to stop; never cleared, so it holds even before start()
 
 signals:
     // One paddle line changed (serial worker): which lever, its new state, and the time in seconds
@@ -73,9 +73,16 @@ signals:
     void portOpened();
 
 protected:
+    bool stopRequested() const { return m_stopRequested.load(std::memory_order_acquire); }
+
     QString m_portName;
-    std::atomic<bool> m_running{false};
     std::atomic<bool> m_straightKey{false};
+
+private:
+    // WHY a request flag rather than a running flag the loop sets on entry: stop() can arrive
+    // before start() has run, and a loop that stored `running = true` would overwrite it and never
+    // exit, leaving the thread unjoinable.
+    std::atomic<bool> m_stopRequested{false};
 };
 
 #endif // HALIKEYWORKERBASE_H

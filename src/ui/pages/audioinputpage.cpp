@@ -36,8 +36,10 @@ AudioInputPage::AudioInputPage(AudioController *audioController, QWidget *parent
     m_micDeviceCombo = new QComboBox(this);
     m_micDeviceCombo->setStyleSheet(K4Styles::Dialog::comboBox());
     populateMicDevices();
-    connect(m_micDeviceCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-            &AudioInputPage::onMicDeviceChanged);
+    // WHY activated, not currentIndexChanged: repopulating the list changes the current index (and
+    // falls back to System Default while a pinned device is absent). Only an operator's pick may
+    // move the saved device or the stream.
+    connect(m_micDeviceCombo, &QComboBox::activated, this, &AudioInputPage::onMicDeviceChanged);
     layout->addWidget(m_micDeviceCombo);
 
     layout->addSpacing(K4Styles::Dimensions::PaddingMedium);

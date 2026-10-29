@@ -671,16 +671,15 @@ void KpodPlusEp02Worker::setDeviceHandle(quintptr handle) {
 }
 
 void KpodPlusEp02Worker::requestStop() {
-    m_running.store(false, std::memory_order_relaxed);
+    m_stopRequested.store(true, std::memory_order_release);
 }
 
 void KpodPlusEp02Worker::run() {
-    m_running.store(true, std::memory_order_relaxed);
     unsigned char buffer[32];
 
     // WHY a longer timeout than the legacy 10 ms: the device's EP02 FIFO is
     // multi-packet deep so we don't lose data during the wait. A short
-    // timeout served only to check m_running, which we'd hit at worst once per
+    // timeout served only to check for a stop request, which we'd hit at worst once per
     // timeout window — 100 ms is plenty for clean shutdown perception.
     constexpr int kEp02TimeoutMs = 100;
     // USB-008 backoff. 5 ms is long enough to stop a spin and far shorter than one CW element, so
@@ -690,7 +689,7 @@ void KpodPlusEp02Worker::run() {
     constexpr int kMaxConsecutiveErrors = 20;
     int consecutiveErrors = 0;
 
-    while (m_running.load(std::memory_order_relaxed)) {
+    while (!m_stopRequested.load(std::memory_order_acquire)) {
         libusb_device_handle *h = m_handle.load(std::memory_order_acquire);
         if (!h) {
             // No device — sleep briefly and re-check. Using a short blocking

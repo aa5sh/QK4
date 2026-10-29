@@ -4,7 +4,7 @@
 
 #ifdef Q_OS_LINUX
 
-#include <QByteArray>
+#include "hardware/kpodudevmatch.h"
 #include <QLoggingCategory>
 #include <cerrno>
 #include <cstring>
@@ -23,7 +23,14 @@ Q_LOGGING_CATEGORY(hwKpodUdev, "hw.kpod.udev")
 // crosses to userspace.
 
 KpodUdevWorker::KpodUdevWorker(quint16 vendorId, quint16 productId, QObject *parent)
-    : QObject(parent), m_vendorId(vendorId), m_productId(productId) {}
+    : QObject(parent), m_vendorId(vendorId), m_productId(productId) {
+    // WHY here, not in start(): stop() writes to the pipe from another thread, so the descriptors
+    // must exist before the worker thread does and never change afterwards.
+    if (::pipe2(m_wakePipe, O_CLOEXEC | O_NONBLOCK) < 0) {
+        qCWarning(hwKpodUdev) << "pipe2 failed:" << ::strerror(errno);
+        m_wakePipe[0] = m_wakePipe[1] = -1;
+    }
+}
 
 KpodUdevWorker::~KpodUdevWorker() {
     if (m_wakePipe[0] >= 0)
@@ -33,15 +40,18 @@ KpodUdevWorker::~KpodUdevWorker() {
 }
 
 void KpodUdevWorker::stop() {
-    m_running.store(false, std::memory_order_relaxed);
+    m_stopRequested.store(true, std::memory_order_release);
     if (m_wakePipe[1] >= 0) {
         const char b = 'x';
         ssize_t n = ::write(m_wakePipe[1], &b, 1);
-        (void)n; // best-effort wakeup; loop also checks m_running
+        (void)n; // best-effort wakeup; loop also checks m_stopRequested
     }
 }
 
 void KpodUdevWorker::start() {
+    if (m_stopRequested.load(std::memory_order_acquire) || m_wakePipe[0] < 0)
+        return;
+
     udev *udev = udev_new();
     if (!udev) {
         qCWarning(hwKpodUdev) << "udev_new failed";
@@ -77,19 +87,7 @@ void KpodUdevWorker::start() {
         return;
     }
 
-    if (::pipe2(m_wakePipe, O_CLOEXEC | O_NONBLOCK) < 0) {
-        qCWarning(hwKpodUdev) << "pipe2 failed:" << ::strerror(errno);
-        udev_monitor_unref(monitor);
-        udev_unref(udev);
-        return;
-    }
-
-    const QByteArray wantVid = QByteArray::number(m_vendorId, 16).rightJustified(4, '0').toLower();
-    const QByteArray wantPid = QByteArray::number(m_productId, 16).rightJustified(4, '0').toLower();
-
-    m_running.store(true, std::memory_order_relaxed);
-
-    while (m_running.load(std::memory_order_relaxed)) {
+    while (!m_stopRequested.load(std::memory_order_acquire)) {
         struct pollfd fds[2];
         fds[0].fd = monitorFd;
         fds[0].events = POLLIN;
@@ -118,9 +116,12 @@ void KpodUdevWorker::start() {
             // Drain all pending events (multiple may arrive between wakeups).
             while (udev_device *dev = udev_monitor_receive_device(monitor)) {
                 const char *action = udev_device_get_action(dev);
-                const char *vid = udev_device_get_sysattr_value(dev, "idVendor");
-                const char *pid = udev_device_get_sysattr_value(dev, "idProduct");
-                if (action && vid && pid && wantVid == vid && wantPid == pid) {
+                // WHY event properties, not sysattrs: on "remove" the sysfs node is already gone,
+                // so idVendor/idProduct read as null and an unplug was never reported.
+                const bool ours = KpodUdevMatch::eventMatches(
+                    udev_device_get_property_value(dev, "PRODUCT"), udev_device_get_property_value(dev, "ID_VENDOR_ID"),
+                    udev_device_get_property_value(dev, "ID_MODEL_ID"), m_vendorId, m_productId);
+                if (action && ours) {
                     if (std::strcmp(action, "add") == 0) {
                         emit deviceArrived();
                     } else if (std::strcmp(action, "remove") == 0) {

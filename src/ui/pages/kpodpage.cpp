@@ -174,15 +174,15 @@ void KpodPage::setupKeyerConfigSection(QVBoxLayout *parentLayout) {
     });
 
     // Separator before keyer section
-    auto *line3 = new QFrame(this);
-    line3->setFrameShape(QFrame::HLine);
-    line3->setStyleSheet(K4Styles::Dialog::separator());
-    line3->setFixedHeight(K4Styles::Dimensions::SeparatorHeight);
-    parentLayout->addWidget(line3);
+    m_keyerSeparator = new QFrame(this);
+    m_keyerSeparator->setFrameShape(QFrame::HLine);
+    m_keyerSeparator->setStyleSheet(K4Styles::Dialog::separator());
+    m_keyerSeparator->setFixedHeight(K4Styles::Dimensions::SeparatorHeight);
+    parentLayout->addWidget(m_keyerSeparator);
     parentLayout->addWidget(m_keyerConfigWidget);
 
     // Initially hidden
-    line3->setVisible(false);
+    m_keyerSeparator->setVisible(false);
     m_keyerConfigWidget->setVisible(false);
 }
 
@@ -274,18 +274,7 @@ void KpodPage::updateKpodStatus() {
     // Show/hide keyer configuration section based on KPOD+ detection
     if (m_keyerConfigWidget) {
         m_keyerConfigWidget->setVisible(kpodPlusDetected);
-        // Also show the separator above it
-        QWidget *sep = m_keyerConfigWidget->parentWidget();
-        if (sep) {
-            // Find the separator line just before keyer config
-            int idx = static_cast<QVBoxLayout *>(layout())->indexOf(m_keyerConfigWidget);
-            if (idx > 0) {
-                QLayoutItem *item = layout()->itemAt(idx - 1);
-                if (item && item->widget()) {
-                    item->widget()->setVisible(kpodPlusDetected);
-                }
-            }
-        }
+        m_keyerSeparator->setVisible(kpodPlusDetected);
     }
 
     // Help text. DETECTED, ENABLED and RUNNING are three different things, and this used to conflate

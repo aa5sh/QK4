@@ -123,7 +123,7 @@ private:
     void waitUntilSidetoneHeard();
     void endElement(char element);
     void measureInherentSidetoneLag();
-    void endStraightKeyOnAir();
+    void endStraightKeyOnAir(double keyDownAt);
     long long straightKeyMs(double seconds) const;
     double midiEventTimestamp(double delta);
     std::optional<double> sleepUntil(double when);
@@ -180,7 +180,7 @@ private:
     std::atomic<bool> m_inBurst{false};
     bool m_closed = false;
     bool m_straightKeyDown = false;
-    double m_straightKeyDownAt = 0.0;
+    double m_straightKeyDownAt = 0.0; // read only under m_firstElementMutex, like its writer
 
     // ---- straight-key on-air state (keyer thread, and releasePaddles from any thread) ----
     std::mutex m_straightMutex;

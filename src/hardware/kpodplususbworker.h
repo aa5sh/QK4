@@ -53,10 +53,6 @@ public:
     ResponseEvents decodeResponse(const unsigned char buffer[8]);
     void resetDecoderState(); // test seam
 
-    // Device-handle accessor — consumed by KpodPlusEp02Worker once open
-    // succeeds (handle is set via a queued slot, never read concurrently).
-    libusb_device_handle *deviceHandle() const { return m_handle; }
-
 public slots:
     void start();    // wired to QThread::started; libusb_init + timer setup
     void shutdown(); // BlockingQueuedConnection from façade dtor
@@ -89,8 +85,9 @@ signals:
     void buttonHeld(int n);
     void pollError(QString message);
 
-    // Emitted right after openHandle() succeeds. The façade re-emits to the
-    // EP02 worker (queued) so the reader can pick up the new handle.
+    // Emitted right after openHandle() succeeds, and handleClosing before the handle is released.
+    // The façade connects both to the EP02 worker with DirectConnection: its run() loop never
+    // returns to an event loop, so a queued call would never be delivered.
     void handleOpened(quintptr handle);
     void handleClosing();
 
@@ -178,7 +175,8 @@ signals:
 
 private:
     std::atomic<libusb_device_handle *> m_handle{nullptr};
-    std::atomic<bool> m_running{false};
+    // WHY a request flag run() never resets: requestStop() may arrive before run() starts.
+    std::atomic<bool> m_stopRequested{false};
     std::mutex m_transferMutex;
 };
 

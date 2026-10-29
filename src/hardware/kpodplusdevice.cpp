@@ -105,14 +105,17 @@ KpodPlusDevice::~KpodPlusDevice() {
     if (m_ep02Worker) {
         m_ep02Worker->requestStop();
     }
-    if (m_ep02Thread) {
-        m_ep02Thread->quit();
-        m_ep02Thread->wait(2000);
-    }
-
-    if (m_usbThread) {
-        m_usbThread->quit();
-        m_usbThread->wait(2000);
+    // WHY a thread that will not stop is detached, not left as a child: ~QObject would destroy it
+    // while it runs, which aborts the process.
+    for (QThread *thread : {m_ep02Thread, m_usbThread}) {
+        if (!thread)
+            continue;
+        thread->quit();
+        if (!thread->wait(2000)) {
+            qCWarning(hwKpodPlus) << "KPOD+:" << thread->objectName() << "thread did not stop within 2 s; detaching it";
+            thread->setParent(nullptr);
+            connect(thread, &QThread::finished, thread, &QObject::deleteLater);
+        }
     }
 }
 

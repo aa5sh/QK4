@@ -320,25 +320,23 @@ void HardwareController::onKpodEncoderRotated(int ticks) {
     if (!m_connectionController->isConnected()) {
         return;
     }
-    // USB-007. isConnected() goes true when the socket authenticates, which is BEFORE the RDY dump
-    // that carries the radio's actual frequencies. A knob turn in that window read vfoA() at its 0
-    // sentinel and sent FA for a near-zero frequency - the radio obeyed and jumped off band. The
-    // `newFreq > 0` guard below does not catch it, because ticks x step is itself positive.
-    //
-    // Waiting for a real frequency is the honest condition: until the K4 has told us where it is,
-    // QK4 has nothing to tune relative to.
-    if (m_radioState->vfoA() == 0) {
-        return;
-    }
     onKpodEncoderRotatedWithRocker(ticks, static_cast<int>(m_kpodDevice->rockerPosition()));
 }
 
 void HardwareController::onKpodEncoderRotatedWithRocker(int ticks, int rockerPos) {
     // Action depends on rocker position (shared by KPOD and KPOD+)
+    //
+    // USB-007. isConnected() goes true when the socket authenticates, which is BEFORE the RDY dump
+    // that carries the radio's actual frequencies. A knob turn in that window read the VFO at its 0
+    // sentinel and sent FA/FB for a near-zero frequency - the radio obeyed and jumped off band. The
+    // `newFreq > 0` guards below do not catch it, because ticks x step is itself positive.
+    //
+    // Waiting for a real frequency is the honest condition: until the K4 has told us where the VFO
+    // being tuned is, QK4 has nothing to tune relative to.
     switch (rockerPos) {
     case 2: // RockerLeft — VFO A
     {
-        if (m_radioState->lockA())
+        if (m_radioState->lockA() || m_radioState->vfoA() == 0)
             break;
         quint64 currentFreq = m_radioState->vfoA();
         int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStep());
@@ -353,7 +351,7 @@ void HardwareController::onKpodEncoderRotatedWithRocker(int ticks, int rockerPos
 
     case 0: // RockerCenter — VFO B
     {
-        if (m_radioState->lockB())
+        if (m_radioState->lockB() || m_radioState->vfoB() == 0)
             break;
         quint64 currentFreq = m_radioState->vfoB();
         int stepHz = RadioUtils::tuningStepToHz(m_radioState->tuningStepB());
