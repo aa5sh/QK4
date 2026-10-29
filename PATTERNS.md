@@ -86,9 +86,9 @@ Spectrum and waterfall widgets subclass `QRhiWidget` (Qt Widgets, since Qt 6.7).
 `src/dsp/panadapter_rhi.cpp`. Shaders are compiled with `qt6_add_shaders()` in `CMakeLists.txt`.
 Size GPU buffers and textures in device pixels (`size() * devicePixelRatio()`), not widget pixels.
 
-The CI unit-test job builds with Ubuntu's Qt 6.4.2, which has no `QRhiWidget`. Keep any logic you
-want tested out of the widget, in a plain class (`spectrumgeometry`, `waterfallgeometry`,
-`dashgeometry`), and test that.
+Unit tests do not create a GPU context, and an offscreen `QRhiWidget` has nothing to render to.
+Keep any logic you want tested out of the widget, in a plain class (`spectrumgeometry`,
+`waterfallgeometry`, `dashgeometry`), and test that.
 
 ### High-DPI drawing
 
