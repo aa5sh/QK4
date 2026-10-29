@@ -78,8 +78,8 @@ private:
     // Monotonic clock for history timestamps (immune to wall-clock jumps).
     QElapsedTimer m_clock;
 
-    // 30-second sparkline trail. RTT/jitter append ~1/s (per PONG); buffer appends ~100/s
-    // (AudioEngine feed timer, 10 ms). 30 s × 100/s = 3000 buffer samples → cap with headroom.
+    // 30-second sparkline trail. RTT/jitter append ~1/s (per PONG); buffer appends 20/s
+    // (AudioController samples the engine every 50 ms). 30 s × 20/s = 600; the cap is a backstop.
     static constexpr int HISTORY_WINDOW_MS = 30000;
     static constexpr int HISTORY_MAX_SAMPLES = 4000;
     std::deque<TimedSample> m_rttHistory;

@@ -73,6 +73,9 @@ public:
     // not while the K4 has stopped sending because we are transmitting.
     quint32 rxUnderruns() const { return m_rxUnderruns.load(std::memory_order_relaxed); }
     quint32 rxDroppedPackets() const { return m_rxDroppedPackets.load(std::memory_order_relaxed); }
+    // Total RX audio buffered (queue + sink) at the last feed tick, in bytes of decoded audio.
+    // Sampled by the UI rather than pushed: the feed runs at 200 Hz.
+    int rxBufferedBytes() const { return m_rxBufferedBytes.load(std::memory_order_relaxed); }
 
     // Transmitting: the K4 stops sending RX audio, so the sink running dry is expected and not
     // counted as an underrun. Atomic, safe from any thread.
@@ -84,10 +87,6 @@ public:
 
     // Get list of available output devices (for settings UI)
     static QList<QPair<QString, QString>> availableOutputDevices(); // (id, description)
-
-signals:
-    // Total RX audio buffered (queue + sink), in bytes of decoded audio.
-    void bufferStatus(int bufferedBytes);
 
 private slots:
     void feedAudioDevice();
@@ -164,6 +163,7 @@ private:
     std::atomic<quint32> m_rxUnderruns{0};
     std::atomic<quint32> m_rxDroppedPackets{0};
     std::atomic<bool> m_transmitting{false};
+    std::atomic<int> m_rxBufferedBytes{0};
 
     // Jitter buffer for RX audio playback: one decoded K4 packet per slot, filled in place by the
     // I/O thread and mixed and written in place by the audio thread.

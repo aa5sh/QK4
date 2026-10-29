@@ -18,6 +18,8 @@
 namespace {
 // 20 Hz: often enough for the buffer sparkline, a tenth of the events the audio thread used to post.
 constexpr int kMetricsSampleMs = 50;
+// No RX packet for this many ticks (250 ms, two SL7 packets) and the stream counts as stopped.
+constexpr int kStreamIdleTicks = 5;
 // One RX playout line at most this often, and only when something happened.
 constexpr int kRxLogEveryTicks = 2000 / kMetricsSampleMs;
 } // namespace
@@ -71,6 +73,7 @@ AudioController::AudioController(ConnectionController *connController, RadioStat
     m_rxDecodeConnection =
         connect(protocol, &Protocol::audioDataReady, protocol, [this, decoder](const QByteArray &payload) {
             QByteArray pcmData = decoder->decodeK4Packet(payload);
+            m_rxPacketsDecoded.fetch_add(1, std::memory_order_relaxed);
             if (!pcmData.isEmpty()) {
                 m_audioEngine->enqueueAudio(pcmData);
                 // Fan-out for TCI listeners. Deliberately after enqueueAudio so the speaker path is
@@ -83,13 +86,10 @@ AudioController::AudioController(ConnectionController *connController, RadioStat
             }
         });
 
-    // Audio buffer status → network health metrics
-    connect(protocol, &Protocol::audioSequenceReceived, m_connectionController->networkMetrics(),
-            &NetworkMetrics::onAudioSequence);
-    connect(m_audioEngine, &AudioEngine::bufferStatus, m_connectionController->networkMetrics(),
-            &NetworkMetrics::onBufferStatus);
-
-    // Playout counters → network health metrics, sampled here on the main thread.
+    // Audio activity, buffer depth and playout counters → network health metrics, SAMPLED here on
+    // the main thread at 20 Hz. WHY not signals: the buffer depth was emitted from the audio thread
+    // on every feed tick and the packet sequence from the I/O thread on every packet - together
+    // 150-300 queued events a second into the GUI event loop for a sparkline that redraws at 4 Hz.
     m_metricsTimer = new QTimer(this);
     m_metricsTimer->setInterval(kMetricsSampleMs);
     connect(m_metricsTimer, &QTimer::timeout, this, &AudioController::sampleAudioMetrics);
@@ -382,9 +382,23 @@ void AudioController::onStreamingLatencyChanged(int tier) {
 void AudioController::sampleAudioMetrics() {
     if (!m_audioEngine)
         return;
+    NetworkMetrics *metrics = m_connectionController->networkMetrics();
+    const quint32 packets = m_rxPacketsDecoded.load(std::memory_order_relaxed);
+    if (packets != m_sampledRxPackets) {
+        m_sampledRxPackets = packets;
+        m_ticksSinceRxPacket = 0;
+        metrics->onAudioSequence();
+    } else if (m_ticksSinceRxPacket < kStreamIdleTicks) {
+        ++m_ticksSinceRxPacket;
+    }
+    // Depth only while audio is flowing, as before: the engine's last value goes stale when the
+    // stream stops, and an idle connection should not draw a flat line at it. "Flowing" spans a
+    // few ticks so SL6-7's 120 ms packets still give a sample every tick.
+    if (m_ticksSinceRxPacket < kStreamIdleTicks)
+        metrics->onBufferStatus(m_audioEngine->rxBufferedBytes());
     const quint32 underruns = m_audioEngine->rxUnderruns();
     const quint32 drops = m_audioEngine->rxDroppedPackets();
-    m_connectionController->networkMetrics()->onRxPlayoutCounters(underruns, drops);
+    metrics->onRxPlayoutCounters(underruns, drops);
 
     // Formatted here, on the main thread, never on the audio thread (CONVENTIONS.md Rule 16).
     if (++m_ticksSinceRxLog < kRxLogEveryTicks)

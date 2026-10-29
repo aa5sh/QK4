@@ -6,6 +6,7 @@
 #include <QThread>
 #include <QTimer>
 
+#include <atomic>
 #include <memory>
 #include <mutex>
 
@@ -149,6 +150,11 @@ private:
     QThread *m_txThread = nullptr;
 
     QTimer *m_metricsTimer = nullptr;
+    // RX packets decoded, counted on the I/O thread; the sampler turns an increase into "audio is
+    // arriving" for NetworkMetrics instead of an event per packet.
+    std::atomic<quint32> m_rxPacketsDecoded{0};
+    quint32 m_sampledRxPackets = 0;
+    int m_ticksSinceRxPacket = 1000;
     // Counter values at the last RX playout log line, and ticks since it.
     quint32 m_loggedUnderruns = 0;
     quint32 m_loggedDrops = 0;

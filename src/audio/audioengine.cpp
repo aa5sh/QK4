@@ -306,7 +306,7 @@ void AudioEngine::feedAudioDevice() {
         }
     }
 
-    emit bufferStatus(queued + sinkFill);
+    m_rxBufferedBytes.store(queued + sinkFill, std::memory_order_relaxed);
 
     // Write whole packets while they fit; a packet larger than the room left goes in part only when
     // the sink is about to starve (RxPlayout::bytesToWrite), and the rest waits at the ring's front.
