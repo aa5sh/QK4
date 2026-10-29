@@ -4,8 +4,16 @@
 #include "halikeymidiworker.h"
 #include "halikeyv14worker.h"
 #include "halikeyworkerbase.h"
+#include "utils/threadshutdown.h"
 #include <QDebug>
 #include <RtMidi.h>
+#include <chrono>
+
+namespace {
+// WHY 1 s: the serial worker sees its stop request within one 1 ms poll, and prepareShutdown() has
+// already closed a MIDI port before the join. The rest is closing the port handle.
+constexpr std::chrono::milliseconds kWorkerStopTimeout{1000};
+} // namespace
 
 HalikeyDevice::HalikeyDevice(int deviceType, QObject *parent)
     : QObject(parent), m_midiSink(std::make_shared<HaliKeyMidiSink>()), m_deviceType(deviceType) {}
@@ -76,21 +84,10 @@ void HalikeyDevice::closePort() {
         m_worker->prepareShutdown();
     }
 
-    if (m_workerThread) {
-        m_workerThread->quit();
-        if (m_workerThread->wait(2000)) {
-            m_workerThread->deleteLater();
-        } else {
-            // WHY not deleted: destroying a running QThread aborts the process. Detach it so this
-            // device's destruction cannot take it down, and free it if it ever finishes.
-            qCWarning(lcCwHalikey) << "HalikeyDevice: worker thread did not stop within 2 s; detaching it";
-            m_workerThread->setParent(nullptr);
-            connect(m_workerThread, &QThread::finished, m_workerThread, &QObject::deleteLater);
-        }
-        m_workerThread = nullptr;
-    }
-
-    m_worker = nullptr; // Deleted by QThread::finished -> deleteLater
+    // The worker goes with its thread (finished -> deleteLater), or stays on it if the thread is
+    // disowned; its paddle line into this object was cut above either way.
+    ThreadShutdown::retire(m_workerThread, QDeadlineTimer(kWorkerStopTimeout), lcCwHalikey());
+    m_worker = nullptr;
 
     bool wasConnected = m_connected;
     m_connected = false;

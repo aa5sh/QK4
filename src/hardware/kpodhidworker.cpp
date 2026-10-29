@@ -8,6 +8,14 @@
 
 #ifdef Q_OS_LINUX
 #include "kpodudevworker.h"
+#include "utils/threadshutdown.h"
+#include <chrono>
+
+namespace {
+// WHY 1 s: the udev monitor blocks in poll() on its netlink socket and a wake pipe, and stop()
+// writes the pipe, so it returns at once. Anything longer means it is wedged.
+constexpr std::chrono::milliseconds kUdevStopTimeout{1000};
+} // namespace
 #endif
 
 static void kpodLog(const QString &msg) {
@@ -159,16 +167,9 @@ void KpodHidWorker::shutdown() {
 #else
     if (m_udevWorker)
         m_udevWorker->stop();
-    if (m_udevThread) {
-        m_udevThread->quit();
-        if (!m_udevThread->wait(2000)) {
-            // WHY detached: it is a child of this worker, and destroying a running QThread aborts.
-            qCWarning(lcKpod) << "KPOD: udev thread did not stop within 2 s; detaching it";
-            m_udevThread->setParent(nullptr);
-            m_udevThread = nullptr;
-            m_udevWorker = nullptr;
-        }
-    }
+    // The udev worker goes with its thread (finished -> deleteLater), or stays on it if disowned.
+    ThreadShutdown::retire(m_udevThread, QDeadlineTimer(kUdevStopTimeout), lcKpodUdev());
+    m_udevWorker = nullptr;
 #endif
     releaseHandle();
     if (m_hidInitialized) {

@@ -150,11 +150,15 @@ private:
     QtOneShotTimer *m_unmuteTimer = nullptr; // child; lives on the main thread
     std::unique_ptr<PaddleKeyer> m_paddleKeyer;
     QThread *m_keyerThread = nullptr;
+    // The keyer thread missed its shutdown deadline: it and everything above are leaked, not
+    // destroyed while it may still be using them.
+    bool m_keyerDisowned = false;
 
     // Local sidetone generator (dedicated thread). Constructed + owned here;
     // CW playback wiring lives on CwController.
     SidetoneGenerator *m_sidetoneGenerator;
     QThread *m_sidetoneThread = nullptr;
+    QMetaObject::Connection m_sidetoneDeleteConnection; // sidetone thread finished -> deleteLater
 };
 
 #endif // HARDWARECONTROLLER_H

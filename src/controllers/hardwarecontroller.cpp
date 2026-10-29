@@ -13,12 +13,20 @@
 #include "settings/radiosettings.h"
 #include "utils/radioutils.h"
 #include "utils/rtscheduling.h"
+#include "utils/threadshutdown.h"
 #include <QLoggingCategory>
 #include <QTimer>
+#include <chrono>
 
 namespace {
 // The K4 reports no stuck-key timeout; push this fixed default to the KPOD+.
 constexpr int kKpodPlusStuckTimeoutSec = 60;
+
+// WHY 1.5 s: close() is queued behind the element the keyer is sending, and an iambic element plus
+// its space is up to 600 ms at the 8 WPM floor (RadioUtils::ditMsForWpm). Then run() returns.
+constexpr std::chrono::milliseconds kKeyerStopTimeout{1500};
+// WHY 2 s: stop() destroys the sidetone QAudioSink, as AudioEngine's does for RX audio.
+constexpr std::chrono::milliseconds kSidetoneStopTimeout{2000};
 } // namespace
 
 HardwareController::HardwareController(RadioState *radioState, ConnectionController *connController, QObject *parent)
@@ -136,6 +144,10 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     m_sidetoneThread->setObjectName("Sidetone");
     Logging::markRealtimeOnStart(m_sidetoneThread);
     m_sidetoneGenerator->moveToThread(m_sidetoneThread);
+    // Destroyed on its own thread when that thread finishes (Rule 14). Kept so shutdown can cut it
+    // if the keyer, which reads the generator's stream clock, could not be stopped.
+    m_sidetoneDeleteConnection =
+        connect(m_sidetoneThread, &QThread::finished, m_sidetoneGenerator, &QObject::deleteLater);
     // Promoted to real-time by SidetoneGenerator::start() on the thread itself: sidetone shares the
     // CW perception path with the keyer, and a preempted block write is audible onset jitter.
     m_sidetoneThread->start();
@@ -312,28 +324,32 @@ void HardwareController::shutdownDevices() {
     }
 
     // close() releases whatever is keyed (an open straight-key KZD gets its KZU, queued for the
-    // keyer thread ahead of Close) and posts Close, which ends run(). The keyer object outlives its
-    // thread; it's destroyed with this controller.
+    // keyer thread ahead of Close) and posts Close, which ends run(). quit() would do nothing: the
+    // keyer thread has no event loop.
     //
     // WHY the link is cleared only after the join: the keyer may still have a KZU to send (a
-    // straight key held at quit). Dropping it would leave the K4 keyed. ConnectionController is still alive
-    // here (CONC-001), so the send is safe.
+    // straight key held at quit). Dropping it would leave the K4 keyed. ConnectionController is
+    // still alive here (CONC-001), so the send is safe. A keyer that would not stop has it cleared
+    // anyway: it would otherwise send into the KZ egress after ConnectionController destroys it.
     if (m_keyerThread) {
         m_paddleKeyer->close();
-        if (!m_keyerThread->wait(2000))
-            qCWarning(lcHardware) << "keyer thread did not stop within 2 s";
+        m_keyerDisowned = ThreadShutdown::join(m_keyerThread, QDeadlineTimer(kKeyerStopTimeout), lcCwKeyer()) ==
+                          ThreadShutdown::Outcome::Disowned;
         m_keyerLink->setTarget(nullptr);
     }
-    m_keyerThread = nullptr; // child of this; Qt deletes it, but never join it twice
 
-    if (m_sidetoneThread) {
-        QMetaObject::invokeMethod(m_sidetoneGenerator, "stop", Qt::BlockingQueuedConnection);
-        m_sidetoneThread->quit();
-        m_sidetoneThread->wait(2000);
+    // WHY a disowned keyer keeps the generator alive: the keyer's SidetoneScheduler reads the
+    // generator's stream clock (setStreamTimeSource), so the generator must outlive any keyer
+    // still running. It is leaked with it rather than deleted when the sidetone thread finishes.
+    if (m_keyerDisowned) {
+        disconnect(m_sidetoneDeleteConnection);
     }
-    delete m_sidetoneGenerator; // No parent, must delete manually
+    if (SidetoneGenerator *generator = m_sidetoneGenerator) {
+        const QDeadlineTimer deadline(kSidetoneStopTimeout);
+        ThreadShutdown::callBlocking(generator, [generator]() { generator->stop(); }, deadline);
+        ThreadShutdown::retire(m_sidetoneThread, deadline, lcAudioSidetone());
+    }
     m_sidetoneGenerator = nullptr;
-    m_sidetoneThread = nullptr;
 
     // Through the policy, so the close is silent: the window is going away and there is nobody
     // left to tell that a device disconnected.
@@ -348,6 +364,16 @@ HardwareController::~HardwareController() {
     // doing it here for the first time is what CONC-001 was. Still called, because a fatal error
     // or a window that was never shown reaches the destructor without a closeEvent.
     shutdownDevices();
+
+    // A keyer thread that would not stop still runs PaddleKeyer::run() against these. Leaked, not
+    // destroyed underneath it; the process is exiting.
+    if (m_keyerDisowned) {
+        (void)m_paddleKeyer.release();
+        (void)m_sidetoneScheduler.release();
+        (void)m_keyerLink.release();
+        (void)m_keyerClock.release();
+        m_unmuteTimer->setParent(nullptr);
+    }
 }
 
 // =============================================================================

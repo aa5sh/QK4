@@ -78,6 +78,8 @@ private:
 
     KpodPlusEp02Worker *m_ep02Worker = nullptr;
     QThread *m_ep02Thread = nullptr;
+    // EP02 worker's finished -> deleteLater, cut if the USB thread is disowned (see the destructor).
+    QMetaObject::Connection m_ep02DeleteConnection;
 };
 
 #endif // KPODPLUSDEVICE_H
