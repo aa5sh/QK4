@@ -353,6 +353,18 @@ private slots:
         }
     }
 
+    void kpaCardKeepsAGroupGapAboveThePfKeys() {
+        // The stretch below the card is zero at the window's minimum height, which put B SET/CLR
+        // straight under the card.
+        QPushButton *bset = nullptr;
+        for (QPushButton *button : functionButtons(m_right))
+            if (button->text() == QLatin1String("B SET"))
+                bset = button;
+        QVERIFY(bset);
+        const int gap = inPanel(m_right, bset).top() - inPanel(m_right, m_kpa).bottom() - 1;
+        QVERIFY2(gap >= K4Styles::Dimensions::SidePanelGroupGap, qPrintable(QString::number(gap)));
+    }
+
     void withoutTheKpa1500TheRightPanelMatchesTheLeft() {
         QWidget host;
         auto *panel = new RightSidePanel(&host);

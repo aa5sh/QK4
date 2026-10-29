@@ -83,6 +83,9 @@ void RightSidePanel::setupUi() {
     // here via embedKpa1500Panel().
     SidePanelButton::addGap(m_layout, K4Styles::Dimensions::SidePanelGroupGap);
     m_kpa1500SlotIdx = m_layout->count();
+    // WHY a fixed gap as well as the stretch: the stretch is zero at the window's minimum height, which
+    // left the PF keys touching the card.
+    SidePanelButton::addGap(m_layout, K4Styles::Dimensions::SidePanelGroupGap);
 
     // Add stretch to push remaining buttons to bottom (above PTT)
     m_layout->addStretch();
