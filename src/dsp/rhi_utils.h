@@ -1,10 +1,13 @@
 #ifndef RHI_UTILS_H
 #define RHI_UTILS_H
 
+#include <QColor>
 #include <QFile>
 #include <QVector>
+#include <rhi/qrhi.h>
 #include <rhi/qshader.h>
 #include <QDebug>
+#include <array>
 
 namespace RhiUtils {
 
@@ -100,6 +103,48 @@ struct WaterfallUniforms {
     float padding;
 };
 static_assert(sizeof(WaterfallUniforms) == 32, "must match the std140 block in waterfall.{vert,frag}");
+
+// Uniform block for overlay.vert / overlay.frag. Must match the std140 block in both shader files.
+struct OverlayUniforms {
+    float viewportWidth;
+    float viewportHeight;
+    float pad0, pad1; // std140: vec2 padding before the vec4 colour
+    float r, g, b, a;
+};
+static_assert(sizeof(OverlayUniforms) == 32, "must match the std140 block in overlay.{vert,frag}");
+
+// Two triangles covering the rectangle (x1, y1)-(x2, y2), as (x, y) pairs for the overlay pipeline.
+inline std::array<float, 12> quadVerts(float x1, float y1, float x2, float y2) {
+    return {x1, y1, x2, y1, x2, y2, x1, y1, x2, y2, x1, y2};
+}
+
+// Record one overlay draw's vertices and colour into the frame's update batch.
+//
+// WHY every overlay draw has its own vertex and uniform buffer, all written before beginPass():
+// QRhiCommandBuffer::resourceUpdate() cannot be called inside a pass, and a QRhiBuffer::Dynamic
+// buffer is double-buffered per frame, not per draw. Two draws in one frame that write the same
+// buffer both see whichever write came last, so a shared overlay buffer drew every user of it
+// with the final user's vertices and colour.
+//
+// Returns the number of vertices to draw: 0 when the vertices would not fit the buffer.
+inline int stageOverlay(QRhiResourceUpdateBatch *rub, QRhiBuffer *vbo, QRhiBuffer *ubo, const float *verts,
+                        int floatCount, float viewportWidth, float viewportHeight, const QColor &color) {
+    const quint32 bytes = static_cast<quint32>(floatCount) * sizeof(float);
+    Q_ASSERT(bytes <= vbo->size());
+    if (floatCount <= 0 || bytes > vbo->size())
+        return 0;
+    rub->updateDynamicBuffer(vbo, 0, bytes, verts);
+    const OverlayUniforms uniforms = {viewportWidth,
+                                      viewportHeight,
+                                      0.0f,
+                                      0.0f,
+                                      static_cast<float>(color.redF()),
+                                      static_cast<float>(color.greenF()),
+                                      static_cast<float>(color.blueF()),
+                                      static_cast<float>(color.alphaF())};
+    rub->updateDynamicBuffer(ubo, 0, sizeof(uniforms), &uniforms);
+    return floatCount / 2;
+}
 
 } // namespace RhiUtils
 

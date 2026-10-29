@@ -9,6 +9,7 @@
 #include <QTimer>
 #include <QVector>
 #include <memory>
+#include "dsp/spectrumgeometry.h"
 #include "utils/bandplan.h"
 #include "utils/wheelaccumulator.h"
 
@@ -33,7 +34,6 @@ public:
     // Configuration
     qint64 centerFreq() const { return m_centerFreq; }
     int ifShift() const { return m_ifShift; }
-    QString mode() const { return m_mode; }
     float spectrumRatio() const { return m_spectrumRatio; }
 
     void setDbRange(float minDb, float maxDb);
@@ -117,7 +117,7 @@ private:
     void createPipelines();
 
     // Data processing
-    void decompressBins(const QByteArray &bins, QVector<float> &out);
+    static void decompressBins(const QByteArray &bins, QVector<float> &out);
     void updateWaterfallData();
 
     // Diagnostics — no rendering effect. Gated on the qk4.pan.diag category being debug-enabled.
@@ -125,10 +125,12 @@ private:
     void logRenderGeometry(const QSize &outputSize);
 
     // Coordinate helpers
-    float normalizeDb(float db);
-    float freqToNormalized(qint64 freq);
-    qint64 xToFreq(int x, int w);
+    float normalizeDb(float db) const;
+    qint64 displayCenterHz() const;
+    float freqToNormalized(qint64 freq) const;
+    qint64 xToFreq(int x, int w) const;
     int calculateGridInterval(int spanHz) const;
+    void rebuildGridIfNeeded(float w, float spectrumHeight, float dpr);
     // RHI resources
     QRhi *m_rhi = nullptr;
     std::unique_ptr<QRhiBuffer> m_waterfallVbo;
@@ -170,17 +172,10 @@ private:
     std::unique_ptr<QRhiBuffer> m_txMarkerVbo;
     std::unique_ptr<QRhiBuffer> m_txMarkerUniformBuffer;
     std::unique_ptr<QRhiShaderResourceBindings> m_txMarkerSrb;
-    // RTTY mark/space tone line buffers (primary VFO)
-    std::unique_ptr<QRhiBuffer> m_rttyMarkVbo;
-    std::unique_ptr<QRhiBuffer> m_rttyMarkUniformBuffer;
-    std::unique_ptr<QRhiShaderResourceBindings> m_rttyMarkSrb;
+    // RTTY space tone line buffers (the mark tone coincides with the VFO marker)
     std::unique_ptr<QRhiBuffer> m_rttySpaceVbo;
     std::unique_ptr<QRhiBuffer> m_rttySpaceUniformBuffer;
     std::unique_ptr<QRhiShaderResourceBindings> m_rttySpaceSrb;
-    // RTTY mark/space tone line buffers (secondary VFO)
-    std::unique_ptr<QRhiBuffer> m_secRttyMarkVbo;
-    std::unique_ptr<QRhiBuffer> m_secRttyMarkUniformBuffer;
-    std::unique_ptr<QRhiShaderResourceBindings> m_secRttyMarkSrb;
     std::unique_ptr<QRhiBuffer> m_secRttySpaceVbo;
     std::unique_ptr<QRhiBuffer> m_secRttySpaceUniformBuffer;
     std::unique_ptr<QRhiShaderResourceBindings> m_secRttySpaceSrb;
@@ -200,6 +195,16 @@ private:
     QVector<float> m_currentSpectrum;
     QVector<float> m_rawSpectrum;
     QVector<float> m_normalizedSpectrum; // Reused per-frame to avoid allocation in render()
+    // Per-frame scratch for the dashed overlay lines; cleared, not reallocated, each frame.
+    QVector<float> m_notchDashVerts;
+    QVector<float> m_rttyDashVerts;
+    QVector<float> m_secRttyDashVerts;
+    // Grid lines depend only on the spectrum area's size and the device pixel ratio, so they are
+    // rebuilt when one of those changes rather than every frame.
+    QVector<float> m_gridVerts;
+    float m_gridWidth = -1.0f;
+    float m_gridHeight = -1.0f;
+    float m_gridDpr = -1.0f;
     // Full-tier spectrum data (all 1024 bins for waterfall storage)
     QVector<float> m_tierSpectrum;
     QVector<float> m_tierRawSpectrum;
@@ -255,8 +260,8 @@ private:
     float m_noiseFloor = -130.0f;
     qint64 m_tunedFreq = 0;
     int m_filterBw = 2400;
-    QString m_mode = "USB";
-    int m_dataSubMode = 0;
+    SpectrumGeometry::Mode m_mode = SpectrumGeometry::Mode::Usb;
+    SpectrumGeometry::DataSubMode m_dataSubMode = SpectrumGeometry::DataSubMode::DataA;
     int m_ifShift = 50;
     int m_cwPitch = 500;
     int m_fskMarkTone = 915; // FSK Mark-Tone (user-configurable from K4 front panel)
@@ -282,8 +287,8 @@ private:
     // Secondary VFO (other receiver's passband)
     qint64 m_secondaryTunedFreq = 0;
     int m_secondaryFilterBw = 0;
-    QString m_secondaryMode = "";
-    int m_secondaryDataSubMode = 0;
+    SpectrumGeometry::Mode m_secondaryMode = SpectrumGeometry::Mode::Unknown;
+    SpectrumGeometry::DataSubMode m_secondaryDataSubMode = SpectrumGeometry::DataSubMode::DataA;
     int m_secondaryIfShift = 50;
     bool m_secondaryVisible = false;
     QColor m_secondaryPassbandColor{0, 255, 0, 64}; // Green 25% alpha

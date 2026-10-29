@@ -8,6 +8,7 @@
 #include <QTimer>
 #include <QVector>
 #include <memory>
+#include "dsp/spectrumgeometry.h"
 #include "ui/styling/k4constants.h"
 
 // Compact Mini-Pan widget for VFO area using Qt RHI
@@ -63,8 +64,8 @@ private:
     void positionFrequencyLabels();
 
     // Data processing
-    float normalizeDb(float db);
-    int bandwidthForMode(const QString &mode) const;
+    float normalizeDb(float db) const;
+    int bandwidthForMode(SpectrumGeometry::Mode mode) const;
 
     // RHI resources
     QRhi *m_rhi = nullptr;
@@ -110,6 +111,12 @@ private:
     std::unique_ptr<QRhiBuffer> m_rttySpaceUniformBuffer;
     std::unique_ptr<QRhiShaderResourceBindings> m_rttySpaceSrb;
 
+    // Dedicated frame-border buffers: the spectrum/waterfall separator uses the shared overlay
+    // buffers, and two draws in one frame cannot share a dynamic buffer.
+    std::unique_ptr<QRhiBuffer> m_borderVbo;
+    std::unique_ptr<QRhiBuffer> m_borderUniformBuffer;
+    std::unique_ptr<QRhiShaderResourceBindings> m_borderSrb;
+
     QRhiRenderPassDescriptor *m_rpDesc = nullptr;
 
     bool m_rhiInitialized = false;
@@ -126,6 +133,7 @@ private:
     // Spectrum data
     QVector<float> m_spectrum;
     QVector<float> m_smoothedSpectrum;
+    QVector<float> m_rttyDashVerts; // per-frame scratch, cleared rather than reallocated
 
     // Waterfall data
     static constexpr int WATERFALL_HISTORY = 100;
@@ -142,7 +150,6 @@ private:
     float m_minDb = -1.0f;
     float m_maxDb = 4.0f;
     float m_smoothedBaseline = 0.0f;
-    float m_heightBoost = 1.0f;
     float m_spectrumRatio = 0.40f; // 40% spectrum, 60% waterfall
 
     // Spectrum line color — default to the VFO A cyan theme; caller may override.
@@ -154,9 +161,11 @@ private:
     // Notch filter visualization
     bool m_notchEnabled = false;
     int m_notchPitchHz = 0;
-    QString m_mode = "USB";
-    int m_dataSubMode = 0;
-    int m_bandwidthHz = 10000; // Mode-dependent span: CW=3kHz, Voice/Data=10kHz
+    SpectrumGeometry::Mode m_mode = SpectrumGeometry::Mode::Usb;
+    SpectrumGeometry::DataSubMode m_dataSubMode = SpectrumGeometry::DataSubMode::DataA;
+    // Mode-dependent span: PanadapterConstants::SpanNarrowHz for CW and FSK/AFSK/PSK, SpanWideHz
+    // otherwise.
+    int m_bandwidthHz = 10000;
 
     // Display averaging (K4 #AVG control, 1-20)
     int m_averagingLevel = 1;

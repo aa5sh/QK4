@@ -157,6 +157,7 @@ set(SOURCES
     src/dsp/panadapter_rhi.cpp
     src/dsp/minipan_rhi.cpp
     src/dsp/bandplanstrip.cpp
+    src/dsp/spectrumgeometry.cpp
     src/dsp/spectrumscale.cpp
     src/dsp/waterfallgeometry.cpp
     src/settings/radiosettings.cpp

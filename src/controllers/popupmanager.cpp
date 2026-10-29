@@ -461,7 +461,7 @@ void PopupManager::wireDisplayPopup() {
     connect(m_displayPopup, &DisplayPopupWidget::scaleIncrementRequested, this, [adjustScale]() { adjustScale(+1); });
     connect(m_displayPopup, &DisplayPopupWidget::scaleDecrementRequested, this, [adjustScale]() { adjustScale(-1); });
 
-    // Ref level +/- (per-VFO, 1 dB step, range -200..60).
+    // Ref level +/- (per-VFO, 1 dB step, SpectrumDisplayLimits range).
     auto adjustRefLevel = [this](int delta) {
         // WHY: a #REF sent during AutoRef is accepted silently and freezes the radio's tracking while it
         // still reports AutoRef on (bench 2026-10-19). Same rule as Ctrl+Wheel in SpectrumController.
@@ -470,14 +470,16 @@ void PopupManager::wireDisplayPopup() {
         const bool vfoA = m_displayPopup->isVfoAEnabled();
         const bool vfoB = m_displayPopup->isVfoBEnabled();
         if (vfoA) {
-            const int newLevel = qBound(-200, m_radioState->refLevel() + delta, 60);
+            const int newLevel = qBound(SpectrumDisplayLimits::RefLevelMin, m_radioState->refLevel() + delta,
+                                        SpectrumDisplayLimits::RefLevelMax);
             if (newLevel != m_radioState->refLevel()) {
                 m_radioState->setRefLevel(newLevel);
                 m_connection->sendCAT(QString("#REF%1;").arg(newLevel));
             }
         }
         if (vfoB) {
-            const int newLevel = qBound(-200, m_radioState->refLevelB() + delta, 60);
+            const int newLevel = qBound(SpectrumDisplayLimits::RefLevelMin, m_radioState->refLevelB() + delta,
+                                        SpectrumDisplayLimits::RefLevelMax);
             if (newLevel != m_radioState->refLevelB()) {
                 m_radioState->setRefLevelB(newLevel);
                 m_connection->sendCAT(QString("#REF$%1;").arg(newLevel));

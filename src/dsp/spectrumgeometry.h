@@ -1,0 +1,51 @@
+#ifndef SPECTRUMGEOMETRY_H
+#define SPECTRUMGEOMETRY_H
+
+#include <QString>
+#include <QtGlobal>
+
+// Frequency-axis arithmetic shared by the panadapter, its overlays and the mini-pan: the
+// operating mode as the renderers see it, where the display is centred, where a passband and its
+// marker sit, and whether a PAN frame's bins fit the buffers they are written into. Pure
+// functions on Qt Core only, so they are covered by test_spectrumgeometry without a GPU.
+namespace SpectrumGeometry {
+
+enum class Mode { Unknown, Lsb, Usb, Cw, CwR, Data, DataR, Am, Fm };
+
+// K4 DATA sub-mode (DT command): DATA-A, AFSK-A, FSK-D, PSK-D.
+enum class DataSubMode { DataA = 0, AfskA = 1, FskD = 2, PskD = 3 };
+
+// Parses RadioState::modeToString() spelling ("LSB", "CW-R", "DATA-R", ...). Anything else,
+// including the empty string RadioState reports before the radio has said, is Unknown.
+Mode modeFromString(const QString &mode);
+DataSubMode dataSubModeFromInt(int subMode);
+
+bool isCw(Mode mode);
+bool isData(Mode mode);
+// AFSK-A and FSK-D: the RTTY sub-modes whose dial frequency is the mark tone.
+bool isRtty(Mode mode, DataSubMode subMode);
+
+// Frequency at the horizontal centre of the panadapter. In CW the K4 centres the passband rather
+// than the dial, so the display is shifted by the IF shift (decahertz) — up for CW, down for CW-R.
+qint64 displayCenterHz(qint64 centerFreqHz, int ifShiftDecaHz, Mode mode);
+
+// Frequency where the VFO marker is drawn: the passband centre in CW, the dial otherwise.
+qint64 markerFreqHz(qint64 tunedFreqHz, int ifShiftDecaHz, Mode mode);
+
+struct Passband {
+    qint64 lowHz;
+    qint64 highHz;
+};
+
+// Filter passband edges for a VFO, by mode and DATA sub-mode.
+Passband passbandFor(Mode mode, DataSubMode subMode, qint64 tunedFreqHz, int bandwidthHz, int ifShiftDecaHz,
+                     int rttyShiftHz);
+
+// Number of bins of a PAN frame that may be used, or 0 if the frame must be dropped: the bins must
+// lie inside the payload and must fit the waterfall texture row they are centred in. The count is
+// read straight off the wire, so it is validated here rather than assumed to be 1024.
+int usableBinCount(qsizetype payloadSize, int binsOffset, int binCount, int maxBins);
+
+} // namespace SpectrumGeometry
+
+#endif // SPECTRUMGEOMETRY_H

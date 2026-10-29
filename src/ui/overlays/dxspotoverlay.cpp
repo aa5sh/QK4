@@ -3,6 +3,8 @@
 
 #include <QMouseEvent>
 #include <QPainter>
+#include <QResizeEvent>
+#include <utility>
 
 DxSpotOverlay::DxSpotOverlay(QWidget *parent) : QWidget(parent) {
     setAttribute(Qt::WA_TranslucentBackground);
@@ -153,7 +155,7 @@ void DxSpotOverlay::layoutLabels() {
             continue;
         // Find the highest row used at this X position
         int lastRow = 0;
-        for (const auto &other : m_labels) {
+        for (const auto &other : std::as_const(m_labels)) {
             if (other.row >= 0 && qAbs(other.xPixel - label.xPixel) < 40)
                 lastRow = qMax(lastRow, other.row);
         }
@@ -226,4 +228,10 @@ void DxSpotOverlay::mousePressEvent(QMouseEvent *event) {
     // Not on a spot label — pass through to panadapter click-tune (left → VFO A,
     // right → VFO B at the mouse-x frequency).
     event->ignore();
+}
+
+void DxSpotOverlay::resizeEvent(QResizeEvent *event) {
+    QWidget::resizeEvent(event);
+    // Label positions and click targets are laid out against the width and height.
+    layoutLabels();
 }

@@ -5,6 +5,19 @@
 
 class RadioState;
 
+// Ranges and defaults for the K4's panadapter amplitude window, shared by the CAT parser and every
+// place QK4 adjusts them (wheel, display popup, renderer), so they cannot disagree.
+namespace SpectrumDisplayLimits {
+// #REF / #REF$ — bottom of the window, dBm.
+constexpr int RefLevelMin = -200;
+constexpr int RefLevelMax = 50;
+constexpr int RefLevelDefault = -110;
+// #SCL — height of the window, dB (global).
+constexpr int ScaleMin = 10;
+constexpr int ScaleMax = 150;
+constexpr int ScaleDefault = 75;
+} // namespace SpectrumDisplayLimits
+
 // Panadapter / waterfall / display-related state — all of the K4's
 // `#`-prefix commands. Covers reference level, span, scale, display
 // mode (spectrum / spectrum+waterfall), dual-pan mode, frame rate,

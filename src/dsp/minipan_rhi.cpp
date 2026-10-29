@@ -7,6 +7,8 @@
 #include <QMouseEvent>
 #include <QResizeEvent>
 #include <QtMath>
+#include <algorithm>
+#include <array>
 #include <cmath>
 
 Q_LOGGING_CATEGORY(dspMiniPan, "dsp.minipan")
@@ -171,6 +173,11 @@ void MiniPanRhiWidget::initialize(QRhiCommandBuffer *cb) {
     m_rttySpaceUniformBuffer.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 32));
     m_rttySpaceUniformBuffer->create();
 
+    m_borderVbo.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, 64 * sizeof(float)));
+    m_borderVbo->create();
+    m_borderUniformBuffer.reset(m_rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 32));
+    m_borderUniformBuffer->create();
+
     cb->resourceUpdate(rub);
 
     m_rhiInitialized = true;
@@ -327,6 +334,15 @@ void MiniPanRhiWidget::createPipelines() {
         m_rttySpaceSrb->create();
     }
 
+    // Dedicated frame-border SRB
+    {
+        m_borderSrb.reset(m_rhi->newShaderResourceBindings());
+        m_borderSrb->setBindings({QRhiShaderResourceBinding::uniformBuffer(
+            0, QRhiShaderResourceBinding::VertexStage | QRhiShaderResourceBinding::FragmentStage,
+            m_borderUniformBuffer.get())});
+        m_borderSrb->create();
+    }
+
     m_pipelinesCreated = true;
 }
 
@@ -477,7 +493,7 @@ void MiniPanRhiWidget::render(QRhiCommandBuffer *cb) {
 
             float normalized = normalizeDb(peak);
             float adjusted = normalized - m_smoothedBaseline;
-            float lineHeight = adjusted * spectrumHeight * 0.95f * m_heightBoost;
+            float lineHeight = adjusted * spectrumHeight * 0.95f;
             float y = qMax(0.0f, spectrumHeight - lineHeight);
 
             // Bottom vertex (baseline) - spectrum color with transparency
@@ -500,6 +516,157 @@ void MiniPanRhiWidget::render(QRhiCommandBuffer *cb) {
         if (!vertices.isEmpty()) {
             rub->updateDynamicBuffer(m_spectrumVbo.get(), 0, vertices.size() * sizeof(float), vertices.constData());
         }
+    }
+
+    // Overlays, staged in draw order. Every write goes into this frame's batch before the pass
+    // begins, and each draw has its own buffers (see RhiUtils::stageOverlay).
+    using SpectrumGeometry::Mode;
+    struct OverlayDraw {
+        QRhiGraphicsPipeline *pipeline;
+        QRhiBuffer *vbo;
+        QRhiShaderResourceBindings *srb;
+        int vertexCount;
+    };
+    std::array<OverlayDraw, 7> overlayDraws;
+    int overlayDrawCount = 0;
+    auto stage = [&](QRhiGraphicsPipeline *pipeline, QRhiBuffer *vbo, QRhiBuffer *ubo, QRhiShaderResourceBindings *srb,
+                     const float *verts, int floatCount, const QColor &color) {
+        const int vertexCount = RhiUtils::stageOverlay(rub, vbo, ubo, verts, floatCount, w, h, color);
+        if (vertexCount > 0 && overlayDrawCount < static_cast<int>(overlayDraws.size()))
+            overlayDraws[overlayDrawCount++] = {pipeline, vbo, srb, vertexCount};
+    };
+
+    if (m_overlayLinePipeline && m_overlayTrianglePipeline) {
+        QRhiGraphicsPipeline *triangles = m_overlayTrianglePipeline.get();
+        const float centerX = w / 2;
+
+        // Filter passband (full height)
+        if (m_filterBw > 0 && m_passbandSrb) {
+            float bwPixels = (static_cast<float>(m_filterBw) * w) / m_bandwidthHz;
+
+            // K4 IF shift: value in 10 Hz units (m_ifShift=140 → 1400 Hz → displayed as 1.40 kHz)
+            float shiftHz = m_ifShift * 10.0f;
+            float shiftPixels = (shiftHz * w) / m_bandwidthHz;
+
+            float passbandX;
+            if (SpectrumGeometry::isCw(m_mode)) {
+                // CW: passband position relative to CW pitch
+                // When shift == pitch, passband is centered on center line
+                // When shift differs from pitch, passband moves accordingly
+                float offsetHz = shiftHz - m_cwPitch;
+                float offsetPixels = (offsetHz * w) / m_bandwidthHz;
+
+                if (m_mode == Mode::Cw) {
+                    // CW: positive offset moves passband right (higher freq)
+                    passbandX = centerX + offsetPixels - bwPixels / 2;
+                } else {
+                    // CW-R: positive offset moves passband left (lower freq)
+                    passbandX = centerX - offsetPixels - bwPixels / 2;
+                }
+            } else if (SpectrumGeometry::isData(m_mode) && m_dataSubMode == SpectrumGeometry::DataSubMode::PskD) {
+                // PSK-D: passband centered on dial frequency
+                passbandX = centerX - bwPixels / 2;
+            } else if (SpectrumGeometry::isRtty(m_mode, m_dataSubMode)) {
+                // AFSK-A / FSK-D: LSB — passband centered half-shift below dial
+                float offsetPixels = (PanadapterConstants::RttyHalfShiftHz * w) / m_bandwidthHz;
+                passbandX = centerX - offsetPixels - bwPixels / 2;
+            } else if (m_mode == Mode::Am || m_mode == Mode::Fm) {
+                // WHY: AM/FM are carrier-centered (both sidebands); the K4 reports a leftover
+                // SSB-style IS value but does not apply it to the filter. Matches the main
+                // panadapter (SpectrumGeometry::passbandFor) and FilterIndicatorWidget.
+                passbandX = centerX - bwPixels / 2;
+            } else if (m_mode == Mode::Lsb) {
+                // LSB: passband center is shiftHz below carrier
+                passbandX = centerX - shiftPixels - bwPixels / 2;
+            } else {
+                // USB/AFSK/DATA-A: passband center is shiftHz above carrier
+                passbandX = centerX + shiftPixels - bwPixels / 2;
+            }
+
+            QColor fillColor = m_passbandColor;
+            fillColor.setAlpha(PanadapterConstants::MiniPanFillAlpha);
+            const auto fill = RhiUtils::quadVerts(passbandX, 0, passbandX + bwPixels, h);
+            stage(triangles, m_passbandVbo.get(), m_passbandUniformBuffer.get(), m_passbandSrb.get(), fill.data(),
+                  static_cast<int>(fill.size()), fillColor);
+
+            // Passband edges as 2px rectangles for robust Metal rendering
+            if (m_passbandEdgeSrb) {
+                QColor edgeColor = m_passbandColor;
+                edgeColor.setAlpha(PanadapterConstants::PassbandEdgeAlpha);
+                const float edgeWidth = PanadapterConstants::PassbandEdgeWidth;
+                const float rightX = passbandX + bwPixels;
+                const auto left = RhiUtils::quadVerts(passbandX, 0, passbandX + edgeWidth, h);
+                const auto right = RhiUtils::quadVerts(rightX, 0, rightX + edgeWidth, h);
+                std::array<float, 24> edges;
+                std::copy(left.begin(), left.end(), edges.begin());
+                std::copy(right.begin(), right.end(), edges.begin() + left.size());
+                stage(triangles, m_passbandEdgeVbo.get(), m_passbandEdgeUniformBuffer.get(), m_passbandEdgeSrb.get(),
+                      edges.data(), static_cast<int>(edges.size()), edgeColor);
+            }
+        }
+
+        // Frequency marker (center line) as a filled rectangle; colour is the VFO theme at full
+        // opacity.
+        if (m_centerLineSrb) {
+            QColor markerColor = m_passbandColor;
+            markerColor.setAlpha(255);
+            const auto verts = RhiUtils::quadVerts(centerX, 0, centerX + PanadapterConstants::MarkerLineWidth, h);
+            stage(triangles, m_centerLineVbo.get(), m_centerLineUniformBuffer.get(), m_centerLineSrb.get(),
+                  verts.data(), static_cast<int>(verts.size()), markerColor);
+        }
+
+        // RTTY space tone for AFSK-A / FSK-D, one full shift below the dial (mark). The mark tone
+        // coincides with the center line.
+        if (SpectrumGeometry::isRtty(m_mode, m_dataSubMode) && m_rttySpaceSrb && m_bandwidthHz > 0) {
+            const float spaceX = centerX - (PanadapterConstants::RttyShiftHz * w) / m_bandwidthHz;
+            if (spaceX >= 0 && spaceX < w) {
+                m_rttyDashVerts.clear();
+                DashGeometry::appendDashedVerticalLine(m_rttyDashVerts, spaceX, PanadapterConstants::RttyDashLineWidth,
+                                                       0.0f, h);
+                // Yellow-orange tone marker, matches main panadapter
+                static const QColor toneColor(255, 200, 0, 200);
+                stage(triangles, m_rttySpaceVbo.get(), m_rttySpaceUniformBuffer.get(), m_rttySpaceSrb.get(),
+                      m_rttyDashVerts.constData(), m_rttyDashVerts.size(), toneColor);
+            }
+        }
+
+        // Notch filter marker, relative to the passband centre (consistent with main panadapter).
+        if (m_notchEnabled && m_notchPitchHz > 0 && m_notchSrb && m_bandwidthHz > 0) {
+            // Mini-pan center (centerX) = passband center.
+            // In CW: passband center = tunedFreq + cwPitch, notch RF = tunedFreq + NM.
+            // So offset from center = NM - cwPitch.
+            // In CW-R: passband center = tunedFreq - cwPitch, notch RF = tunedFreq - NM.
+            // So offset from center = -(NM - cwPitch).
+            int offsetHz;
+            if (m_mode == Mode::Lsb) {
+                offsetHz = -m_notchPitchHz;
+            } else if (m_mode == Mode::Cw) {
+                offsetHz = m_notchPitchHz - m_cwPitch;
+            } else if (m_mode == Mode::CwR) {
+                offsetHz = -(m_notchPitchHz - m_cwPitch);
+            } else {
+                // USB, DATA, DATA-R, AM, FM
+                offsetHz = m_notchPitchHz;
+            }
+
+            const float notchX = centerX + (static_cast<float>(offsetHz) * w) / m_bandwidthHz;
+            if (notchX >= 0 && notchX < w) {
+                const auto verts = RhiUtils::quadVerts(notchX, 0, notchX + PanadapterConstants::MarkerLineWidth, h);
+                stage(triangles, m_notchVbo.get(), m_notchUniformBuffer.get(), m_notchSrb.get(), verts.data(),
+                      static_cast<int>(verts.size()), QColor(255, 0, 0));
+            }
+        }
+
+        // Separator line — DialogBorder (#333333) keeps minor dividers consistent across UI.
+        const std::array<float, 4> separator = {0, spectrumHeight, w, spectrumHeight};
+        stage(m_overlayLinePipeline.get(), m_overlayVbo.get(), m_overlayUniformBuffer.get(), m_overlaySrb.get(),
+              separator.data(), static_cast<int>(separator.size()), QColor(K4Styles::Colors::DialogBorder));
+
+        // Frame border — matches VFO panels.
+        const std::array<float, 16> border = {0,     0,     w - 1, 0,     w - 1, 0,     w - 1, h - 1,
+                                              w - 1, h - 1, 0,     h - 1, 0,     h - 1, 0,     0};
+        stage(m_overlayLinePipeline.get(), m_borderVbo.get(), m_borderUniformBuffer.get(), m_borderSrb.get(),
+              border.data(), static_cast<int>(border.size()), QColor(K4Styles::Colors::PanelBorder));
     }
 
     cb->resourceUpdate(rub);
@@ -529,336 +696,13 @@ void MiniPanRhiWidget::render(QRhiCommandBuffer *cb) {
 
     // Draw overlays (full viewport)
     cb->setViewport({0, 0, w, h});
-
-    // Draw separator line, passband, center marker, notch, and border using overlay pipeline
-    if (m_overlayLinePipeline && m_overlayTrianglePipeline) {
-        // Helper lambda to draw filled quad
-        auto drawFilledQuad = [&](float x1, float y1, float x2, float y2, const QColor &color) {
-            QVector<float> quadVerts = {x1, y1, x2, y1, x2, y2, x1, y1, x2, y2, x1, y2};
-
-            QRhiResourceUpdateBatch *rub2 = m_rhi->nextResourceUpdateBatch();
-            rub2->updateDynamicBuffer(m_overlayVbo.get(), 0, quadVerts.size() * sizeof(float), quadVerts.constData());
-
-            struct {
-                float viewportWidth;
-                float viewportHeight;
-                float pad0, pad1; // std140: padding BEFORE color
-                float r, g, b, a;
-            } overlayUniforms = {w,
-                                 h,
-                                 0,
-                                 0,
-                                 static_cast<float>(color.redF()),
-                                 static_cast<float>(color.greenF()),
-                                 static_cast<float>(color.blueF()),
-                                 static_cast<float>(color.alphaF())};
-            rub2->updateDynamicBuffer(m_overlayUniformBuffer.get(), 0, sizeof(overlayUniforms), &overlayUniforms);
-
-            cb->resourceUpdate(rub2);
-            cb->setGraphicsPipeline(m_overlayTrianglePipeline.get());
-            cb->setShaderResources(m_overlaySrb.get());
-            const QRhiCommandBuffer::VertexInput overlayVbufBinding(m_overlayVbo.get(), 0);
-            cb->setVertexInput(0, 1, &overlayVbufBinding);
-            cb->draw(6);
-        };
-
-        // Helper lambda to draw lines
-        auto drawLines = [&](const QVector<float> &lineVerts, const QColor &color) {
-            QRhiResourceUpdateBatch *rub2 = m_rhi->nextResourceUpdateBatch();
-            rub2->updateDynamicBuffer(m_overlayVbo.get(), 0, lineVerts.size() * sizeof(float), lineVerts.constData());
-
-            struct {
-                float viewportWidth;
-                float viewportHeight;
-                float pad0, pad1; // std140: padding BEFORE color
-                float r, g, b, a;
-            } overlayUniforms = {w,
-                                 h,
-                                 0,
-                                 0,
-                                 static_cast<float>(color.redF()),
-                                 static_cast<float>(color.greenF()),
-                                 static_cast<float>(color.blueF()),
-                                 static_cast<float>(color.alphaF())};
-            rub2->updateDynamicBuffer(m_overlayUniformBuffer.get(), 0, sizeof(overlayUniforms), &overlayUniforms);
-
-            cb->resourceUpdate(rub2);
-            cb->setGraphicsPipeline(m_overlayLinePipeline.get());
-            cb->setShaderResources(m_overlaySrb.get());
-            const QRhiCommandBuffer::VertexInput overlayVbufBinding(m_overlayVbo.get(), 0);
-            cb->setVertexInput(0, 1, &overlayVbufBinding);
-            cb->draw(lineVerts.size() / 2);
-        };
-
-        // Draw filter passband using DEDICATED buffers (full height)
-        float centerX = w / 2;
-        if (m_filterBw > 0 && m_passbandSrb) {
-            float bwPixels = (static_cast<float>(m_filterBw) * w) / m_bandwidthHz;
-
-            // K4 IF shift: value in 10 Hz units (m_ifShift=140 → 1400 Hz → displayed as 1.40 kHz)
-            float shiftHz = m_ifShift * 10.0f;
-            float shiftPixels = (shiftHz * w) / m_bandwidthHz;
-
-            float passbandX;
-            if (m_mode == "CW" || m_mode == "CW-R") {
-                // CW: passband position relative to CW pitch
-                // When shift == pitch, passband is centered on center line
-                // When shift differs from pitch, passband moves accordingly
-                float offsetHz = shiftHz - m_cwPitch;
-                float offsetPixels = (offsetHz * w) / m_bandwidthHz;
-
-                if (m_mode == "CW") {
-                    // CW: positive offset moves passband right (higher freq)
-                    passbandX = centerX + offsetPixels - bwPixels / 2;
-                } else {
-                    // CW-R: positive offset moves passband left (lower freq)
-                    passbandX = centerX - offsetPixels - bwPixels / 2;
-                }
-            } else if ((m_mode == "DATA" || m_mode == "DATA-R") && m_dataSubMode == 3) {
-                // PSK-D: passband centered on dial frequency
-                passbandX = centerX - bwPixels / 2;
-            } else if ((m_mode == "DATA" || m_mode == "DATA-R") && (m_dataSubMode == 1 || m_dataSubMode == 2)) {
-                // AFSK-A / FSK-D: LSB — passband centered half-shift below dial
-                float offsetPixels = (PanadapterConstants::RttyHalfShiftHz * w) / m_bandwidthHz;
-                passbandX = centerX - offsetPixels - bwPixels / 2;
-            } else if (m_mode == "AM" || m_mode == "FM") {
-                // WHY: AM/FM are carrier-centered (both sidebands); the K4 reports a leftover
-                // SSB-style IS value but does not apply it to the filter. Matches the main
-                // panadapter (panadapter_rhi.cpp AM/FM branch) and FilterIndicatorWidget.
-                passbandX = centerX - bwPixels / 2;
-            } else if (m_mode == "LSB") {
-                // LSB: passband center is shiftHz below carrier
-                passbandX = centerX - shiftPixels - bwPixels / 2;
-            } else {
-                // USB/AFSK/DATA-A: passband center is shiftHz above carrier
-                passbandX = centerX + shiftPixels - bwPixels / 2;
-            }
-
-            // Draw passband quad using DEDICATED passband buffers
-            QColor fillColor = m_passbandColor;
-            fillColor.setAlpha(PanadapterConstants::MiniPanFillAlpha);
-
-            // Build passband quad vertices (two triangles) - full height
-            QVector<float> pbQuadVerts = {
-                passbandX, 0, passbandX + bwPixels, 0, passbandX + bwPixels, h, passbandX, 0, passbandX + bwPixels, h,
-                passbandX, h};
-
-            QRhiResourceUpdateBatch *pbRub = m_rhi->nextResourceUpdateBatch();
-            pbRub->updateDynamicBuffer(m_passbandVbo.get(), 0, pbQuadVerts.size() * sizeof(float),
-                                       pbQuadVerts.constData());
-
-            struct {
-                float viewportWidth;
-                float viewportHeight;
-                float pad0, pad1; // std140: padding BEFORE color
-                float r, g, b, a;
-            } pbUniforms = {w,
-                            h,
-                            0,
-                            0,
-                            static_cast<float>(fillColor.redF()),
-                            static_cast<float>(fillColor.greenF()),
-                            static_cast<float>(fillColor.blueF()),
-                            static_cast<float>(fillColor.alphaF())};
-            pbRub->updateDynamicBuffer(m_passbandUniformBuffer.get(), 0, sizeof(pbUniforms), &pbUniforms);
-
-            cb->resourceUpdate(pbRub);
-            cb->setGraphicsPipeline(m_overlayTrianglePipeline.get());
-            cb->setShaderResources(m_passbandSrb.get());
-            const QRhiCommandBuffer::VertexInput pbVbufBinding(m_passbandVbo.get(), 0);
-            cb->setVertexInput(0, 1, &pbVbufBinding);
-            cb->draw(6);
-
-            // Draw passband edge rectangles using DEDICATED buffers (2px wide for robust Metal rendering)
-            if (m_passbandEdgeSrb) {
-                QColor edgeColor = m_passbandColor;
-                edgeColor.setAlpha(PanadapterConstants::PassbandEdgeAlpha);
-                float edgeWidth = PanadapterConstants::PassbandEdgeWidth;
-                // Left edge rectangle + right edge rectangle = 4 triangles = 12 vertices
-                QVector<float> passbandEdges = {// Left edge (2 triangles)
-                                                passbandX, 0, passbandX + edgeWidth, 0, passbandX + edgeWidth, h,
-                                                passbandX, 0, passbandX + edgeWidth, h, passbandX, h,
-                                                // Right edge (2 triangles)
-                                                passbandX + bwPixels, 0, passbandX + bwPixels + edgeWidth, 0,
-                                                passbandX + bwPixels + edgeWidth, h, passbandX + bwPixels, 0,
-                                                passbandX + bwPixels + edgeWidth, h, passbandX + bwPixels, h};
-
-                QRhiResourceUpdateBatch *edgeRub = m_rhi->nextResourceUpdateBatch();
-                edgeRub->updateDynamicBuffer(m_passbandEdgeVbo.get(), 0, passbandEdges.size() * sizeof(float),
-                                             passbandEdges.constData());
-
-                struct {
-                    float viewportWidth;
-                    float viewportHeight;
-                    float pad0, pad1;
-                    float r, g, b, a;
-                } edgeUniforms = {w,
-                                  h,
-                                  0,
-                                  0,
-                                  static_cast<float>(edgeColor.redF()),
-                                  static_cast<float>(edgeColor.greenF()),
-                                  static_cast<float>(edgeColor.blueF()),
-                                  static_cast<float>(edgeColor.alphaF())};
-                edgeRub->updateDynamicBuffer(m_passbandEdgeUniformBuffer.get(), 0, sizeof(edgeUniforms), &edgeUniforms);
-
-                cb->resourceUpdate(edgeRub);
-                cb->setGraphicsPipeline(m_overlayTrianglePipeline.get());
-                cb->setShaderResources(m_passbandEdgeSrb.get());
-                const QRhiCommandBuffer::VertexInput edgeVbufBinding(m_passbandEdgeVbo.get(), 0);
-                cb->setVertexInput(0, 1, &edgeVbufBinding);
-                cb->draw(12);
-            }
-        }
-
-        // Draw frequency marker (center line) using DEDICATED buffers
-        if (m_centerLineSrb) {
-            // Draw as filled rectangle instead of line for robust Metal rendering
-            // Derive marker color from VFO theme (passband color at full opacity)
-            QColor markerColor = m_passbandColor;
-            markerColor.setAlpha(255);
-            float markerWidth = PanadapterConstants::MarkerLineWidth;
-            QVector<float> centerLineVerts = {
-                centerX, 0, centerX + markerWidth, 0, centerX + markerWidth, h, centerX, 0, centerX + markerWidth, h,
-                centerX, h};
-
-            QRhiResourceUpdateBatch *clRub = m_rhi->nextResourceUpdateBatch();
-            clRub->updateDynamicBuffer(m_centerLineVbo.get(), 0, centerLineVerts.size() * sizeof(float),
-                                       centerLineVerts.constData());
-
-            struct {
-                float viewportWidth;
-                float viewportHeight;
-                float pad0, pad1; // std140: padding BEFORE color
-                float r, g, b, a;
-            } clUniforms = {w,
-                            h,
-                            0,
-                            0,
-                            static_cast<float>(markerColor.redF()),
-                            static_cast<float>(markerColor.greenF()),
-                            static_cast<float>(markerColor.blueF()),
-                            static_cast<float>(markerColor.alphaF())};
-            clRub->updateDynamicBuffer(m_centerLineUniformBuffer.get(), 0, sizeof(clUniforms), &clUniforms);
-
-            cb->resourceUpdate(clRub);
-            cb->setGraphicsPipeline(m_overlayTrianglePipeline.get());
-            cb->setShaderResources(m_centerLineSrb.get());
-            const QRhiCommandBuffer::VertexInput clVbufBinding(m_centerLineVbo.get(), 0);
-            cb->setVertexInput(0, 1, &clVbufBinding);
-            cb->draw(6);
-        }
-
-        // Draw RTTY space tone dashed line for AFSK-A / FSK-D modes
-        // Only the space tone is drawn — the mark tone coincides with the dial frequency center line
-        if ((m_mode == "DATA" || m_mode == "DATA-R") && (m_dataSubMode == 1 || m_dataSubMode == 2) && m_rttySpaceSrb &&
-            m_bandwidthHz > 0) {
-            // Space tone is one full RTTY shift below dial (mark) frequency
-            float spaceOffsetPixels = (PanadapterConstants::RttyShiftHz * w) / m_bandwidthHz;
-            float spaceX = centerX - spaceOffsetPixels;
-
-            if (spaceX >= 0 && spaceX < w) {
-                float lineWidth = PanadapterConstants::RttyDashLineWidth;
-
-                QVector<float> verts;
-                DashGeometry::appendDashedVerticalLine(verts, spaceX, lineWidth, 0.0f, h);
-
-                QRhiResourceUpdateBatch *rtRub = m_rhi->nextResourceUpdateBatch();
-                rtRub->updateDynamicBuffer(m_rttySpaceVbo.get(), 0, verts.size() * sizeof(float), verts.constData());
-
-                // Yellow-orange tone marker, matches main panadapter
-                static const QColor toneColor(255, 200, 0, 200);
-
-                struct {
-                    float viewportWidth;
-                    float viewportHeight;
-                    float pad0, pad1;
-                    float r, g, b, a;
-                } rtUniforms = {w,
-                                h,
-                                0,
-                                0,
-                                static_cast<float>(toneColor.redF()),
-                                static_cast<float>(toneColor.greenF()),
-                                static_cast<float>(toneColor.blueF()),
-                                static_cast<float>(toneColor.alphaF())};
-                rtRub->updateDynamicBuffer(m_rttySpaceUniformBuffer.get(), 0, sizeof(rtUniforms), &rtUniforms);
-
-                cb->resourceUpdate(rtRub);
-                cb->setGraphicsPipeline(m_overlayTrianglePipeline.get());
-                cb->setShaderResources(m_rttySpaceSrb.get());
-                const QRhiCommandBuffer::VertexInput rtVbufBinding(m_rttySpaceVbo.get(), 0);
-                cb->setVertexInput(0, 1, &rtVbufBinding);
-                cb->draw(verts.size() / 2);
-            }
-        }
-
-        // Draw notch filter marker using DEDICATED buffers
-        // Notch position relative to passband center (consistent with main panadapter)
-        if (m_notchEnabled && m_notchPitchHz > 0 && m_notchSrb && m_bandwidthHz > 0) {
-            // Mini-pan center (centerX) = passband center.
-            // In CW: passband center = tunedFreq + cwPitch, notch RF = tunedFreq + NM.
-            // So offset from center = NM - cwPitch.
-            // In CW-R: passband center = tunedFreq - cwPitch, notch RF = tunedFreq - NM.
-            // So offset from center = -(NM - cwPitch).
-            int offsetHz;
-            if (m_mode == "LSB") {
-                offsetHz = -m_notchPitchHz;
-            } else if (m_mode == "CW") {
-                offsetHz = m_notchPitchHz - m_cwPitch;
-            } else if (m_mode == "CW-R") {
-                offsetHz = -(m_notchPitchHz - m_cwPitch);
-            } else {
-                // USB, DATA, DATA-R, AM, FM
-                offsetHz = m_notchPitchHz;
-            }
-
-            float notchX = centerX + (static_cast<float>(offsetHz) * w) / m_bandwidthHz;
-            bool inBounds = (notchX >= 0 && notchX < w);
-
-            if (inBounds) {
-                // Draw as filled rectangle (2px wide) instead of line for robust rendering
-                QColor notchColor(255, 0, 0); // Red
-                float notchWidth = PanadapterConstants::MarkerLineWidth;
-                QVector<float> notchVerts = {
-                    notchX, 0, notchX + notchWidth, 0, notchX + notchWidth, h, notchX, 0, notchX + notchWidth, h,
-                    notchX, h};
-
-                QRhiResourceUpdateBatch *notchRub = m_rhi->nextResourceUpdateBatch();
-                notchRub->updateDynamicBuffer(m_notchVbo.get(), 0, notchVerts.size() * sizeof(float),
-                                              notchVerts.constData());
-
-                struct {
-                    float viewportWidth;
-                    float viewportHeight;
-                    float pad0, pad1; // std140: padding BEFORE color
-                    float r, g, b, a;
-                } notchUniforms = {w,
-                                   h,
-                                   0,
-                                   0,
-                                   static_cast<float>(notchColor.redF()),
-                                   static_cast<float>(notchColor.greenF()),
-                                   static_cast<float>(notchColor.blueF()),
-                                   static_cast<float>(notchColor.alphaF())};
-                notchRub->updateDynamicBuffer(m_notchUniformBuffer.get(), 0, sizeof(notchUniforms), &notchUniforms);
-
-                cb->resourceUpdate(notchRub);
-                cb->setGraphicsPipeline(m_overlayTrianglePipeline.get()); // Use triangles not lines
-                cb->setShaderResources(m_notchSrb.get());
-                const QRhiCommandBuffer::VertexInput notchVbufBinding(m_notchVbo.get(), 0);
-                cb->setVertexInput(0, 1, &notchVbufBinding);
-                cb->draw(6); // 2 triangles = 6 vertices
-            }
-        }
-
-        // Draw separator line — DialogBorder (#333333) keeps minor dividers consistent across UI.
-        QVector<float> separatorLine = {0, spectrumHeight, w, spectrumHeight};
-        drawLines(separatorLine, QColor(K4Styles::Colors::DialogBorder));
-
-        // Draw border
-        QVector<float> border = {0, 0, w - 1, 0, w - 1, 0, w - 1, h - 1, w - 1, h - 1, 0, h - 1, 0, h - 1, 0, 0};
-        drawLines(border, QColor(K4Styles::Colors::PanelBorder)); // Frame border — matches VFO panels.
+    for (int i = 0; i < overlayDrawCount; ++i) {
+        const OverlayDraw &draw = overlayDraws[i];
+        cb->setGraphicsPipeline(draw.pipeline);
+        cb->setShaderResources(draw.srb);
+        const QRhiCommandBuffer::VertexInput vbufBinding(draw.vbo, 0);
+        cb->setVertexInput(0, 1, &vbufBinding);
+        cb->draw(draw.vertexCount);
     }
 
     cb->endPass();
@@ -912,21 +756,22 @@ void MiniPanRhiWidget::clear() {
     // Reset persistent display state for clean reconnect
     m_notchEnabled = false;
     m_notchPitchHz = 0;
-    m_mode = "USB";
-    m_bandwidthHz = 10000;
+    m_mode = SpectrumGeometry::Mode::Usb;
+    m_dataSubMode = SpectrumGeometry::DataSubMode::DataA;
+    m_bandwidthHz = bandwidthForMode(m_mode);
     m_filterBw = 2400;
     m_ifShift = 50;
     m_cwPitch = 600;
 
-    if (m_leftFreqLabel)
-        m_leftFreqLabel->setText("");
-    if (m_rightFreqLabel)
-        m_rightFreqLabel->setText("");
+    // WHY the labels are refreshed rather than blanked: they describe m_bandwidthHz, which was
+    // just reset. Blanking them left them empty after a reconnect in USB, because setMode("USB")
+    // then saw no change and never rewrote them.
+    updateFrequencyLabels();
 
     update();
 }
 
-float MiniPanRhiWidget::normalizeDb(float db) {
+float MiniPanRhiWidget::normalizeDb(float db) const {
     // WHY: Only the lower bound is clamped. Bins stronger than m_maxDb intentionally return
     // values > 1.0 so the CPU-rasterized trace can climb to the chart's top edge (qMax pin
     // on y) instead of flat-topping below it. The waterfall byte-cast path re-clamps via
@@ -934,13 +779,11 @@ float MiniPanRhiWidget::normalizeDb(float db) {
     return qMax(0.0f, (db - m_minDb) / (m_maxDb - m_minDb));
 }
 
-int MiniPanRhiWidget::bandwidthForMode(const QString &mode) const {
-    if (mode == "CW" || mode == "CW-R") {
+int MiniPanRhiWidget::bandwidthForMode(SpectrumGeometry::Mode mode) const {
+    if (SpectrumGeometry::isCw(mode))
         return PanadapterConstants::SpanNarrowHz;
-    }
-    if ((mode == "DATA" || mode == "DATA-R") && (m_dataSubMode == 1 || m_dataSubMode == 2 || m_dataSubMode == 3)) {
-        return PanadapterConstants::SpanNarrowHz; // FSK-D / AFSK-A: narrow span like CW
-    }
+    if (SpectrumGeometry::isData(mode) && m_dataSubMode != SpectrumGeometry::DataSubMode::DataA)
+        return PanadapterConstants::SpanNarrowHz; // AFSK-A / FSK-D / PSK-D: narrow span like CW
     return PanadapterConstants::SpanWideHz;
 }
 
@@ -966,17 +809,19 @@ void MiniPanRhiWidget::setNotchFilter(bool enabled, int pitchHz) {
 }
 
 void MiniPanRhiWidget::setMode(const QString &mode) {
-    if (m_mode != mode) {
-        m_mode = mode;
-        m_bandwidthHz = bandwidthForMode(mode);
+    const SpectrumGeometry::Mode parsed = SpectrumGeometry::modeFromString(mode);
+    if (m_mode != parsed) {
+        m_mode = parsed;
+        m_bandwidthHz = bandwidthForMode(m_mode);
         updateFrequencyLabels();
         update();
     }
 }
 
 void MiniPanRhiWidget::setDataSubMode(int subMode) {
-    if (m_dataSubMode != subMode) {
-        m_dataSubMode = subMode;
+    const SpectrumGeometry::DataSubMode parsed = SpectrumGeometry::dataSubModeFromInt(subMode);
+    if (m_dataSubMode != parsed) {
+        m_dataSubMode = parsed;
         int newBw = bandwidthForMode(m_mode);
         if (newBw != m_bandwidthHz) {
             m_bandwidthHz = newBw;
@@ -1066,8 +911,8 @@ void MiniPanRhiWidget::updateFrequencyLabels() {
         return;
 
     // Update text based on bandwidth (mode-dependent)
-    if (m_bandwidthHz == 2000) {
-        // CW mode: ±1.0 kHz
+    if (m_bandwidthHz == PanadapterConstants::SpanNarrowHz) {
+        // CW and narrow DATA sub-modes: ±1.0 kHz
         m_leftFreqLabel->setText("-1.0 kHz");
         m_rightFreqLabel->setText("+1.0 kHz");
     } else {

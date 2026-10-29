@@ -122,6 +122,14 @@ target_include_directories(test_spectrumscale PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_spectrumscale Qt6::Core Qt6::Test)
 add_test(NAME SpectrumScaleTests COMMAND test_spectrumscale)
 
+# Panadapter frequency axis: mode parsing, CW display centre, passband edges, PAN frame bin bounds.
+add_executable(test_spectrumgeometry test_spectrumgeometry.cpp
+    ${CMAKE_SOURCE_DIR}/src/dsp/spectrumgeometry.cpp
+)
+target_include_directories(test_spectrumgeometry PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_spectrumgeometry Qt6::Core Qt6::Test)
+add_test(NAME SpectrumGeometryTests COMMAND test_spectrumgeometry)
+
 # RFC 6455 framing for the TCI server: length forms, masking, fragment reassembly, size limits.
 add_executable(test_websocketframe test_websocketframe.cpp
     ${CMAKE_SOURCE_DIR}/src/network/websocketframe.cpp

@@ -51,7 +51,8 @@ void handleREF(SpectrumDisplayState &state, RadioState &owner, const QString &cm
     bool ok;
     int val = cmd.mid(4).toInt(&ok);
     if (ok)
-        applyIntInRange(state.refLevel, val, -200, 50, owner, &RadioState::refLevelChanged);
+        applyIntInRange(state.refLevel, val, SpectrumDisplayLimits::RefLevelMin, SpectrumDisplayLimits::RefLevelMax,
+                        owner, &RadioState::refLevelChanged);
 }
 
 void handleREFSub(SpectrumDisplayState &state, RadioState &owner, const QString &cmd) {
@@ -60,7 +61,8 @@ void handleREFSub(SpectrumDisplayState &state, RadioState &owner, const QString 
     bool ok;
     int val = cmd.mid(5).toInt(&ok);
     if (ok)
-        applyIntInRange(state.refLevelB, val, -200, 50, owner, &RadioState::refLevelBChanged);
+        applyIntInRange(state.refLevelB, val, SpectrumDisplayLimits::RefLevelMin, SpectrumDisplayLimits::RefLevelMax,
+                        owner, &RadioState::refLevelBChanged);
 }
 
 void handleSPN(SpectrumDisplayState &state, RadioState &owner, const QString &cmd) {
@@ -86,7 +88,8 @@ void handleSCL(SpectrumDisplayState &state, RadioState &owner, const QString &cm
         return;
     bool ok;
     int scale = cmd.mid(4).toInt(&ok);
-    if (ok && scale >= 10 && scale <= 150 && scale != state.scale) {
+    if (ok && scale >= SpectrumDisplayLimits::ScaleMin && scale <= SpectrumDisplayLimits::ScaleMax &&
+        scale != state.scale) {
         state.scale = scale;
         emit owner.scaleChanged(state.scale);
     }
