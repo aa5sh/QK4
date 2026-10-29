@@ -53,7 +53,7 @@ bool SidetoneScheduler::scheduleDown(double downAt, bool late) {
     m_scheduleOffset = offsets->first;
     m_downAsked = downAt + *m_scheduleOffset;
     m_downLate = late ? m_downAsked : std::nullopt;
-    m_keyEvents.emplace_back(*m_downAsked, true);
+    m_keyEvents.push_back({*m_downAsked, true});
     return true;
 }
 
@@ -63,7 +63,7 @@ void SidetoneScheduler::scheduleUp(double upAt) {
         return;
     const double offset = *m_scheduleOffset;
     m_scheduleOffset.reset();
-    m_keyEvents.emplace_back(upAt + offset, false);
+    m_keyEvents.push_back({upAt + offset, false});
 }
 
 void SidetoneScheduler::keyNow(bool down) {
@@ -74,7 +74,7 @@ void SidetoneScheduler::keyNow(bool down) {
     double eventTime = m_clock.now() + offsets->first;
     if (m_blockTiming)
         eventTime += m_blockTiming->lead + m_blockTiming->block;
-    m_keyEvents.emplace_back(eventTime, down);
+    m_keyEvents.push_back({eventTime, down});
 }
 
 std::optional<std::pair<double, double>> SidetoneScheduler::placedDownLocked() const {

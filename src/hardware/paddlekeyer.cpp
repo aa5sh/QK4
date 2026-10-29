@@ -18,7 +18,6 @@
 #include "audio/sidetonescheduler.h"
 
 #include <algorithm>
-#include <iterator>
 #include <cmath>
 #include <utility>
 
@@ -245,10 +244,10 @@ void PaddleKeyer::applyRelease(double at) {
             m_stamps.dahUp = std::max(m_stamps.dahUp, at);
             // In time order, as if appended when it was asked for: edges that arrived since are
             // later and stay after it.
-            auto pos = m_history.end();
-            while (pos != m_history.begin() && std::prev(pos)->first > at)
+            std::size_t pos = m_history.size();
+            while (pos > 0 && m_history[pos - 1].first > at)
                 --pos;
-            pos = m_history.insert(pos, {at, Event::DahUp});
+            m_history.insert(pos, {at, Event::DahUp});
             m_history.insert(pos, {at, Event::DitUp});
             while (m_history.size() > kHistoryLength)
                 m_history.pop_front();
@@ -398,7 +397,7 @@ void PaddleKeyer::paddleEvent(Event event, double deltaTime, std::optional<doubl
         case Event::RestoreMonitor:
             break;
         }
-        m_history.emplace_back(stamp, event);
+        m_history.push_back({stamp, event});
         while (m_history.size() > kHistoryLength)
             m_history.pop_front();
     }
@@ -578,11 +577,12 @@ PaddleKeyer::Stamps PaddleKeyer::paddleTimestamps(std::optional<double> asOf) {
     // Walk the history newest first for each paddle's latest edge at or before asOf: the
     // paddles as they stood when the decision was due, not when the keyer got to it.
     std::optional<double> found[4];
-    for (auto it = m_history.rbegin(); it != m_history.rend(); ++it) {
-        if (it->first > *asOf)
+    for (std::size_t n = m_history.size(); n-- > 0;) {
+        const auto &[timestamp, event] = m_history[n];
+        if (timestamp > *asOf)
             continue;
         int index;
-        switch (it->second) {
+        switch (event) {
         case Event::DitUp:
             index = 0;
             break;
@@ -599,7 +599,7 @@ PaddleKeyer::Stamps PaddleKeyer::paddleTimestamps(std::optional<double> asOf) {
             continue;
         }
         if (!found[index]) {
-            found[index] = it->first;
+            found[index] = timestamp;
             if (found[0] && found[1] && found[2] && found[3])
                 break;
         }
@@ -666,7 +666,7 @@ void PaddleKeyer::sendUltimatic() {
     sendBurst(choose);
 }
 
-void PaddleKeyer::sendBurst(const Chooser &choose) {
+void PaddleKeyer::sendBurst(Chooser choose) {
     m_inBurst = true;
     Element prev;
     std::optional<double> prevLook;
@@ -733,7 +733,8 @@ PaddleKeyer::Element PaddleKeyer::missedFirstElement(std::optional<double> ended
         return std::nullopt;
     applyPendingReleases();
     std::lock_guard lock(m_paddleMutex);
-    for (const auto &[timestamp, event] : m_history) {
+    for (std::size_t n = 0; n < m_history.size(); ++n) {
+        const auto &[timestamp, event] = m_history[n];
         if (timestamp <= *endedDue)
             continue;
         char elt;
@@ -777,7 +778,7 @@ std::optional<double> PaddleKeyer::sleepUntil(double when) {
     return std::nullopt;
 }
 
-bool PaddleKeyer::startElement(bool firstElement, const std::function<bool(double)> &wanted) {
+bool PaddleKeyer::startElement(bool firstElement, Wanted wanted) {
     planSidetoneCatchup(firstElement);
     double keyedStart;
     double sidetoneStart;
@@ -850,7 +851,7 @@ void PaddleKeyer::planSidetoneCatchup(bool firstElement) {
     m_sidetoneBehind = behind;
 }
 
-bool PaddleKeyer::confirmElement(double sidetoneStart, const std::function<bool(double)> &wanted, double gridShift) {
+bool PaddleKeyer::confirmElement(double sidetoneStart, Wanted wanted, double gridShift) {
     const std::optional<double> checkAt = m_sidetone.downDeadline(sidetoneStart);
     const double wakeAt = checkAt ? *checkAt - kSidetoneEdgeMarginSeconds - m_wakeOverrun : *m_elementTimestamp;
     const std::optional<double> overrun = sleepUntil(wakeAt);

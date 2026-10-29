@@ -8,6 +8,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <utility>
 
 /**
  * @brief Base class for HaliKey paddle-input workers, which live on `HalikeyDevice::m_workerThread`.
@@ -28,8 +29,12 @@
 struct HaliKeyMidiSink {
     using Fn = std::function<void(int status, int note, int velocity, double deltaTime)>;
     void set(Fn fn) {
-        std::lock_guard lock(mutex);
-        target = std::move(fn);
+        {
+            std::lock_guard lock(mutex);
+            std::swap(target, fn);
+        }
+        // WHY the old target dies here, after the unlock: destroying it can free memory, and
+        // RtMidi's thread may be waiting for the lock.
     }
     void call(int status, int note, int velocity, double deltaTime) {
         std::lock_guard lock(mutex);

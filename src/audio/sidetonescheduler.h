@@ -15,8 +15,8 @@
 #define SIDETONESCHEDULER_H
 
 #include "hardware/keyertiming.h"
+#include "utils/ringdeque.h"
 
-#include <deque>
 #include <functional>
 #include <mutex>
 #include <optional>
@@ -93,7 +93,9 @@ private:
 
     int m_minimumSidetoneMs = 0;
 
-    std::deque<std::pair<double, bool>> m_keyEvents; // (stream time, down)
+    // (stream time, down). WHY 256: a handful are queued per element, and the audio thread drains
+    // them every block, so this never grows unless the sidetone stream has stopped.
+    RingDeque<std::pair<double, bool>> m_keyEvents{256};
     std::optional<std::pair<double, bool>> m_pendingKeyEvent;
 
     double m_lag = 0.0;

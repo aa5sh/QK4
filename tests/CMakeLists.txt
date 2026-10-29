@@ -375,6 +375,12 @@ target_include_directories(test_spscring PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_spscring Qt6::Core Qt6::Test)
 add_test(NAME SpscRingTests COMMAND test_spscring)
 
+# RingDeque and FunctionRef: the keyer's and sidetone's non-allocating containers (src/utils/)
+add_executable(test_rtcontainers test_rtcontainers.cpp)
+target_include_directories(test_rtcontainers PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_rtcontainers Qt6::Core Qt6::Test)
+add_test(NAME RtContainersTests COMMAND test_rtcontainers)
+
 # NetworkMetrics sparkline history + jitter tests
 add_executable(test_networkmetrics test_networkmetrics.cpp
     ${CMAKE_SOURCE_DIR}/src/network/networkmetrics.cpp

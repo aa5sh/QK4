@@ -25,13 +25,13 @@
 #define PADDLEKEYER_H
 
 #include "hardware/keyertiming.h"
+#include "utils/functionref.h"
+#include "utils/ringdeque.h"
 #include "utils/rtsemaphore.h"
 #include "utils/spscring.h"
 
 #include <atomic>
 #include <cstdint>
-#include <deque>
-#include <functional>
 #include <mutex>
 #include <optional>
 #include <string_view>
@@ -99,8 +99,10 @@ public:
 
 private:
     using Element = std::optional<char>; // '.', '-', or none
-    using Chooser = std::function<Element(Element prev, std::optional<double> look, std::optional<double> heard,
-                                          std::optional<double> asOf)>;
+    // WHY FunctionRef, not std::function: a std::function can allocate, per burst, on the keyer thread.
+    using Chooser = FunctionRef<Element(Element prev, std::optional<double> look, std::optional<double> heard,
+                                        std::optional<double> asOf)>;
+    using Wanted = FunctionRef<bool(double asOf)>;
 
     struct PaddleEventItem {
         Event event;
@@ -130,14 +132,14 @@ private:
     void sendStraightKey(const PaddleEventItem &item);
     void sendIambic();
     void sendUltimatic();
-    void sendBurst(const Chooser &choose);
+    void sendBurst(Chooser choose);
     Element missedFirstElement(std::optional<double> endedDue);
     Element placedFirstElement();
     std::optional<FirstElement> takeFirstElement();
     void startBurstSidetoneLocked(Event event, double timestamp, double pressed);
-    bool startElement(bool firstElement, const std::function<bool(double)> &wanted);
+    bool startElement(bool firstElement, Wanted wanted);
     void planSidetoneCatchup(bool firstElement);
-    bool confirmElement(double sidetoneStart, const std::function<bool(double)> &wanted, double gridShift);
+    bool confirmElement(double sidetoneStart, Wanted wanted, double gridShift);
     std::pair<double, double> elementSidetone(double elementSeconds) const;
     double upEdgeMargin(double ditSidetoneSeconds) const;
     void waitUntilSidetoneHeard();
@@ -197,7 +199,8 @@ private:
     // ---- paddle state (device thread writes, keyer reads) ----
     mutable std::mutex m_paddleMutex;
     Stamps m_stamps{0, 0, 0, 0};
-    std::deque<std::pair<double, Event>> m_history; // capped at kHistoryLength
+    // Capped at kHistoryLength; preallocated with room for the two a release inserts past it.
+    RingDeque<std::pair<double, Event>> m_history{kHistoryLength * 2};
 
     // ---- MIDI decoding (device thread only) ----
     double m_midiDelta = 0;
