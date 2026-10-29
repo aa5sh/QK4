@@ -831,6 +831,10 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     // Connect VFO A click to toggle mini-pan (send CAT to enable Mini-Pan streaming)
     // The VFO view itself follows miniPanAEnabledChanged (SpectrumController).
     connect(m_vfoA, &VFOWidget::normalContentClicked, this, [this]() {
+        // WHY: with no radio there is nothing to stream, and setting the state optimistically
+        // would open an empty mini-pan that no #MP echo ever confirms.
+        if (!m_connectionController->isConnected())
+            return;
         m_radioState->setMiniPanAEnabled(true);
         m_connectionController->sendCAT("#MP1;"); // Enable Mini-Pan A streaming
     });
@@ -1164,6 +1168,8 @@ void MainWindow::setupVfoSection(QWidget *parent) {
 
     // Connect VFO B click to toggle mini-pan (send CAT to enable Mini-Pan streaming)
     connect(m_vfoB, &VFOWidget::normalContentClicked, this, [this]() {
+        if (!m_connectionController->isConnected())
+            return;
         // WHY: the K4 refuses the Sub mini-pan while Sub RX is off
         // (ER105 "Operation requires SUB RX to be ON"), whatever band VFO B is on.
         if (!m_radioState->subReceiverEnabled()) {
