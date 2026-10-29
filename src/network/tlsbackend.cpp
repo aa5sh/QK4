@@ -1,7 +1,8 @@
 #include "tlsbackend.h"
 
+#include "logging/logcategories.h"
+
 #include <QByteArray>
-#include <QDebug>
 #include <QFileInfo>
 #include <QLatin1String>
 #include <QLibraryInfo>
@@ -118,10 +119,10 @@ void selectOpenSsl() {
 
     if (QSslSocket::availableBackends().contains(OpenSsl)) {
         if (!QSslSocket::setActiveBackend(OpenSsl))
-            qWarning() << "Failed to activate the OpenSSL TLS backend - TLS/PSK unavailable";
+            qCWarning(lcLinkTcp) << "Failed to activate the OpenSSL TLS backend - TLS/PSK unavailable";
     } else {
-        qWarning() << "OpenSSL TLS backend unavailable (active:" << QSslSocket::activeBackend()
-                   << ") - TLS/PSK connections will fail";
+        qCWarning(lcLinkTcp) << "OpenSSL TLS backend unavailable (active:" << QSslSocket::activeBackend()
+                             << ") - TLS/PSK connections will fail";
     }
 }
 
