@@ -58,7 +58,7 @@ public:
 
 public slots:
     void start();    // wired to QThread::started; libusb_init + timer setup
-    void shutdown(); // BlockingQueuedConnection from façade dtor
+    void shutdown(); // run on this thread by the façade dtor (ThreadShutdown::callBlocking)
 
     void openDevice();
     void closeDevice();
