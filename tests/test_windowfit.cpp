@@ -12,7 +12,7 @@ namespace {
 // What the main window needed when this was written: layout minimum plus menu bar, plus title bar
 // and frame. Exact values do not matter to the rules under test; realistic ones keep the cases
 // readable.
-const QSize kRequired(1180, 900);
+const QSize kRequired(1225, 900);
 
 // Available area of a screen at the given OS scaling, minus a 48 px taskbar.
 QSize screenAt(int width, int height, double osScale = 1.0) {

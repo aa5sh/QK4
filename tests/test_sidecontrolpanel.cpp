@@ -7,9 +7,11 @@
 // button-and-label pair from 49 px to 42. This holds the panel to its own minimum and checks the
 // pairs, and every other control, stay apart.
 
+#include "ui/widgets/rightsidepanel.h"
 #include "ui/widgets/sidecontrolpanel.h"
 
 #include <QApplication>
+#include <QFontMetricsF>
 #include <QLabel>
 #include <QPushButton>
 #include <QSettings>
@@ -90,6 +92,40 @@ private slots:
         // gone blind, not the bug away.
         SideControlPanel probe;
         QVERIFY(!firstOverlap(probe.minimumSizeHint().height() - 22).isEmpty());
+    }
+
+    // The first orange sub-label in `panel` whose text does not fit its width, or an empty string.
+    // kGapPx keeps neighbours (REM ANT | SUB ANT) from touching even when each one just fits.
+    static QString firstClippedSubLabel(QWidget &panel) {
+        static constexpr qreal kGapPx = 2.0;
+        QWidget host;
+        panel.setParent(&host);
+        panel.setGeometry(0, 0, panel.minimumSizeHint().width(), panel.minimumSizeHint().height());
+        host.resize(panel.size());
+        host.show();
+        QCoreApplication::processEvents();
+        for (QLabel *label : panel.findChildren<QLabel *>()) {
+            if (!label->isVisible() || label->text().isEmpty() || label->text().contains('\n'))
+                continue;
+            const qreal needed = QFontMetricsF(label->font(), label).horizontalAdvance(label->text()) + kGapPx;
+            if (label->width() < needed)
+                return QString("\"%1\" needs %2 px, has %3").arg(label->text()).arg(needed).arg(label->width());
+        }
+        return {};
+    }
+
+    void everyLeftPanelSubLabelFits() {
+        // At the 10 px text floor REM ANT and SUB ANT were drawn edge to edge.
+        auto *panel = new SideControlPanel;
+        const QString clipped = firstClippedSubLabel(*panel);
+        QVERIFY2(clipped.isEmpty(), qPrintable(clipped));
+    }
+
+    void everyRightPanelSubLabelFits() {
+        // At the 10 px text floor DIVERSITY, under SUB, was cut to "IVERSITY".
+        auto *panel = new RightSidePanel;
+        const QString clipped = firstClippedSubLabel(*panel);
+        QVERIFY2(clipped.isEmpty(), qPrintable(clipped));
     }
 };
 
