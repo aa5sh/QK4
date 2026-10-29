@@ -1,6 +1,7 @@
 #include "ui/widgets/sidepanelbutton.h"
 #include "ui/styling/k4styles.h"
 
+#include <QBoxLayout>
 #include <QFontMetricsF>
 #include <QGridLayout>
 #include <QLabel>
@@ -49,6 +50,23 @@ QWidget *createWithSubLabel(const QString &text, const QString &subText, Shade s
     layout->addWidget(btnOut, 0, Qt::AlignHCenter);
     layout->addWidget(createSubLabel(subText, cell));
     return cell;
+}
+
+int keyWidthFor(const QList<QPushButton *> &keys, int borderWidth) {
+    qreal widest = 0;
+    for (const QPushButton *key : keys) {
+        // WHY the key's own polished font and not one built here: the sheet sets only size and weight,
+        // and the family it falls back to is the platform's push-button font, not the app font.
+        key->ensurePolished();
+        const QFontMetricsF metrics(key->font(), key);
+        for (const QString &line : key->text().split(QLatin1Char('\n')))
+            widest = qMax(widest, metrics.horizontalAdvance(line));
+    }
+    return qCeil(widest) + 2 * (borderWidth + D::ButtonTextClearance);
+}
+
+void addGap(QBoxLayout *layout, int gap) {
+    layout->addSpacing(gap - layout->spacing());
 }
 
 QGridLayout *createGrid() {

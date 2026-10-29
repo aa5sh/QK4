@@ -81,7 +81,7 @@ void RightSidePanel::setupUi() {
     // Reserve a layout slot for the KPA1500 mini panel — the actual
     // widget is constructed + owned by KPA1500UiController and dropped
     // here via embedKpa1500Panel().
-    m_layout->addSpacing(K4Styles::Dimensions::SidePanelGroupGap);
+    SidePanelButton::addGap(m_layout, K4Styles::Dimensions::SidePanelGroupGap);
     m_kpa1500SlotIdx = m_layout->count();
 
     // Add stretch to push remaining buttons to bottom (above PTT)
@@ -112,7 +112,7 @@ void RightSidePanel::setupUi() {
     m_ritBtn->installEventFilter(this);
     m_xitBtn->installEventFilter(this);
 
-    m_layout->addSpacing(K4Styles::Dimensions::SidePanelSectionGap);
+    SidePanelButton::addGap(m_layout, K4Styles::Dimensions::SidePanelSectionGap);
 
     // Create 2×2 bottom button grid (FREQ ENT, RATE, LOCK A, SUB)
     auto *bottomGrid = SidePanelButton::createGrid();
@@ -209,7 +209,23 @@ bool RightSidePanel::eventFilter(QObject *watched, QEvent *event) {
 }
 
 void RightSidePanel::embedKpa1500Panel(Kpa1500MiniPanel *panel) {
-    Q_ASSERT(m_kpa1500SlotIdx >= 0);
+    Q_ASSERT(m_kpa1500SlotIdx >= 0 && !m_kpa1500Panel);
+    m_kpa1500Panel = panel;
     panel->setParent(this);
     m_layout->insertWidget(m_kpa1500SlotIdx, panel);
+}
+
+void RightSidePanel::setKpa1500SlotReserved(bool reserved) {
+    Q_ASSERT(m_kpa1500Panel);
+    // WHY: the card keeps its space while hidden ("the layout will not be changed by hiding the
+    // widget" - QSizePolicy::setRetainSizeWhenHidden), but only while the amplifier is enabled.
+    QSizePolicy policy = m_kpa1500Panel->sizePolicy();
+    policy.setRetainSizeWhenHidden(reserved);
+    m_kpa1500Panel->setSizePolicy(policy);
+    setFixedWidth(reserved ? K4Styles::Dimensions::RightSidePanelKpaWidth : K4Styles::Dimensions::RightSidePanelWidth);
+    // WHY announce it here: the card is explicitly hidden until the amplifier connects, and "for
+    // explicitly hidden widgets, updateGeometry() is a no-op" (QWidget docs), so switching the KPA1500
+    // on or off in Options would otherwise leave the window's minimum where it was.
+    m_layout->invalidate();
+    updateGeometry();
 }

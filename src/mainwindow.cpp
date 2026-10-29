@@ -5,6 +5,7 @@
 #include "ui/dialogs/radiomanagerdialog.h"
 #include "ui/widgets/sidecontrolpanel.h"
 #include "ui/widgets/rightsidepanel.h"
+#include "ui/widgets/memorykeyrow.h"
 #include "ui/widgets/sidepanelbutton.h"
 #include "ui/widgets/bottommenubar.h"
 #include "controllers/featuremenucontroller.h"
@@ -132,8 +133,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new 
     setupSpectrumDataRouting();
 
     setupHardwareController();
-
-    m_kpa1500UiController = new KPA1500UiController(m_statusBarController, m_rightSidePanel, this);
 
     m_processingDisplayController = new ProcessingDisplayController(m_radioState, m_vfoA, m_vfoB, this);
 
@@ -640,6 +639,12 @@ void MainWindow::setupUi() {
 
     // Right Side Panel (mirrors left panel dimensions)
     m_rightSidePanel = new RightSidePanel(middleWidget);
+    // WHY here, before the panel joins the grid: the controller puts the KPA1500 card into the panel
+    // and reserves its space. Changes to a layout reach the layouts above it only once the window is
+    // shown, so made after sizeToScreen() measured the window - or any time before the first show -
+    // the window was sized, and the Auto interface scale chosen, without the card, and the window
+    // grew when shown.
+    m_kpa1500UiController = new KPA1500UiController(m_statusBarController, m_rightSidePanel, this);
     middleLayout->addWidget(m_rightSidePanel, 0, 2);
 
     mainLayout->addWidget(middleWidget, 1);
@@ -932,6 +937,7 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     m_ritXitBox->setStyleSheet(QString("#ritXitBox { border: 1px solid %1; }").arg(K4Styles::Colors::MutedGraphic));
     m_ritXitBox->setMaximumWidth(80);
     m_ritXitBox->setMaximumHeight(40);
+    m_ritXitBox->setCursor(Qt::PointingHandCursor);
     m_ritXitBox->installEventFilter(this);
     auto *ritXitLayout = new QVBoxLayout(m_ritXitBox);
     ritXitLayout->setContentsMargins(1, 2, 1, 2);
@@ -1041,102 +1047,15 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     // ===== Memory Buttons Row (M1-M4, REC, STORE, RCL) =====
     centerLayout->addStretch(); // Push buttons to vertical center
 
-    // The memory keys are side-panel buttons narrowed to fit seven across between the VFOs.
-    const QSize memorySize(K4Styles::Dimensions::MemoryButtonWidth, K4Styles::Dimensions::SideButtonHeight);
-    auto createMemoryButton = [centerWidget, memorySize](const QString &label, const QString &subLabel,
-                                                         SidePanelButton::Shade shade) -> QWidget * {
-        QPushButton *btn = nullptr;
-        return SidePanelButton::createWithSubLabel(label, subLabel, shade, btn, centerWidget, memorySize);
-    };
-
-    // Single row: M1-M4 group, REC, STORE, RCL (all centered)
-    auto *memoryRow = new QHBoxLayout();
-    memoryRow->setContentsMargins(0, 0, 0, 0);
-    memoryRow->setSpacing(K4Styles::Dimensions::SideButtonColumnGap);
-
-    memoryRow->addStretch();
-
-    // M1-M4 group with MESSAGE label underneath
-    auto *messageGroup = new QWidget(centerWidget);
-    auto *messageGroupLayout = new QVBoxLayout(messageGroup);
-    messageGroupLayout->setContentsMargins(0, 0, 0, 0);
-    messageGroupLayout->setSpacing(K4Styles::Dimensions::SideButtonSubLabelGap);
-
-    // M1-M4 button row
-    auto *m1m4Row = new QHBoxLayout();
-    m1m4Row->setContentsMargins(0, 0, 0, 0);
-    m1m4Row->setSpacing(K4Styles::Dimensions::SideButtonColumnGap);
-
-    auto createSimpleButton = [centerWidget, memorySize](const QString &label) -> QPushButton * {
-        return SidePanelButton::create(label, SidePanelButton::Shade::Dark, centerWidget, memorySize);
-    };
-
-    QPushButton *m1Btn = createSimpleButton("M1");
-    m1m4Row->addWidget(m1Btn);
-
-    QPushButton *m2Btn = createSimpleButton("M2");
-    m1m4Row->addWidget(m2Btn);
-
-    QPushButton *m3Btn = createSimpleButton("M3");
-    m1m4Row->addWidget(m3Btn);
-
-    QPushButton *m4Btn = createSimpleButton("M4");
-    m1m4Row->addWidget(m4Btn);
-
-    messageGroupLayout->addLayout(m1m4Row);
-
-    // MESSAGE label with connecting lines: ——— MESSAGE ———
-    auto *messageLabel = new QWidget(messageGroup);
-    auto *messageLabelLayout = new QHBoxLayout(messageLabel);
-    messageLabelLayout->setContentsMargins(0, 0, 0, 0);
-    messageLabelLayout->setSpacing(2);
-
-    auto *leftLine = new QFrame(messageLabel);
-    leftLine->setFrameShape(QFrame::HLine);
-    leftLine->setStyleSheet(QString("background-color: %1; max-height: 1px;").arg(K4Styles::Colors::BorderSelected));
-    leftLine->setFixedHeight(K4Styles::Dimensions::SeparatorHeight);
-
-    auto *msgText = new QLabel("MESSAGE", messageLabel);
-    msgText->setStyleSheet(QString("color: %1; font-size: %2px;")
-                               .arg(K4Styles::Colors::BorderSelected)
-                               .arg(K4Styles::Dimensions::FontSizeCaption));
-    msgText->setAlignment(Qt::AlignCenter);
-    // WHY: one sub-label line tall, so MESSAGE sits on the same line as BANK / AF REC / AF PLAY.
-    msgText->setFixedHeight(SidePanelButton::subLabelHeight(msgText));
-
-    auto *rightLine = new QFrame(messageLabel);
-    rightLine->setFrameShape(QFrame::HLine);
-    rightLine->setStyleSheet(QString("background-color: %1; max-height: 1px;").arg(K4Styles::Colors::BorderSelected));
-    rightLine->setFixedHeight(K4Styles::Dimensions::SeparatorHeight);
-
-    messageLabelLayout->addWidget(leftLine, 1);
-    messageLabelLayout->addWidget(msgText, 0);
-    messageLabelLayout->addWidget(rightLine, 1);
-
-    messageGroupLayout->addWidget(messageLabel);
-    memoryRow->addWidget(messageGroup);
-
-    // REC (dark grey like M keys, BANK sub-label)
-    auto *recContainer = createMemoryButton("REC", "BANK", SidePanelButton::Shade::Dark);
-    QPushButton *recBtn = recContainer->findChild<QPushButton *>();
-    memoryRow->addWidget(recContainer);
-
-    // STORE (lighter grey, AF REC sub-label)
-    auto *storeContainer = createMemoryButton("STORE", "AF REC", SidePanelButton::Shade::Light);
-    QPushButton *storeBtn = storeContainer->findChild<QPushButton *>();
-    memoryRow->addWidget(storeContainer);
-
-    // RCL (lighter grey, AF PLAY sub-label)
-    auto *rclContainer = createMemoryButton("RCL", "AF PLAY", SidePanelButton::Shade::Light);
-    QPushButton *rclBtn = rclContainer->findChild<QPushButton *>();
-    memoryRow->addWidget(rclContainer);
-
-    memoryRow->addStretch();
-    centerLayout->addLayout(memoryRow);
+    const QMargins centerMargins = centerLayout->contentsMargins();
+    MemoryKeyRow::Keys memoryKeys;
+    centerLayout->addLayout(MemoryKeyRow::create(
+        centerWidget, centerWidget->maximumWidth() - centerMargins.left() - centerMargins.right(), memoryKeys));
 
     // Owns left+right click wiring for the M1-M4 / REC / STORE / RCL buttons.
     m_memoryButtonsController =
-        new MemoryButtonsController(m_connectionController, m1Btn, m2Btn, m3Btn, m4Btn, recBtn, storeBtn, rclBtn, this);
+        new MemoryButtonsController(m_connectionController, memoryKeys.m1, memoryKeys.m2, memoryKeys.m3, memoryKeys.m4,
+                                    memoryKeys.rec, memoryKeys.store, memoryKeys.rcl, this);
 
     centerLayout->addStretch(); // Balance below
     layout->addWidget(centerWidget);
@@ -1445,6 +1364,14 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
         return m_ritXitController->handleRitLabelClick();
     if (watched == m_xitLabel && event->type() == QEvent::MouseButtonPress)
         return m_ritXitController->handleXitLabelClick();
+    // WHY: the RIT and XIT words are caption text, far smaller than a pointer target. The whole box is
+    // the target instead, split down the middle between the two words: left half RIT, right half XIT.
+    if ((watched == m_ritXitBox || watched == m_ritXitValueLabel) && event->type() == QEvent::MouseButtonPress) {
+        const auto *press = static_cast<QMouseEvent *>(event);
+        const QPoint inBox = static_cast<QWidget *>(watched)->mapTo(m_ritXitBox, press->position().toPoint());
+        return inBox.x() < m_ritXitBox->width() / 2 ? m_ritXitController->handleRitLabelClick()
+                                                    : m_ritXitController->handleXitLabelClick();
+    }
     if (event->type() == QEvent::Wheel &&
         (watched == m_ritXitBox || watched == m_ritLabel || watched == m_xitLabel || watched == m_ritXitValueLabel)) {
         return m_ritXitController->handleWheel(static_cast<QWheelEvent *>(event));

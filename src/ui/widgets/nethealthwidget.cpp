@@ -5,7 +5,9 @@
 #include <QPainter>
 
 NetHealthWidget::NetHealthWidget(NetworkMetrics *metrics, QWidget *parent) : QWidget(parent), m_metrics(metrics) {
-    setFixedSize(K4Styles::Dimensions::SmallIconSize, 16);
+    // WHY larger than the bars: the glyph keeps its size, centred, and the widget around it is the
+    // click target.
+    setFixedSize(K4Styles::Dimensions::MinClickTarget, K4Styles::Dimensions::MinClickTarget);
     setCursor(Qt::PointingHandCursor); // hint: click to open the metrics popup
     connect(m_metrics, &NetworkMetrics::healthTierChanged, this, &NetHealthWidget::onHealthTierChanged);
 }
@@ -57,15 +59,19 @@ void NetHealthWidget::paintEvent(QPaintEvent *) {
 
     QColor dimColor(K4Styles::Colors::MutedGraphic);
 
+    const QRect glyph(QPoint((width() - K4Styles::Dimensions::SmallIconSize) / 2,
+                             (height() - K4Styles::Dimensions::NetHealthGlyphHeight) / 2),
+                      QSize(K4Styles::Dimensions::SmallIconSize, K4Styles::Dimensions::NetHealthGlyphHeight));
+
     int barWidth = 3;
     int gap = 2;
     int totalWidth = BarCount * barWidth + (BarCount - 1) * gap;
-    int xOffset = (width() - totalWidth) / 2;
+    int xOffset = glyph.left() + (glyph.width() - totalWidth) / 2;
 
     for (int i = 0; i < BarCount; i++) {
-        int barH = static_cast<int>(height() * barHeights[i]);
+        int barH = static_cast<int>(glyph.height() * barHeights[i]);
         int x = xOffset + i * (barWidth + gap);
-        int y = height() - barH;
+        int y = glyph.top() + glyph.height() - barH;
 
         p.setPen(Qt::NoPen);
         p.setBrush(i < litBars ? litColor : dimColor);

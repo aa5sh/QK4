@@ -9,7 +9,11 @@
 
 #include "ui/widgets/rightsidepanel.h"
 #include "ui/styling/k4styles.h"
+#include "ui/widgets/bottommenubar.h"
+#include "ui/widgets/dualcontrolbutton.h"
 #include "ui/widgets/kpa1500minipanel.h"
+#include "ui/widgets/memorykeyrow.h"
+#include "ui/widgets/vforowwidget.h"
 #include "ui/widgets/sidecontrolpanel.h"
 #include "ui/widgets/sidepanelbutton.h"
 
@@ -19,6 +23,8 @@
 #include <QFontMetricsF>
 #include <QLabel>
 #include <QPushButton>
+#include <QSlider>
+#include <QVBoxLayout>
 #include <QSettings>
 #include <QTemporaryDir>
 #include <climits>
@@ -115,7 +121,9 @@ private slots:
         for (QLabel *label : panel.findChildren<QLabel *>()) {
             if (!label->isVisible() || label->text().isEmpty() || label->text().contains('\n'))
                 continue;
-            const qreal needed = QFontMetricsF(label->font(), label).horizontalAdvance(label->text()) + kGapPx;
+            // A centred sub-label shares its edges with its neighbour's; other labels only need their text.
+            const qreal gap = (label->alignment() & Qt::AlignHCenter) ? kGapPx : 0.0;
+            const qreal needed = QFontMetricsF(label->font(), label).horizontalAdvance(label->text()) + gap;
             if (label->width() < needed)
                 return QString("\"%1\" needs %2 px, has %3").arg(label->text()).arg(needed).arg(label->width());
         }
@@ -173,14 +181,38 @@ private slots:
         // controller reserves its space, so showing it must not change the panel's minimum.
         RightSidePanel panel;
         auto *card = new Kpa1500MiniPanel(&panel);
-        QSizePolicy policy = card->sizePolicy();
-        policy.setRetainSizeWhenHidden(true);
-        card->setSizePolicy(policy);
         panel.embedKpa1500Panel(card);
         card->setVisible(false);
+        panel.setKpa1500SlotReserved(true);
         const int hidden = panel.minimumSizeHint().height();
         card->setVisible(true);
         QCOMPARE(panel.minimumSizeHint().height(), hidden);
+    }
+
+    void reservingTheCardReachesTheLayoutAbove() {
+        // The window sized itself, and chose its Auto interface scale, without the card: the card is
+        // explicitly hidden, so its own size-policy change never reached the layouts above it. Both
+        // ways, before anything is shown, the panel's parent must see the change.
+        QWidget host;
+        auto *column = new QVBoxLayout(&host);
+        column->setContentsMargins(0, 0, 0, 0);
+        auto *panel = new RightSidePanel;
+        column->addWidget(panel);
+        auto *card = new Kpa1500MiniPanel(panel);
+        card->setVisible(false);
+        panel->embedKpa1500Panel(card);
+        panel->setKpa1500SlotReserved(false);
+        const QSize without = host.minimumSizeHint();
+        QCOMPARE(panel->width(), K4Styles::Dimensions::RightSidePanelWidth);
+
+        panel->setKpa1500SlotReserved(true);
+        QVERIFY2(host.minimumSizeHint().height() >= without.height() + card->minimumSizeHint().height(),
+                 qPrintable(QString("%1 -> %2").arg(without.height()).arg(host.minimumSizeHint().height())));
+        QCOMPARE(panel->width(), K4Styles::Dimensions::RightSidePanelKpaWidth);
+
+        panel->setKpa1500SlotReserved(false);
+        QCOMPARE(host.minimumSizeHint(), without);
+        QCOMPARE(panel->width(), K4Styles::Dimensions::RightSidePanelWidth);
     }
 
     void everyRightPanelSubLabelFits() {
@@ -233,6 +265,7 @@ private slots:
         m_kpa = new Kpa1500MiniPanel;
         m_kpa->setConnected(true);
         m_right->embedKpa1500Panel(m_kpa);
+        m_right->setKpa1500SlotReserved(true);
         row->addWidget(m_left);
         row->addWidget(m_right);
         m_host.resize(m_host.minimumSizeHint());
@@ -320,6 +353,89 @@ private slots:
         }
     }
 
+    void withoutTheKpa1500TheRightPanelMatchesTheLeft() {
+        QWidget host;
+        auto *panel = new RightSidePanel(&host);
+        panel->embedKpa1500Panel(new Kpa1500MiniPanel(panel));
+        panel->setKpa1500SlotReserved(false);
+        panel->setGeometry(0, 0, panel->width(), panel->minimumSizeHint().height());
+        host.resize(panel->size());
+        host.show();
+        QCoreApplication::processEvents();
+        QCOMPARE(panel->width(), m_left->width());
+        int minX = INT_MAX;
+        for (QPushButton *button : functionButtons(panel))
+            minX = qMin(minX, inPanel(panel, button).left());
+        QCOMPARE(minX, K4Styles::Dimensions::SidePanelMarginH);
+    }
+
+    void knobKeysLineUpWithTheKeyGrid() {
+        // The six knob keys were narrower than the grid and sat against its left edge, with a gap on
+        // the right. Now their outer edges are the grid's and the MON row's.
+        const auto knobs = m_left->findChildren<DualControlButton *>();
+        QCOMPARE(knobs.size(), 6);
+        for (DualControlButton *knob : knobs) {
+            QCOMPARE(knob->x(), K4Styles::Dimensions::SidePanelMarginH);
+            QCOMPARE(knob->width(), K4Styles::Dimensions::SideButtonGridWidth);
+            QCOMPARE(knob->height(), DualControlButton::measuredHeight(knob));
+        }
+        QPushButton *mon = nullptr;
+        QPushButton *bal = nullptr;
+        for (QPushButton *button : m_left->findChildren<QPushButton *>()) {
+            if (button->text() == QLatin1String("MON"))
+                mon = button;
+            if (button->text() == QLatin1String("BAL"))
+                bal = button;
+        }
+        QVERIFY(mon && bal);
+        QCOMPARE(mon->x(), knobs.first()->x());
+        QCOMPARE(bal->geometry().right(), knobs.first()->geometry().right());
+    }
+
+    void gapsAreDrawnAtTheirTokens() {
+        // QBoxLayout draws its spacing between two items a spacer separates, so addSpacing(16) drew 20.
+        namespace D = K4Styles::Dimensions;
+        const auto knobs = m_left->findChildren<DualControlButton *>();
+        auto gapBelow = [](const QWidget *upper, const QWidget *lower) {
+            return lower->mapTo(lower->window(), QPoint()).y() - upper->mapTo(upper->window(), QPoint()).y() -
+                   upper->height();
+        };
+        QList<QLabel *> txLabels;
+        for (QPushButton *button : functionButtons(m_left))
+            txLabels << subLabelOf(button);
+        QCOMPARE(gapBelow(txLabels.last(), knobs[0]), D::SidePanelGroupGap);
+        for (int i = 1; i < knobs.size(); ++i)
+            QCOMPARE(gapBelow(knobs[i - 1], knobs[i]), i % 2 ? D::SidePanelItemSpacing : D::SidePanelGroupGap);
+
+        QPushButton *mon = nullptr;
+        for (QPushButton *button : m_left->findChildren<QPushButton *>())
+            if (button->text() == QLatin1String("MON"))
+                mon = button;
+        const auto sliders = m_left->findChildren<QSlider *>();
+        QCOMPARE(sliders.size(), 2);
+        QCOMPARE(gapBelow(knobs.last(), mon), D::SidePanelMinorGap);
+        QCOMPARE(gapBelow(mon, sliders[0]), D::SidePanelMinorGap);
+        QCOMPARE(gapBelow(sliders[0], sliders[1]), D::SidePanelMinorGap);
+
+        // Right: main grid to the KPA1500 card, PF keys to the VFO keys.
+        const auto right = functionButtons(m_right);
+        QCOMPARE(gapBelow(subLabelOf(right[9]), m_kpa), D::SidePanelGroupGap);
+        QCOMPARE(gapBelow(subLabelOf(right[13]), right[14]), D::SidePanelSectionGap);
+    }
+
+    void volumeSlidersShareOneUsableRow() {
+        // MAIN and SUB each sit on one row with their name; both sliders start and end together and
+        // keep a groove a mouse and the arrow keys can work.
+        const auto sliders = m_left->findChildren<QSlider *>();
+        QCOMPARE(sliders.size(), 2);
+        QCOMPARE(sliders[0]->x(), sliders[1]->x());
+        QCOMPARE(sliders[0]->width(), sliders[1]->width());
+        QVERIFY2(sliders[0]->width() >= 80, qPrintable(QString::number(sliders[0]->width())));
+        QCOMPARE(sliders[0]->geometry().right(), m_left->width() - K4Styles::Dimensions::SidePanelMarginH - 1);
+        for (QSlider *slider : sliders)
+            QVERIFY(slider->focusPolicy() & Qt::TabFocus);
+    }
+
     void kpaButtonsSitDirectlyOnTheCard() {
         // WHY: the app's background rule paints every plain QWidget; a container behind each key drew
         // an opaque square over the card's lighter tint.
@@ -328,7 +444,7 @@ private slots:
     }
 
     void statusGroupSitsOnTheBottomEdge() {
-        // Taller than its minimum, the spare height goes above the clock, not below the version label.
+        // Taller than its minimum, the spare height goes above the clock, not below the icon row.
         QWidget host;
         auto *panel = new SideControlPanel(&host);
         const int extra = 260;
@@ -336,13 +452,113 @@ private slots:
         host.resize(panel->size());
         host.show();
         QCoreApplication::processEvents();
-        QLabel *version = nullptr;
-        for (QLabel *label : panel->findChildren<QLabel *>(Qt::FindDirectChildrenOnly))
-            if (label->text().startsWith(QLatin1String("QK4 V.")))
-                version = label;
-        QVERIFY(version);
-        QCOMPARE(version->geometry().bottom() + 1, panel->height() - K4Styles::Dimensions::SidePanelMarginV);
+        QPushButton *icon = nullptr;
+        for (QPushButton *button : panel->findChildren<QPushButton *>(Qt::FindDirectChildrenOnly))
+            if (button->size() ==
+                QSize(K4Styles::Dimensions::SideIconButtonSize, K4Styles::Dimensions::SideIconButtonSize))
+                icon = button;
+        QVERIFY(icon);
+        QCOMPARE(icon->geometry().bottom() + 1, panel->height() - K4Styles::Dimensions::SidePanelMarginV);
         QCOMPARE(functionButtons(panel).first()->mapTo(panel, QPoint()).y(), K4Styles::Dimensions::SidePanelMarginV);
+    }
+};
+
+// Every key's text stands K4Styles::Dimensions::ButtonTextClearance inside its border, measured in the
+// font the key is drawn with: both panels, the KPA1500 card, the memory row and the bottom menu bar.
+class KeyTextClearanceTests : public QObject {
+    Q_OBJECT
+
+    QTemporaryDir m_tempDir;
+    QWidget m_host;
+    QWidget *m_memoryRow = nullptr;
+    MemoryKeyRow::Keys m_memoryKeys;
+
+    // The row width MainWindow gives the memory keys: the centre column inside its margins.
+    static constexpr int kMemoryRowWidth = 322;
+
+    static int borderOf(const QPushButton *key) {
+        return key->styleSheet() == K4Styles::compactButton() ? K4Styles::Dimensions::SideCompactBorderWidth
+                                                              : K4Styles::Dimensions::BorderWidth;
+    }
+
+private slots:
+    void initTestCase() {
+        QVERIFY(m_tempDir.isValid());
+        QSettings::setDefaultFormat(QSettings::IniFormat);
+        QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, m_tempDir.path());
+        qApp->setStyleSheet(K4Styles::applicationStyleSheet());
+
+        auto *grid = new QGridLayout(&m_host);
+        grid->setContentsMargins(0, 0, 0, 0);
+        auto *left = new SideControlPanel;
+        auto *right = new RightSidePanel;
+        auto *kpa = new Kpa1500MiniPanel;
+        right->embedKpa1500Panel(kpa);
+        right->setKpa1500SlotReserved(true);
+        m_memoryRow = new QWidget;
+        m_memoryRow->setFixedWidth(kMemoryRowWidth);
+        m_memoryRow->setLayout(MemoryKeyRow::create(m_memoryRow, kMemoryRowWidth, m_memoryKeys));
+        grid->addWidget(left, 0, 0, 2, 1);
+        grid->addWidget(m_memoryRow, 0, 1);
+        grid->addWidget(right, 0, 2);
+        grid->addWidget(new BottomMenuBar, 1, 1, 1, 2);
+        m_host.resize(m_host.minimumSizeHint());
+        m_host.show();
+        QCoreApplication::processEvents();
+    }
+
+    void everyKeyClearsItsText() {
+        int checked = 0;
+        for (QPushButton *key : m_host.findChildren<QPushButton *>()) {
+            if (!key->isVisible() || key->text().isEmpty())
+                continue;
+            const QFontMetricsF metrics(key->font(), key);
+            qreal widest = 0;
+            for (const QString &line : key->text().split('\n'))
+                widest = qMax(widest, metrics.horizontalAdvance(line));
+            const qreal clearance = (key->width() - widest) / 2 - borderOf(key);
+            QVERIFY2(clearance >= K4Styles::Dimensions::ButtonTextClearance,
+                     qPrintable(QString("'%1': %2 px each side, %3 wide")
+                                    .arg(QString(key->text()).replace('\n', ' '))
+                                    .arg(clearance)
+                                    .arg(key->width())));
+            ++checked;
+        }
+        // 6 + 3 left, 18 + 4 right, 7 memory, 8 menu bar.
+        QCOMPARE(checked, 46);
+    }
+
+    void memoryKeysAreTwoSetsThatSpanTheRow() {
+        const QList<QPushButton *> message{m_memoryKeys.m1, m_memoryKeys.m2, m_memoryKeys.m3, m_memoryKeys.m4};
+        const QList<QPushButton *> recall{m_memoryKeys.rec, m_memoryKeys.store, m_memoryKeys.rcl};
+        for (QPushButton *key : message)
+            QCOMPARE(key->size(), message.first()->size());
+        for (QPushButton *key : recall)
+            QCOMPARE(key->size(), recall.first()->size());
+        const int left = m_memoryKeys.m1->mapTo(m_memoryRow, QPoint()).x();
+        const int right = m_memoryKeys.rcl->mapTo(m_memoryRow, QPoint()).x() + m_memoryKeys.rcl->width();
+        QVERIFY2(right - left <= kMemoryRowWidth && right - left > kMemoryRowWidth - 4,
+                 qPrintable(QString("%1..%2").arg(left).arg(right)));
+    }
+
+    void memorySubLabelsDoNotTouch() {
+        // AF REC and AF PLAY under neighbouring keys: each fits its own key's width.
+        for (QPushButton *key : {m_memoryKeys.rec, m_memoryKeys.store, m_memoryKeys.rcl}) {
+            QLabel *label = key->parentWidget()->findChild<QLabel *>(QString(), Qt::FindDirectChildrenOnly);
+            QVERIFY(label);
+            const qreal needed = QFontMetricsF(label->font(), label).horizontalAdvance(label->text());
+            // 2 px: the same allowance the panel sub-labels get, so neighbours never touch.
+            QVERIFY2(needed + 2 <= label->width(), qPrintable(label->text()));
+        }
+    }
+
+    void modeLabelsAreFullSizeClickTargets() {
+        VfoRowWidget row;
+        for (QLabel *mode : {row.modeALabel(), row.modeBLabel()}) {
+            QVERIFY(mode->height() >= K4Styles::Dimensions::MinClickTarget ||
+                    mode->minimumHeight() >= K4Styles::Dimensions::MinClickTarget);
+            QVERIFY(mode->width() >= K4Styles::Dimensions::MinClickTarget);
+        }
     }
 };
 
@@ -356,6 +572,10 @@ int main(int argc, char **argv) {
     {
         SidePanelButtonStandardTests standard;
         status |= QTest::qExec(&standard, argc, argv);
+    }
+    {
+        KeyTextClearanceTests clearance;
+        status |= QTest::qExec(&clearance, argc, argv);
     }
     return status;
 }

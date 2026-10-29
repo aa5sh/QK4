@@ -17,7 +17,7 @@ void VFOWidget::setupUi() {
     auto *mainLayout = new QVBoxLayout(this);
     // Outer edge margin (toward waterfall border) is tight; inner edge (toward center) has spacing
     int outerMargin = 2; // Align with spectrum container border
-    int innerMargin = K4Styles::Dimensions::PopupButtonSpacing;
+    int innerMargin = K4Styles::Dimensions::VfoInnerMargin;
     if (m_type == VFO_A) {
         mainLayout->setContentsMargins(outerMargin, 4, innerMargin, 4);
     } else {

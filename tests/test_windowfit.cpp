@@ -9,10 +9,10 @@
 
 namespace {
 
-// What the main window needed when this was written: layout minimum plus menu bar, plus title bar
-// and frame. Exact values do not matter to the rules under test; realistic ones keep the cases
-// readable.
-const QSize kRequired(1225, 900);
+// What the main window needed when this was written, in its largest everyday form: KPA1500 enabled,
+// menu bar inside the window (Windows, Linux), plus title bar and frame. Exact values do not matter to
+// the rules under test; realistic ones keep the cases readable.
+const QSize kRequired(1214, 847);
 
 // Available area of a screen at the given OS scaling, minus a 48 px taskbar.
 QSize screenAt(int width, int height, double osScale = 1.0) {
@@ -62,7 +62,7 @@ private slots:
     }
 
     void nativeOnA1080pScreen() {
-        // 1032 / 900 leaves room for 114%, but growth moves only in 25% steps and 125% does not fit.
+        // 1032 / 847 leaves room for 121%, but growth moves only in 25% steps and 125% does not fit.
         QCOMPARE(WindowFit::fitScale(kRequired, screen1080(1.0), 1.0), 1.0);
     }
 
@@ -76,7 +76,7 @@ private slots:
     }
 
     void cappedOnA1440pScreen() {
-        // A 27" 2560x1440 monitor has room for 154%; Auto stops at its ceiling.
+        // A 27" 2560x1440 monitor has room for 164%; Auto stops at its ceiling.
         QCOMPARE(WindowFit::fitScale(kRequired, screenAt(2560, 1440), 1.0), WindowFit::kMaxScale);
         QCOMPARE(WindowFit::kMaxScale, 1.25);
     }
@@ -86,10 +86,10 @@ private slots:
         QTest::addColumn<double>("expected");
         QTest::newRow("2560x1440") << screenAt(2560, 1440) << 1.25;
         QTest::newRow("1920x1080") << screenAt(1920, 1080) << 1.0;
-        QTest::newRow("1440x900") << screenAt(1440, 900) << 0.9;
-        QTest::newRow("1366x768") << screenAt(1366, 768) << 0.8;
+        QTest::newRow("1440x900") << screenAt(1440, 900) << 1.0;
+        QTest::newRow("1366x768") << screenAt(1366, 768) << 0.85;
         QTest::newRow("1024x768") << screenAt(1024, 768) << 0.8;
-        QTest::newRow("1920x1080 at 150%") << screenAt(1920, 1080, 1.5) << 0.7;
+        QTest::newRow("1920x1080 at 150%") << screenAt(1920, 1080, 1.5) << 0.75;
         QTest::newRow("3840x2160 at 150%") << screenAt(3840, 2160, 1.5) << 1.25;
     }
 
@@ -109,7 +109,7 @@ private slots:
 
     void laptopAt125Percent() {
         const double s = WindowFit::fitScale(kRequired, screen1080(1.25), 1.0);
-        QCOMPARE(s, 0.9);
+        QCOMPARE(s, 0.95);
         QVERIFY(fits(kRequired, screen1080(1.25), 1.0, s));
     }
 
@@ -136,13 +136,13 @@ private slots:
         // Launched last time at 1.25 on the big monitor, now on the 1080p laptop at 150%: under 1.25
         // its 1280x672 logical screen reports 1024x538.
         const double s = WindowFit::fitScale(kRequired, {1024, 538}, 1.25);
-        QCOMPARE(s, 0.7);
+        QCOMPARE(s, 0.75);
     }
 
     void ceilingLimitsGrowthButNotShrinking() {
         QCOMPARE(WindowFit::fitScale(kRequired, screenAt(2560, 1440), 1.0, WindowFit::kNativeScale), 1.0);
         QCOMPARE(WindowFit::fitScale(kRequired, {2048, 1114}, 1.25, WindowFit::kNativeScale), 1.0);
-        QCOMPARE(WindowFit::fitScale(kRequired, screen1080(1.5), 1.0, WindowFit::kNativeScale), 0.7);
+        QCOMPARE(WindowFit::fitScale(kRequired, screen1080(1.5), 1.0, WindowFit::kNativeScale), 0.75);
     }
 
     void noGrowthWhereTheWorkAreaIsUnknown() {

@@ -576,6 +576,9 @@ add_executable(test_sidecontrolpanel
     test_sidecontrolpanel.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/widgets/sidecontrolpanel.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/widgets/sidepanelbutton.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/widgets/memorykeyrow.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/widgets/bottommenubar.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/widgets/vforowwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/widgets/rightsidepanel.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/widgets/kpa1500minipanel.cpp
     ${CMAKE_SOURCE_DIR}/src/network/kpa1500antennas.cpp

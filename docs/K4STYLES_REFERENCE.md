@@ -216,7 +216,9 @@ buttons share all of it and differ only in colour. Build buttons with `SidePanel
 (`src/ui/widgets/sidepanelbutton.h`), never by hand: `create()` (fixed size, sheet,
 `WA_LayoutUsesWidgetRect`), `createWithSubLabel()`, `createSubLabel()` / `subLabelHeight()` (one line of
 the sub-label font, measured with `QFontMetricsF`), `createGrid()` (two equal columns, add it with
-`Qt::AlignHCenter`). Checked by `SidePanelButtonStandardTests` in `tests/test_sidecontrolpanel.cpp`.
+`Qt::AlignHCenter`), `keyWidthFor()` (one width for a set of keys: the widest text in each key's own polished
+font plus `ButtonTextClearance` inside the border), `addGap()` (a box-layout gap drawn at exactly its token).
+Checked by `SidePanelButtonStandardTests` and `KeyTextClearanceTests` in `tests/test_sidecontrolpanel.cpp`.
 
 | Constant | Value | Usage |
 |----------|-------|-------|
@@ -224,25 +226,40 @@ the sub-label font, measured with `QFontMetricsF`), `createGrid()` (two equal co
 | `SideButtonWidth` | `57` | Function keys; the narrowest column every sub-label fits (DIVERSITY) |
 | `SideButtonColumnGap` | `4` | Between keys side by side (grids, memory row, MON/NORM/BAL, icon row) |
 | `SideButtonSubLabelGap` | `4` | Key bottom edge to its orange sub-label (also M1–M4 to MESSAGE) |
-| `SideButtonRowGap` | `12` | Sub-label (or key, where none) to the next row's key |
+| `SideButtonRowGap` | `8` | Sub-label (or key, where none) to the next row's key |
 | `SideButtonGridWidth` | `118` | `2 × SideButtonWidth + SideButtonColumnGap` |
 | `SidePanelMarginH` / `SidePanelMarginV` | `6` / `8` | Panel edge to content; `MarginH` is also the KPA1500 card's inset |
 | `SidePanelItemSpacing` | `4` | Between consecutive items of one group |
-| `SidePanelGroupGap` | `16` | Between groups (TX grid, each knob pair, KPA1500 slot) |
+| `SidePanelGroupGap` | `12` | Between groups (TX grid, each knob pair, KPA1500 slot) |
 | `SidePanelMinorGap` | `8` | Between rows of one block (MON row, sliders, icon row) |
-| `SidePanelSectionGap` | `32` | Right panel: PF keys to the VFO keys below |
+| `SidePanelSectionGap` | `24` | Right panel: PF keys to the VFO keys below |
 | `SidePanelInnerGap` | `4` | Inside a painted card: label → bar → value, text to the status-box edge |
 | `SideCompactButtonHeight` | `24` | MON / NORM / BAL |
 | `SideCompactBorderWidth` / `SideCompactBorderRadius` | `1` / `4` | `compactButton()` border; status-box radius |
 | `SideIconSize` / `SideIconInset` | `24` / `2` | ? and globe glyph, and its clearance inside the border |
 | `SideIconButtonSize` | `32` | `SideIconSize + 2 × (BorderWidth + SideIconInset)` |
-| `SidePanelMeterAllowance` | `12` | Extra right-panel width per side, for the KPA1500 meters |
+| `SidePanelMeterAllowance` | `12` | Extra right-panel width per side, for the KPA1500 meters — only while the KPA1500 is enabled |
+| `ButtonTextClearance` | `4` | Minimum space between a key's text and the inside of its border, each side. Key widths are measured from text plus this |
+| `KnobButtonWidth` | `118` (= `SideButtonGridWidth`) | The six knob keys (WPM/PWR, BW/SHFT, M.RF/S.SQL): same edges as the key grid |
+| `KnobTextInset` / `KnobLineGap` | `4` / `4` | Knob key edge to its top and bottom text lines; gap between the lines. Height = insets + both measured lines + gap (`DualControlButton::measuredHeight`) |
+| `MinClickTarget` | `24` | Smallest pointer target (WCAG 2.2, 2.5.8). Small indicators keep their drawn size inside it: net-health bars, VFO mode labels |
 
 The side sheets (`sidePanelButton*()`, `compactButton()`) carry colour, border, radius and font only —
 `padding: 0px` and no size. Size is set on the widget: a style sheet `height` has no effect on widgets and
 `min-height` counts from the content rect (Qt Style Sheets Reference). Spacing is explicit rather than the
 style's `PM_Layout*Spacing`, which follows native guidelines (Aqua spaces push buttons 12 px) and would make
 the panels differ per platform.
+
+**Gaps are what is drawn.** `QBoxLayout` still draws its `spacing()` between two items a spacer separates, so
+`addSpacing(16)` in the panels' 4 px layout drew a 20 px gap. Every panel gap goes through
+`SidePanelButton::addGap()`, which subtracts the spacing; `gapsAreDrawnAtTheirTokens` measures them.
+
+**Key widths come from their text.** A set of keys that must look alike shares one width:
+`keyWidthFor(keys)` = widest text + 2 × (border + `ButtonTextClearance`). MON / NORM / BAL each take their own
+width as their stretch factor, so spare pixels go in proportion; REC / STORE / RCL share STORE's width and
+M1–M4 share what is left of the memory row (`src/ui/widgets/memorykeyrow.cpp`). Measure the key's own font
+after polish: the sheets set size and weight only, and on macOS the family falls back to the platform's
+push-button font, not Inter.
 
 ### Popup Layout
 
@@ -252,6 +269,7 @@ the panels differ per platform.
 | `PopupButtonHeight` | `44` | Standard popup button height (px) |
 | `PopupButtonSpacing` | `8` | Spacing between popup buttons (px) |
 | `MenuBarButtonWidth` | `90` | Bottom menu bar buttons (fits "MAIN RX") (px) |
+| `MenuBarMarginV` | `6` | Bottom menu bar edge to its keys, top and bottom (px) |
 | `PopupContentMargin` | `12` | Padding inside popup content area (px) |
 
 ### Common UI Heights
@@ -260,21 +278,22 @@ the panels differ per platform.
 |----------|-------|-------|
 | `SeparatorHeight` | `1` | Horizontal/vertical separator lines (px) |
 | `MenuItemHeight` | `40` | Menu overlay items, frequency labels (px) |
-| `MenuBarHeight` | `52` | Bottom menu bar container height (px) |
+| `MenuBarHeight` | `48` | Bottom menu bar: `ButtonHeightMedium + 2 × MenuBarMarginV` (px) |
 
 ### Common UI Widths
 
 | Constant | Value | Usage |
 |----------|-------|-------|
 | `SmallIconSize` | `20` | Lock icons, health indicator, small controls (px) |
+| `NetHealthGlyphHeight` | `16` | Net-health bars, drawn centred in a `MinClickTarget` square (px) |
 | `CompactButtonSize` | `32` | Side panel icons, EQ +/- buttons (px) |
 | `FormLabelWidth` | `80` | Form field labels, numeric value displays (px) |
 | `VfoSquareSize` | `45` | VFO A/B indicator squares and mode labels (px) |
 | `NavButtonWidth` | `54` | Navigation buttons in overlays (px) |
 | `LeftSidePanelWidth` | `130` | Left side panel: `SideButtonGridWidth + 2 × SidePanelMarginH` (px) |
-| `RightSidePanelWidth` | `154` | Right side panel: `LeftSidePanelWidth + 2 × SidePanelMeterAllowance` (px) |
+| `RightSidePanelWidth` | `130` | Right side panel with the KPA1500 off: `LeftSidePanelWidth` (px) |
+| `RightSidePanelKpaWidth` | `154` | Right side panel with the KPA1500 enabled: `LeftSidePanelWidth + 2 × SidePanelMeterAllowance` (px) |
 | `NavPanelWidth` | `130` | Menu overlay navigation/search panel (px) |
-| `MemoryButtonWidth` | `42` | M1–M4, REC, STORE, RCL buttons (px) |
 
 ### Type Scale
 
@@ -329,6 +348,7 @@ Removed names, for reading older code: `FontSizeTiny` / `Small` / `Normal` / `Me
 |----------|-------|-------|
 | `VfoIndicatorWidth` | `34` | VFO A/B label width on panadapter (px) |
 | `VfoIndicatorHeight` | `30` | VFO A/B label height on panadapter (px) |
+| `VfoInnerMargin` | `4` | VFO column to its widget's edge on the centre-column side; the VFO row's 8 px spacing adds to it (px) |
 
 ### Network Metrics Chart (`NetHealthPopup` sparklines)
 

@@ -51,6 +51,7 @@ public:
 
 private:
     StatusBarController *m_statusBar;  // injected, not owned
+    RightSidePanel *m_rightSidePanel;  // injected, not owned
     Kpa1500MiniPanel *m_miniPanel;     // constructed here, parent-owned by RightSidePanel
     KPA1500Client *m_client = nullptr; // owned via Qt parent (this)
 
@@ -58,7 +59,6 @@ private:
     void onDisconnected();
     void onError(const QString &error);
     void onEnabledChanged(bool enabled);
-    void reserveCardSpace(bool reserve);
     void onSettingsChanged();
     void onPollIntervalChanged(int intervalMs);
     void updateStatus();

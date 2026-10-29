@@ -10,16 +10,17 @@ Top-level app widgets that aren't popups, pages, overlays, dialogs, or styling i
 - `filterindicatorwidget` — filter bandwidth indicator on VFO row.
 - `txmeterwidget` — multifunction S / Po / ALC / COMP / SWR / Id meter. Scale marks carry the value they denote alongside their position on the bar (`ScaleMark`), so a mark cannot drift away from the value drawn there; `tests/test_meterscale.cpp` asserts the two agree.
 
-### Menu bars + panels (6)
+### Menu bars + panels (7)
 - `bottommenubar` — MENU, Fn, DISPLAY, BAND, PTT.
 - `featuremenubar` — +/- control bar for ATTN / NB / NR / MANUAL NOTCH.
 - `sidecontrolpanel` — left panel: volume, AF/RF/MIC gain, squelch, BW/SHFT.
-- `rightsidepanel` — right panel: function buttons, memory, KPA1500 mini-panel slot.
+- `rightsidepanel` — right panel: function buttons, memory, KPA1500 mini-panel slot. As narrow as the left panel; wider, with the card's height reserved, only while the KPA1500 is enabled (`setKpa1500SlotReserved`).
 - `kpa1500minipanel` — KPA1500 status + button slab for the right side panel.
-- `sidepanelbutton` — the one builder for side-panel buttons (both panels, memory row, KPA1500 mini-panel): fixed size from the `K4Styles::Dimensions::Side*` tokens, light or dark sheet, measured orange sub-label, the standard two-column grid.
+- `sidepanelbutton` — the one builder for side-panel buttons (both panels, memory row, KPA1500 mini-panel): fixed size from the `K4Styles::Dimensions::Side*` tokens, light or dark sheet, measured orange sub-label, the standard two-column grid, `keyWidthFor()` (a key set's one width from its widest text plus `ButtonTextClearance`) and `addGap()` (a box-layout gap drawn at exactly its token, net of the layout's spacing).
+- `memorykeyrow` — the memory keys between the VFOs: M1–M4 over the MESSAGE bracket, REC / STORE / RCL with sub-labels. Two sets, each one width: REC/STORE/RCL from STORE's text, M1–M4 from what is left of the row.
 
 ### Small controls (4)
-- `dualcontrolbutton` — custom split-button for paired controls.
+- `dualcontrolbutton` — custom split-button for paired controls (the six knob keys): `KnobButtonWidth` wide, so its edges line up with the key grid; height measured from its two text lines (`measuredHeight`).
 - `controlgroupwidget` / `togglegroupwidget` — radio-button-like grouping for option sets.
 - `displaymenubutton` — DISPLAY popup trigger button.
 

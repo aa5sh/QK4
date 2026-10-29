@@ -5,9 +5,42 @@
 #include <QMouseEvent>
 #include <QWheelEvent>
 #include <QLinearGradient>
+#include <QFontMetrics>
+
+namespace D = K4Styles::Dimensions;
+
+QFont DualControlButton::labelFont(const QWidget *context) {
+    QFont font = context->font();
+    font.setPixelSize(D::FontSizeBody);
+    font.setBold(true);
+    return font;
+}
+
+QFont DualControlButton::valueFont(const QWidget *context) {
+    QFont font = context->font();
+    font.setPixelSize(D::FontSizeReadout);
+    font.setBold(true);
+    return font;
+}
+
+QFont DualControlButton::altFont(const QWidget *context) {
+    QFont font = context->font();
+    font.setPixelSize(D::FontSizeCaption);
+    return font;
+}
+
+int DualControlButton::measuredHeight(const QWidget *context) {
+    const QFontMetrics label(labelFont(context), context);
+    const QFontMetrics value(valueFont(context), context);
+    const QFontMetrics alt(altFont(context), context);
+    const int primaryLine = qMax(label.ascent(), value.ascent()) + qMax(label.descent(), value.descent());
+    return D::KnobTextInset + primaryLine + D::KnobLineGap + alt.height() + D::KnobTextInset;
+}
 
 DualControlButton::DualControlButton(QWidget *parent) : QWidget(parent) {
-    setFixedSize(K4Styles::Dimensions::MenuBarButtonWidth, K4Styles::Dimensions::ButtonHeightLarge);
+    // WHY fixed: the six knob keys never resize with the window, and the width is the key grid's so
+    // all their edges line up with the grid and the MON row.
+    setFixedSize(D::KnobButtonWidth, measuredHeight(this));
     setCursor(Qt::PointingHandCursor);
     setMouseTracking(true);
 }
@@ -112,16 +145,9 @@ void DualControlButton::paintEvent(QPaintEvent *event) {
     }
 
     // Text setup
-    QFont labelFont = font();
-    labelFont.setPixelSize(K4Styles::Dimensions::FontSizeBody);
-    labelFont.setBold(true);
-
-    QFont valueFont = font();
-    valueFont.setPixelSize(K4Styles::Dimensions::FontSizeReadout);
-    valueFont.setBold(true);
-
-    QFont altFont = font();
-    altFont.setPixelSize(K4Styles::Dimensions::FontSizeCaption);
+    const QFont labelFont = DualControlButton::labelFont(this);
+    const QFont valueFont = DualControlButton::valueFont(this);
+    const QFont altFont = DualControlButton::altFont(this);
 
     int textLeft = buttonLeft + 6;
     int textRight = w - 6;
@@ -132,8 +158,8 @@ void DualControlButton::paintEvent(QPaintEvent *event) {
     QFontMetrics fmValue(valueFont);
     QFontMetrics fmAlt(altFont);
 
-    int topMargin = 4;
-    int bottomMargin = 4;
+    const int topMargin = D::KnobTextInset;
+    const int bottomMargin = D::KnobTextInset;
 
     // Primary baseline: top margin + ascent (vertically centered in upper half)
     int primaryBaseline = topMargin + qMax(fmLabel.ascent(), fmValue.ascent());

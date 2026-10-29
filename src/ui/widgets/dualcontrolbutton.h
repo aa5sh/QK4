@@ -46,6 +46,9 @@ public:
     explicit DualControlButton(QWidget *parent = nullptr);
     ~DualControlButton() = default;
 
+    // Two lines of text, measured in the fonts they are painted in, plus the knob insets and line gap.
+    static int measuredHeight(const QWidget *context);
+
     // Primary function (white text - top line)
     void setPrimaryLabel(const QString &label);
     void setPrimaryValue(const QString &value);
@@ -83,6 +86,9 @@ protected:
 
 private:
     QColor contextColor() const;
+    static QFont labelFont(const QWidget *context);
+    static QFont valueFont(const QWidget *context);
+    static QFont altFont(const QWidget *context);
 
     QString m_primaryLabel;   // e.g., "WPM", "BW", "M.RF"
     QString m_primaryValue;   // e.g., "15", "0.40", "0"

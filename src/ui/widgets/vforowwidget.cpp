@@ -96,7 +96,10 @@ void VfoRowWidget::setupWidgets() {
 
     m_modeALabel = new QLabel("USB", m_vfoAContainer);
     m_modeALabel->setFixedWidth(K4Styles::Dimensions::VfoSquareSize);
-    m_modeALabel->setAlignment(Qt::AlignCenter);
+    // WHY taller than its text, the text at the top: the word stays where it was and the space below it,
+    // empty down to the row's bottom edge, makes the label a full-size click target.
+    m_modeALabel->setMinimumHeight(K4Styles::Dimensions::MinClickTarget);
+    m_modeALabel->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
     m_modeALabel->setCursor(Qt::PointingHandCursor);
     m_modeALabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
                                     .arg(K4Styles::Colors::TextPrimary)
@@ -160,7 +163,8 @@ void VfoRowWidget::setupWidgets() {
 
     m_modeBLabel = new QLabel("USB", m_vfoBContainer);
     m_modeBLabel->setFixedWidth(K4Styles::Dimensions::VfoSquareSize);
-    m_modeBLabel->setAlignment(Qt::AlignCenter);
+    m_modeBLabel->setMinimumHeight(K4Styles::Dimensions::MinClickTarget);
+    m_modeBLabel->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
     m_modeBLabel->setCursor(Qt::PointingHandCursor);
     m_modeBLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
                                     .arg(K4Styles::Colors::TextPrimary)

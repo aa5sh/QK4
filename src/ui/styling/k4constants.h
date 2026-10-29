@@ -239,28 +239,48 @@ constexpr int SideButtonHeight = ButtonHeightSmall;
 constexpr int SideButtonWidth = 57;
 constexpr int SideButtonColumnGap = 4;   // Between buttons side by side, in every row and panel
 constexpr int SideButtonSubLabelGap = 4; // Button bottom edge to its orange sub-label
-constexpr int SideButtonRowGap = 12;     // Sub-label (or button, where none) to the next row's button
+constexpr int SideButtonRowGap = 8;      // Sub-label (or button, where none) to the next row's button
 constexpr int SideButtonGridWidth = 2 * SideButtonWidth + SideButtonColumnGap;
 
+// The gaps below are the space drawn between two items, edge to edge. SidePanelButton::addGap() puts them
+// into a box layout net of its own spacing, which Qt still draws between items a spacer separates.
 constexpr int SidePanelMarginH = 6;     // Panel edge to content, left and right
 constexpr int SidePanelMarginV = 8;     // Panel edge to content, top and bottom
 constexpr int SidePanelItemSpacing = 4; // Between consecutive items of one group
-constexpr int SidePanelGroupGap = 16;   // Between groups (button grid, each knob pair, KPA1500 slot)
+constexpr int SidePanelGroupGap = 12;   // Between groups (button grid, each knob pair, KPA1500 slot)
 constexpr int SidePanelMinorGap = 8;    // Between the rows of one block (MON row, sliders, icon row)
 // WHY double: the PF keys and the VFO keys under them are separate blocks on the K4's own panel.
 constexpr int SidePanelSectionGap = 2 * SidePanelGroupGap;
+static_assert(SidePanelMinorGap >= SidePanelItemSpacing && SidePanelGroupGap >= SidePanelItemSpacing,
+              "a gap is drawn net of the layout spacing, so it cannot be smaller than that spacing");
 constexpr int SidePanelInnerGap = 4; // Inside a painted card: label to bar, bar to value, text to box edge
 
 constexpr int SideCompactButtonHeight = ButtonHeightMini; // MON / NORM / BAL
 constexpr int SideCompactBorderWidth = 1;
 constexpr int SideCompactBorderRadius = 4;
 
+// Text on every key stands at least this far inside the key's border, left and right. Key widths are
+// measured from their text plus this, so 5% wider text (Windows hinting, a fractional scale factor)
+// still clears the border. Checked for every key by SideControlPanelLayoutTests.
+constexpr int ButtonTextClearance = 4;
+
+// The six knob controls (WPM/PWR, BW/SHFT, M.RF/S.SQL): a panel-wide key, two lines of text. Height is
+// measured from the fonts (DualControlButton::measuredHeight), these two gaps and nothing else.
+constexpr int KnobButtonWidth = SideButtonGridWidth; // Same left and right edges as the key grid above
+constexpr int KnobTextInset = 4;                     // Key edge to the top line, and to the bottom line
+constexpr int KnobLineGap = 4;                       // Between the value line and the amber alternate line
+
+// WHY 24: the smallest pointer target WCAG 2.2 (2.5.8) accepts. Small indicators keep their drawn size
+// and take this much room around it.
+constexpr int MinClickTarget = 24;
+
 constexpr int SideIconSize = 24; // ? and globe glyphs
 constexpr int SideIconInset = 2; // Clearance between the glyph and the button's border
 constexpr int SideIconButtonSize = SideIconSize + 2 * (BorderWidth + SideIconInset);
 
-// WHY: the right panel is wider than the left only so the KPA1500 meters get room; its button grid
-// is the same width and sits centred, this much in from the left panel's inset on each side.
+// WHY: the right panel is wider than the left only so the KPA1500 meters get room, and only while the
+// KPA1500 is enabled; its button grid is the same width and sits centred, this much in from the left
+// panel's inset on each side.
 constexpr int SidePanelMeterAllowance = 12;
 
 // =============================================================================
@@ -270,27 +290,29 @@ constexpr int PopupButtonWidth = 70;
 constexpr int PopupButtonHeight = 44;
 constexpr int PopupButtonSpacing = 8;
 constexpr int MenuBarButtonWidth = 90; // Bottom menu bar buttons (fits "MAIN RX")
+constexpr int MenuBarMarginV = 6;      // Bottom menu bar edge to its buttons, top and bottom
 constexpr int PopupContentMargin = 12;
 
 // =============================================================================
 // Common UI Heights
 // =============================================================================
-constexpr int SeparatorHeight = 1; // Horizontal/vertical separator lines
-constexpr int MenuItemHeight = 40; // Menu overlay items, frequency labels
-constexpr int MenuBarHeight = 52;  // Bottom menu bar container height
+constexpr int SeparatorHeight = 1;                                     // Horizontal/vertical separator lines
+constexpr int MenuItemHeight = 40;                                     // Menu overlay items, frequency labels
+constexpr int MenuBarHeight = ButtonHeightMedium + 2 * MenuBarMarginV; // Bottom menu bar: its keys, no more
 
 // =============================================================================
 // Common UI Widths
 // =============================================================================
-constexpr int SmallIconSize = 20;     // Lock icons, health indicator, small controls
-constexpr int CompactButtonSize = 32; // Side panel icons, EQ +/- buttons
-constexpr int FormLabelWidth = 80;    // Form field labels, numeric value displays
-constexpr int VfoSquareSize = 45;     // VFO A/B indicator squares and mode labels
-constexpr int NavButtonWidth = 54;    // Navigation buttons in overlays
-constexpr int LeftSidePanelWidth = SideButtonGridWidth + 2 * SidePanelMarginH;        // 130
-constexpr int RightSidePanelWidth = LeftSidePanelWidth + 2 * SidePanelMeterAllowance; // 154
-constexpr int NavPanelWidth = 130;    // Menu overlay navigation/search panel
-constexpr int MemoryButtonWidth = 42; // M1-M4, REC, STORE, RCL buttons
+constexpr int SmallIconSize = 20;        // Lock icons, health indicator, small controls
+constexpr int NetHealthGlyphHeight = 16; // The four signal bars, drawn inside a MinClickTarget square
+constexpr int CompactButtonSize = 32;    // Side panel icons, EQ +/- buttons
+constexpr int FormLabelWidth = 80;       // Form field labels, numeric value displays
+constexpr int VfoSquareSize = 45;        // VFO A/B indicator squares and mode labels
+constexpr int NavButtonWidth = 54;       // Navigation buttons in overlays
+constexpr int LeftSidePanelWidth = SideButtonGridWidth + 2 * SidePanelMarginH;           // 130
+constexpr int RightSidePanelWidth = LeftSidePanelWidth;                                  // 130, KPA1500 off
+constexpr int RightSidePanelKpaWidth = LeftSidePanelWidth + 2 * SidePanelMeterAllowance; // 154, KPA1500 on
+constexpr int NavPanelWidth = 130; // Menu overlay navigation/search panel
 
 // =============================================================================
 // Type scale (pixels) - use with QFont::setPixelSize(), paintFont() or dataFont()
@@ -355,6 +377,9 @@ constexpr int ChartScaleTickLen = 5;        // Length of the left-edge scale tic
 // =============================================================================
 constexpr int VfoIndicatorWidth = 34;  // VFO A/B label width on panadapter
 constexpr int VfoIndicatorHeight = 30; // VFO A/B label height on panadapter
+// VFO frequency/meter column to the edge of its widget on the centre-column side. The VFO row's own
+// spacing adds to it, so the centre column stays clear of both meters.
+constexpr int VfoInnerMargin = 4;
 
 // Under each VFO's frequency: the multifunction meter OR the mini-pan, then the feature row (AGC, PRE,
 // ATT, NB, NR, NTCH, APF), which stays visible either way. Panel + 2 px layout spacing + row = 150,

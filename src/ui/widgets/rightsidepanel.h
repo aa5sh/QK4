@@ -51,6 +51,11 @@ public:
     // programming error.
     void embedKpa1500Panel(Kpa1500MiniPanel *panel);
 
+    // With the KPA1500 enabled the panel is wide enough for its meters and keeps the card's height
+    // while the card is hidden, so the window is sized for it from launch; disabled, the panel is as
+    // narrow as the left one and spends no height on a card that never appears.
+    void setKpa1500SlotReserved(bool reserved);
+
 signals:
     // Button click signals (main function - left click)
     void preClicked();
@@ -110,6 +115,7 @@ private:
 
     QVBoxLayout *m_layout;
     int m_kpa1500SlotIdx = -1; // layout index reserved for KPA1500 mini panel
+    Kpa1500MiniPanel *m_kpa1500Panel = nullptr;
 
     // Button pointers (existing 5x2 grid)
     QPushButton *m_preBtn;
