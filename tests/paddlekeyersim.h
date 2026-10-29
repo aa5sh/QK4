@@ -167,7 +167,6 @@ public:
         : m_config(config), m_geo(config), m_tapAt(tapAt), m_tapLength(tapLength), m_clock(*this), m_link(*this),
           m_sidetone(m_clock, [this]() -> std::optional<double> { return m_now + 1000.0; }),
           m_keyer(m_clock, m_link, m_sidetone, m_timer) {
-        m_sidetone.setEnabled(true);
         m_sidetone.setMinimumSidetoneMs(0);
         m_keyer.setStraightKeying(false);
         m_keyer.setDitNotes({20});

@@ -64,10 +64,6 @@ void PaddleKeyer::setStraightKeying(bool straight) {
         releasePaddles();
 }
 
-bool PaddleKeyer::straightKeying() const {
-    return m_straightKeying.load();
-}
-
 void PaddleKeyer::setDitMemoryDelayPercent(double percent) {
     std::lock_guard lock(m_configMutex);
     m_ditMemoryDelayPercent = std::clamp(percent, 0.0, 100.0);

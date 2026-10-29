@@ -48,8 +48,7 @@ public:
     // ---- configuration (any thread) ----
     void setMode(Mode mode);
     Mode mode() const;
-    void setStraightKeying(bool straight); // straight key or external keyer passthrough
-    bool straightKeying() const;
+    void setStraightKeying(bool straight);         // straight key or external keyer passthrough
     void setDitMemoryDelayPercent(double percent); // Iambic B only; 0 disables
     void setSpeed(int wpm, double weighting = 1.0);
     void setDitNotes(std::vector<int> notes);

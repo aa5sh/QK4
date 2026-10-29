@@ -39,7 +39,6 @@ public:
 struct Rig {
     HookClock clock;
     SidetoneScheduler s{clock, [this]() -> std::optional<double> { return clock.t + 1000.0; }};
-    Rig() { s.setEnabled(true); }
     // An output block whose first frame plays at dac (stream clock).
     std::vector<SidetoneScheduler::Edge> block(double dac) {
         s.noteBlockTiming(dac, dac - kLead, kBlock);
@@ -59,13 +58,9 @@ class TestSidetoneScheduler : public QObject {
     Q_OBJECT
 
 private slots:
-    void refusedWhenDisabledOrNoStream() {
-        Rig r;
-        r.s.setEnabled(false);
-        QVERIFY(!r.s.scheduleDown(10.0));
+    void refusedWithNoStream() {
         HookClock c;
         SidetoneScheduler none(c, []() -> std::optional<double> { return std::nullopt; });
-        none.setEnabled(true);
         QVERIFY(!none.scheduleDown(10.0));
     }
 

@@ -140,28 +140,14 @@ void HaliKeyV14Worker::closeNativePort() {
 #endif
 }
 
-bool HaliKeyV14Worker::readPinState(bool &ditState, bool &dahState, bool &pttState) {
-    // WHY: HaliKey V1.4 firmware exposes raw modem-status pin states. Empirically (verified via
-    // qk4.hardware.debug logs in this user's setup, NORMAL paddle wiring):
+bool HaliKeyV14Worker::readPinState(bool &ditState, bool &dahState) {
+    // WHY this mapping: HaliKey V1.4 firmware exposes raw modem-status pins. Bench-verified (NORMAL
+    // paddle wiring):
     //
-    //   physical dah lever  → DCD AND DSR transition together (always paired)
-    //   physical dit lever  → CTS only
-    //   foot pedal          → CTS only (indistinguishable from dit lever on the wire)
-    //
-    // We map the three logical signals as follows:
-    //
-    //   ditState = false                (V1.4 cannot report the dit lever on its own line — see
-    //                                    pttState below, which carries it.)
-    //   dahState = DCD || DSR           (paddle dah lever — both pins fire together; OR collapses
-    //                                    them into one stable edge.)
-    //   pttState = CTS                  (the dit lever, in CW. CwController maps it.)
-    //
-    // WHY the dit lever arrives on a field named pttState: a footswitch wired inline with the
-    // paddles also drives CTS, so on this firmware the two are the same signal and the name kept
-    // both readings open. Footswitch PTT is now withdrawn from both transports (see
-    // cwcontroller.h), so CTS means the dit lever and nothing else; the field name is left alone
-    // because it is the transport-level line name shared with the MIDI worker, not a claim about
-    // what QK4 does with it.
+    //   dah lever  → DCD and DSR, always together, so DCD || DSR is one stable edge
+    //   dit lever  → CTS
+    //   foot pedal → CTS too, indistinguishable from the dit lever — which is why footswitch PTT
+    //                is withdrawn (see cwcontroller.h)
 #ifdef Q_OS_WIN
     DWORD modemStatus = 0;
     if (!GetCommModemStatus(m_handle, &modemStatus)) {
@@ -181,9 +167,8 @@ bool HaliKeyV14Worker::readPinState(bool &ditState, bool &dahState, bool &pttSta
         m_lastRawDsr = dsr;
         m_lastRawDcd = dcd;
     }
-    ditState = false;
+    ditState = cts;
     dahState = dcd || dsr;
-    pttState = cts;
     return true;
 #else
     int status = 0;
@@ -193,9 +178,8 @@ bool HaliKeyV14Worker::readPinState(bool &ditState, bool &dahState, bool &pttSta
     bool cts = (status & TIOCM_CTS) != 0;
     bool dsr = (status & TIOCM_DSR) != 0;
     bool dcd = (status & TIOCM_CD) != 0;
-    ditState = false;
+    ditState = cts;
     dahState = dcd || dsr;
-    pttState = cts;
     return true;
 #endif
 }
@@ -211,22 +195,14 @@ void HaliKeyV14Worker::monitorLoop() {
     //   - each edge carries the time since that line's previous change, which is what a straight
     //     key's KZD/KZU are built from.
     // Paddles are reported on the first poll that sees them. The keyer reads its paddles from
-    // time-stamped history, so a bounce inside an element changes nothing on the air. The old
-    // two-read confirm only added 0.5-2 ms of latency. Linux used to wait in TIOCMIWAIT instead of
-    // polling; a blocking wait cannot time the 20 ms quiet a straight key needs.
+    // time-stamped history, so a bounce inside an element changes nothing on the air. A blocking
+    // edge wait would not do: it cannot time the 20 ms quiet a straight key needs.
     //
     // Line map (see readPinState): dit lever = CTS, dah lever = DCD || DSR.
     using Signal = PaddleKeyer::Signal;
     bool ditLine = false;
     bool dahLine = false;
-    auto sample = [&]() {
-        bool unused = false, dah = false, cts = false;
-        if (!readPinState(unused, dah, cts))
-            return false;
-        ditLine = cts;
-        dahLine = dah;
-        return true;
-    };
+    auto sample = [&]() { return readPinState(ditLine, dahLine); };
     // One read per poll, shared by both lines, so the pair is always a joint sample.
     const SerialLinePoller::ReadLine read = [&](Signal s) { return s == Signal::CTS ? ditLine : dahLine; };
 

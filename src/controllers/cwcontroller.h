@@ -66,9 +66,8 @@ class KpodPlusDevice;
 //   3. The keyer's commands reach TcpClient through FunctionLink → sendCAT, which queues to the
 //      I/O thread. One producer thread, one consumer: FIFO, so KZD/KZU stay in order.
 //   4. KPOD+ EP02 keyer data routes EP02 worker → I/O thread via QueuedConnection.
-//   5. On a KPOD+ gate rise, store the gate FIRST and then raise the inhibit.
-//   6. Destructor runs disconnect(this) first (CONVENTIONS Rule 11).
-//   7. The link is never gated: a KZU closing an open KZD must always reach the K4. Suppression
+//   5. Destructor runs disconnect(this) first (CONVENTIONS Rule 11).
+//   6. The link is never gated: a KZU closing an open KZD must always reach the K4. Suppression
 //      is the inhibit's job, upstream of the keyer.
 //
 // Footswitch PTT: REMOVED, deliberately

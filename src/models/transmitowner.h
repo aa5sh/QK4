@@ -4,8 +4,7 @@
 // Decides who owns the transmitter and what has to happen when that changes.
 //
 // Pure logic with no Qt, no audio and no network dependency, so it can be unit-tested without
-// standing up AudioController or a socket — mirroring hardware/halikey_edge.h and
-// network/connect_failure.h.
+// standing up AudioController or a socket — mirroring network/connect_failure.h.
 //
 // WHY this exists at all: QK4 had no owner of "are we transmitting". Several producers each wrote
 // an audio gate and a button independently, only one of them put TX;/RX; on the wire, the radio's

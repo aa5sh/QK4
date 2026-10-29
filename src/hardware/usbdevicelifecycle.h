@@ -6,7 +6,7 @@
 // this existed, two different and disagreeing implementations of it.
 //
 // Pure logic with no Qt, no hidapi and no libusb, so it can be unit-tested without a device present
-// — mirroring hardware/halikey_edge.h, network/connect_failure.h and models/transmitowner.h.
+// — mirroring network/connect_failure.h and models/transmitowner.h.
 //
 // WHY this exists at all. Three defects, all from the same root:
 //

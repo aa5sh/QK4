@@ -23,16 +23,6 @@ void SidetoneScheduler::setStreamTimeSource(StreamTimeFn streamTime) {
     m_streamTime = std::move(streamTime);
 }
 
-void SidetoneScheduler::setEnabled(bool enabled) {
-    std::lock_guard lock(m_mutex);
-    m_enabled = enabled;
-}
-
-bool SidetoneScheduler::isEnabled() const {
-    std::lock_guard lock(m_mutex);
-    return m_enabled;
-}
-
 void SidetoneScheduler::setMinimumSidetoneMs(int ms) {
     std::lock_guard lock(m_mutex);
     m_minimumSidetoneMs = ms;
@@ -55,8 +45,6 @@ std::optional<std::pair<double, double>> SidetoneScheduler::edgeClockOffsetLocke
 
 bool SidetoneScheduler::scheduleDown(double downAt, bool late) {
     std::lock_guard lock(m_mutex);
-    if (!m_enabled)
-        return false;
     const auto offsets = edgeClockOffsetLocked();
     if (!offsets) {
         m_scheduleOffset.reset();
@@ -80,8 +68,6 @@ void SidetoneScheduler::scheduleUp(double upAt) {
 
 void SidetoneScheduler::keyNow(bool down) {
     std::lock_guard lock(m_mutex);
-    if (!m_enabled)
-        return;
     const auto offsets = edgeClockOffsetLocked();
     if (!offsets)
         return;
@@ -107,8 +93,6 @@ std::optional<double> SidetoneScheduler::downHeardAt() const {
 
 std::optional<double> SidetoneScheduler::downDeadline(double downAt) const {
     std::lock_guard lock(m_mutex);
-    if (!m_enabled)
-        return std::nullopt;
     const auto offsets = edgeClockOffsetLocked();
     if (!offsets)
         return std::nullopt;

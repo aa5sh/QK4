@@ -37,9 +37,6 @@ public:
     // The stream clock, once the output that owns it exists. Replaces the constructor's.
     void setStreamTimeSource(StreamTimeFn streamTime);
 
-    void setEnabled(bool enabled);
-    bool isEnabled() const;
-
     // Shortest tone a straight key is allowed to produce, in ms: half the rise plus half the fall
     // (4 ms with the 4 ms ramps). K4-Companion's minimum_sidetone_ms.
     void setMinimumSidetoneMs(int ms);
@@ -94,7 +91,6 @@ private:
     // callback waits at most a few hundred nanoseconds.
     mutable std::mutex m_mutex;
 
-    bool m_enabled = true;
     int m_minimumSidetoneMs = 0;
 
     std::deque<std::pair<double, bool>> m_keyEvents; // (stream time, down)

@@ -9,11 +9,10 @@ class QTimer;
 class RtMidiIn;
 
 /**
- * @brief HaliKey worker for the MIDI variant of the paddle device. Uses RtMidi with a callback
- *        thread (separate from QThread's event loop) that writes raw atomic state into
- *        HalikeyDevice. Implements the MoMIDI extended protocol for time-stamped paddle events.
- *        `prepareShutdown()` synchronously closes the MIDI port so RtMidi's callback thread
- *        quits before QThread tears down.
+ * @brief HaliKey worker for the MIDI variant of the paddle device. RtMidi calls back on its own
+ *        thread, and each message goes straight to the HaliKeyMidiSink (the keyer, which decodes
+ *        MoMIDI's timing). The worker thread only runs the presence poll. `prepareShutdown()`
+ *        closes the port so RtMidi's callback thread quits before QThread tears down.
  */
 class HaliKeyMidiWorker : public HaliKeyWorkerBase {
     Q_OBJECT
@@ -34,7 +33,7 @@ public slots:
 
 private:
     static void midiCallback(double deltaTime, std::vector<unsigned char> *message, void *userData);
-    void handleMidiMessage(double deltaTime, const std::vector<unsigned char> &message);
+    static void logNote(int note, bool down); // hw.midi diagnostics, on RtMidi's thread
 
     // Has the port we opened disappeared from the enumeration? Runs on the worker thread.
     void checkPortPresence();
@@ -54,20 +53,11 @@ private:
     // device that is still plugged in.
     int m_missedPolls = 0;
 
-    // Last-known state of each line. MIDI reports one line per message, so these carry the other
-    // two forward when a note arrives — see the switch in handleMidiMessage().
-    bool m_ditState = false;
-    bool m_dahState = false;
-    // Always false: footswitch PTT is withdrawn from both transports, so note 31 no longer sets
-    // this. Kept so the three-line signal shape stays identical to the V1.4 worker's, where CTS is
-    // a real line — a transport-shaped signature is worth more than one saved bool.
-    bool m_pttState = false;
-
     std::shared_ptr<HaliKeyMidiSink> m_sink;
 
-    // MoMIDI protocol state. Atomic: the raw sink path reads it on RtMidi's thread.
+    // Set by the first control change (MoMIDI's version message). Read and written only in the
+    // RtMidi callback; atomic because RtMidi does not promise which thread that runs on.
     std::atomic<bool> m_momidiDetected{false};
-    int m_pendingTimeMsb = 0;
 };
 
 #endif // HALIKEYMIDIWORKER_H

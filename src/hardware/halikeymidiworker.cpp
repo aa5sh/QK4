@@ -87,7 +87,7 @@ void HaliKeyMidiWorker::checkPortPresence() {
     // does drop the device (verified on macOS), which is what makes this poll work.
     //
     // errorOccurred is the existing route: HalikeyDevice closes the port, which emits disconnected,
-    // which releases the captured PTT and both levers.
+    // and CwController releases the keyer's paddles on that.
     m_presenceTimer->stop();
     const QString message = QString("MIDI device '%1' removed").arg(m_portName);
     qCWarning(hwMidi) << "HaliKeyMidiWorker:" << message;
@@ -158,117 +158,53 @@ void HaliKeyMidiWorker::midiCallback(double deltaTime, std::vector<unsigned char
     auto *self = static_cast<HaliKeyMidiWorker *>(userData);
     if (!self->m_running)
         return;
-    if (!message || message->empty())
+    if (!message || message->size() < 3)
         return;
-    if (self->m_sink && message->size() >= 3) {
-        // Raw to the keyer, on this thread, with RtMidi's own delta: the paddle edge is stamped on
-        // arrival (PaddleKeyer::midiMessage, ported from K4-Companion).
-        int status = (*message)[0];
-        const int note = (*message)[1];
-        const int velocity = (*message)[2];
-        const int kind = status & 0xF0;
-        if (status == 0xB0)
-            self->m_momidiDetected.store(true, std::memory_order_relaxed);
-        if (kind == 0x90 || kind == 0x80) {
-            // WHY normalise the channel: QK4 has always taken notes on any channel; the keyer
-            // matches 0x90/0x80 exactly.
-            status = kind;
-            // WHY translate only for non-MoMIDI devices: MoMIDI's note-on is always key-down, its
-            // velocity carrying time. Ordinary MIDI sends note-on velocity 0 for a release, which
-            // left as key-down would hold the key down.
-            if (kind == 0x90 && velocity == 0 && !self->m_momidiDetected.load(std::memory_order_relaxed))
-                status = 0x80;
-        }
-        self->m_sink->call(status, note, velocity, deltaTime);
+    int status = (*message)[0];
+    const int note = (*message)[1];
+    const int velocity = (*message)[2];
+    const int kind = status & 0xF0;
+    if (status == 0xB0 && !self->m_momidiDetected.exchange(true, std::memory_order_relaxed))
+        qCDebug(hwMidi) << "HaliKeyMidiWorker: MoMIDI detected, version" << velocity;
+    if (kind == 0x90 || kind == 0x80) {
+        // WHY normalise the channel: QK4 has always taken notes on any channel; the keyer
+        // matches 0x90/0x80 exactly.
+        status = kind;
+        // WHY translate only for non-MoMIDI devices: MoMIDI's note-on is always key-down, its
+        // velocity carrying time. Ordinary MIDI sends note-on velocity 0 for a release, which
+        // left as key-down would hold the key down.
+        if (kind == 0x90 && velocity == 0 && !self->m_momidiDetected.load(std::memory_order_relaxed))
+            status = 0x80;
     }
-    // WHY marshal to the worker thread before doing anything Qt-related:
-    // RtMidi invokes this callback from its OWN internal thread (not a QThread).
-    // Emitting Qt signals from a non-Qt thread is undefined — Qt's event-queue
-    // machinery isn't guaranteed to work on threads it doesn't know about. Instead
-    // we copy the message bytes by value into a lambda and post it back to this
-    // worker (which IS a managed QThread). handleMidiMessage then runs on the
-    // worker thread and emits signals safely.
-    //
-    // Cost: one Qt-event-queue hop (~10-50 µs typical). Negligible vs. CW timing.
-    std::vector<unsigned char> copy = *message;
-    QMetaObject::invokeMethod(
-        self, [self, dt = deltaTime, msg = std::move(copy)]() { self->handleMidiMessage(dt, msg); },
-        Qt::QueuedConnection);
+    // Raw to the keyer, on this thread, with RtMidi's own delta: the paddle edge is stamped on
+    // arrival (PaddleKeyer::midiMessage, ported from K4-Companion). Diagnostics come after.
+    if (self->m_sink)
+        self->m_sink->call(status, note, velocity, deltaTime);
+    if (status == 0x90 || status == 0x80)
+        logNote(note, status == 0x90);
 }
 
-void HaliKeyMidiWorker::handleMidiMessage(double deltaTime, const std::vector<unsigned char> &message) {
-    if (message.size() < 3)
-        return;
-
-    unsigned char status = message[0] & 0xF0;
-    unsigned char channel = message[0] & 0x0F;
-    unsigned char data1 = message[1];
-    unsigned char data2 = message[2];
-
-    // --- CC events: MoMIDI version detection and timing MSB ---
-    if (status == 0xB0) {
-        if (channel == 0 && !m_momidiDetected.load(std::memory_order_relaxed)) {
-            m_momidiDetected.store(true, std::memory_order_relaxed);
-            qCDebug(hwMidi) << "HaliKeyMidiWorker: MoMIDI detected, version" << data2;
-        } else if (channel != 0) {
-            m_pendingTimeMsb = data2;
-        }
-        return;
-    }
-
-    // --- Note events ---
-    bool pressed = false;
-    if (status == 0x90) {
-        if (m_momidiDetected.load(std::memory_order_relaxed)) {
-            // MoMIDI: Note On is ALWAYS key down; velocity carries timing LSB
-            pressed = true;
-            m_pendingTimeMsb = 0;
-        } else {
-            // Traditional MIDI: velocity 0 on Note On = Note Off
-            pressed = (data2 > 0);
-        }
-    } else if (status == 0x80) {
-        pressed = false;
-        m_pendingTimeMsb = 0;
-    } else {
-        return;
-    }
-
-    // WHY the worker holds all three lines: MIDI gives one note per message, so unlike the serial
-    // variant there is no joint hardware sample to forward. Carrying the last-known value of the
-    // lines that did not change still hands the keyer a coherent pair on every event, and keeps one
-    // interface for both transports. It cannot make two genuinely separate messages simultaneous —
-    // that limitation is the transport's, not ours.
-    switch (data1) {
+void HaliKeyMidiWorker::logNote(int note, bool down) {
+    const char *edge = down ? "down" : "up";
+    switch (note) {
     case NOTE_LEFT_PADDLE:
-        qCDebug(hwMidi) << "HaliKeyMidiWorker: dit (note 20)" << (pressed ? "down" : "up");
-        m_ditState = pressed;
-        emit lineStateChanged(m_ditState, m_dahState, m_pttState);
+        qCDebug(hwMidi) << "HaliKeyMidiWorker: note 20" << edge;
         break;
     case NOTE_RIGHT_PADDLE:
-        qCDebug(hwMidi) << "HaliKeyMidiWorker: dah (note 21)" << (pressed ? "down" : "up");
-        m_dahState = pressed;
-        emit lineStateChanged(m_ditState, m_dahState, m_pttState);
+        qCDebug(hwMidi) << "HaliKeyMidiWorker: note 21" << edge;
         break;
     case NOTE_PTT:
-        // WHY note 31 is read and then dropped rather than removed from the switch: the firmware
-        // still sends it, and an unhandled note falls through to the default case below, which
-        // exists to make an unrecognised note visible in the trace. Logging it there would read as
-        // a firmware mismatch. Naming it here says the note arrived and QK4 chose to ignore it.
-        //
-        // Footswitch PTT is withdrawn from BOTH HaliKey transports pending wiring information from
-        // the hardware developer: a footswitch may be wired inline with the paddles, which on V1.4
-        // is indistinguishable from the dit lever because both drive CTS. Rather than guess per
-        // transport, neither keys PTT. If it comes back it will be behind an explicit
+        // WHY name note 31 rather than let it fall to "unhandled": the firmware still sends it, and
+        // logging it as unknown would read as a firmware mismatch. Footswitch PTT is withdrawn from
+        // both HaliKey transports pending wiring information from the hardware developer: a
+        // footswitch may be wired inline with the paddles, which on V1.4 is indistinguishable from
+        // the dit lever because both drive CTS. If it comes back it will be behind an explicit
         // "alternate wiring" setting, off by default.
-        qCDebug(hwMidi) << "HaliKeyMidiWorker: ptt (note 31)" << (pressed ? "down" : "up")
-                        << "- ignored, footswitch PTT is withdrawn";
+        qCDebug(hwMidi) << "HaliKeyMidiWorker: note 31 (ptt)" << edge << "- ignored, footswitch PTT is withdrawn";
         break;
     default:
-        // Log unrecognized notes so a HaliKey MIDI firmware using different note numbers
-        // than 20/21/31 is immediately visible in the trace rather than silently dropped.
-        qCDebug(hwMidi) << "HaliKeyMidiWorker: unhandled note" << data1 << (pressed ? "down" : "up")
-                        << "status=" << Qt::hex << status;
+        // A firmware using other note numbers than 20/21/31 shows up in the trace, not silently.
+        qCDebug(hwMidi) << "HaliKeyMidiWorker: unhandled note" << note << edge;
         break;
     }
 }

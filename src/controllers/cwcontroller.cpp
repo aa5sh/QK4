@@ -24,7 +24,7 @@ CwController::CwController(RadioState *radioState, ConnectionController *connect
     // Keyer → K4
     // =========================================================================
     // sendCAT queues to the I/O thread itself; one producer (the keyer thread, or the main thread
-    // for the monitor restore) keeps KZD/KZU in order. Never gated here: see invariant 7.
+    // for the monitor restore) keeps KZD/KZU in order. Never gated here: see invariant 6.
     auto *tc = m_connection->tcpClient();
     m_link->setSender([tc](const std::string &command) { tc->sendCAT(QString::fromLatin1(command)); });
 
@@ -220,8 +220,6 @@ void CwController::setKpodPlusGate(bool active) {
     qCInfo(cwKeyer) << "KPOD+ keyer gate"
                     << (active ? "UP - the KPOD+ owns CW; QK4's keyer keys nothing"
                                : "DOWN - QK4's own keyer owns CW again");
-    // Invariant 5: the store first, then the inhibit (which releases anything keyed).
-    m_connection->setKpodPlusKeyerActive(active);
     m_kpodPlusGate = active;
     updateInhibit();
 }

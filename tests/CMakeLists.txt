@@ -429,12 +429,6 @@ target_include_directories(test_dxclustercontroller PRIVATE ${CMAKE_SOURCE_DIR}/
 target_link_libraries(test_dxclustercontroller Qt6::Core Qt6::Network Qt6::Test)
 add_test(NAME DxClusterControllerTests COMMAND test_dxclustercontroller)
 
-# HalikeyDevice edge-dedupe tests — pure logic, no Qt/RtMidi/serial linkage needed.
-add_executable(test_halikeydevice test_halikeydevice.cpp)
-target_include_directories(test_halikeydevice PRIVATE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(test_halikeydevice Qt6::Core Qt6::Test)
-add_test(NAME HalikeyDeviceTests COMMAND test_halikeydevice)
-
 # PaddleKeyer — port of K4-Companion's keyer (Dale Farnsworth, GPL-3.0). Pure logic on a virtual
 # clock; see tests/paddlekeyersim.h and docs/cw-keyer-port-plan.md.
 set(QK4_PADDLEKEYER_SOURCES
@@ -595,8 +589,8 @@ add_test(NAME MicRateTests COMMAND test_micrate)
 # test_* executable defined above. CI uses this so adding `add_executable(test_foo)`
 # automatically gets the new test built — no parallel maintenance of an explicit
 # list in .github/workflows/ci-checks.yml (which is what caused the late-May 2026
-# string of red builds when test_menumodel / test_catpushbroadcaster /
-# test_halikeydevice were added but the workflow's --target list wasn't).
+# string of red builds when new test suites were added but the workflow's
+# --target list wasn't).
 get_property(_qk4_dir_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
 set(_qk4_test_targets "")
 foreach(_t IN LISTS _qk4_dir_targets)

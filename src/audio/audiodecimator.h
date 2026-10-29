@@ -4,7 +4,7 @@
 // Decimates a captured microphone stream down to the K4's 12 kHz TX rate.
 //
 // Pure logic with no Qt and no audio device, so the rate arithmetic can be unit-tested without
-// hardware — mirroring audio/rawaudioformat.h, hardware/halikey_edge.h and the rest.
+// hardware — mirroring audio/rawaudioformat.h and the rest.
 //
 // WHY the capture rate is not simply 48 kHz any more (INT-005). QK4 opened every microphone at a
 // hardcoded 48 kHz and decimated 4:1. That worked on ordinary sound cards and failed completely on

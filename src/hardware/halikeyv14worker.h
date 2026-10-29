@@ -27,7 +27,7 @@ private:
     void monitorLoop(); // Platform-specific main loop
     bool openNativePort();
     void closeNativePort();
-    bool readPinState(bool &ditState, bool &dahState, bool &pttState);
+    bool readPinState(bool &ditState, bool &dahState);
 
 #ifdef Q_OS_WIN
     // Diagnostic: last-logged raw modem-line states, so readPinState() only logs on a

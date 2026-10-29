@@ -13,22 +13,16 @@
 Q_DECLARE_LOGGING_CATEGORY(hwHalikey)
 
 /**
- * @brief Base class for HaliKey paddle-input workers. Concrete workers (one per platform) live on
- *        `HalikeyDevice::m_workerThread` and translate hardware events into
- *        one `lineStateChanged(dit, dah, ptt)` signal per sample.
+ * @brief Base class for HaliKey paddle-input workers, which live on `HalikeyDevice::m_workerThread`.
  *
- * WHY three concrete subclasses instead of one:
- *   - `HaliKeyV14Worker`  — native V1.4 hardware protocol (direct serial frames).
- *   - `HaliKeyMidiWorker` — MIDI interface variant (used when the V1.4 firmware exposes MIDI).
- *   - (Linux-only)        — `TIOCMIWAIT` blocking ioctl on the serial FD.
- * Each has a different event model (line-oriented reads, MIDI messages, blocking ioctl) so sharing
- * a single loop is impossible.
+ * Two concrete workers, because the transports share no event model:
+ *   - `HaliKeyV14Worker`  — V1.4 serial: polls the modem lines every 1 ms and emits paddleChanged.
+ *   - `HaliKeyMidiWorker` — MIDI variant: hands each raw message to a HaliKeyMidiSink on RtMidi's
+ *                           thread.
  *
- * WHY `prepareShutdown()` exists: the Linux `TIOCMIWAIT`-based worker blocks inside a kernel
- * ioctl and cannot observe `m_running = false` until an edge arrives. `prepareShutdown()` is the
- * hook that variant uses (typically toggling a modem-control line on the same FD) to force the
- * ioctl to return so the thread can exit cleanly. The base no-op is correct for variants whose
- * event loops poll `m_running` naturally.
+ * WHY `prepareShutdown()` exists: it runs on the main thread before the worker thread is joined.
+ * The MIDI worker uses it to close the port, which stops RtMidi's callback thread. The serial loop
+ * sees `m_running` go false within a poll, so it needs nothing.
  */
 // Where raw MIDI messages go, called straight from RtMidi's own thread with no hop: the keyer
 // stamps a paddle edge the moment it arrives, so a queued hop would be timing error. Shared
@@ -70,20 +64,6 @@ public slots:
     void stop();              // Sets atomic flag to exit loop
 
 signals:
-    // All three input lines as ONE sample, emitted whenever any of them changes.
-    //
-    // WHY a single signal rather than one per line: iambic decisions are a function of the paddle
-    // PAIR, and the V1.4 worker already reads every line in one ioctl/API call. Splitting that
-    // sample into separate signals threw the "read together" fact away, and a squeeze release then
-    // reached the keyer as two events — if the element timer fired between them one lever still
-    // read down, and an element nobody keyed was appended. Emitting the sample intact keeps the
-    // pair consistent all the way to the keyer.
-    //
-    // The MIDI variant cannot produce a true joint sample (each lever is its own note message), so
-    // it carries its last-known values for the lines that did not change. That still gives the
-    // keyer a coherent pair and one uniform interface for both transports.
-    void lineStateChanged(bool dit, bool dah, bool ptt);
-
     // One paddle line changed (serial worker): which lever, its new state, and the time in seconds
     // since that line's previous reported change (0 the first time). Emitted on the worker thread
     // the moment the 1 ms poll sees it. Port of K4-Companion's serial callback.
