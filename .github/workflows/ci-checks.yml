@@ -62,13 +62,26 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
-      - name: Install Qt 6 and dependencies
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y qt6-base-dev qt6-base-private-dev \
-            qt6-multimedia-dev qt6-serialport-dev qt6-svg-dev \
-            qt6-shadertools-dev qt6-qpa-plugins \
+          sudo apt-get install -y \
             libopus-dev libhidapi-dev libusb-1.0-0-dev libssl-dev libudev-dev libasound2-dev
+
+      - name: Read Qt version
+        # WHY: tests run on the exact Qt every package ships with (.github/qt-version), not Ubuntu's
+        # Qt 6.4.2, which is older than the app's own floor and tested a Qt nobody runs.
+        run: echo "QT_VERSION=$(tr -d '[:space:]' < .github/qt-version)" >> "$GITHUB_ENV"
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4.5.0
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: 'linux'
+          target: 'desktop'
+          arch: 'linux_gcc_64'
+          modules: 'qtmultimedia qtshadertools qtserialport'
+          cache: true
 
       - name: Configure CMake
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release
@@ -99,13 +112,25 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
-      - name: Install Qt 6 and dependencies
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y qt6-base-dev qt6-base-private-dev \
-            qt6-multimedia-dev qt6-serialport-dev qt6-svg-dev \
-            qt6-shadertools-dev qt6-qpa-plugins \
+          sudo apt-get install -y \
             libopus-dev libhidapi-dev libusb-1.0-0-dev libssl-dev libudev-dev libasound2-dev
+
+      - name: Read Qt version
+        # Same Qt as the unit-tests job; see there.
+        run: echo "QT_VERSION=$(tr -d '[:space:]' < .github/qt-version)" >> "$GITHUB_ENV"
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4.5.0
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: 'linux'
+          target: 'desktop'
+          arch: 'linux_gcc_64'
+          modules: 'qtmultimedia qtshadertools qtserialport'
+          cache: true
 
       - name: Configure CMake (sanitizers on for tests)
         run: cmake -B build-san -DCMAKE_BUILD_TYPE=Debug -DQK4_TESTS_SANITIZE=ON
