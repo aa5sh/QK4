@@ -144,6 +144,8 @@ private:
     void endElement(char element);
     void measureInherentSidetoneLag();
     void endStraightKeyOnAir(double keyDownAt, double releasedAt);
+    void straightKeyUpOnAir(double timestamp, bool restoreMonitor);
+    void reconcileLostEdges();
     long long straightKeyMs(double seconds) const;
     double midiEventTimestamp(double delta);
     std::optional<double> sleepUntil(double when);
@@ -180,6 +182,10 @@ private:
     // Paddle events (device threads) and the keyer's own straight-key Release: pushed under
     // m_firstElementMutex, which makes the producers one at a time.
     SpscRing<PaddleEventItem, 1024> m_events;
+    // Set when m_events was full and an edge was dropped (under m_firstElementMutex, like every
+    // push). Paddles lose nothing by it, since they are read from m_stamps, but a straight key is
+    // keyed from the queued edges alone; see reconcileLostEdges.
+    std::atomic<bool> m_eventsLost{false};
     // Releases (the time each was asked for) and Close / RestoreMonitor, from any thread: pushed
     // under m_requestMutex, which the keyer never takes. Separate, so a pending restore never
     // holds up a release the keyer applies mid-burst.

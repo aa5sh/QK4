@@ -177,6 +177,8 @@ double PaddleKeyer::interElementSeconds() const {
 void PaddleKeyer::pushEvent(PaddleEventItem item) {
     if (m_events.push(item))
         m_wake.post();
+    else
+        m_eventsLost.store(true, std::memory_order_relaxed);
 }
 
 void PaddleKeyer::pushRequest(PaddleEventItem item) {
@@ -449,12 +451,25 @@ PaddleKeyer::Event PaddleKeyer::processNextEvent() {
                 while (m_events.pop(last))
                     if (last.event == Event::Release)
                         endStraightKeyOnAir(last.keyDownAt, last.timestamp);
+                // WHY: the Release above can itself have been lost to a full queue. Whatever
+                // happened, the keyer does not exit with the radio keyed.
+                if (m_k4Keyed) {
+                    double at;
+                    {
+                        std::lock_guard lock(m_straightMutex);
+                        at = m_paddleTimestamp;
+                    }
+                    straightKeyUpOnAir(at, false);
+                }
                 return Event::Close;
             }
             break;
         }
         if (released)
             return Event::Release;
+        reconcileLostEdges();
+        if (!m_events.empty())
+            continue;
         m_wake.wait();
     }
     switch (item.event) {
@@ -489,6 +504,10 @@ long long PaddleKeyer::straightKeyMs(double seconds) const {
 void PaddleKeyer::sendStraightKey(const PaddleEventItem &item) {
     const double timestamp = item.timestamp;
     if (item.event == Event::DitDown) {
+        // WHY: a key-down while the radio is still keyed means the key-up between them was lost
+        // to a full queue. End the old element first, so the radio never sees two KZDs in a row.
+        if (m_k4Keyed)
+            straightKeyUpOnAir(timestamp, false);
         long long ms;
         {
             std::lock_guard lock(m_straightMutex);
@@ -499,21 +518,54 @@ void PaddleKeyer::sendStraightKey(const PaddleEventItem &item) {
         muteSidetoneMonitor();
         send(fourDigits("KZD", ms));
     } else if (item.event == Event::DitUp) {
-        long long ms;
-        {
-            std::lock_guard lock(m_straightMutex);
-            ms = straightKeyMs(timestamp - m_previousKeyDownTimestamp);
-            m_previousKeyUpTimestamp = timestamp;
-        }
-        if (std::exchange(m_k4Keyed, false)) {
-            send(fourDigits("KZU", ms));
-            double delay = m_keyDownInitialDelayMs / 1000.0;
-            delay += m_sidetone.delay();
-            delay += ms / 1000.0;
-            delay += kUnmuteExtraDelay;
-            delayedUnmuteSidetoneMonitor(delay);
-        }
+        straightKeyUpOnAir(timestamp, true);
     }
+}
+
+// Keyer thread. The KZU for a straight key that went up at timestamp (paddle time), if the radio
+// is keyed. restoreMonitor schedules the monitor unmute, as a normal key-up does.
+void PaddleKeyer::straightKeyUpOnAir(double timestamp, bool restoreMonitor) {
+    long long ms;
+    {
+        std::lock_guard lock(m_straightMutex);
+        ms = straightKeyMs(timestamp - m_previousKeyDownTimestamp);
+        m_previousKeyUpTimestamp = timestamp;
+    }
+    if (!std::exchange(m_k4Keyed, false))
+        return;
+    send(fourDigits("KZU", ms));
+    if (!restoreMonitor)
+        return;
+    double delay = m_keyDownInitialDelayMs / 1000.0;
+    delay += m_sidetone.delay();
+    delay += ms / 1000.0;
+    delay += kUnmuteExtraDelay;
+    delayedUnmuteSidetoneMonitor(delay);
+}
+
+// Keyer thread, with nothing left to process. After an edge was lost to a full queue the queued
+// edges no longer say whether the key is down, so the key itself is read: a radio still keyed for a
+// key that is up gets its KZU now. A lost key-down is left lost: not keying is the safe side.
+void PaddleKeyer::reconcileLostEdges() {
+    if (!m_eventsLost.load(std::memory_order_relaxed))
+        return;
+    bool keyUp;
+    {
+        // Every push happens under this lock, so an empty queue here has no edge in flight.
+        std::lock_guard lock(m_firstElementMutex);
+        if (!m_events.empty())
+            return;
+        m_eventsLost.store(false, std::memory_order_relaxed);
+        keyUp = !m_straightKeyDown;
+    }
+    if (!m_k4Keyed || !keyUp)
+        return;
+    double at;
+    {
+        std::lock_guard lock(m_straightMutex);
+        at = m_paddleTimestamp;
+    }
+    straightKeyUpOnAir(at, true);
 }
 
 PaddleKeyer::Stamps PaddleKeyer::paddleTimestamps(std::optional<double> asOf) {

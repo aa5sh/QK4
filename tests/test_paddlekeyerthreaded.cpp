@@ -12,6 +12,7 @@
 
 #include <QtTest/QtTest>
 #include <atomic>
+#include <condition_variable>
 #include <mutex>
 #include <random>
 #include <thread>
@@ -119,6 +120,36 @@ struct StraightRaceRig {
         thread.join();
         return link.sent();
     }
+};
+
+// A link that holds the keyer in its first send until opened, so the test can fill the keyer's
+// event queue past capacity while nothing drains it.
+class GateLink : public CaptureLink {
+public:
+    void send(std::string_view c) override {
+        {
+            std::unique_lock lock(m_gateMutex);
+            m_entered = true;
+            m_changed.notify_all();
+            m_changed.wait(lock, [this] { return m_open; });
+        }
+        CaptureLink::send(c);
+    }
+    void waitUntilHeld() {
+        std::unique_lock lock(m_gateMutex);
+        m_changed.wait(lock, [this] { return m_entered; });
+    }
+    void open() {
+        std::lock_guard lock(m_gateMutex);
+        m_open = true;
+        m_changed.notify_all();
+    }
+
+private:
+    std::mutex m_gateMutex;
+    std::condition_variable m_changed;
+    bool m_entered = false;
+    bool m_open = false;
 };
 
 enum class StopBy { Release, Inhibit };
@@ -248,8 +279,45 @@ private slots:
         rig.thread.join();
         const auto sent = rig.link.sent();
         QCOMPARE(openKzd(sent), 0);
+        const std::string fault = kzFault(sent);
+        QVERIFY2(fault.empty(), fault.c_str());
         for (const auto &c : sent)
             QVERIFY2(std::stoi(c.substr(3, 4)) <= 5000, c.c_str());
+    }
+
+    // More straight-key edges than the keyer's queue holds, while the keyer is stuck in a send: the
+    // queue keeps an even run ending on a key-down, and the key-up after it is dropped. Once the
+    // keyer drains, it must find the key up and unkey the radio by itself, not only at close().
+    void straightKeyUpLostToAFullQueueStillUnkeys() {
+        SteadyKeyerClock clock;
+        GateLink link;
+        NullTimer timer;
+        SidetoneScheduler sidetone{clock, []() -> std::optional<double> { return std::nullopt; }};
+        PaddleKeyer keyer{clock, link, sidetone, timer};
+        keyer.setSpeed(30);
+        keyer.setStraightKeying(true);
+        std::thread thread([&] { keyer.run(); });
+
+        keyer.paddleEvent(PaddleKeyer::Event::DitDown, 0.010);
+        link.waitUntilHeld(); // the keyer is sending this KZD and drains nothing
+        keyer.paddleEvent(PaddleKeyer::Event::DitUp, 0.010);
+        for (int i = 0; i < 1100; ++i) {
+            keyer.paddleEvent(PaddleKeyer::Event::DitDown, 0.010);
+            keyer.paddleEvent(PaddleKeyer::Event::DitUp, 0.010);
+        }
+        link.open();
+
+        std::string fault = "not drained";
+        for (int i = 0; i < 200 && !fault.empty(); ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            fault = kzFault(link.sent());
+        }
+        QVERIFY2(fault.empty(), fault.c_str());
+
+        keyer.close();
+        thread.join();
+        fault = kzFault(link.sent());
+        QVERIFY2(fault.empty(), fault.c_str());
     }
 
     // A straight key stopped from another thread at random offsets around the moment the keyer
