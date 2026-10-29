@@ -293,15 +293,15 @@ QString HardwareController::halikeyName() const {
 void HardwareController::reportThreadScheduling() {
     for (const RtScheduling::Report &report : RtScheduling::takeUnreported()) {
         const RtScheduling::Result &r = report.result;
+        QString detail;
+        // Only the RLIMIT_NICE fallback leaves the value out of the mechanism; -10 names itself.
+        if (r.nice != 0 && r.nice != RtScheduling::kLinuxHighNice)
+            detail += QStringLiteral(" (nice %1)").arg(r.nice);
         if (r.error != 0)
-            qCInfo(lcHardware).nospace() << report.thread << " thread: asked for "
-                                         << RtScheduling::className(r.requested) << ", got "
-                                         << RtScheduling::outcomeName(r.outcome) << " - " << r.mechanism
-                                         << " (OS error " << r.error << ")";
-        else
-            qCInfo(lcHardware).nospace() << report.thread << " thread: asked for "
-                                         << RtScheduling::className(r.requested) << ", got "
-                                         << RtScheduling::outcomeName(r.outcome) << " - " << r.mechanism;
+            detail += QStringLiteral(" (OS error %1)").arg(r.error);
+        qCInfo(lcHardware).nospace().noquote()
+            << report.thread << " thread: asked for " << RtScheduling::className(r.requested) << ", got "
+            << RtScheduling::outcomeName(r.outcome) << " - " << r.mechanism << detail;
     }
 }
 

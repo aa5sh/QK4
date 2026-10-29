@@ -17,11 +17,14 @@ using namespace RtScheduling;
 
 namespace {
 
+constexpr int kEACCES = 13;
+
 // Answers each call with the next code queued for it, and records the call.
 struct FakeOs {
     int qos = 0, timeConstraint = 0;
     int mmcss = 0, timeCritical = 0, highest = 0;
     int fifo = 0, nice = 0;
+    int niceFloor = -20; // what RLIMIT_NICE allows; setNice refuses anything lower with EACCES
     std::vector<std::string> calls;
 
     static FakeOs &of(void *c) { return *static_cast<FakeOs *>(c); }
@@ -57,12 +60,15 @@ struct FakeOs {
                         },
                         [](void *c, int nice) {
                             of(c).calls.push_back("nice " + std::to_string(nice));
-                            return of(c).nice;
+                            if (of(c).nice != 0)
+                                return of(c).nice;
+                            return nice < of(c).niceFloor ? kEACCES : 0;
                         },
                         [](void *c, unsigned long ns) {
                             of(c).calls.push_back("slack " + std::to_string(ns));
                             return 0;
-                        }};
+                        },
+                        [](void *c) { return of(c).niceFloor; }};
     }
 };
 
@@ -179,7 +185,43 @@ private slots:
         FakeOs os;
         const Result r = applyLinux(Class::High, os.linuxOps());
         QCOMPARE(r.outcome, Outcome::Elevated);
+        QCOMPARE(r.nice, kLinuxHighNice);
+        QCOMPARE(r.error, 0);
         QCOMPARE(os.calls, (Calls{"slack 1", "nice -10"}));
+    }
+
+    // RLIMIT_NICE 25 (limits.conf "nice -5"): -10 is refused, -5 is not, and -5 is what it gets.
+    void linuxHighTakesWhatRlimitNiceAllows() {
+        FakeOs os;
+        os.niceFloor = -5;
+        const Result r = applyLinux(Class::High, os.linuxOps());
+        QCOMPARE(r.outcome, Outcome::Elevated);
+        QCOMPARE(r.nice, -5);
+        QCOMPARE(r.error, kEACCES);
+        QCOMPARE(os.calls, (Calls{"slack 1", "nice -10", "nice -5"}));
+        QVERIFY(std::strstr(r.mechanism, "RLIMIT_NICE"));
+    }
+
+    // RLIMIT_NICE 0, the systemd and limits.conf default: no lower nice at all, and no second try.
+    void linuxHighWithoutRlimitNiceLeavesTheThreadAlone() {
+        FakeOs os;
+        os.niceFloor = 20;
+        const Result r = applyLinux(Class::High, os.linuxOps());
+        QCOMPARE(r.outcome, Outcome::Unchanged);
+        QCOMPARE(r.nice, 0);
+        QCOMPARE(r.error, kEACCES);
+        QCOMPARE(os.calls, (Calls{"slack 1", "nice -10"}));
+    }
+
+    void linuxRealTimeFallbackAlsoTakesWhatRlimitNiceAllows() {
+        FakeOs os;
+        os.fifo = kEPERM;
+        os.niceFloor = -3;
+        const Result r = applyLinux(Class::RealTime, os.linuxOps());
+        QCOMPARE(r.outcome, Outcome::Elevated);
+        QCOMPARE(r.nice, -3);
+        QCOMPARE(r.error, kEPERM); // the first refusal: SCHED_FIFO
+        QCOMPARE(os.calls, (Calls{"slack 1", "fifo 15", "nice -10", "nice -3"}));
     }
 
     // ---- every OS ----

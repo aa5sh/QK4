@@ -7,8 +7,10 @@
 //   ----------|-------------------------------------|---------------------------------|---------------------------
 //   RealTime  | Mach time-constraint policy, else   | MMCSS "Pro Audio" (high), else  | SCHED_FIFO 15 with
 //             | QoS user-interactive                | TIME_CRITICAL, else HIGHEST     | SCHED_RESET_ON_FORK, else
-//             |                                     |                                 | nice -10, else unchanged
-//   High      | QoS user-interactive                | THREAD_PRIORITY_HIGHEST         | nice -10, else unchanged
+//             |                                     |                                 | the High chain
+//   High      | QoS user-interactive                | THREAD_PRIORITY_HIGHEST         | nice -10, else the lowest
+//             |                                     |                                 | nice RLIMIT_NICE allows,
+//             |                                     |                                 | else unchanged
 //   Normal    | unchanged                           | unchanged                       | unchanged
 //
 // Linux also cuts the thread's timer slack to 1 ns for RealTime and High, whatever else it gets.
@@ -33,6 +35,7 @@ struct Result {
     Outcome outcome = Outcome::Unchanged;
     const char *mechanism = "default"; // a static string: what the thread runs under now
     int error = 0;                     // the OS error of the first refused step, 0 if none
+    int nice = 0;                      // Linux: the nice value the thread now has, 0 if unchanged
 };
 
 // Promotes the calling thread and records the result under `threadName` (a string literal).
@@ -102,6 +105,7 @@ struct LinuxOps {
     int (*setFifo)(void *context, int priority) = nullptr; // 0 or an errno
     int (*setNice)(void *context, int nice) = nullptr;     // 0 or an errno
     int (*setTimerSlackNs)(void *context, unsigned long ns) = nullptr;
+    int (*niceFloor)(void *context) = nullptr; // lowest nice RLIMIT_NICE allows: 20 - rlim_cur, -20..19
 };
 Result applyLinux(Class requested, const LinuxOps &ops);
 

@@ -135,17 +135,30 @@ Result applyLinux(Class requested, const LinuxOps &ops) {
         }
         r.error = fifo;
     }
+    const bool rt = requested == Class::RealTime;
     const int nice = ops.setNice(ops.context, kLinuxHighNice);
     if (nice == 0) {
         r.outcome = Outcome::Elevated;
-        r.mechanism = requested == Class::RealTime ? "nice -10, timer slack 1 ns (SCHED_FIFO refused)"
-                                                   : "nice -10, timer slack 1 ns";
-    } else {
-        r.mechanism = requested == Class::RealTime ? "SCHED_OTHER, timer slack 1 ns (SCHED_FIFO and nice refused)"
-                                                   : "SCHED_OTHER, timer slack 1 ns (nice refused)";
-        if (r.error == 0)
-            r.error = nice;
+        r.nice = kLinuxHighNice;
+        r.mechanism = rt ? "nice -10, timer slack 1 ns (SCHED_FIFO refused)" : "nice -10, timer slack 1 ns";
+        return r;
     }
+    if (r.error == 0)
+        r.error = nice;
+    // WHY a second attempt: an unprivileged thread may lower its nice value as far as RLIMIT_NICE
+    // allows ("The actual ceiling for the nice value is calculated as 20 - rlim_cur", getrlimit(2)),
+    // and a limit that allows -5 must not end as no promotion at all because -10 was asked first.
+    // CAP_SYS_NICE ignores the limit, which is why -10 is still tried before it is read.
+    const int floor = ops.niceFloor(ops.context);
+    if (floor > kLinuxHighNice && floor < 0 && ops.setNice(ops.context, floor) == 0) {
+        r.outcome = Outcome::Elevated;
+        r.nice = floor;
+        r.mechanism = rt ? "nice at the RLIMIT_NICE limit, timer slack 1 ns (SCHED_FIFO and nice -10 refused)"
+                         : "nice at the RLIMIT_NICE limit, timer slack 1 ns (nice -10 refused)";
+        return r;
+    }
+    r.mechanism = rt ? "SCHED_OTHER, timer slack 1 ns (SCHED_FIFO and nice refused)"
+                     : "SCHED_OTHER, timer slack 1 ns (nice refused)";
     return r;
 }
 
@@ -219,6 +232,15 @@ int linuxNice(void *, int nice) {
     return setpriority(PRIO_PROCESS, tid, nice) == 0 ? 0 : errno;
 }
 
+int linuxNiceFloor(void *) {
+    rlimit limit{};
+    if (getrlimit(RLIMIT_NICE, &limit) != 0)
+        return 0;
+    if (limit.rlim_cur == RLIM_INFINITY || limit.rlim_cur >= 40)
+        return -20;
+    return 20 - static_cast<int>(limit.rlim_cur);
+}
+
 int linuxSlack(void *, unsigned long ns) {
     return prctl(PR_SET_TIMERSLACK, ns, 0UL, 0UL, 0UL) == 0 ? 0 : errno;
 }
@@ -261,7 +283,7 @@ Result promoteCurrentThread(Class requested, const char *threadName) {
 #elif defined(Q_OS_WIN)
     const Result r = applyWindows(requested, WindowsOps{nullptr, winMmcss, winPriority});
 #elif defined(Q_OS_LINUX)
-    const Result r = applyLinux(requested, LinuxOps{nullptr, linuxFifo, linuxNice, linuxSlack});
+    const Result r = applyLinux(requested, LinuxOps{nullptr, linuxFifo, linuxNice, linuxSlack, linuxNiceFloor});
 #else
     Result r;
     r.requested = requested;
