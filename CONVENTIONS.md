@@ -215,6 +215,7 @@ keys, the fixed 90×44 knob keys, and removed names. Values live only in
 | 14 Threads and object affinity | review |
 | 15 No new singletons | aspirational |
 | 16 Nothing on a real-time thread formats, allocates, locks or does I/O | review |
+| 17 Logging goes through `src/logging/` | CI (`LogCategoriesTests`, `LogRulesTests`) + review |
 
 ### 1. [review] No Duplicated Static Functions
 
@@ -450,11 +451,30 @@ per-edge, per-packet or per-frame `qCDebug`/`qCInfo` on these threads, even behi
   enabled" (*QLoggingCategory*, Q_LOGGING_CATEGORY), including debug, in Release builds too:
   "Logging categories are not affected by your C++ build configuration".
 - Turn debug on per category at run time with `QT_LOGGING_RULES`, e.g.
-  `QT_LOGGING_RULES="cw.keyer.debug=true"`.
+  `QT_LOGGING_RULES="qk4.cw.keyer.debug=true"`, or tick the subsystem in Options → Diagnostics.
 - A disabled `qCDebug` skips evaluating its arguments, so it is cheap on ordinary threads. On a
   real-time thread it still is not free when someone enables it, which is why the rule bans it there
   rather than relying on the default.
 - To observe a real-time thread, record into a preallocated buffer or lock-free queue and format it
   on another thread.
 
-Category names and the logging subsystem are being reworked; this rule stays principle-level.
+- A thread that must never block on logging is marked with `Logging::markRealtimeOnStart(thread)`
+  (connected before any `started()` connection that enters a loop); the handler then only
+  try-locks its queue and drops and counts instead of waiting.
+
+### 17. [CI] Logging Goes Through `src/logging/`
+
+- Every category is declared in `src/logging/logcategories.{h,cpp}` at `QtInfoMsg`, named
+  `qk4.<area>[.<detail>]` with an `lc<Area><Detail>` symbol, and belongs to a group in
+  `logrules.cpp`. Every log call names a category (`qCWarning(lcX)`), never bare `qWarning()`.
+  Enforced by `LogCategoriesTests` and `LogRulesTests`.
+- No info-or-above line on a per-sample, per-frame, per-element or per-CAT-response path; those
+  stay `qCDebug` in a category that is off by default, or become a bench item. [review]
+- Never log a password, PSK or PSK identity; log `.isEmpty()` or `.size()`. A new credential field
+  is passed to `Logging::registerSecret()` when loaded. Enforced by the secret scan in
+  `LogCategoriesTests`; the writer also redacts registered secrets.
+- Only `main()` installs a message handler, through `Logging::install()`. Production code never
+  calls `QLoggingCategory::installFilter()`, which would make Qt ignore every rule; rules change
+  only through `Logging::apply()`. [review]
+
+Where logs go and how testers turn them on: `README.md` → "Reporting a Bug: Log Files", and `src/logging/README.md`.
