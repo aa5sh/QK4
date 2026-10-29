@@ -69,7 +69,7 @@ elseif(WIN32)
         set(QT_GUI_PRIVATE_FOUND FALSE)
     endif()
 else()
-    # Linux: Debian cross-compilation may not ship GuiPrivate CMake config
+    # Linux: distro Qt packages may not ship the GuiPrivate CMake config (the official Qt does)
     find_package(Qt6 COMPONENTS GuiPrivate QUIET)
     if(Qt6GuiPrivate_FOUND)
         set(QT_GUI_PRIVATE_FOUND TRUE)

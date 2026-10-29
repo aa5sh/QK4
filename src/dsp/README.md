@@ -10,8 +10,8 @@ created, `QRhiWidget::renderFailed` fires; `SpectrumController` logs it.
 Qt version: `QRhiWidget` needs Qt 6.7 or later. The QRhi classes (`QRhi`, `QShader`,
 `QShaderDescription`) have no source or binary compatibility guarantee across Qt minor releases
 (Qt docs, QRhiWidget). They are included as `<rhi/qrhi.h>` through `Qt6::GuiPrivate`. Re-test the
-panadapter on every Qt minor bump; the release packages use Qt 6.10 on macOS, Windows and Flatpak,
-and Debian Trixie's Qt on the Pi.
+panadapter on every Qt minor bump; every release package is built with the one Qt named in
+`.github/qt-version` (Flatpak takes the same minor from the KDE runtime).
 
 Reparenting: neither widget implements `QRhiWidget::releaseResources()`. Qt expects a robust
 subclass to implement it if the widget can move to a different top-level window. These widgets are

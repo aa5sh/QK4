@@ -77,7 +77,7 @@ and PipeWire tuning from [@jmeloranta](https://github.com/jmeloranta)'s Arch AUR
 ### Raspberry Pi Prerequisites
 
 - Raspberry Pi 4 or 5 with a desktop session. QK4 runs on the X11 (xcb) platform plugin; under Wayland it runs through XWayland.
-- Raspberry Pi OS or Debian based on Trixie. The tarball is built in a Debian Trixie container and needs Trixie's libraries.
+- Raspberry Pi OS or Debian based on Trixie, 64-bit. The tarball is built in a Debian Trixie container with the official Qt for ARM64, which it carries along with its own copies of Qt's ICU, OpenSSL and the audio libraries; the rest (X11, Mesa, fontconfig, GLib) comes from the desktop install.
 - **First run asks for `sudo`.** The launcher (`run.sh`) installs a udev rule that gives non-root access to the KPOD and KPOD+ USB devices. Without it, the kernel restricts `/dev/hidraw*` and the USB device nodes. If you decline, QK4 still starts, but a KPOD or KPOD+ will not work. Once the rule is installed, `run.sh` no longer asks.
 
 ## Building from Source
