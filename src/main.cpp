@@ -23,6 +23,7 @@
 #include "settings/radiosettings.h"
 #include "mainwindow.h"
 #include "settings/interfacescale.h"
+#include "utils/rtscheduling.h"
 #include "ui/styling/k4styles.h"
 // WHY: last, after every project header. windows.h defines SendMessage, ERROR and a long tail of
 // other unqualified macros, and anything it reaches first it rewrites - a header that later
@@ -357,6 +358,8 @@ int main(int argc, char *argv[]) {
     QObject::connect(RadioSettings::instance(), &RadioSettings::loggingChanged, RadioSettings::instance(),
                      applyLogging);
     Logging::sink()->start();
+    if (const char *throttling = RtScheduling::optOutOfPowerThrottling())
+        qCInfo(lcApp) << "Windows:" << throttling;
 
     int exitCode = 0;
     bool relaunch = false;

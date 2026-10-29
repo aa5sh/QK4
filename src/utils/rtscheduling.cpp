@@ -271,6 +271,35 @@ Result promoteCurrentThread(Class requested, const char *threadName) {
     return r;
 }
 
+#if defined(Q_OS_WIN)
+const char *optOutOfPowerThrottling() {
+#ifndef PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION
+#define PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION 0x4
+#endif
+    PROCESS_POWER_THROTTLING_STATE state{};
+    state.Version = PROCESS_POWER_THROTTLING_CURRENT_VERSION;
+    // ControlMask: the policies this process decides for itself; StateMask 0: each one off.
+    state.ControlMask = PROCESS_POWER_THROTTLING_EXECUTION_SPEED | PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION;
+    state.StateMask = 0;
+    if (SetProcessInformation(GetCurrentProcess(), ProcessPowerThrottling, &state, sizeof state))
+        return "power throttling and timer-resolution throttling off";
+    // Older Windows 10 knows only EXECUTION_SPEED; ask for that alone.
+    state.ControlMask = PROCESS_POWER_THROTTLING_EXECUTION_SPEED;
+    if (SetProcessInformation(GetCurrentProcess(), ProcessPowerThrottling, &state, sizeof state))
+        return "power throttling off (this Windows cannot exempt timer resolution)";
+    return "power throttling left to Windows (SetProcessInformation refused)";
+}
+#else
+const char *optOutOfPowerThrottling() {
+    return nullptr;
+}
+#endif
+
+#ifndef Q_OS_MACOS
+void LatencyCriticalActivity::begin() {}
+void LatencyCriticalActivity::end() {}
+#endif
+
 std::vector<Report> takeUnreported() {
     std::vector<std::pair<unsigned long long, Report>> found;
     for (Slot &slot : g_slots) {

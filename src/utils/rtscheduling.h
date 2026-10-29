@@ -47,6 +47,31 @@ struct Report {
 // Every result recorded since the last call, oldest first. For an ordinary thread to log.
 std::vector<Report> takeUnreported();
 
+// ---- process-wide ----
+
+// Windows: opts the whole process out of power throttling (EcoQoS) and of the timer-resolution
+// throttling Windows 11 applies to a minimised or occluded window, so the CW threads keep their
+// timing when QK4 is not in front. A no-op elsewhere. Returns a static description for the log.
+const char *optOutOfPowerThrottling();
+
+// macOS: while held, an NSProcessInfo activity (latency-critical, user-initiated) keeps App Nap
+// and timer coalescing away from the process. QK4 holds one while connected to the radio. A no-op
+// elsewhere. Main thread.
+class LatencyCriticalActivity {
+public:
+    LatencyCriticalActivity() = default;
+    ~LatencyCriticalActivity() { end(); }
+    LatencyCriticalActivity(const LatencyCriticalActivity &) = delete;
+    LatencyCriticalActivity &operator=(const LatencyCriticalActivity &) = delete;
+
+    void begin();
+    void end();
+    bool active() const { return m_token != nullptr; }
+
+private:
+    void *m_token = nullptr; // the activity object, retained (macOS only)
+};
+
 const char *className(Class c);
 const char *outcomeName(Outcome o);
 

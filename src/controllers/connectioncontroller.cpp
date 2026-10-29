@@ -104,5 +104,9 @@ TcpClient::ConnectionState ConnectionController::connectionState() const {
 
 void ConnectionController::onStateChanged(TcpClient::ConnectionState state) {
     qCInfo(lcLink) << "Link state:" << state;
+    if (state == TcpClient::Connected)
+        m_latencyActivity.begin();
+    else if (state == TcpClient::Disconnected)
+        m_latencyActivity.end();
     emit connectionStateChanged(state);
 }

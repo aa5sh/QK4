@@ -294,6 +294,13 @@ if(UNIX AND NOT APPLE)
     list(APPEND SOURCES src/hardware/kpodudevworker.cpp)
 endif()
 
+# NSProcessInfo activity while connected (utils/rtscheduling_mac.mm): Objective-C++, ARC.
+if(APPLE)
+    enable_language(OBJCXX)
+    list(APPEND SOURCES src/utils/rtscheduling_mac.mm)
+    set_source_files_properties(src/utils/rtscheduling_mac.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+endif()
+
 set(HEADERS
     src/mainwindow.h
     src/utils/radioutils.h
@@ -531,6 +538,7 @@ if(APPLE)
     target_link_libraries(${PROJECT_NAME} PRIVATE
         "-framework IOKit"
         "-framework CoreFoundation"
+        "-framework Foundation"
     )
 endif()
 

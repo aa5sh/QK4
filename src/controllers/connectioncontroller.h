@@ -5,6 +5,7 @@
 #include <QThread>
 #include "network/tcpclient.h"
 #include "settings/radiosettings.h"
+#include "utils/rtscheduling.h"
 
 class NetworkMetrics;
 
@@ -67,6 +68,8 @@ private:
     QThread *m_ioThread = nullptr;
     NetworkMetrics *m_networkMetrics;
     RadioEntry m_currentRadio;
+    // Held while connected (macOS: keeps App Nap and timer coalescing off; a no-op elsewhere).
+    RtScheduling::LatencyCriticalActivity m_latencyActivity;
 };
 
 #endif // CONNECTIONCONTROLLER_H
