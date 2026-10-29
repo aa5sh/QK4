@@ -2,6 +2,7 @@
 
 #include "utils/rtscheduling.h"
 
+#include <QThread>
 #include <QtGlobal>
 #include <algorithm>
 #include <array>
@@ -291,6 +292,14 @@ Result promoteCurrentThread(Class requested, const char *threadName) {
 #endif
     record(threadName, r);
     return r;
+}
+
+void promoteOnStart(QThread *thread, const ThreadRole &role) {
+    // WHY started with a direct connection: QThread emits started "from the associated thread when
+    // it starts executing" (QThread::started), so a direct slot runs on the new thread, which is the
+    // only thread a macOS QoS class or a Linux per-thread nice can be applied to from here.
+    const ThreadRole copy = role;
+    QObject::connect(thread, &QThread::started, thread, [copy] { promoteCurrentThread(copy); }, Qt::DirectConnection);
 }
 
 #if defined(Q_OS_WIN)

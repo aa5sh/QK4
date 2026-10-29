@@ -461,10 +461,16 @@ per-edge, per-packet or per-frame `qCDebug`/`qCInfo` on these threads, even behi
 - To observe a real-time thread, record into a preallocated buffer or lock-free queue and format it
   on another thread.
 
-- A real-time thread promotes itself first thing with `RtScheduling::promoteCurrentThread(RtScheduling::Class::RealTime, "Name")`
-  (`src/utils/rtscheduling.h`), never with `QThread::HighPriority`, and must block between
-  wake-ups, never spin: under `SCHED_FIFO` or the Mach time-constraint policy a spinning thread
-  starves its core.
+- A promoted thread gets its class from its entry in `RtScheduling::Threads`
+  (`src/utils/rtscheduling.h`), the one table of who is promoted: the CW threads (keyer, sidetone,
+  HaliKey poller, KPOD+ EP02) are `RealTime`; the I/O thread and the RX and TX audio threads are
+  `High`, never real-time. It promotes itself first thing, on itself:
+  `RtScheduling::promoteCurrentThread(RtScheduling::Threads::kName)` at the top of its run function,
+  or `RtScheduling::promoteOnStart(thread, RtScheduling::Threads::kName)` before `start()` for an
+  event-loop thread. Never `QThread::HighPriority` or any `QThread::Priority`. A real-time thread
+  must block between wake-ups, never spin: under `SCHED_FIFO` or the Mach time-constraint policy a
+  spinning thread starves its core. `test_rtscheduling` checks the table and where each entry is
+  applied [CI].
 - A thread that must never block on logging is marked with `Logging::markRealtimeOnStart(thread)`
   (connected before any `started()` connection that enters a loop); the handler then only
   try-locks its queue and drops and counts instead of waiting.

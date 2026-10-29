@@ -25,6 +25,8 @@
 
 #include <vector>
 
+class QThread;
+
 namespace RtScheduling {
 
 enum class Class { RealTime, High, Normal };
@@ -41,6 +43,32 @@ struct Result {
 // Promotes the calling thread and records the result under `threadName` (a string literal).
 // Never allocates, locks or logs, so it is safe on the thread it promotes.
 Result promoteCurrentThread(Class requested, const char *threadName);
+
+// Every promoted thread, with the class it gets. One table so the policy is reviewed, and tested,
+// in one place: the CW threads are real-time; the I/O and audio threads are High, never real-time
+// (they do far more work per wake-up than a time-constraint or SCHED_FIFO budget allows, and a
+// real-time thread that overruns starves the cores the CW threads need).
+struct ThreadRole {
+    const char *name; // also the name in the scheduling report
+    Class schedulingClass;
+};
+namespace Threads {
+inline constexpr ThreadRole kKeyer{"Keyer", Class::RealTime};
+inline constexpr ThreadRole kSidetone{"Sidetone", Class::RealTime};
+inline constexpr ThreadRole kHaliKey{"HaliKey", Class::RealTime};
+inline constexpr ThreadRole kKpodPlusEp02{"KpodPlusEP02", Class::RealTime};
+inline constexpr ThreadRole kIo{"I/O", Class::High};
+inline constexpr ThreadRole kAudioRx{"AudioEngine", Class::High};
+inline constexpr ThreadRole kAudioTx{"AudioTX", Class::High};
+} // namespace Threads
+
+inline Result promoteCurrentThread(const ThreadRole &role) {
+    return promoteCurrentThread(role.schedulingClass, role.name);
+}
+
+// For a QThread running an event loop: promotes it on itself as it starts, before its event loop
+// runs anything, and again each time it is restarted. Connect before start().
+void promoteOnStart(QThread *thread, const ThreadRole &role);
 
 struct Report {
     const char *thread;

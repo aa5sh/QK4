@@ -36,7 +36,7 @@ TCI 2.0 over WebSocket: CAT control, RX/TX audio and CW for WSJT-X, QLog, RumLog
 
 ## Threading
 
-- `TcpClient` and its `Protocol` live on `ConnectionController::m_ioThread`, never on the main thread. CAT writes reach `TcpClient` by queued connection, except KZ and ML frames from the keying threads, which go through its `KzEgress`. The I/O thread logs the KZ enqueue-to-write latency (median, 99th percentile, max, dropped) at info once a minute while keying and when a session ends. RX audio is decoded on this thread too (see `src/audio/README.md`).
+- `TcpClient` and its `Protocol` live on `ConnectionController::m_ioThread`, never on the main thread. The thread is promoted to High (not real-time) on itself as it starts (`RtScheduling::promoteOnStart`, see `src/utils/README.md`). CAT writes reach `TcpClient` by queued connection, except KZ and ML frames from the keying threads, which go through its `KzEgress`. The I/O thread logs the KZ enqueue-to-write latency (median, 99th percentile, max, dropped) at info once a minute while keying and when a session ends. RX audio is decoded on this thread too (see `src/audio/README.md`).
 - `DxClusterClient` lives on a per-instance `QThread` created by `DxClusterController::ensureInstance`.
 - `TciServer`, its `WebSocketServer` and `TciAudioBridge` live on the `TCI` thread owned by `TciController`. State reaches them as queued snapshots; client requests come back as queued signals to the main thread.
 - Main thread: `CatServer`, `CatPushBroadcaster`, `KPA1500Client` (owned by `KPA1500UiController`), `NetworkMetrics` (owned by `ConnectionController`) and `K4Discovery` (owned by `RadioManagerDialog`).

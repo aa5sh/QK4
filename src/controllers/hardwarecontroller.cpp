@@ -186,7 +186,7 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     // KPOD+ not owning CW.
     m_paddleKeyer->setInhibited(true);
     m_keyerThread = QThread::create([keyer = m_paddleKeyer.get()]() {
-        RtScheduling::promoteCurrentThread(RtScheduling::Class::RealTime, "Keyer");
+        RtScheduling::promoteCurrentThread(RtScheduling::Threads::kKeyer);
         keyer->run();
     });
     m_keyerThread->setParent(this);

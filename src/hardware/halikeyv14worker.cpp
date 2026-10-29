@@ -34,7 +34,7 @@ void HaliKeyV14Worker::start() {
     }
     // Promoted here, not when the thread starts: the same thread runs the MIDI worker's presence
     // poll, which needs nothing of the sort.
-    RtScheduling::promoteCurrentThread(RtScheduling::Class::RealTime, "HaliKey");
+    RtScheduling::promoteCurrentThread(RtScheduling::Threads::kHaliKey);
     emit portOpened();
     monitorLoop();
 }

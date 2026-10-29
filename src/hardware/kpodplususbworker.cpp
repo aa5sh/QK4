@@ -681,7 +681,7 @@ void KpodPlusEp02Worker::requestStop() {
 }
 
 void KpodPlusEp02Worker::run() {
-    RtScheduling::promoteCurrentThread(RtScheduling::Class::RealTime, "KpodPlusEP02");
+    RtScheduling::promoteCurrentThread(RtScheduling::Threads::kKpodPlusEp02);
     unsigned char buffer[32];
 
     // WHY a longer timeout than the legacy 10 ms: the device's EP02 FIFO is

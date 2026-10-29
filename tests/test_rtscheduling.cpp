@@ -7,6 +7,10 @@
 
 #include "utils/rtscheduling.h"
 
+#include <QDirIterator>
+#include <QFile>
+#include <QRegularExpression>
+#include <QThread>
 #include <QtTest/QtTest>
 #include <cstring>
 #include <string>
@@ -74,6 +78,25 @@ struct FakeOs {
 
 using Calls = std::vector<std::string>;
 constexpr int kEPERM = 1;
+
+// Every non-comment line of every C++ source under src/, as (relative path, line).
+std::vector<std::pair<QString, QString>> sourceLines() {
+    std::vector<std::pair<QString, QString>> out;
+    const QString root = QStringLiteral(QK4_SOURCE_DIR);
+    QDirIterator it(root, {"*.cpp", "*.h", "*.mm"}, QDir::Files, QDirIterator::Subdirectories);
+    while (it.hasNext()) {
+        const QString path = it.next();
+        QFile f(path);
+        if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+            continue;
+        const QString rel = path.mid(root.size() + 1);
+        for (const QString &line : QString::fromUtf8(f.readAll()).split('\n')) {
+            if (!line.trimmed().startsWith(QLatin1String("//")))
+                out.push_back({rel, line});
+        }
+    }
+    return out;
+}
 
 } // namespace
 
@@ -250,6 +273,79 @@ private slots:
         QCOMPARE(QByteArray(reports[0].thread), QByteArray("TestThread"));
         QCOMPARE(reports[0].result.outcome, got.outcome);
         QVERIFY(takeUnreported().empty());
+    }
+
+    // ---- the thread roles ----
+
+    void cwThreadsAreRealTimeAndIoAndAudioOnlyHigh() {
+        for (const ThreadRole &role : {Threads::kKeyer, Threads::kSidetone, Threads::kHaliKey, Threads::kKpodPlusEp02})
+            QCOMPARE(role.schedulingClass, Class::RealTime);
+        for (const ThreadRole &role : {Threads::kIo, Threads::kAudioRx, Threads::kAudioTx})
+            QCOMPARE(role.schedulingClass, Class::High);
+    }
+
+    // Each role is applied to the thread it names, by its owner, and nothing bypasses the table.
+    void eachRoleIsAppliedWhereItBelongs() {
+        struct Expected {
+            const char *role, *file, *call;
+            int seen = 0;
+        };
+        std::vector<Expected> expected{
+            {"kIo", "controllers/connectioncontroller.cpp", "promoteOnStart(m_ioThread, RtScheduling::Threads::kIo)"},
+            {"kAudioRx", "controllers/audiocontroller.cpp",
+             "promoteOnStart(m_audioThread, RtScheduling::Threads::kAudioRx)"},
+            {"kAudioTx", "controllers/audiocontroller.cpp",
+             "promoteOnStart(m_txThread, RtScheduling::Threads::kAudioTx)"},
+            {"kKeyer", "controllers/hardwarecontroller.cpp", "promoteCurrentThread(RtScheduling::Threads::kKeyer)"},
+            {"kSidetone", "audio/sidetonegenerator.cpp", "promoteCurrentThread(RtScheduling::Threads::kSidetone)"},
+            {"kHaliKey", "hardware/halikeyv14worker.cpp", "promoteCurrentThread(RtScheduling::Threads::kHaliKey)"},
+            {"kKpodPlusEp02", "hardware/kpodplususbworker.cpp",
+             "promoteCurrentThread(RtScheduling::Threads::kKpodPlusEp02)"},
+        };
+        // No QThread::Priority anywhere (setPriority, start(priority)): a no-op on Linux, and on macOS
+        // the scheduling parameters they set opt the thread out of QoS.
+        static const QRegularExpression bypass(
+            QStringLiteral(R"(promoteCurrentThread\(\s*RtScheduling::Class::|QThread::\w+Priority\b)"));
+        QStringList stray;
+        for (const auto &[file, line] : sourceLines()) {
+            if (file.startsWith(QLatin1String("utils/rtscheduling")))
+                continue;
+            if (bypass.match(line).hasMatch())
+                stray << file + ": " + line.trimmed();
+            for (Expected &e : expected) {
+                if (!line.contains(QLatin1String("Threads::") + QLatin1String(e.role) + QLatin1Char(')')) &&
+                    !line.contains(QLatin1String("Threads::") + QLatin1String(e.role) + QLatin1Char(',')))
+                    continue;
+                if (file == QLatin1String(e.file) && line.contains(QLatin1String(e.call)))
+                    ++e.seen;
+                else
+                    stray << file + ": " + line.trimmed();
+            }
+        }
+        QVERIFY2(stray.isEmpty(), qPrintable(stray.join('\n')));
+        for (const Expected &e : expected)
+            QVERIFY2(e.seen == 1, e.role);
+    }
+
+    void promoteOnStartRunsOnTheThreadEachTimeItStarts() {
+        takeUnreported();
+        QThread thread;
+        promoteOnStart(&thread, Threads::kAudioTx);
+        QThread *ranOn = nullptr;
+        QObject::connect(
+            &thread, &QThread::started, &thread, [&ranOn] { ranOn = QThread::currentThread(); }, Qt::DirectConnection);
+        for (int run = 0; run < 2; ++run) {
+            ranOn = nullptr;
+            thread.start();
+            thread.quit();
+            QVERIFY(thread.wait(QDeadlineTimer(5000)));
+            QCOMPARE(ranOn, &thread);
+            const auto reports = takeUnreported();
+            QCOMPARE(reports.size(), size_t(1));
+            QCOMPARE(QByteArray(reports[0].thread), QByteArray("AudioTX"));
+            QCOMPARE(reports[0].result.requested, Class::High);
+            QVERIFY(reports[0].result.outcome != Outcome::RealTime);
+        }
     }
 
     void reportsComeBackInOrderFromManyThreads() {

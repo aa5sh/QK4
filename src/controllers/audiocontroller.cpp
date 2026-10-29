@@ -12,6 +12,7 @@
 #include "network/tcpclient.h"
 #include "settings/radiosettings.h"
 #include "utils/radioutils.h"
+#include "utils/rtscheduling.h"
 #include "utils/threadshutdown.h"
 
 #include <QCoreApplication>
@@ -63,6 +64,7 @@ AudioController::AudioController(ConnectionController *connController, RadioStat
     m_audioThread = new QThread(this);
     m_audioThread->setObjectName("AudioEngine");
     Logging::markRealtimeOnStart(m_audioThread);
+    RtScheduling::promoteOnStart(m_audioThread, RtScheduling::Threads::kAudioRx);
     m_audioEngine->moveToThread(m_audioThread);
     connect(m_audioThread, &QThread::finished, m_audioEngine, &QObject::deleteLater);
     m_audioThread->start();
@@ -72,6 +74,7 @@ AudioController::AudioController(ConnectionController *connController, RadioStat
     m_txThread = new QThread(this);
     m_txThread->setObjectName("AudioTX");
     Logging::markRealtimeOnStart(m_txThread);
+    RtScheduling::promoteOnStart(m_txThread, RtScheduling::Threads::kAudioTx);
     m_txPipeline->moveToThread(m_txThread);
     connect(m_txThread, &QThread::finished, m_txPipeline, &QObject::deleteLater);
     m_txThread->start();

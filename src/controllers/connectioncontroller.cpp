@@ -20,6 +20,9 @@ ConnectionController::ConnectionController(QObject *parent) : QObject(parent), m
     m_ioThread = new QThread(this);
     m_ioThread->setObjectName("I/O");
     Logging::markRealtimeOnStart(m_ioThread);
+    // High, not real-time: every RX audio decode and every keyer KZ frame passes through here, but
+    // so do TLS, spectrum and CAT, too much work per wake-up for a real-time budget.
+    RtScheduling::promoteOnStart(m_ioThread, RtScheduling::Threads::kIo);
     m_tcpClient->moveToThread(m_ioThread);
     // Destroyed on its own thread when that thread finishes (Rule 14), with Protocol, the socket
     // and the timers as its children.

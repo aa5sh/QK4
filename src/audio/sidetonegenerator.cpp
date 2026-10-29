@@ -140,7 +140,7 @@ void SidetoneGenerator::closeAudio() {
 }
 
 void SidetoneGenerator::start() {
-    RtScheduling::promoteCurrentThread(RtScheduling::Class::RealTime, "Sidetone");
+    RtScheduling::promoteCurrentThread(RtScheduling::Threads::kSidetone);
 }
 
 void SidetoneGenerator::stop() {
