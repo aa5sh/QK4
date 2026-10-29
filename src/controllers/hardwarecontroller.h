@@ -15,7 +15,7 @@ class PaddleKeyer;
 class SidetoneGenerator;
 class SidetoneScheduler;
 class SteadyKeyerClock;
-class FunctionLink;
+class ForwardingLink;
 class QtOneShotTimer;
 class RadioState;
 class ConnectionController;
@@ -56,7 +56,7 @@ public:
     // HardwareController and wires the CW graph across these (HardwareController-owned) objects.
     // Same Rule 2 documented-exception rationale as the device accessors above.
     PaddleKeyer *paddleKeyer() const { return m_paddleKeyer.get(); }
-    FunctionLink *keyerLink() const { return m_keyerLink.get(); }
+    ForwardingLink *keyerLink() const { return m_keyerLink.get(); }
     SidetoneGenerator *sidetoneGenerator() const { return m_sidetoneGenerator; }
 
     /// Stop every input producer this controller owns — HaliKey, the iambic keyer, the sidetone,
@@ -142,7 +142,7 @@ private:
     // construction order: the keyer refers to the clock, link, scheduler and timer, so they come
     // first and outlive it. The keyer's thread runs PaddleKeyer::run() until close().
     std::unique_ptr<SteadyKeyerClock> m_keyerClock;
-    std::unique_ptr<FunctionLink> m_keyerLink;
+    std::unique_ptr<ForwardingLink> m_keyerLink;
     std::unique_ptr<SidetoneScheduler> m_sidetoneScheduler;
     QtOneShotTimer *m_unmuteTimer = nullptr; // child; lives on the main thread
     std::unique_ptr<PaddleKeyer> m_paddleKeyer;

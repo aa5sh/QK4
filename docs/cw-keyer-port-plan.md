@@ -107,8 +107,9 @@ Items 1 and 2 fix what goes on air. Items 3 to 6 fix the feel and the monitoring
 
 **Kept exactly as is (KPOD+)**
 - `kpodplusdevice.*`, `kpodplususbworker.*`, the EP02 thread.
-- The `KpodPlusDevice::keyerDataReceived` → `TcpClient::sendCATBytes` connection in
-  `CwController`, moved verbatim.
+- The KPOD+ EP02 batches reaching the K4 untouched, one CAT packet per batch. (Since 2026-10-29
+  the EP02 reader posts them to `TcpClient`'s `KzEgress` from its own thread instead of a queued
+  `keyerDataReceived` → `sendCATBytes` connection; the bytes on the wire are the same.)
 - The KPOD+ ownership gate → `CwController::setKpodPlusGate`, which raises the keyer's inhibit:
   `PaddleKeyer` refuses to key while it is set. (`ConnectionController::m_kpodPlusKeyerActive`,
   which the old HaliKey KZ lambdas read on the I/O thread, had no reader left after the port and

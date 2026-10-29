@@ -136,21 +136,21 @@ void TestKpodPlusUsbWorker::buildStuckTimeout_lowHighBytes() {
 void TestKpodPlusUsbWorker::trimEp02_dropsTrailingNuls() {
     // Build a 32-byte buffer that mirrors what the device delivers on EP02:
     // an 8-byte payload followed by 24 NUL bytes of zero-padding.
-    QByteArray raw(32, '\0');
+    unsigned char raw[32] = {};
     const char prefix[] = "KZ.;KZ-;";
-    memcpy(raw.data(), prefix, 8);
-    const QByteArray trimmed = KpodPlusUsbWorker::trimEp02Buffer(raw);
-    QCOMPARE(trimmed, QByteArray("KZ.;KZ-;"));
+    memcpy(raw, prefix, 8);
+    QCOMPARE(KpodPlusUsbWorker::ep02PayloadLength(raw, 32), 8);
 }
 
 void TestKpodPlusUsbWorker::trimEp02_emptyAndAllNul() {
-    QCOMPARE(KpodPlusUsbWorker::trimEp02Buffer(QByteArray()), QByteArray());
-    QCOMPARE(KpodPlusUsbWorker::trimEp02Buffer(QByteArray(32, '\0')), QByteArray());
+    const unsigned char zeros[32] = {};
+    QCOMPARE(KpodPlusUsbWorker::ep02PayloadLength(zeros, 0), 0);
+    QCOMPARE(KpodPlusUsbWorker::ep02PayloadLength(zeros, 32), 0);
 }
 
 void TestKpodPlusUsbWorker::trimEp02_noTrailing() {
-    QByteArray raw("KZ.;");
-    QCOMPARE(KpodPlusUsbWorker::trimEp02Buffer(raw), raw);
+    const unsigned char raw[] = {'K', 'Z', '.', ';'};
+    QCOMPARE(KpodPlusUsbWorker::ep02PayloadLength(raw, 4), 4);
 }
 
 // =============================================================================

@@ -1,6 +1,7 @@
 #ifndef KPODPLUSUSBWORKER_H
 #define KPODPLUSUSBWORKER_H
 
+#include "hardware/keyertiming.h"
 #include "kpodplusdevice.h" // KpodPlusDeviceInfo struct
 #include <QByteArray>
 #include <QObject>
@@ -16,7 +17,7 @@ class QTimer;
 // its own QThread. Public open/close and setter slots are dispatched from the
 // façade via Qt::QueuedConnection so the main thread never touches libusb.
 //
-// Pure helpers (buildXxxCmd, trimEp02Buffer, decodeResponse) are exposed so
+// Pure helpers (buildXxxCmd, ep02PayloadLength, decodeResponse) are exposed so
 // the unit tests can exercise the parsing + state machine without a real USB
 // device.
 class KpodPlusUsbWorker : public QObject {
@@ -37,7 +38,8 @@ public:
     static void buildKeyerParamsCmd(int iambicMode, bool reversed, unsigned char out[8]);
     static void buildEncodeModeCmd(int mode, unsigned char out[8]);
     static void buildStuckTimeoutCmd(int seconds, unsigned char out[8]);
-    static QByteArray trimEp02Buffer(const QByteArray &raw);
+    // Length of an EP02 transfer without its trailing NUL padding.
+    static int ep02PayloadLength(const unsigned char *data, int size);
 
     // EP01 response decoder result. The worker turns these flags into Qt
     // signals; tests inspect them directly.
@@ -140,8 +142,8 @@ private:
 
 // Reads EP02 IN with a blocking sync interrupt transfer. Lives on its own
 // HighPriority thread so KZ stream timing is not affected by the GUI or the
-// EP01 worker. Emits keyerDataReceived(QByteArray) — wired by the façade
-// directly to TcpClient on the I/O thread (queued), so the main thread is
+// EP01 worker. Hands each trimmed batch to the keyer link (TcpClient's KZ
+// egress) on this thread: no Qt event, no allocation, and the main thread is
 // never on the hot path.
 //
 // THREADING CONSTRAINT: run() is a blocking synchronous loop that NEVER
@@ -165,12 +167,15 @@ public:
     // mutex bounds the wait by the EP02 transfer timeout (100 ms max).
     std::mutex *transferMutex() { return &m_transferMutex; }
 
+    // Where each KZ batch goes; nullptr drops it. Any thread. The link must outlive every send:
+    // it is cleared at shutdown before the connection that owns it goes away.
+    void setKeyerLink(CwKeying::Link *link) { m_keyerLink.store(link, std::memory_order_release); }
+
 public slots:
     void run();
     void setDeviceHandle(quintptr handle); // 0 = clear
 
 signals:
-    void keyerDataReceived(QByteArray data);
     void transferError(QString message);
 
 private:
@@ -178,6 +183,7 @@ private:
     // WHY a request flag run() never resets: requestStop() may arrive before run() starts.
     std::atomic<bool> m_stopRequested{false};
     std::mutex m_transferMutex;
+    std::atomic<CwKeying::Link *> m_keyerLink{nullptr};
 };
 
 #endif // KPODPLUSUSBWORKER_H

@@ -28,7 +28,7 @@
 #include <functional>
 #include <mutex>
 #include <optional>
-#include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -135,7 +135,7 @@ private:
     long long straightKeyMs(double seconds) const;
     double midiEventTimestamp(double delta);
     std::optional<double> sleepUntil(double when);
-    void send(const std::string &command);
+    void send(std::string_view command);
     void muteSidetoneMonitor();
     void delayedUnmuteSidetoneMonitor(double delay);
     void unmuteSidetoneMonitor();

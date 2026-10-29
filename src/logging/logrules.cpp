@@ -12,8 +12,8 @@ const std::vector<Group> &groups() {
          {"qk4.ui", "qk4.ui.menu", "qk4.ui.bandnav", "qk4.ui.modepopup", "qk4.ui.textdecode", "qk4.ui.macro"}},
         {"link", "Radio connection", {"qk4.link", "qk4.link.tcp", "qk4.link.discovery", "qk4.tx.owner"}},
         {"audio", "Audio", {"qk4.audio"}},
-        // WHY qk4.kpod.plus here too: the KPOD+ forwards its own keyer's KZ strings, and its KZ@
-        // line is half of a CW timing trace.
+        // WHY qk4.kpod.plus here too: the KPOD+ forwards its own keyer's KZ strings, and its device
+        // lifecycle decides who owns CW.
         {"cw", "CW keying", {"qk4.cw.keyer", "qk4.cw.halikey", "qk4.cw.midi", "qk4.audio.sidetone", "qk4.kpod.plus"}},
         {"kpod", "KPOD and KPOD+", {"qk4.hardware", "qk4.kpod", "qk4.kpod.udev", "qk4.kpod.plus"}},
         {"catserver", "CAT server", {"qk4.catserver", "qk4.catserver.push"}},

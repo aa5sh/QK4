@@ -155,6 +155,7 @@ set(SOURCES
     src/controllers/cwcontroller.cpp
     src/controllers/transmitcontroller.cpp
     src/network/tcpclient.cpp
+    src/network/kzegress.cpp
     src/network/protocol.cpp
     src/network/networkmetrics.cpp
     src/network/kpa1500client.cpp
@@ -326,6 +327,8 @@ set(HEADERS
     src/controllers/memorybuttonscontroller.h
     src/controllers/cwcontroller.h
     src/network/tcpclient.h
+    src/network/kzegress.h
+    src/utils/latencyhistogram.h
     src/network/protocol.h
     src/network/networkmetrics.h
     src/network/kpa1500client.h

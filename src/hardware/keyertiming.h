@@ -12,7 +12,7 @@
 
 #include <cmath>
 #include <functional>
-#include <string>
+#include <string_view>
 
 namespace CwKeying {
 
@@ -26,10 +26,12 @@ public:
     virtual void sleep(double seconds) = 0;
 };
 
+// WHY a view: the keyer formats each frame into a stack buffer and the egress copies it into a
+// preallocated slot, so sending a KZ never allocates on the keyer or EP02 thread.
 class Link {
 public:
     virtual ~Link() = default;
-    virtual void send(const std::string &command) = 0;
+    virtual void send(std::string_view command) = 0;
 };
 
 class OneShotTimer {

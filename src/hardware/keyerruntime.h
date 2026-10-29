@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // Production implementations of the seams in keyertiming.h: a steady clock with precise sleeps,
-// a link onto the K4 connection, and a one-shot timer on the main thread. The tests use virtual
+// a link onto the K4 connection's KZ egress, and a one-shot timer on the main thread. The tests use virtual
 // ones instead (tests/paddlekeyersim.h).
 
 #ifndef KEYERRUNTIME_H
@@ -12,7 +12,6 @@
 #include <QObject>
 #include <atomic>
 #include <functional>
-#include <mutex>
 
 // std::chrono::steady_clock in seconds. sleep() is as precise as the platform allows: a
 // high-resolution waitable timer on Windows (the default timer tick there is 15.6 ms), and the
@@ -23,17 +22,17 @@ public:
     void sleep(double seconds) override;
 };
 
-// Forwards each command to a sender set at runtime. Thread-safe: the keyer thread sends while the
-// main thread may be (re)wiring the sender.
-class FunctionLink : public CwKeying::Link {
+// Forwards each command to a target link set at runtime (the K4 connection's KZ egress), or drops
+// it while there is none. The target is an atomic pointer, so the keyer thread sends without a lock
+// while the main thread wires it. The target must outlive every send: it is cleared only after
+// the keyer thread is joined.
+class ForwardingLink : public CwKeying::Link {
 public:
-    using Sender = std::function<void(const std::string &)>;
-    void setSender(Sender sender);
-    void send(const std::string &command) override;
+    void setTarget(CwKeying::Link *target);
+    void send(std::string_view command) override;
 
 private:
-    std::mutex m_mutex;
-    Sender m_sender;
+    std::atomic<CwKeying::Link *> m_target{nullptr};
 };
 
 // One-shot timer whose callback runs on the thread this object lives on (the main thread).

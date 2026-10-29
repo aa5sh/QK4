@@ -1,5 +1,6 @@
 #include "tcpclient.h"
 #include "logging/logcategories.h"
+#include "network/kzegress.h"
 #include <QDateTime>
 #include <QHostInfo>
 #include <QLoggingCategory>
@@ -7,7 +8,6 @@
 #include <QSslConfiguration>
 #include <QSslPreSharedKeyAuthenticator>
 #include <QSslSocket>
-#include <QTime>
 
 // ConnectFailure::Phase mirrors ConnectionState rather than reusing it, so connect_failure.h - and
 // the test that links it alone - stays clear of QSslSocket. These keep the two from drifting.
@@ -20,7 +20,9 @@ TcpClient::TcpClient(QObject *parent)
     : QObject(parent), m_socket(new QSslSocket(this)), m_protocol(new Protocol(this)), m_authTimer(new QTimer(this)),
       m_connectTimer(new QTimer(this)), m_pingTimer(new QTimer(this)), m_retryTimer(new QTimer(this)),
       m_port(K4Protocol::DEFAULT_PORT), m_useTls(false), m_encodeMode(3), m_streamingLatency(3),
-      m_authResponseReceived(false) {
+      m_authResponseReceived(false), m_kzEgress(new KzEgress(this)) {
+    connect(m_kzEgress, &KzEgress::framesReady, this, &TcpClient::writeKzFrames);
+
     // Socket signals
     connect(m_socket, &QSslSocket::connected, this, &TcpClient::onSocketConnected);
     connect(m_socket, &QSslSocket::encrypted, this, &TcpClient::onSocketEncrypted);
@@ -245,6 +247,10 @@ void TcpClient::disconnectFromHost() {
     if (m_socket->state() != QAbstractSocket::UnconnectedState) {
         // Send graceful disconnect command
         if (m_state.load(std::memory_order_acquire) == Connected) {
+            // WHY first: a KZU the keyer posted on its way out (a straight key held at quit) must
+            // reach the K4 before the session ends. The egress wakes this thread through a
+            // notifier, which the event loop may service after this queued call.
+            writeKzFrames();
             sendCAT(K4Protocol::Commands::DISCONNECT);
         }
         m_socket->disconnectFromHost();
@@ -272,30 +278,38 @@ void TcpClient::sendCAT(const QString &command) {
         m_socket->write(packet);
         m_socket->flush();
         qCDebug(lcCatTx) << "sent:" << command << "(" << packet.size() << "bytes)";
-        // Mirror the KPOD+ "TX@" trace format for KZ commands so HaliKey-keyer emits can be
-        // correlated 1:1 against cw.keyer traces and KPOD+ EP02 KZ@ traces.
-        if (command.startsWith(QLatin1String("KZ"))) {
-            qCDebug(lcCatTx).noquote() << "TX@" << QTime::currentTime().toString(QStringLiteral("HH:mm:ss.zzz")) << "["
-                                       << command << "]";
-        }
     } else {
         qCWarning(lcCatTx) << "DROPPED (state=" << m_state.load(std::memory_order_acquire) << "):" << command;
     }
 }
 
-void TcpClient::sendCATBytes(const QByteArray &raw) {
-    int len = raw.size();
-    while (len > 0 && raw.at(len - 1) == '\0')
-        --len;
-    if (len > 0) {
-        const QString cmd = QString::fromLatin1(raw.constData(), len);
-        // Diagnostic: pair with the hw.kpodplus EP02 emit log to measure end-to-end
-        // device-emit → wire-write latency. Same HH:mm:ss.zzz format so a simple diff
-        // between matching "KZ@" and "TX@" lines tells you how long each batch took to
-        // forward across the Qt event-queue + I/O thread + TLS encrypt + kernel send.
-        qCDebug(lcCatTx).noquote() << "TX@" << QTime::currentTime().toString("HH:mm:ss.zzz") << "[" << cmd << "]";
-        sendCAT(cmd);
-    }
+void TcpClient::writeKzFrames() {
+    const bool connected = m_state.load(std::memory_order_acquire) == Connected;
+    m_kzEgress->drain([this, connected](std::string_view frame, std::int64_t enqueuedNs) {
+        const auto text = QLatin1StringView(frame.data(), static_cast<qsizetype>(frame.size()));
+        if (!connected) {
+            qCWarning(lcCatTx) << "DROPPED (state=" << m_state.load(std::memory_order_acquire) << "):" << text;
+            return;
+        }
+        char packet[KzEgress::kMaxFrameBytes + Protocol::kCatPacketOverhead];
+        const std::size_t length = Protocol::writeCATPacket(frame, packet, sizeof packet);
+        m_socket->write(packet, static_cast<qint64>(length));
+        m_socket->flush();
+        const std::int64_t queuedUs = (KzEgress::nowNs() - enqueuedNs) / 1000;
+        m_kzLatency.record(queuedUs);
+        qCDebug(lcCatTx) << "sent:" << text << "(" << length << "bytes," << queuedUs << "us from the keying thread)";
+    });
+}
+
+void TcpClient::logKzLatency() {
+    const LatencyHistogram::Counts c = m_kzLatency.snapshot();
+    if (c.total == m_kzLatencyLogged)
+        return;
+    m_kzLatencyLogged = c.total;
+    qCInfo(lcLinkTcp).nospace() << "KZ egress, keying thread to socket write, this session: " << c.total
+                                << " frames, median <= " << c.quantileBoundUs(0.5)
+                                << " us, 99% <= " << c.quantileBoundUs(0.99) << " us, max " << c.maxUs
+                                << " us, dropped " << m_kzEgress->droppedCount();
 }
 
 void TcpClient::sendRaw(const QByteArray &data) {
@@ -315,6 +329,13 @@ void TcpClient::setState(ConnectionState state) {
         qCDebug(lcLinkTcp) << "State:" << names[prev] << "->" << names[state];
         m_state.store(state, std::memory_order_release);
         m_connected.store(state == Connected, std::memory_order_relaxed);
+        if (state == Connected) {
+            m_kzLatency.reset();
+            m_kzLatencyLogged = 0;
+            m_pingTicks = 0;
+        } else if (prev == Connected) {
+            logKzLatency();
+        }
         emit stateChanged(state);
 
         if (state == Connected) {
@@ -484,6 +505,11 @@ void TcpClient::onPingTimer() {
         qint64 epoch = QDateTime::currentSecsSinceEpoch();
         sendCAT(QString("PING%1;").arg(epoch));
         m_pingElapsed.start();
+        // WHY on the ping: it is the I/O thread's only steady tick, and a summary a minute is plenty.
+        if (++m_pingTicks * K4Protocol::PING_INTERVAL_MS >= 60'000) {
+            m_pingTicks = 0;
+            logKzLatency();
+        }
     }
 }
 

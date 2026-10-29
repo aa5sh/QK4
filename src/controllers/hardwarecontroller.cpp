@@ -124,7 +124,7 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     // The keyer below refers to the scheduler; the generator owns the clock the scheduler reads.
     // =========================================================================
     m_keyerClock = std::make_unique<SteadyKeyerClock>();
-    m_keyerLink = std::make_unique<FunctionLink>();
+    m_keyerLink = std::make_unique<ForwardingLink>();
     m_sidetoneScheduler = std::make_unique<SidetoneScheduler>(*m_keyerClock, nullptr);
     m_unmuteTimer = new QtOneShotTimer(this);
 
@@ -296,7 +296,7 @@ void HardwareController::shutdownDevices() {
         m_paddleKeyer->close();
         if (!m_keyerThread->wait(2000))
             qCWarning(lcHardware) << "keyer thread did not stop within 2 s";
-        m_keyerLink->setSender(nullptr);
+        m_keyerLink->setTarget(nullptr);
     }
     m_keyerThread = nullptr; // child of this; Qt deletes it, but never join it twice
 
@@ -313,6 +313,8 @@ void HardwareController::shutdownDevices() {
     // left to tell that a device disconnected.
     applyKpodPlus(UsbDeviceLifecycle::Event::ShuttingDown);
     applyKpod(UsbDeviceLifecycle::Event::ShuttingDown);
+    // The KZ egress belongs to the connection, which is destroyed before this controller.
+    m_kpodPlusDevice->setKeyerLink(nullptr);
 }
 
 HardwareController::~HardwareController() {

@@ -3,7 +3,6 @@
 #include <QLoggingCategory>
 #include <QString>
 #include <QThread>
-#include <QTime>
 #include <QTimer>
 #include <cstring>
 #include <libusb-1.0/libusb.h>
@@ -59,11 +58,10 @@ void KpodPlusUsbWorker::buildStuckTimeoutCmd(int seconds, unsigned char out[8]) 
     out[3] = static_cast<unsigned char>((seconds >> 8) & 0xFF);
 }
 
-QByteArray KpodPlusUsbWorker::trimEp02Buffer(const QByteArray &raw) {
-    int len = raw.size();
-    while (len > 0 && raw.at(len - 1) == '\0')
-        --len;
-    return raw.left(len);
+int KpodPlusUsbWorker::ep02PayloadLength(const unsigned char *data, int size) {
+    while (size > 0 && data[size - 1] == '\0')
+        --size;
+    return size;
 }
 
 // =============================================================================
@@ -716,19 +714,15 @@ void KpodPlusEp02Worker::run() {
             rc = libusb_interrupt_transfer(h, 0x82, buffer, sizeof(buffer), &transferred, kEp02TimeoutMs);
         }
         if (rc == LIBUSB_SUCCESS && transferred > 0) {
-            QByteArray data(reinterpret_cast<const char *>(buffer), transferred);
-            // Diagnostic: timestamp each KZ batch so on-air vs wire-out timing can be compared
-            // when investigating "rhythm wrong at the K4" reports. Enable with
-            // QT_LOGGING_RULES="qk4.kpod.plus.debug=true". The device always sends fixed 32-byte
-            // transfers zero-padded after the KZ string (docs/KPodKeyerInterface.pdf
-            // §"Endpoint 2 IN"), so transferred==32 is expected every read and is NOT a signal
-            // of buffer pressure. The real "FIFO backing up" signature would be the trimmed
-            // PAYLOAD length approaching 32 bytes; flag at >=24 to catch trouble early.
-            const QByteArray trimmed = KpodPlusUsbWorker::trimEp02Buffer(data);
-            const char *fillTag = (trimmed.size() >= 24) ? " [PAYLOAD-NEAR-FULL!]" : "";
-            qCDebug(lcKpodPlus).noquote() << "KZ@" << QTime::currentTime().toString("HH:mm:ss.zzz") << "[" << trimmed
-                                          << "] (payload=" << trimmed.size() << "B)" << fillTag;
-            emit keyerDataReceived(data);
+            // The device always sends fixed 32-byte transfers zero-padded after the KZ string
+            // (docs/KPodKeyerInterface.pdf §"Endpoint 2 IN"). The batch goes to the K4 as one CAT
+            // packet, as it arrived. No log line here: this is a real-time thread (CONVENTIONS
+            // Rule 16); the CAT traffic bench item logs each batch, with its queue time, from the
+            // I/O thread that writes it.
+            const int length = KpodPlusUsbWorker::ep02PayloadLength(buffer, transferred);
+            CwKeying::Link *link = m_keyerLink.load(std::memory_order_acquire);
+            if (length > 0 && link)
+                link->send(std::string_view(reinterpret_cast<const char *>(buffer), static_cast<size_t>(length)));
         } else if (rc == LIBUSB_ERROR_TIMEOUT) {
             continue;
         } else if (rc == LIBUSB_ERROR_NO_DEVICE || rc == LIBUSB_ERROR_IO) {

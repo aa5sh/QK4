@@ -6,6 +6,9 @@
 #include <QString>
 
 class QThread;
+namespace CwKeying {
+class Link;
+}
 class KpodPlusUsbWorker;
 class KpodPlusEp02Worker;
 
@@ -51,6 +54,10 @@ public:
     void setEncodeMode(int mode);
     void setStuckTimeout(int seconds);
 
+    // Where the KPOD+'s own KZ strings go, straight from the EP02 reader thread; nullptr drops
+    // them. Any thread. The link must outlive the EP02 reader's use of it.
+    void setKeyerLink(CwKeying::Link *link);
+
 signals:
     void deviceConnected();
     void deviceDisconnected();
@@ -59,7 +66,6 @@ signals:
     void rockerPositionChanged(RockerPosition position);
     void buttonTapped(int buttonNumber);
     void buttonHeld(int buttonNumber);
-    void keyerDataReceived(const QByteArray &data);
     void pollError(const QString &error);
 
 private:

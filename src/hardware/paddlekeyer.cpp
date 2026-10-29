@@ -19,17 +19,45 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdio>
 #include <utility>
 
 using CwKeying::pyRound;
 
 namespace {
 
-std::string fourDigits(const char *prefix, long long ms) {
-    char buf[16];
-    std::snprintf(buf, sizeof buf, "%s%04lld;", prefix, ms);
-    return buf;
+// One KZ or ML frame, formatted on the stack by hand: the keyer thread never allocates, and never
+// enters printf, whose locale handling is not something a real-time thread should depend on.
+struct Frame {
+    char text[32];
+    size_t length = 0;
+    operator std::string_view() const { return {text, length}; }
+};
+
+// prefix, then value zero-padded to at least `width` digits (printf's %0*lld), then ';'.
+Frame formatFrame(const char *prefix, long long value, int width) {
+    Frame f;
+    for (const char *p = prefix; *p; ++p)
+        f.text[f.length++] = *p;
+    const bool negative = value < 0;
+    unsigned long long magnitude = negative ? 0ULL - static_cast<unsigned long long>(value) : value;
+    if (negative)
+        f.text[f.length++] = '-';
+    char digits[20];
+    int n = 0;
+    do {
+        digits[n++] = static_cast<char>('0' + magnitude % 10);
+        magnitude /= 10;
+    } while (magnitude > 0);
+    for (int pad = width - n - (negative ? 1 : 0); pad > 0; --pad)
+        f.text[f.length++] = '0';
+    while (n > 0)
+        f.text[f.length++] = digits[--n];
+    f.text[f.length++] = ';';
+    return f;
+}
+
+Frame fourDigits(const char *prefix, long long ms) {
+    return formatFrame(prefix, ms, 4);
 }
 
 bool contains(const std::vector<int> &v, int x) {
@@ -801,7 +829,7 @@ void PaddleKeyer::measureInherentSidetoneLag() {
 
 // ---- K4 link and monitor ----
 
-void PaddleKeyer::send(const std::string &command) {
+void PaddleKeyer::send(std::string_view command) {
     m_link.send(command);
 }
 
@@ -815,9 +843,7 @@ void PaddleKeyer::muteSidetoneMonitor() {
 }
 
 void PaddleKeyer::unmuteSidetoneMonitor() {
-    char buf[16];
-    std::snprintf(buf, sizeof buf, "ML0%03d;", m_monitorLevel.load());
-    send(buf);
+    send(formatFrame("ML0", m_monitorLevel.load(), 3));
     m_monitorMuted = false;
 }
 

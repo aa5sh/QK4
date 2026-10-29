@@ -9,6 +9,9 @@
 #include <atomic>
 #include "connect_failure.h"
 #include "protocol.h"
+#include "utils/latencyhistogram.h"
+
+class KzEgress;
 
 class TcpClient : public QObject {
     Q_OBJECT
@@ -48,12 +51,10 @@ public:
     Q_INVOKABLE void sendCAT(const QString &command);
     Q_INVOKABLE void sendRaw(const QByteArray &data);
 
-    // WHY: lets the KPOD+ EP02 reader (HighPriority worker thread) deliver
-    // KZ batches straight to the I/O thread via a queued connection,
-    // bypassing the main thread. Trims trailing NUL padding from the
-    // device's 32-byte fixed-size frames and dispatches through sendCAT()
-    // so existing K4-packet framing and the cross-thread marshal apply.
-    Q_INVOKABLE void sendCATBytes(const QByteArray &raw);
+    // Where the CW keying threads post KZ and ML frames (the keyer, and the KPOD+'s own KZ strings).
+    // Posting is lock-free and allocation-free from any thread; this object writes the frames from
+    // the I/O thread, in order. Lives as long as this TcpClient.
+    KzEgress *kzEgress() const { return m_kzEgress; }
 
     // Pre-RDY command string sent before the state dump on connect.
     // Must be called before connectToHost() — both are queued to the IO thread,
@@ -93,6 +94,8 @@ private slots:
 
 private:
     void setState(ConnectionState state);
+    void writeKzFrames();
+    void logKzLatency();
     void sendAuthentication();
     void startPingTimer();
     void stopPingTimer();
@@ -128,6 +131,13 @@ private:
     std::atomic<ConnectionState> m_state{Disconnected};
     std::atomic<bool> m_connected{false}; // Thread-safe read for isConnected()
     bool m_authResponseReceived;
+
+    KzEgress *m_kzEgress;
+    // Enqueue on the keying thread to the socket write here, per frame, since the session began.
+    // Written on the I/O thread only. Logged once a minute while keying and when the session ends.
+    LatencyHistogram m_kzLatency;
+    std::uint64_t m_kzLatencyLogged = 0; // samples covered by the last summary
+    int m_pingTicks = 0;
 
     QElapsedTimer m_pingElapsed;
     int m_latencyMs = -1;

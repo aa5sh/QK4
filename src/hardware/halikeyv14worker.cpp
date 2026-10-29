@@ -156,17 +156,6 @@ bool HaliKeyV14Worker::readPinState(bool &ditState, bool &dahState) {
     bool cts = (modemStatus & MS_CTS_ON) != 0;
     bool dsr = (modemStatus & MS_DSR_ON) != 0;
     bool dcd = (modemStatus & MS_RLSD_ON) != 0;
-    // Diagnostic: log each raw modem-line transition so we can see whether DCD and DSR
-    // (which together form the dah lever via `dcd || dsr`) actually rise/fall as a pair.
-    // A lingering DSR after DCD drops would latch dahState true → stuck dah. Chatty by
-    // design; gated behind qk4.cw.halikey.debug. Compares against last-logged raw bits.
-    if (cts != m_lastRawCts || dsr != m_lastRawDsr || dcd != m_lastRawDcd) {
-        qCDebug(lcCwHalikey) << "HaliKeyV14Worker: raw pins  CTS:" << cts << " DCD:" << dcd << " DSR:" << dsr
-                             << " => dah(dcd||dsr):" << (dcd || dsr);
-        m_lastRawCts = cts;
-        m_lastRawDsr = dsr;
-        m_lastRawDcd = dcd;
-    }
     ditState = cts;
     dahState = dcd || dsr;
     return true;
@@ -266,12 +255,10 @@ void HaliKeyV14Worker::monitorLoop() {
             poller.start(read);
             continue;
         }
-        for (const auto &change : poller.poll(read, clock.now())) {
-            const bool dah = change.signal != Signal::CTS;
-            qCDebug(lcCwHalikey) << "HaliKeyV14Worker:" << (dah ? "dah" : "dit") << (change.asserted ? "down" : "up")
-                                 << "after" << change.deltaTime * 1000 << "ms";
-            emit paddleChanged(dah, change.asserted, change.deltaTime);
-        }
+        // No log line per edge: this is a real-time thread (CONVENTIONS Rule 16). What the keyer
+        // made of the edges is in the CAT traffic bench item.
+        for (const auto &change : poller.poll(read, clock.now()))
+            emit paddleChanged(change.signal != Signal::CTS, change.asserted, change.deltaTime);
     }
 
 #ifdef Q_OS_WIN

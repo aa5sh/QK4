@@ -45,19 +45,13 @@ void SteadyKeyerClock::sleep(double seconds) {
 #endif
 }
 
-void FunctionLink::setSender(Sender sender) {
-    std::lock_guard lock(m_mutex);
-    m_sender = std::move(sender);
+void ForwardingLink::setTarget(CwKeying::Link *target) {
+    m_target.store(target, std::memory_order_release);
 }
 
-void FunctionLink::send(const std::string &command) {
-    Sender sender;
-    {
-        std::lock_guard lock(m_mutex);
-        sender = m_sender;
-    }
-    if (sender)
-        sender(command);
+void ForwardingLink::send(std::string_view command) {
+    if (CwKeying::Link *target = m_target.load(std::memory_order_acquire))
+        target->send(command);
 }
 
 QtOneShotTimer::QtOneShotTimer(QObject *parent) : QObject(parent) {}

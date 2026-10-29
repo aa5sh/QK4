@@ -10,11 +10,12 @@
 #include "hardware/kpodplusdevice.h"
 #include "hardware/paddlekeyer.h"
 #include "models/radiostate.h"
+#include "network/kzegress.h"
 #include "network/tcpclient.h"
 #include "settings/radiosettings.h"
 
 CwController::CwController(RadioState *radioState, ConnectionController *connection, PaddleKeyer *keyer,
-                           FunctionLink *link, SidetoneGenerator *sidetone, HalikeyDevice *halikey,
+                           ForwardingLink *link, SidetoneGenerator *sidetone, HalikeyDevice *halikey,
                            KpodPlusDevice *kpodPlus, QObject *parent)
     : QObject(parent), m_radioState(radioState), m_connection(connection), m_keyer(keyer), m_link(link),
       m_sidetone(sidetone), m_halikey(halikey), m_kpodPlus(kpodPlus) {
@@ -22,10 +23,10 @@ CwController::CwController(RadioState *radioState, ConnectionController *connect
     // =========================================================================
     // Keyer → K4
     // =========================================================================
-    // sendCAT queues to the I/O thread itself; one producer (the keyer thread, which also sends the
-    // monitor restore) keeps KZD/KZU in order. Never gated here: see invariant 6.
-    auto *tc = m_connection->tcpClient();
-    m_link->setSender([tc](const std::string &command) { tc->sendCAT(QString::fromLatin1(command)); });
+    // The KZ egress takes frames from any thread without a lock and writes them from the I/O thread
+    // in order; one producer (the keyer thread, which also sends the monitor restore) keeps KZD/KZU
+    // in order. Never gated here: see invariant 6.
+    m_link->setTarget(m_connection->tcpClient()->kzEgress());
 
     // =========================================================================
     // Configuration from the K4 (the source of truth) and from settings
@@ -131,14 +132,12 @@ CwController::CwController(RadioState *radioState, ConnectionController *connect
     connect(m_halikey, &HalikeyDevice::disconnected, this, [this]() { m_keyer->releasePaddles(); });
 
     // =========================================================================
-    // KPOD+ EP02 keyer data routing — unchanged
+    // KPOD+ EP02 keyer data
     // =========================================================================
-    // The KPOD+ delivers complete KZ/KX strings in 32-byte transfers, zero-padded after the
-    // last ';'. By targeting TcpClient as the receiver (lives on the I/O thread) with a
-    // queued connection we skip the main thread entirely on this hot path. sendCATBytes
-    // trims NUL padding on the I/O thread and hands off to sendCAT().
-    connect(m_kpodPlus, &KpodPlusDevice::keyerDataReceived, m_connection->tcpClient(), &TcpClient::sendCATBytes,
-            Qt::QueuedConnection);
+    // The KPOD+ delivers complete KZ/KX strings in 32-byte transfers, zero-padded after the last
+    // ';'. The EP02 reader trims the padding and posts each batch to the same KZ egress, from its
+    // own thread: no Qt event, no copy into a QByteArray, and the main thread is not on the path.
+    m_kpodPlus->setKeyerLink(m_connection->tcpClient()->kzEgress());
 }
 
 CwController::~CwController() {

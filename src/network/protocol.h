@@ -2,6 +2,8 @@
 #define PROTOCOL_H
 
 #include <QObject>
+#include <cstddef>
+#include <string_view>
 #include <QByteArray>
 
 // K4 Protocol Constants.
@@ -107,6 +109,11 @@ public:
 
     // Build a CAT command packet
     static QByteArray buildCATPacket(const QString &command);
+
+    // The same packet as buildCATPacket, framed into a caller's buffer: no allocation, for the KZ
+    // egress on the I/O thread. Returns the packet length, or 0 if it does not fit in `capacity`.
+    static std::size_t writeCATPacket(std::string_view command, char *out, std::size_t capacity);
+    static constexpr std::size_t kCatPacketOverhead = 4 + 4 + 3 + 4; // markers, length, CAT header
 
     // Build authentication data (SHA-384 hash as hex string)
     static QByteArray buildAuthData(const QString &password);

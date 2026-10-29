@@ -29,7 +29,7 @@ public:
 class CaptureLink : public CwKeying::Link {
 public:
     std::vector<std::string> sent;
-    void send(const std::string &c) override { sent.push_back(c); }
+    void send(std::string_view c) override { sent.emplace_back(c); }
 };
 
 class NullTimer : public CwKeying::OneShotTimer {

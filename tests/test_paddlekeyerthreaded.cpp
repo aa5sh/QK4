@@ -20,9 +20,9 @@ namespace {
 
 class CaptureLink : public CwKeying::Link {
 public:
-    void send(const std::string &c) override {
+    void send(std::string_view c) override {
         std::lock_guard lock(m_mutex);
-        m_sent.push_back(c);
+        m_sent.emplace_back(c);
     }
     std::vector<std::string> sent() {
         std::lock_guard lock(m_mutex);
@@ -93,7 +93,7 @@ std::string kzFault(const std::vector<std::string> &sent) {
 // ML0000 just before its KZD, so this holds the keyer between deciding to key and sending the KZD.
 class SlowMuteLink : public CaptureLink {
 public:
-    void send(const std::string &c) override {
+    void send(std::string_view c) override {
         if (c == "ML0000;")
             std::this_thread::sleep_for(std::chrono::microseconds(1500));
         CaptureLink::send(c);

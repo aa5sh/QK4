@@ -7,7 +7,7 @@
 class RadioState;
 class ConnectionController;
 class PaddleKeyer;
-class FunctionLink;
+class ForwardingLink;
 class SidetoneGenerator;
 class HalikeyDevice;
 class KpodPlusDevice;
@@ -40,7 +40,7 @@ class KpodPlusDevice;
 // ------
 //   src                                  | dst                         | thread
 //   -------------------------------------|-----------------------------|-----------------------------
-//   PaddleKeyer → FunctionLink            | TcpClient::sendCAT          | keyer → I/O (sendCAT queues)
+//   PaddleKeyer → ForwardingLink         | TcpClient's KzEgress        | keyer → I/O (lock-free post)
 //   HalikeyDevice::paddleChanged (V1.4)  | PaddleKeyer::paddleEvent    | runs ON the HaliKey worker
 //   HalikeyDevice MIDI sink (MIDI)       | PaddleKeyer::midiMessage    | runs ON RtMidi's thread
 //   RadioState keyer speed/KP/pitch/ML/KZL| keyer + sidetone + KPOD+    | main
@@ -48,7 +48,7 @@ class KpodPlusDevice;
 //     disconnect, KPOD+ gate             |                             |
 //   RadioSettings halikey/*              | keyer mode, straight key,   | main
 //                                        | dit memory, monitor mute    |
-//   KpodPlusDevice::keyerDataReceived    | TcpClient::sendCATBytes     | EP02 worker → I/O (queued)
+//   KpodPlusDevice EP02 reader           | TcpClient's KzEgress        | EP02 worker → I/O (lock-free)
 //
 // Inhibit
 // -------
@@ -63,11 +63,11 @@ class KpodPlusDevice;
 //      RtMidi's thread. Both stamp the edge on arrival; a queued hop would be timing error.
 //   2. m_cachedIsV14 and m_reversed are stored on the main thread (release) and loaded on those
 //      device threads (acquire).
-//   3. The keyer's commands reach TcpClient through FunctionLink → sendCAT, which queues to the
-//      I/O thread. One producer thread, one consumer: FIFO, so KZD/KZU stay in order. The keyer
+//   3. The keyer's commands reach TcpClient through ForwardingLink → KzEgress, a lock-free queue
+//      the I/O thread drains in order. FIFO per producer, so KZD/KZU stay in order. The keyer
 //      thread is the only producer: a release, inhibit or close from the main thread, and the
 //      monitor-restore timer, post requests to the keyer's queue and never send KZ or ML.
-//   4. KPOD+ EP02 keyer data routes EP02 worker → I/O thread via QueuedConnection.
+//   4. KPOD+ EP02 keyer data goes from the EP02 worker to the same KzEgress.
 //   5. The destructor cuts the V1.4 line handler first (CONVENTIONS Rule 11). That stops new
 //      calls only; an edge already in flight on the worker is ruled out by shutdownDevices().
 //   6. The link is never gated: a KZU closing an open KZD must always reach the K4. Suppression
@@ -92,7 +92,7 @@ class CwController : public QObject {
     Q_OBJECT
 
 public:
-    CwController(RadioState *radioState, ConnectionController *connection, PaddleKeyer *keyer, FunctionLink *link,
+    CwController(RadioState *radioState, ConnectionController *connection, PaddleKeyer *keyer, ForwardingLink *link,
                  SidetoneGenerator *sidetone, HalikeyDevice *halikey, KpodPlusDevice *kpodPlus,
                  QObject *parent = nullptr);
     ~CwController() override;
@@ -119,7 +119,7 @@ private:
     RadioState *m_radioState;
     ConnectionController *m_connection;
     PaddleKeyer *m_keyer;          // owned by HardwareController
-    FunctionLink *m_link;          // owned by HardwareController
+    ForwardingLink *m_link;        // owned by HardwareController
     SidetoneGenerator *m_sidetone; // owned by HardwareController
     HalikeyDevice *m_halikey;      // owned by HardwareController
     KpodPlusDevice *m_kpodPlus;    // owned by HardwareController

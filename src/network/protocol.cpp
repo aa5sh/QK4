@@ -169,6 +169,25 @@ QByteArray Protocol::buildCATPacket(const QString &command) {
     return buildPacket(payload);
 }
 
+std::size_t Protocol::writeCATPacket(std::string_view command, char *out, std::size_t capacity) {
+    const std::size_t payloadLength = 3 + command.size();
+    const std::size_t total = kCatPacketOverhead + command.size();
+    if (total > capacity)
+        return 0;
+    char *p = out;
+    std::memcpy(p, K4Protocol::START_MARKER.constData(), 4);
+    p += 4;
+    qToBigEndian(static_cast<quint32>(payloadLength), reinterpret_cast<uchar *>(p));
+    p += 4;
+    *p++ = static_cast<char>(K4Protocol::CAT);
+    *p++ = '\x00';
+    *p++ = '\x00';
+    std::memcpy(p, command.data(), command.size());
+    p += command.size();
+    std::memcpy(p, K4Protocol::END_MARKER.constData(), 4);
+    return total;
+}
+
 QByteArray Protocol::buildAuthData(const QString &password) {
     // SHA-384 hash of password
     QByteArray passwordData = password.toUtf8();

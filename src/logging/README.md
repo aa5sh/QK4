@@ -84,14 +84,14 @@ category that no rule or Options switch can address. The same test enforces it.
 | `qk4.audio` | `lcAudio` | audio devices, codecs, pipeline | `qk4.audio` |
 | `qk4.audio.rx` | `lcAudioRx` | RX playback levels, once a second | `qk4.audio.rx` |
 | `qk4.audio.tx` | `lcAudioTx` | what each TX frame put on the wire | `qk4.audio.tx` |
-| `qk4.audio.sidetone` | `lcAudioSidetone` | sidetone timing per tone onset | `qk4.audio.sidetone` |
+| `qk4.audio.sidetone` | `lcAudioSidetone` | sidetone output dry-outs and short writes (no per-tone line: real-time thread) | `qk4.audio.sidetone` |
 | `qk4.cw.keyer` | `lcCwKeyer` | CW orchestration (CwController) | `cw.keyer` |
 | `qk4.cw.halikey` | `lcCwHalikey` | HaliKey device and V1.4 serial worker | `hw.halikey` |
 | `qk4.cw.midi` | `lcCwMidi` | HaliKey MIDI worker | `hw.midi` |
 | `qk4.hardware` | `lcHardware` | HardwareController | `qk4.hardware` |
 | `qk4.kpod` | `lcKpod` | KPOD (hidapi) | `hw.kpod` |
 | `qk4.kpod.udev` | `lcKpodUdev` | KPOD hotplug on Linux | `hw.kpod.udev` |
-| `qk4.kpod.plus` | `lcKpodPlus` | KPOD+ (libusb), including EP02 `KZ@` | `hw.kpodplus` |
+| `qk4.kpod.plus` | `lcKpodPlus` | KPOD+ (libusb); its EP02 batches appear under `qk4.cat.tx` | `hw.kpodplus` |
 | `qk4.catserver` | `lcCatServer` | CAT server for WSJT-X and friends | `net.cat` |
 | `qk4.catserver.push` | `lcCatServerPush` | CAT server auto-information push | `net.catpush` |
 | `qk4.tci` | `lcTci` | TCI server | `net.tci` |

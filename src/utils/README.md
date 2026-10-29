@@ -8,6 +8,7 @@ Shared helper functions. Any helper needed in more than one translation unit goe
 - `bandplan.{cpp,h}` — `BandPlan::` namespace. Segment lookup (CW / data / beacon / phone) per IARU region, driving the panadapter band-plan overlay. Region 4 (`RegionUS`) is the US FCC layout with practical Extra-class mode edges. Covered by `test_bandplan`.
 - `windowfit.h` — `WindowFit::` namespace. Main-window sizing rules: the size the window opens at (never below its layout's minimum) and the interface scale at which it fits a screen — shrinking on a small screen, growing to 125% on a large one with room for it (no step between 100% and 125%). Pure arithmetic on `QSize`, covered by `test_windowfit`.
 - `wheelaccumulator.{cpp,h}` — `WheelAccumulator` class. Accumulates `QWheelEvent` angle deltas into discrete steps (optionally per key, e.g. per modifier), so a trackpad does not fire one tuning step per small delta.
+- `latencyhistogram.h` — `LatencyHistogram`, fixed µs buckets with relaxed atomic counters: one thread records without locking or allocating, any thread reads a snapshot and its quantile bounds. Used for the KZ egress latency; covered by `test_kzegress`.
 - `macroids.h` — `MacroIds::` namespace. `QString` constants naming every macro slot (Startup, PF1–PF4, Fn.F1–F8, K-pod buttons, Keyboard-F1–F12, built-in functions) and the forbidden-startup-command check.
 
 ## Rule 1 — No duplicated static functions

@@ -19,7 +19,7 @@ USB / serial / MIDI device wrappers. Owned by `controllers/hardwarecontroller.cp
 - `halikeyportscan.{cpp,h}` — Lists HaliKey serial or MIDI ports on a short-lived worker thread and delivers them queued to the caller's thread, for the Options page. The first CoreMIDI enumeration in a process took 0.8–1.9 s on macOS, and SetupAPI COM enumeration is slow on Windows with Bluetooth serial ports; both used to run on the GUI thread. One scan at a time: a repeat request is absorbed, a request for the other device type replaces the outdated scan. `chooseIndex()` is the saved-port / first-HaliKey-MIDI selection rule.
 - `paddlekeyer.{cpp,h}` — Port of K4-Companion's keyer (Dale Farnsworth, GPL-3.0): Iambic A/B, Plain Iambic, Ultimatic and straight-key passthrough, sent as timed `KZD`/`KZU`. Paddle edges timestamped at capture (MoMIDI's own clock, the 1 ms serial poll); decisions read the paddles as of when they were due. Pure logic behind `keyertiming.h` seams; pinned by Dale's 564 recorded runs (`tests/test_paddlekeyersweeps.cpp`, data in `tests/data/paddlekeyer/`).
 - `keyertiming.h` — The Clock / Link / OneShotTimer seams the keyer runs against, and `pyRound` (half-to-even, as Python's `round`).
-- `keyerruntime.{cpp,h}` — Production seams: `SteadyKeyerClock` (steady_clock, high-resolution waitable timer sleeps on Windows), `FunctionLink` (keyer → `TcpClient::sendCAT`), `QtOneShotTimer` (monitor restore; fires on the main thread and posts the restore to the keyer).
+- `keyerruntime.{cpp,h}` — Production seams: `SteadyKeyerClock` (steady_clock, high-resolution waitable timer sleeps on Windows), `ForwardingLink` (keyer → `TcpClient`'s `KzEgress`, an atomic pointer set by `CwController`), `QtOneShotTimer` (monitor restore; fires on the main thread and posts the restore to the keyer).
 - `seriallinepoller.{cpp,h}` — Port of K4-Companion's serial line poll, run by the V1.4 worker: rest state at open is not an edge, paddles reported on the first poll that sees them, 20 ms straight-key debounce (dah line ignored), per-line deltas.
 
 ## Threading
@@ -78,9 +78,13 @@ closed and switched off.
 
 - **V1.4:** paddle → V1.4 worker's 1 ms poll → `SerialLinePoller` → `HalikeyDevice::paddleChanged` → `CwController::onPaddle` (paddle reversal; DirectConnection) → `PaddleKeyer::paddleEvent`, stamped on arrival.
 - **MIDI:** paddle → RtMidi callback → `HaliKeyMidiSink` → `PaddleKeyer::midiMessage`, stamped by MoMIDI's own clock.
-- **Keyer thread:** `PaddleKeyer::run()` → timed `KZD####` / `KZU####` (and `ML0000` / restore if the monitor mute is on) → `FunctionLink` → `TcpClient::sendCAT` (queued to the I/O thread). The keyer thread is the only sender of KZ and ML: `releasePaddles()`, the inhibit and `close()` from the main thread, and the monitor-restore timer, post requests to its queue, so a straight key's KZU always follows its KZD. Sidetone edges are scheduled on `SidetoneScheduler`, and `SidetoneGenerator`'s paced push places them on exact frames.
+- **Keyer thread:** `PaddleKeyer::run()` → timed `KZD####` / `KZU####` (and `ML0000` / restore if the monitor mute is on) → `ForwardingLink` → `KzEgress` (a lock-free queue the I/O thread drains and writes; see `src/network/README.md`). The keyer thread is the only sender of KZ and ML: `releasePaddles()`, the inhibit and `close()` from the main thread, and the monitor-restore timer, post requests to its queue, so a straight key's KZU always follows its KZD. Sidetone edges are scheduled on `SidetoneScheduler`, and `SidetoneGenerator`'s paced push places them on exact frames.
 
-The keyer keys nothing while CwController holds it inhibited: radio not ready, mode not CW or CW-R, or the KPOD+ owning CW. KPOD+ owns its whole chain: paddle → onboard keyer → its own sidetone → KZ strings forwarded to the K4 untouched.
+The keyer keys nothing while CwController holds it inhibited: radio not ready, mode not CW or CW-R, or the KPOD+ owning CW. KPOD+ owns its whole chain: paddle → onboard keyer → its own sidetone → KZ strings forwarded to the K4 untouched (the EP02 reader posts each batch to the same `KzEgress`).
+
+No per-edge, per-note or per-batch log line is written on the HaliKey worker, RtMidi, keyer or EP02
+threads (CONVENTIONS Rule 16). The CAT traffic bench item logs every KZ frame from the I/O thread
+as it is written, with how long it waited since the keying thread posted it.
 
 ## V1.4 serial latency (USB-serial bridge latency timer)
 

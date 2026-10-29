@@ -2,6 +2,7 @@
 #include <QTest>
 #include <QtEndian>
 #include "network/protocol.h"
+#include <cstring>
 
 // Helper: build a raw K4 packet from payload bytes
 static QByteArray buildTestPacket(const QByteArray &payload) {
@@ -275,6 +276,22 @@ private slots:
         p.parse(packet);
         QCOMPARE(spy.count(), 1);
         QCOMPARE(spy.at(0).at(0).toString(), QString("FA;"));
+    }
+
+    // The KZ egress frames into a stack buffer; it must put the same bytes on the wire as
+    // buildCATPacket, for a keyer frame and for the longest KPOD+ EP02 batch.
+    void testWriteCATPacketMatchesBuildCATPacket() {
+        for (const char *command : {"KZD0060;", "ML0000;", "KZ.;KZ-;KZ.;KZ-;KZ.;KZ-;KZ.;KZ-;"}) {
+            char out[64];
+            const std::size_t length = Protocol::writeCATPacket(command, out, sizeof out);
+            QCOMPARE(QByteArray(out, static_cast<qsizetype>(length)), Protocol::buildCATPacket(command));
+            QCOMPARE(length, Protocol::kCatPacketOverhead + std::strlen(command));
+        }
+    }
+
+    void testWriteCATPacketRefusesASmallBuffer() {
+        char out[16];
+        QCOMPARE(Protocol::writeCATPacket("KZD0060;", out, sizeof out), std::size_t(0));
     }
 
     void testBuildAudioPacketRoundtrip() {

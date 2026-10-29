@@ -33,7 +33,6 @@ public slots:
 
 private:
     static void midiCallback(double deltaTime, std::vector<unsigned char> *message, void *userData);
-    static void logNote(int note, bool down); // qk4.cw.midi diagnostics, on RtMidi's thread
 
     // Has the port we opened disappeared from the enumeration? Runs on the worker thread.
     void checkPortPresence();
@@ -55,9 +54,11 @@ private:
 
     std::shared_ptr<HaliKeyMidiSink> m_sink;
 
-    // Set by the first control change (MoMIDI's version message). Read and written only in the
-    // RtMidi callback; atomic because RtMidi does not promise which thread that runs on.
+    // Set by the first control change (MoMIDI's version message) in the RtMidi callback, which
+    // must not log; the presence poll reports it once from the worker thread.
     std::atomic<bool> m_momidiDetected{false};
+    std::atomic<int> m_momidiVersion{-1};
+    bool m_momidiReported = false; // worker thread only
 };
 
 #endif // HALIKEYMIDIWORKER_H

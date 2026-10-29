@@ -86,7 +86,6 @@ private:
     size_t m_cycleIndex = 0;
     int m_toneFrequency = 0;
     qint64 m_framesWritten = 0;
-    double m_lastQueued = 0;  // diagnostics for qk4.audio.sidetone
     double m_targetQueue = 0; // adapts upward from kTargetQueueSeconds; see pump()
     QByteArray m_bytes;
     std::vector<float> m_scratch;

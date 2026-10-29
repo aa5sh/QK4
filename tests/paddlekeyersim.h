@@ -246,8 +246,8 @@ private:
     class SimLink : public CwKeying::Link {
     public:
         explicit SimLink(Run &r) : m_run(r) {}
-        void send(const std::string &command) override {
-            m_run.m_sent.push_back(command);
+        void send(std::string_view command) override {
+            m_run.m_sent.emplace_back(command);
             m_run.advance(m_run.m_now + .0002);
         }
 

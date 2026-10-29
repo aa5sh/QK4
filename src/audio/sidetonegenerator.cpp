@@ -217,11 +217,6 @@ void SidetoneGenerator::renderBlock(float *out, int frames, double dacTime, doub
         }
         if (!edge)
             break;
-        if (edge->down && !m_keyed)
-            qCDebug(lcAudioSidetone).nospace()
-                << "tone on: delay " << m_scheduler.delay() * 1000 << " ms, lag " << m_scheduler.lag() * 1000
-                << " ms, block lead " << (dacTime - now) * 1000 << " ms, queued " << m_lastQueued * 1000
-                << " ms, frame " << edge->offset << "/" << frames;
         m_keyed = edge->down;
         start = end;
     }
@@ -306,7 +301,6 @@ void SidetoneGenerator::pump() {
             }
         }
         const double now = m_clock.now();
-        m_lastQueued = queued;
         // Play-out time of this block's first frame: everything still queued plays first. The
         // device's own fixed latency beyond that is the same for every block, which is all the
         // scheduler needs.

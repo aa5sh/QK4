@@ -15,11 +15,6 @@ constexpr int kPresencePollMs = 500;
 constexpr int kMissesBeforeGone = 2;
 } // namespace
 
-// MIDI note assignments from HaliKey MIDI user guide
-static constexpr unsigned char NOTE_LEFT_PADDLE = 20;
-static constexpr unsigned char NOTE_RIGHT_PADDLE = 21;
-static constexpr unsigned char NOTE_PTT = 31;
-
 HaliKeyMidiWorker::HaliKeyMidiWorker(const QString &deviceName, std::shared_ptr<HaliKeyMidiSink> sink, QObject *parent)
     : HaliKeyWorkerBase(deviceName, parent), m_sink(std::move(sink)) {}
 
@@ -45,6 +40,12 @@ void HaliKeyMidiWorker::prepareShutdown() {
 void HaliKeyMidiWorker::checkPortPresence() {
     if (stopRequested()) {
         return;
+    }
+
+    if (!m_momidiReported && m_momidiDetected.load(std::memory_order_acquire)) {
+        m_momidiReported = true;
+        qCDebug(lcCwMidi) << "HaliKeyMidiWorker: MoMIDI detected, version"
+                          << m_momidiVersion.load(std::memory_order_relaxed);
     }
 
     QStringList names;
@@ -176,8 +177,10 @@ void HaliKeyMidiWorker::midiCallback(double deltaTime, std::vector<unsigned char
     const int note = (*message)[1];
     const int velocity = (*message)[2];
     const int kind = status & 0xF0;
-    if (status == 0xB0 && !self->m_momidiDetected.exchange(true, std::memory_order_relaxed))
-        qCDebug(lcCwMidi) << "HaliKeyMidiWorker: MoMIDI detected, version" << velocity;
+    if (status == 0xB0 && !self->m_momidiDetected.load(std::memory_order_relaxed)) {
+        self->m_momidiVersion.store(velocity, std::memory_order_relaxed);
+        self->m_momidiDetected.store(true, std::memory_order_release);
+    }
     if (kind == 0x90 || kind == 0x80) {
         // WHY normalise the channel: QK4 has always taken notes on any channel; the keyer
         // matches 0x90/0x80 exactly.
@@ -189,34 +192,10 @@ void HaliKeyMidiWorker::midiCallback(double deltaTime, std::vector<unsigned char
             status = 0x80;
     }
     // Raw to the keyer, on this thread, with RtMidi's own delta: the paddle edge is stamped on
-    // arrival (PaddleKeyer::midiMessage, ported from K4-Companion). Diagnostics come after.
+    // arrival (PaddleKeyer::midiMessage, ported from K4-Companion). No log line per note: this is a
+    // real-time thread (CONVENTIONS Rule 16). The HaliKey MIDI user guide's notes are 20 (left
+    // paddle), 21 (right paddle) and 31 (footswitch); the keyer maps 20/21 and ignores the rest,
+    // which keeps footswitch PTT withdrawn (see cwcontroller.h).
     if (self->m_sink)
         self->m_sink->call(status, note, velocity, deltaTime);
-    if (status == 0x90 || status == 0x80)
-        logNote(note, status == 0x90);
-}
-
-void HaliKeyMidiWorker::logNote(int note, bool down) {
-    const char *edge = down ? "down" : "up";
-    switch (note) {
-    case NOTE_LEFT_PADDLE:
-        qCDebug(lcCwMidi) << "HaliKeyMidiWorker: note 20" << edge;
-        break;
-    case NOTE_RIGHT_PADDLE:
-        qCDebug(lcCwMidi) << "HaliKeyMidiWorker: note 21" << edge;
-        break;
-    case NOTE_PTT:
-        // WHY name note 31 rather than let it fall to "unhandled": the firmware still sends it, and
-        // logging it as unknown would read as a firmware mismatch. Footswitch PTT is withdrawn from
-        // both HaliKey transports pending wiring information from the hardware developer: a
-        // footswitch may be wired inline with the paddles, which on V1.4 is indistinguishable from
-        // the dit lever because both drive CTS. If it comes back it will be behind an explicit
-        // "alternate wiring" setting, off by default.
-        qCDebug(lcCwMidi) << "HaliKeyMidiWorker: note 31 (ptt)" << edge << "- ignored, footswitch PTT is withdrawn";
-        break;
-    default:
-        // A firmware using other note numbers than 20/21/31 shows up in the trace, not silently.
-        qCDebug(lcCwMidi) << "HaliKeyMidiWorker: unhandled note" << note << edge;
-        break;
-    }
 }

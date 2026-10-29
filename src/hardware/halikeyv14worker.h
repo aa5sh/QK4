@@ -29,15 +29,6 @@ private:
     void closeNativePort();
     bool readPinState(bool &ditState, bool &dahState);
 
-#ifdef Q_OS_WIN
-    // Diagnostic: last-logged raw modem-line states, so readPinState() only logs on a
-    // transition rather than every ~1 ms poll. Windows-only (the raw-pin trace lives in
-    // the Q_OS_WIN branch of readPinState).
-    bool m_lastRawCts = false;
-    bool m_lastRawDsr = false;
-    bool m_lastRawDcd = false;
-#endif
-
     // Native port handle
 #ifdef Q_OS_WIN
     void *m_handle = nullptr; // HANDLE

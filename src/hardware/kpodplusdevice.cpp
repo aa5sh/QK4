@@ -14,8 +14,6 @@ KpodPlusDevice::KpodPlusDevice(QObject *parent) : QObject(parent) {
     m_ep02Worker->moveToThread(m_ep02Thread);
     connect(m_ep02Thread, &QThread::started, m_ep02Worker, &KpodPlusEp02Worker::run);
     connect(m_ep02Thread, &QThread::finished, m_ep02Worker, &QObject::deleteLater);
-    connect(m_ep02Worker, &KpodPlusEp02Worker::keyerDataReceived, this, &KpodPlusDevice::keyerDataReceived,
-            Qt::DirectConnection);
     m_ep02Thread->start(QThread::HighPriority);
 
     // --- USB worker thread (default priority) --------------------------------
@@ -166,4 +164,8 @@ void KpodPlusDevice::setEncodeMode(int mode) {
 
 void KpodPlusDevice::setStuckTimeout(int seconds) {
     QMetaObject::invokeMethod(m_usbWorker, "setStuckTimeout", Qt::QueuedConnection, Q_ARG(int, seconds));
+}
+
+void KpodPlusDevice::setKeyerLink(CwKeying::Link *link) {
+    m_ep02Worker->setKeyerLink(link);
 }

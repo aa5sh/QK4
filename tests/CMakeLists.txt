@@ -391,6 +391,13 @@ target_include_directories(test_protocol PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_protocol Qt6::Core Qt6::Network Qt6::Test)
 add_test(NAME ProtocolTests COMMAND test_protocol)
 
+# KZ egress: the lock-free queue from the CW keying threads to the I/O thread, its wake-up across a
+# moveToThread, and the latency histogram the I/O thread keeps.
+add_executable(test_kzegress test_kzegress.cpp ${CMAKE_SOURCE_DIR}/src/network/kzegress.cpp)
+target_include_directories(test_kzegress PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_kzegress Qt6::Core Qt6::Test)
+add_test(NAME KzEgressTests COMMAND test_kzegress)
+
 # CW by CAT: the TCI macro grammar (speed markers, prosign brackets, escaped separators) and the
 # KY/KS commands it becomes. One target because the interesting cases are at the seam, where TCI
 # and the K4 use the same characters for different things.
