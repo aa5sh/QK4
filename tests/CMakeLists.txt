@@ -306,6 +306,15 @@ target_include_directories(test_kpa1500antennas PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_kpa1500antennas Qt6::Core Qt6::Test)
 add_test(NAME Kpa1500AntennasTests COMMAND test_kpa1500antennas)
 
+# KPA1500 response parsing (fault code, device info) against a loopback fake amplifier
+add_executable(test_kpa1500client test_kpa1500client.cpp
+    ${CMAKE_SOURCE_DIR}/src/network/kpa1500client.cpp
+    ${CMAKE_SOURCE_DIR}/src/network/kpa1500antennas.cpp
+)
+target_include_directories(test_kpa1500client PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_kpa1500client Qt6::Core Qt6::Network Qt6::Test)
+add_test(NAME Kpa1500ClientTests COMMAND test_kpa1500client)
+
 # Band-plan strip layout: blocks, tag, sticky labels, marker collisions (QColor via bandplan.cpp)
 add_executable(test_bandplanstrip test_bandplanstrip.cpp
     ${CMAKE_SOURCE_DIR}/src/dsp/bandplanstrip.cpp

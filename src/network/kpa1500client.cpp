@@ -19,12 +19,12 @@ static QString bandNumberToLabel(const QString &bn) {
 
 // Poll commands - based on KPA1500 Programming Reference
 // ^AI = ATU Inline state, ^AN = Antenna selection
-// Note: ^FS is Fan Speed (not fault status), removed from polling.
+// Note: ^FS is Fan Speed and ^FC is Fan Minimum Speed (neither is a fault); the fault code is ^FL.
 // ^VM1 (PA voltage) and ^VM2 (PA current) were removed — nothing in QK4
 // displays them today; if/when a UI consumer is added, restore them here
 // alongside the parser branches and re-introduce paVoltage/paCurrent state.
 const QString KPA1500Client::POLL_COMMANDS =
-    "^BN;^WS;^TM;^RVM;^FC;^OS;^FL;^AI;^AM;^AN;^IP;^SN;^PC;^VM3;^VM5;^LR;^CR;^PWF;^PWR;^PWD;";
+    "^BN;^WS;^TM;^RVM;^OS;^FL;^AI;^AM;^AN;^IP;^SN;^PC;^VM3;^VM5;^LR;^CR;^PWF;^PWR;^PWD;";
 
 KPA1500Client::KPA1500Client(QObject *parent)
     : QObject(parent), m_socket(new QTcpSocket(this)), m_pollTimer(new QTimer(this)), m_port(1500),
@@ -241,11 +241,19 @@ void KPA1500Client::parseSingleResponse(const QString &response) {
     }
     // ^SN - Serial Number
     else if (cmd.startsWith("SN")) {
-        m_serialNumber = cmd.mid(2);
+        const QString serial = cmd.mid(2);
+        if (serial != m_serialNumber) {
+            m_serialNumber = serial;
+            emit deviceInfoChanged();
+        }
     }
     // ^RVM - Firmware Revision (format: ^RVMnn.nn;)
     else if (cmd.startsWith("RVM")) {
-        m_firmwareVersion = cmd.mid(3);
+        const QString version = cmd.mid(3);
+        if (version != m_firmwareVersion) {
+            m_firmwareVersion = version;
+            emit deviceInfoChanged();
+        }
     }
     // ^OS - Operate/Standby Mode (0=Standby, 1=Operate)
     else if (cmd.startsWith("OS")) {
@@ -260,14 +268,19 @@ void KPA1500Client::parseSingleResponse(const QString &response) {
     else if (cmd.startsWith("FS")) {
         // Fan speed - ignore for now (could add m_fanSpeed if needed)
     }
-    // ^FC - Fault Code
-    else if (cmd.startsWith("FC")) {
-        m_faultCode = cmd.mid(2);
-        emit faultStatusChanged(m_faultStatus, m_faultCode);
-    }
-    // ^FL - Fault List (detailed fault info)
+    // ^FLhh - current fault, two hex digits; 00 is "no fault condition"
     else if (cmd.startsWith("FL")) {
-        // Parse fault list if needed
+        bool ok = false;
+        const QString code = cmd.mid(2);
+        const int value = code.toInt(&ok, 16);
+        if (ok) {
+            const FaultStatus status = (value == 0) ? FaultNone : FaultActive;
+            if (status != m_faultStatus || code != m_faultCode) {
+                m_faultStatus = status;
+                m_faultCode = code;
+                emit faultStatusChanged(m_faultStatus, m_faultCode);
+            }
+        }
     }
     // ^TM - Temperature (PA temperature in Celsius)
     else if (cmd.startsWith("TM")) {

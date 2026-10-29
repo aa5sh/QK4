@@ -25,7 +25,7 @@ void TestNetworkMetrics::historyAppendsOnLatency() {
 
 void TestNetworkMetrics::historyAppendsOnBuffer() {
     NetworkMetrics m;
-    m.onBufferStatus(9600, 96000, false); // 9600 bytes / 96 = 100 ms
+    m.onBufferStatus(9600, 96000); // 9600 bytes / 96 = 100 ms
     QCOMPARE(static_cast<int>(m.bufferHistory().size()), 1);
     QCOMPARE(m.bufferHistory().back().value, 100.0f);
 }
@@ -35,14 +35,14 @@ void TestNetworkMetrics::historySizeCapped() {
     // Rapid pushes (all within the 30 s window) must still be bounded by the hard size cap
     // (HISTORY_MAX_SAMPLES = 4000) so a fast producer can't grow the deque without bound.
     for (int i = 0; i < 5000; ++i)
-        m.onBufferStatus(96 * (i % 50), 96000, false);
+        m.onBufferStatus(96 * (i % 50), 96000);
     QVERIFY(static_cast<int>(m.bufferHistory().size()) <= 4000);
 }
 
 void TestNetworkMetrics::historyClearedOnReconnect() {
     NetworkMetrics m;
     m.onLatencyChanged(10);
-    m.onBufferStatus(960, 96000, false);
+    m.onBufferStatus(960, 96000);
     QVERIFY(!m.rttHistory().empty());
     m.onConnectionStateChanged(true); // a fresh connection resets all trails
     QCOMPARE(static_cast<int>(m.rttHistory().size()), 0);

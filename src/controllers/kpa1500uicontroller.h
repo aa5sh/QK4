@@ -59,6 +59,7 @@ private:
     void onError(const QString &error);
     void onEnabledChanged(bool enabled);
     void onSettingsChanged();
+    void onPollIntervalChanged(int intervalMs);
     void updateStatus();
 };
 

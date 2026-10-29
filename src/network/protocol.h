@@ -100,7 +100,10 @@ public:
 
     // Discard any partly received packet. Called at every connection boundary: bytes left over from
     // one session must never be joined to the next session's.
-    void reset() { m_buffer.clear(); }
+    void reset() {
+        m_buffer.clear();
+        m_readOffset = 0;
+    }
 
     // Build a CAT command packet
     static QByteArray buildCATPacket(const QString &command);
@@ -131,6 +134,8 @@ private:
     static QByteArray buildPacket(const QByteArray &payload);
 
     QByteArray m_buffer;
+    // Start of the unconsumed bytes in m_buffer; consumed bytes are removed once per parse().
+    qsizetype m_readOffset = 0;
 };
 
 #endif // PROTOCOL_H

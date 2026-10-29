@@ -223,7 +223,7 @@ No lint check enforces this; honored today by convention.
 
 Controllers expose **task-level APIs**, not internal workers. No `audioEngine()`, `kpodDevice()`, or `tcpClient()` accessors in the public interface. If external code needs to configure a device, add a method to the controller (e.g., `audioController->setInputDevice(...)` instead of `audioController->audioEngine()->setInputDevice(...)`).
 
-**Exception:** `tcpClient()` is exposed for AudioController's performance-sensitive audio data path and CatServer's direct TCP forwarding. These are documented exceptions, not precedent.
+**Exception:** `tcpClient()` is exposed for AudioController's performance-sensitive audio data path and CwController's keyer link, which sends KZD/KZU from the keyer thread. These are documented exceptions, not precedent.
 
 ### 3. [review] No Non-Const References to Shared State
 

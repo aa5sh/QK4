@@ -403,7 +403,6 @@ void MainWindow::setupCatServer() {
     // CAT server for external app integration (WSJT-X, MacLoggerDX, etc.)
     // Apps connect using their built-in K4 support - no protocol translation needed
     m_catServer = new CatServer(m_radioState, this);
-    m_catServer->setTcpClient(m_connectionController->tcpClient());
 
     // Forward CAT commands from external apps to the real K4
     connect(m_catServer, &CatServer::catCommandReceived, this, [this](const QString &command) {

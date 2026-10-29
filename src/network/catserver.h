@@ -10,7 +10,6 @@
 #include <QTcpSocket>
 
 class RadioState;
-class TcpClient;
 class CatPushBroadcaster;
 
 /**
@@ -19,7 +18,7 @@ class CatPushBroadcaster;
  * Allows external applications (WSJT-X, MacLoggerDX, etc.) to connect
  * using their built-in Elecraft K4 support. Commands are either:
  * - Answered from RadioState cache (GET commands)
- * - Forwarded to real K4 via TcpClient (SET commands)
+ * - Forwarded to the real K4 through catCommandReceived (SET commands)
  *
  * Native K4 CAT passthrough - no protocol translation needed.
  */
@@ -35,9 +34,6 @@ public:
     bool isListening() const;
     quint16 port() const;
     int clientCount() const;
-
-    // Set the TcpClient for forwarding SET commands to real K4
-    void setTcpClient(TcpClient *client);
 
     // Every frame the radio sends, so a query that has to be answered by the radio can be. Several
     // frames may arrive in one string.
@@ -92,7 +88,6 @@ private:
 
     QTcpServer *m_server;
     RadioState *m_radioState;
-    TcpClient *m_tcpClient = nullptr;
     QHash<QTcpSocket *, ClientState> m_clients;
 
     // The client whose TX; asserted PTT, or null. Tracked only so a client that goes away without

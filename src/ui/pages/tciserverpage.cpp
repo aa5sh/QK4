@@ -316,10 +316,11 @@ void TciServerPage::updateClients(const QVector<TciClientInfo> &clients) {
         m_clientsTable->setItem(row, ColAddress, new QTableWidgetItem(c.address));
         // Wall-clock time, not "12 s ago": the row is only repainted when something happens, so a
         // relative age would freeze at whatever it read when the client last spoke and quietly lie.
-        m_clientsTable->setItem(row, ColLastSeen,
-                                new QTableWidgetItem(c.lastMessageTime.isValid()
-                                                         ? c.lastMessageTime.toString(QStringLiteral("HH:mm:ss"))
-                                                         : QString()));
+        m_clientsTable->setItem(
+            row, ColLastSeen,
+            new QTableWidgetItem(c.lastMessageTime.isValid()
+                                     ? c.lastMessageTime.toLocalTime().toString(QStringLiteral("HH:mm:ss"))
+                                     : QString()));
         auto *messageItem =
             new QTableWidgetItem(QString("%1 %2").arg(c.lastMessageOutbound ? kToClient : kFromClient, c.lastMessage));
         // The arrow is the only thing distinguishing an echo from the command that caused it, and a

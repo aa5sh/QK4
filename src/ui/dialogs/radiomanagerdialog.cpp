@@ -2,6 +2,7 @@
 #include "ui/styling/k4styles.h"
 #include "network/protocol.h"
 #include "utils/radioutils.h"
+#include <QIntValidator>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
@@ -148,6 +149,7 @@ void RadioManagerDialog::setupUi() {
     m_portEdit = new QLineEdit(this);
     m_portEdit->setStyleSheet(normalLineEditStyle);
     m_portEdit->setPlaceholderText("64242");
+    m_portEdit->setValidator(new QIntValidator(1, 65535, m_portEdit));
     m_portEdit->setMaximumWidth(80);
     formLayout->addWidget(portLabel, 2, 0);
     formLayout->addWidget(m_portEdit, 2, 1);
@@ -312,6 +314,7 @@ void RadioManagerDialog::setupUi() {
         updateButtonStates();
         updateHostFieldStyle();
     });
+    connect(m_portEdit, &QLineEdit::textChanged, this, &RadioManagerDialog::updateButtonStates);
 }
 
 void RadioManagerDialog::refreshList() {
@@ -378,19 +381,16 @@ void RadioManagerDialog::onConnectClicked() {
         entry.name = m_nameEdit->text().trimmed();
         entry.host = host;
         entry.password = m_passwordEdit->text();
-        QString portText = m_portEdit->text().trimmed();
+        const std::optional<quint16> port = portFromField();
+        if (!port) {
+            return;
+        }
+        entry.port = *port;
         entry.useTls = m_tlsCheckbox->isChecked();
         entry.identity = m_identityEdit->text();
         entry.encodeMode = m_encodeModeCombo->currentData().toInt();
         entry.streamingLatency = m_streamingLatencyCombo->currentData().toInt();
         entry.connectAtStartup = m_startupCheckbox->isChecked();
-
-        // Set port based on TLS mode if not specified
-        if (portText.isEmpty()) {
-            entry.port = entry.useTls ? K4Protocol::TLS_PORT : K4Protocol::DEFAULT_PORT;
-        } else {
-            entry.port = portText.toUShort();
-        }
 
         if (m_currentIndex >= 0) {
             RadioSettings::instance()->setLastSelectedIndex(m_currentIndex);
@@ -415,7 +415,6 @@ void RadioManagerDialog::onSaveClicked() {
     QString name = m_nameEdit->text().trimmed();
     QString host = m_hostEdit->text().trimmed();
     QString password = m_passwordEdit->text();
-    QString portText = m_portEdit->text().trimmed();
     bool useTls = m_tlsCheckbox->isChecked();
     QString identity = m_identityEdit->text();
 
@@ -425,6 +424,10 @@ void RadioManagerDialog::onSaveClicked() {
 
     if (!RadioUtils::isValidHostOrIp(host)) {
         return; // Can't save without a valid host/IP
+    }
+    const std::optional<quint16> port = portFromField();
+    if (!port) {
+        return;
     }
 
     RadioEntry entry;
@@ -436,13 +439,7 @@ void RadioManagerDialog::onSaveClicked() {
     entry.encodeMode = m_encodeModeCombo->currentData().toInt();
     entry.streamingLatency = m_streamingLatencyCombo->currentData().toInt();
     entry.connectAtStartup = m_startupCheckbox->isChecked();
-
-    // Set port based on TLS mode if not specified
-    if (portText.isEmpty()) {
-        entry.port = useTls ? K4Protocol::TLS_PORT : K4Protocol::DEFAULT_PORT;
-    } else {
-        entry.port = portText.toUShort();
-    }
+    entry.port = *port;
 
     if (m_currentIndex >= 0 && m_currentIndex < RadioSettings::instance()->radios().size()) {
         // Update existing
@@ -568,6 +565,7 @@ void RadioManagerDialog::updateButtonStates() {
     bool isSavedEntry = m_currentIndex >= 0 && m_currentIndex < RadioSettings::instance()->radios().size();
     QString host = m_hostEdit->text().trimmed();
     bool hasValidHost = RadioUtils::isValidHostOrIp(host);
+    const bool hasValidPort = portFromField().has_value();
 
     // Check if the selected radio is the connected one
     bool isConnectedRadio = !m_connectedHost.isEmpty() && host == m_connectedHost;
@@ -578,10 +576,10 @@ void RadioManagerDialog::updateButtonStates() {
     bool isDiscoveredEntry = currentItem && currentItem->data(Qt::UserRole).toString() == QStringLiteral("discovered");
 
     // Connect disabled for discovered entries — user must Save first
-    m_connectButton->setEnabled(hasValidHost && !isDiscoveredEntry);
+    m_connectButton->setEnabled(hasValidHost && hasValidPort && !isDiscoveredEntry);
     m_connectButton->setText(isConnectedRadio ? "Disconnect" : "Connect");
     m_deleteButton->setEnabled(isSavedEntry);
-    m_saveButton->setEnabled(hasValidHost);
+    m_saveButton->setEnabled(hasValidHost && hasValidPort);
 }
 
 void RadioManagerDialog::updateHostFieldStyle() {
@@ -646,15 +644,18 @@ void RadioManagerDialog::onTlsCheckboxToggled(bool checked) {
     }
 }
 
-RadioEntry RadioManagerDialog::selectedRadio() const {
-    if (m_currentIndex >= 0) {
-        return RadioSettings::instance()->radios().at(m_currentIndex);
+std::optional<quint16> RadioManagerDialog::portFromField() const {
+    const QString text = m_portEdit->text().trimmed();
+    if (text.isEmpty()) {
+        // Blank means the default for the TLS mode.
+        return m_tlsCheckbox->isChecked() ? K4Protocol::TLS_PORT : K4Protocol::DEFAULT_PORT;
     }
-    return RadioEntry();
-}
-
-bool RadioManagerDialog::hasSelection() const {
-    return m_currentIndex >= 0;
+    bool ok = false;
+    const int port = text.toInt(&ok);
+    if (!ok || port < 1 || port > 65535) {
+        return std::nullopt;
+    }
+    return static_cast<quint16>(port);
 }
 
 void RadioManagerDialog::setConnectedHost(const QString &host) {

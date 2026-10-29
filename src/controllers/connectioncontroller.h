@@ -16,7 +16,7 @@ class RadioState;
  *        signals so callers never reach into `tcpClient()->protocol()`.
  *
  * Rule 2 exception: `tcpClient()` is exposed only for AudioController (TX audio bypass) and
- * CatServer (direct CAT forwarding). See CONVENTIONS.md rule 2 for the rationale.
+ * CwController (keyer-thread KZD/KZU). See CONVENTIONS.md rule 2 for the rationale.
  */
 class ConnectionController : public QObject {
     Q_OBJECT
@@ -44,7 +44,8 @@ public:
     // Access to owned objects
     // Prefer using re-emitted signals below instead of reaching into tcpClient/protocol directly.
     // tcpClient() is exposed for AudioController's performance-sensitive audio data path
-    // and for CatServer's direct TCP forwarding — both require the raw TcpClient.
+    // and for CwController's keyer link, which sends from the keyer thread — both require the raw
+    // TcpClient.
     TcpClient *tcpClient() const { return m_tcpClient; }
     NetworkMetrics *networkMetrics() const { return m_networkMetrics; }
 

@@ -91,18 +91,19 @@ QByteArray setAntennaConfig(const char *prefix, bool displayAll, const QVector<b
 // relative forms (ME0069.+, .-, ./); this is the absolute one.
 QByteArray setMenuValue(int menuId, int value);
 
-// PCnnnr: nnn is watts in QRO and watts*10 in QRP (PC100L is 10.0 W), r is the range letter.
+// PCnnnr: nnn is watts in QRO and tenths in QRP and XVTR (PC100L is 10.0 W), r is the range letter.
+// `value` is in the range's own unit: W for QRO and QRP, mW for XVTR.
 // NOT the PCX form below - that one is the extended QUERY, and the radio ignores it as a set.
-QByteArray setRfPower(int value, bool qrp);
+QByteArray setRfPower(double value, LevelsState::PowerRange range);
 
 // NRnnm: nn is the level, m is on/off - the radio's form in both directions (NR050 is level 05, off).
 QByteArray noiseReduction(int level, bool on);
 // GTn, one digit: 0 off, 1 slow, 2 fast - the radio's form in both directions (GT2 at R40).
 QByteArray agcSpeed(int agc);
-// SQnnn / SQ$nnn - the radio's form (SQ010, SQ$005 at R40).
-QByteArray squelch(int level, bool subRx);
-// RG-nn / RG$-nn - the radio's form (RG-00 at R40). RadioState stores the magnitude.
-QByteArray rfGain(int magnitude, bool subRx);
+// SQnnn - the radio's form (SQ010 at R40); subRx() gives SQ$nnn.
+QByteArray squelch(int level);
+// RG-nn - the radio's form (RG-00 at R40); subRx() gives RG$-nn. RadioState stores the magnitude.
+QByteArray rfGain(int magnitude);
 // The Sub RX form of a two-letter main frame: `$` after the prefix (RT0; -> RT$0;). Every Sub RX
 // reply measured on a K4D at R40 has this shape: RO$+0000, RT$0, GT$2, NB$0301, NR$050, BW$0020, DT$0.
 QByteArray subRx(const QByteArray &mainFrame);

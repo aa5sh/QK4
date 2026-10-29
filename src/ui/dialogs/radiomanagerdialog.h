@@ -9,6 +9,9 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSpinBox>
+
+#include <optional>
+
 #include "settings/radiosettings.h"
 #include "network/k4discovery.h"
 
@@ -24,9 +27,6 @@ class RadioManagerDialog : public QDialog {
 
 public:
     explicit RadioManagerDialog(QWidget *parent = nullptr);
-
-    RadioEntry selectedRadio() const;
-    bool hasSelection() const;
 
     // Set the currently connected radio host (empty string if disconnected)
     void setConnectedHost(const QString &host);
@@ -53,6 +53,8 @@ private:
     void setupUi();
     static QString lineEditStyle(const QString &borderColor);
     void updateButtonStates();
+    // The port the form describes, or nullopt if the field holds something that is not one.
+    std::optional<quint16> portFromField() const;
     void updateHostFieldStyle();
     void clearFields();
     void populateFieldsFromSelection();

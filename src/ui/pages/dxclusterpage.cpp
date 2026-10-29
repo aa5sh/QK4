@@ -67,7 +67,12 @@ DxClusterPage::DxClusterPage(DxClusterController *controller, QWidget *parent)
         }
     };
     connect(m_clusterList, &QListWidget::currentRowChanged, this, loadEntry);
-    connect(m_clusterList, &QListWidget::itemClicked, this, loadEntry);
+    // WHY: add mode clears the selection but not the current row, so clicking that row again
+    // raises no currentRowChanged. Only that click needs loading here; any other has been loaded.
+    connect(m_clusterList, &QListWidget::itemClicked, this, [this, loadEntry]() {
+        if (m_addMode)
+            loadEntry();
+    });
     leftLayout->addWidget(m_clusterList, 1);
 
     auto *listBtnLayout = new QHBoxLayout();
@@ -219,11 +224,19 @@ DxClusterPage::DxClusterPage(DxClusterController *controller, QWidget *parent)
         K4Styles::sliderHorizontal(K4Styles::Colors::DarkBackground, K4Styles::Colors::AccentAmber));
     m_ageValueLabel = new QLabel(QString("%1 min").arg(RadioSettings::instance()->dxClusterSpotAge() / 60), this);
     m_ageValueLabel->setStyleSheet(K4Styles::Dialog::formValue());
-    connect(m_ageSlider, &QSlider::valueChanged, this, [this](int value) {
-        RadioSettings::instance()->setDxClusterSpotAge(value * 60);
-        m_controller->setSpotMaxAge(value * 60);
+    // WHY apply on release, not on every value: each set is a full settings save. Keyboard and
+    // click steps arrive with the slider up and are applied at once.
+    auto applySpotAge = [this]() {
+        const int seconds = m_ageSlider->value() * 60;
+        RadioSettings::instance()->setDxClusterSpotAge(seconds);
+        m_controller->setSpotMaxAge(seconds);
+    };
+    connect(m_ageSlider, &QSlider::valueChanged, this, [this, applySpotAge](int value) {
         m_ageValueLabel->setText(QString("%1 min").arg(value));
+        if (!m_ageSlider->isSliderDown())
+            applySpotAge();
     });
+    connect(m_ageSlider, &QSlider::sliderReleased, this, applySpotAge);
 
     auto *fontLabel = new QLabel("Spot label size:", this);
     fontLabel->setStyleSheet(K4Styles::Dialog::formLabel());

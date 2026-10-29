@@ -466,7 +466,8 @@ void TciController::wireCatSets() {
                 // PCnnnr, with the range letter - the same form QK4's UI sends. The PCX variant
                 // is the extended QUERY and the radio ignores it as a set, which is why drive
                 // failed on the bench until this changed.
-                applyCat(CatFrames::setRfPower(value, m_radioState && m_radioState->isQrpMode()));
+                applyCat(CatFrames::setRfPower(value, m_radioState ? m_radioState->powerRange()
+                                                                   : LevelsState::PowerRange::Qro));
             }
         });
 

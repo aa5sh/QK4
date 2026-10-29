@@ -59,6 +59,47 @@ private slots:
         QCOMPARE(spy.at(1).at(0).toString(), QString("MD2;"));
     }
 
+    void testManyPacketsThenAPartialOneInOneChunk() {
+        // The consumed packets are compacted away once; the partial tail must survive intact.
+        Protocol p;
+        QSignalSpy spy(&p, &Protocol::catResponseReceived);
+
+        const QByteArray last = buildTestPacket(buildCATPayload("FB00007074000;"));
+        QByteArray data;
+        for (int i = 0; i < 50; ++i) {
+            data.append(buildTestPacket(buildCATPayload(QStringLiteral("RG-%1;").arg(i, 2, 10, QChar(u'0')))));
+        }
+        data.append(QByteArray("\x01\x02junk"));
+        data.append(last.left(last.size() - 5));
+        p.parse(data);
+        QCOMPARE(spy.count(), 50);
+        QCOMPARE(spy.at(49).at(0).toString(), QString("RG-49;"));
+
+        p.parse(last.right(5));
+        QCOMPARE(spy.count(), 51);
+        QCOMPARE(spy.at(50).at(0).toString(), QString("FB00007074000;"));
+    }
+
+    void testResetFromASlotStopsTheRestOfTheChunk() {
+        // A disconnect handled inside a packet's slot resets the parser; nothing after it in the
+        // same read belongs to the session that just ended.
+        Protocol p;
+        QStringList seen;
+        connect(&p, &Protocol::catResponseReceived, &p, [&](const QString &r) {
+            seen << r;
+            p.reset();
+        });
+        QByteArray data;
+        data.append(buildTestPacket(buildCATPayload("FA00014074000;")));
+        data.append(buildTestPacket(buildCATPayload("MD2;")));
+        p.parse(data);
+        QCOMPARE(seen, QStringList{QStringLiteral("FA00014074000;")});
+
+        p.parse(buildTestPacket(buildCATPayload("MD3;")));
+        QCOMPARE(seen.size(), 2);
+        QCOMPARE(seen.at(1), QStringLiteral("MD3;"));
+    }
+
     void testSplitPacketAcrossTwoParses() {
         Protocol p;
         QSignalSpy spy(&p, &Protocol::catResponseReceived);

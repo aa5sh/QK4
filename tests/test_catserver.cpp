@@ -131,11 +131,26 @@ private slots:
         // REGRESSION, found on a live K4. PCX is the extended QUERY; the radio ignores it as a
         // set, so drive silently did nothing. The set form is PCnnnr, which is what QK4's own UI
         // sends and what the radio echoes back (PC045H).
-        QCOMPARE(CatFrames::setRfPower(45, false), QByteArray("PC045H;"));
-        QCOMPARE(CatFrames::setRfPower(100, false), QByteArray("PC100H;"));
+        QCOMPARE(CatFrames::setRfPower(45, LevelsState::PowerRange::Qro), QByteArray("PC045H;"));
+        QCOMPARE(CatFrames::setRfPower(100, LevelsState::PowerRange::Qro), QByteArray("PC100H;"));
         // QRP is reported in tenths of a watt, so a request in watts is scaled: 5 W is PC050L.
-        QCOMPARE(CatFrames::setRfPower(5, true), QByteArray("PC050L;"));
-        QCOMPARE(CatFrames::setRfPower(10, true), QByteArray("PC100L;"));
+        QCOMPARE(CatFrames::setRfPower(5, LevelsState::PowerRange::Qrp), QByteArray("PC050L;"));
+        QCOMPARE(CatFrames::setRfPower(10, LevelsState::PowerRange::Qrp), QByteArray("PC100L;"));
+        // Fractional QRP and the XVTR range (tenths of a mW, letter X) go out as the radio reports them.
+        QCOMPARE(CatFrames::setRfPower(2.5, LevelsState::PowerRange::Qrp), QByteArray("PC025L;"));
+        QCOMPARE(CatFrames::setRfPower(1.5, LevelsState::PowerRange::Xvtr), QByteArray("PC015X;"));
+    }
+
+    void sMeterReplyIsTheInverseOfTheRadioReport() {
+        // SM0028 is S9+30 dB. Above S9 each bar is 3 dB, so the reply must read back unchanged -
+        // it used to answer SM0021 (about S9+9).
+        for (int bars = 0; bars <= 40; ++bars) {
+            RadioState rs;
+            const QByteArray wire = QStringLiteral("SM%1;").arg(bars, 4, 10, QChar('0')).toUtf8();
+            rs.parseCATCommand(QString::fromLatin1(wire));
+            QCOMPARE(CatFrames::sMeterMain(rs.sMeter()), wire);
+        }
+        QCOMPARE(CatFrames::sMeterMain(12.0), QByteArray("SM0028;"));
     }
 
     void setMenuValueUsesTheAbsoluteMeForm() {
@@ -152,13 +167,24 @@ private slots:
         QCOMPARE(CatFrames::setNoiseBlanker(99, true), QByteArray("NB151;"));
         QCOMPARE(CatFrames::setNoiseBlanker(-3, true), QByteArray("NB001;"));
         QCOMPARE(CatFrames::setFilterBandwidth(-100), QByteArray("BW0000;"));
-        QCOMPARE(CatFrames::setRfPower(999, false), QByteArray("PC110H;"));
-        QCOMPARE(CatFrames::setRfPower(99, true), QByteArray("PC100L;"));
+        QCOMPARE(CatFrames::setRfPower(999, LevelsState::PowerRange::Qro), QByteArray("PC110H;"));
+        QCOMPARE(CatFrames::setRfPower(99, LevelsState::PowerRange::Qrp), QByteArray("PC100L;"));
     }
 
     // =========================================================================
     // GET command responses (answered from RadioState cache)
     // =========================================================================
+
+    void startedReportsTheBoundPort() {
+        // Port 0 asks the OS for one; listeners need the port actually bound, not the request.
+        RadioState rs;
+        CatServer server(&rs);
+        QSignalSpy started(&server, &CatServer::started);
+        QVERIFY(server.start(0));
+        QCOMPARE(started.count(), 1);
+        QVERIFY(server.port() != 0);
+        QCOMPARE(started.at(0).at(0).value<quint16>(), server.port());
+    }
 
     void testFrequencyA() {
         RadioState rs;

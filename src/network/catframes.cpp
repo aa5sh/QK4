@@ -172,8 +172,8 @@ namespace {
 // W or mW - and a reply must scale it back.
 //
 // CAT-005: neither reply did. 5.0 W was emitted as PCX005L, which a client reads as 0.5 W - a
-// factor of ten. The SET path (setRfPower) has always scaled correctly, so the same file disagreed
-// with itself about what 5 W looks like on the wire, and a test asserted each version.
+// factor of ten. The SET path (setRfPower) scaled correctly, so the same file disagreed with itself
+// about what 5 W looks like on the wire. Replies and the SET now share this one encoder.
 int powerToWire(double value, LevelsState::PowerRange range) {
     const bool tenths = (range != LevelsState::PowerRange::Qro);
     const int raw = static_cast<int>(tenths ? (value * 10.0 + 0.5) : (value + 0.5));
@@ -278,11 +278,9 @@ QByteArray setMenuValue(int menuId, int value) {
     return QString("ME%1.%2;").arg(menuId, 4, 10, QChar('0')).arg(value, 4, 10, QChar('0')).toUtf8();
 }
 
-QByteArray setRfPower(int value, bool qrp) {
-    // Matches what QK4's own UI sends (sidecontrolscrollcontroller.cpp) and what the radio echoes
-    // back, PC045H. The QRP range is reported in tenths, so a request in watts is scaled.
-    const int raw = qrp ? qBound(0, value * 10, 100) : qBound(0, value, 110);
-    return QString("PC%1%2;").arg(raw, 3, 10, QChar('0')).arg(qrp ? "L" : "H").toUtf8();
+QByteArray setRfPower(double value, LevelsState::PowerRange range) {
+    // The SET form is the radio's own reply form (PC045H), so it shares that encoder.
+    return rfPower(value, range);
 }
 
 QByteArray setFilterBandwidth(int bwHz) {
@@ -295,12 +293,12 @@ QByteArray noiseReduction(int level, bool on) {
     return QString("NR%1%2;").arg(qBound(0, level, 99), 2, 10, QChar('0')).arg(on ? 1 : 0).toUtf8();
 }
 
-QByteArray squelch(int level, bool subRx) {
-    return QString("SQ%1%2;").arg(subRx ? "$" : "").arg(qBound(0, level, 999), 3, 10, QChar('0')).toUtf8();
+QByteArray squelch(int level) {
+    return QString("SQ%1;").arg(qBound(0, level, 999), 3, 10, QChar('0')).toUtf8();
 }
 
-QByteArray rfGain(int magnitude, bool subRx) {
-    return QString("RG%1-%2;").arg(subRx ? "$" : "").arg(qBound(0, magnitude, 99), 2, 10, QChar('0')).toUtf8();
+QByteArray rfGain(int magnitude) {
+    return QString("RG-%1;").arg(qBound(0, magnitude, 99), 2, 10, QChar('0')).toUtf8();
 }
 
 QByteArray subRx(const QByteArray &mainFrame) {
@@ -337,15 +335,14 @@ QByteArray aiMode(int level) {
 }
 
 QByteArray sMeterMain(double sMeter) {
-    // WHY: Inverse of handleSM() in rxtxmeterstate.cpp:32-46. K4 SM format is the
-    // raw bar count: 0..18 = S0..S9 (2 bars per S-unit), 19+ encodes dB-over-S9
-    // (each unit = 10 dB). The old "sMeter*3" math saturated at 21 for anything
-    // >= S7, causing MacLoggerDX's meter to read full-scale on normal noise floor.
+    // WHY: the exact inverse of handleSM() in rxtxmeterstate.cpp. K4 SM is the raw bar count:
+    // 0..18 = S0..S9 (2 bars per S-unit), and each bar above 18 is 3 dB over S9 - so S9+30 dB
+    // (S-meter 12.0) is SM0028.
     int bars;
     if (sMeter <= 9.0) {
         bars = qBound(0, static_cast<int>(sMeter * 2.0 + 0.5), 18);
     } else {
-        bars = qBound(18, static_cast<int>(18 + (sMeter - 9.0) + 0.5), 30);
+        bars = qBound(18, static_cast<int>(18 + (sMeter - 9.0) * 10.0 / 3.0 + 0.5), 9999);
     }
     return QString("SM%1;").arg(bars, 4, 10, QChar('0')).toUtf8();
 }

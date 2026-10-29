@@ -3,6 +3,9 @@
 #include <QtEndian>
 #include <QLoggingCategory>
 
+#include <algorithm>
+#include <cstring>
+
 Q_LOGGING_CATEGORY(catRx, "CAT.RX")
 
 Protocol::Protocol(QObject *parent) : QObject(parent) {}
@@ -13,7 +16,7 @@ void Protocol::parse(const QByteArray &data) {
     // Prevent unbounded buffer growth from malformed data
     if (m_buffer.size() > K4Protocol::MAX_BUFFER_SIZE) {
         qCWarning(catRx) << "Protocol buffer overflow (" << m_buffer.size() << "bytes), clearing";
-        m_buffer.clear();
+        reset();
         return;
     }
 
@@ -21,57 +24,57 @@ void Protocol::parse(const QByteArray &data) {
     // All K4 data comes wrapped in binary packets with START/END markers
     while (true) {
         // Look for start marker
-        int startPos = m_buffer.indexOf(K4Protocol::START_MARKER);
+        const qsizetype startPos = m_buffer.indexOf(K4Protocol::START_MARKER, m_readOffset);
         if (startPos == -1) {
             // WHY keep the last 3 bytes: START_MARKER is 4 bytes (FE FD FC FB). A TCP read can
             // split the marker across two reads (1–3 bytes now, final byte(s) in the next read).
             // Dropping those trailing bytes would lose sync; retaining 3 guarantees we still find
             // the marker when the remainder arrives.
-            if (m_buffer.size() > 3) {
-                m_buffer = m_buffer.right(3);
-            }
+            m_readOffset = std::max(m_readOffset, m_buffer.size() - 3);
             break;
         }
 
         // Discard any data before the start marker
-        if (startPos > 0) {
-            m_buffer = m_buffer.mid(startPos);
-        }
+        m_readOffset = startPos;
 
         // Check if we have enough data for the header (4 marker + 4 length = 8 bytes)
-        if (m_buffer.size() < 8) {
+        const qsizetype available = m_buffer.size() - m_readOffset;
+        if (available < 8) {
             break;
         }
 
+        const char *packet = m_buffer.constData() + m_readOffset;
+
         // Read payload length (big-endian uint32)
-        quint32 payloadLength = qFromBigEndian<quint32>(reinterpret_cast<const uchar *>(m_buffer.constData() + 4));
+        const quint32 payloadLength = qFromBigEndian<quint32>(reinterpret_cast<const uchar *>(packet + 4));
 
         // Calculate total packet size: start(4) + length(4) + payload + end(4)
-        int totalPacketSize = 4 + 4 + payloadLength + 4;
+        const qint64 totalPacketSize = 4 + 4 + qint64(payloadLength) + 4;
 
         // Check if we have the complete packet
-        if (m_buffer.size() < totalPacketSize) {
+        if (available < totalPacketSize) {
             break;
         }
 
         // Verify end marker
-        QByteArray endMarker = m_buffer.mid(totalPacketSize - 4, 4);
-        if (endMarker != K4Protocol::END_MARKER) {
+        if (std::memcmp(packet + totalPacketSize - 4, K4Protocol::END_MARKER.constData(), 4) != 0) {
             // Invalid packet, skip past the start marker and try again
             qCWarning(catRx) << "Invalid K4 packet: bad end marker";
-            m_buffer = m_buffer.mid(4);
+            m_readOffset += 4;
             continue;
         }
 
-        // Extract payload
-        QByteArray payload = m_buffer.mid(8, payloadLength);
+        const QByteArray payload = m_buffer.mid(m_readOffset + 8, payloadLength);
+        m_readOffset += totalPacketSize;
 
-        // Remove processed packet from buffer
-        m_buffer = m_buffer.mid(totalPacketSize);
-
-        // Process the complete packet
+        // WHY m_readOffset is a member: a slot reached from here may reset() the protocol (a
+        // disconnect), and the loop must then see the emptied buffer rather than a stale offset.
         processPacket(payload);
     }
+
+    // One compaction per read, not one deep copy of the tail per packet.
+    m_buffer.remove(0, m_readOffset);
+    m_readOffset = 0;
 }
 
 void Protocol::processPacket(const QByteArray &payload) {

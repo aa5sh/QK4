@@ -109,7 +109,7 @@ void NetHealthPopup::paintEvent(QPaintEvent *) {
     const QString rttVal = connected ? QString("%1ms").arg(m_metrics->rttCurrent()) : QStringLiteral("--");
     const QString jitVal = connected ? QString::number(m_metrics->rttJitter(), 'f', 1) : QStringLiteral("--");
     const QString bufVal =
-        connected ? QString("%1ms").arg(static_cast<int>(m_metrics->bufferBytes() / 96.0)) : QStringLiteral("--");
+        connected ? QString("%1ms").arg(static_cast<int>(m_metrics->bufferMs())) : QStringLiteral("--");
 
     drawSparklineRow(painter, QRect(rowX, rowY, rowW, rowH), QStringLiteral("RTT"), rttVal,
                      K4Styles::Colors::ChartSeriesRtt, 0, QStringLiteral("ms"), m_metrics->rttHistory(), connected);

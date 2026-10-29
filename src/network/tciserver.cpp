@@ -63,9 +63,9 @@ void TciServer::stop() {
     m_txSensorClients.clear();
     m_sensorTimer->stop();
 
-    // WebSocketServer::stop() closes the sockets without emitting clientDisconnected for each, so
-    // the roster has to be emptied here or the page would keep listing clients of a server that is
-    // no longer running.
+    // WebSocketServer::stop() raises clientDisconnected for every upgraded session, which empties
+    // the roster through onClientDisconnected. Cleared here as well so the page can never keep
+    // listing clients of a server that is no longer running.
     m_reportedUnhandled.clear();
 
     const bool hadClients = !m_clients.isEmpty();
@@ -94,7 +94,7 @@ void TciServer::recordClientMessage(int clientId, const QString &message, bool o
     }
     it->lastMessage = message;
     it->lastMessageOutbound = outbound;
-    it->lastMessageTime = QDateTime::currentDateTime();
+    it->lastMessageTime = QDateTime::currentDateTimeUtc();
 }
 
 void TciServer::announceClients(bool force) {
@@ -121,7 +121,7 @@ void TciServer::broadcast(const QString &text) {
     // Recorded against every row, then announced ONCE. Routing this through the per-client path
     // would emit the roster once per client for a message they all got at the same instant.
     const QString shown = elideForDisplay(text.trimmed());
-    const QDateTime now = QDateTime::currentDateTime();
+    const QDateTime now = QDateTime::currentDateTimeUtc();
     for (auto it = m_clients.begin(); it != m_clients.end(); ++it) {
         it->lastMessage = shown;
         it->lastMessageOutbound = true;
@@ -163,7 +163,7 @@ void TciServer::onClientConnected(int clientId, const QString &peerEndpoint) {
     // Seeded so the cell is never blank, which would read as a bug. The init burst below overwrites
     // it within microseconds; this shows only if a burst were ever empty.
     info.lastMessage = QStringLiteral("(connected)");
-    info.lastMessageTime = QDateTime::currentDateTime();
+    info.lastMessageTime = QDateTime::currentDateTimeUtc();
     m_clients.insert(clientId, info);
 
     qCInfo(netTci) << "client" << clientId << "connected from" << peerEndpoint << "- sending init burst";
@@ -221,6 +221,11 @@ void TciServer::onTextMessageReceived(int clientId, const QString &text) {
 
     const QVector<Command> commands = it->feed(text);
     for (const Command &raw : commands) {
+        // WHY: any reply below can drop this client synchronously. A command executed after that
+        // acts for a client that no longer exists - trx:0,true would key the radio with no owner.
+        if (!m_parsers.contains(clientId)) {
+            break;
+        }
         const Command command = expandGlobalForm(raw);
         const QString &name = command.name;
 
@@ -603,6 +608,11 @@ void TciServer::setPtt(int clientId, bool active) {
         // and WSJT-X drops the link if a PTT request is not reflected quickly, so it goes out
         // before the chrono clock starts.
         broadcast(message(QStringLiteral("trx"), QString::number(MAIN_RECEIVER), boolText(true)));
+        // WHY: the broadcast can drop the requester synchronously (send-queue overflow), and
+        // onClientDisconnected has then already released PTT. Keying now would key for nobody.
+        if (m_pttOwner != clientId) {
+            return;
+        }
         emit pttRequested(true);
         startChrono(clientId);
         return;

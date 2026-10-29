@@ -7,6 +7,8 @@
 #include <QString>
 #include <QVector>
 
+#include "network/protocol.h"
+
 // Macro entry for programmable function keys
 struct MacroEntry {
     QString functionId; // "PF1", "Fn.F1", "K-pod.1T", etc.
@@ -30,10 +32,12 @@ struct EqPreset {
     QString displayName() const { return isEmpty() ? "---" : name; }
 };
 
+inline constexpr quint16 kDefaultDxClusterPort = 7000;
+inline constexpr quint16 kDefaultKpa1500Port = 1500;
+
 struct DxClusterEntry {
     QString host;
-    quint16 port = 7000;
-    QString callsign;
+    quint16 port = kDefaultDxClusterPort;
     bool autoConnect = false;
 };
 
@@ -41,7 +45,7 @@ struct RadioEntry {
     QString name;
     QString host;
     QString password; // Password (used as PSK when TLS enabled)
-    quint16 port;
+    quint16 port = K4Protocol::DEFAULT_PORT;
     bool useTls = false; // Use TLS/PSK encryption (port 9204)
     QString identity;    // TLS-PSK identity (optional, empty = default)
     // Audio encode mode. See docs/k4-protocol-quirks.md -> "Audio encode modes EM0-EM3".
@@ -274,6 +278,9 @@ private:
     void load();
     void save();
     void sortRadios();
+    static quint16 defaultRadioPort(bool useTls);
+    static RadioEntry sanitized(RadioEntry radio);
+    static DxClusterEntry sanitized(DxClusterEntry entry);
 
     QVector<RadioEntry> m_radios;
     int m_lastSelectedIndex;
@@ -281,7 +288,7 @@ private:
 
     // KPA1500 settings
     QString m_kpa1500Host;
-    quint16 m_kpa1500Port = 1500;
+    quint16 m_kpa1500Port = kDefaultKpa1500Port;
     bool m_kpa1500Enabled = false;
     int m_kpa1500PollInterval = 300; // Default: 300ms for responsive meters
 

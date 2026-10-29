@@ -9,7 +9,6 @@
 #include "catpushbroadcaster.h"
 #include "models/radiostate.h"
 #include "protocol.h"
-#include "tcpclient.h"
 
 #include <QLoggingCategory>
 #include <QTimer>
@@ -24,10 +23,6 @@ CatServer::CatServer(RadioState *state, QObject *parent)
 
 CatServer::~CatServer() {
     stop();
-}
-
-void CatServer::setTcpClient(TcpClient *client) {
-    m_tcpClient = client;
 }
 
 bool CatServer::start(quint16 port) {
@@ -45,7 +40,7 @@ bool CatServer::start(quint16 port) {
 
     m_port = m_server->serverPort(); // use actual port (may differ from requested if 0)
     qCInfo(netCat) << "CAT server listening on port" << m_port;
-    emit started(port);
+    emit started(m_port);
     return true;
 }
 
@@ -265,7 +260,7 @@ QByteArray CatServer::handleCommand(const QString &cmd, QTcpSocket *client) {
         }
         if (prefix == "SQ") {
             const int sq = m_radioState->squelchLevelB();
-            return sq < 0 ? QByteArray() : CatFrames::squelch(sq, true);
+            return sq < 0 ? QByteArray() : CatFrames::subRx(CatFrames::squelch(sq));
         }
         if (prefix == "AG") {
             askRadio(QStringLiteral("AG$"), client);
@@ -273,7 +268,7 @@ QByteArray CatServer::handleCommand(const QString &cmd, QTcpSocket *client) {
         }
         if (prefix == "RG") {
             const int rg = m_radioState->rfGainB();
-            return rg < 0 ? QByteArray() : CatFrames::rfGain(rg, true);
+            return rg < 0 ? QByteArray() : CatFrames::subRx(CatFrames::rfGain(rg));
         }
         if (prefix == "RO") {
             return CatFrames::subRx(CatFrames::ritOffset(m_radioState->ritXitOffsetB()));
@@ -403,11 +398,11 @@ QByteArray CatServer::handleCommand(const QString &cmd, QTcpSocket *client) {
             // No answer until the radio has reported it - a made-up 000 is indistinguishable from
             // a real zero.
             const int sq = m_radioState->squelchLevel();
-            return sq < 0 ? QByteArray() : CatFrames::squelch(sq, false);
+            return sq < 0 ? QByteArray() : CatFrames::squelch(sq);
         }
         if (prefix == "RG") {
             const int rg = m_radioState->rfGain();
-            return rg < 0 ? QByteArray() : CatFrames::rfGain(rg, false);
+            return rg < 0 ? QByteArray() : CatFrames::rfGain(rg);
         }
         if (prefix == "FW") {
             return CatFrames::filterWidthExtended(m_radioState->filterBandwidth());

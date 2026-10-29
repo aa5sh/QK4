@@ -67,13 +67,21 @@ void WebSocketServer::stop() {
     const QList<int> ids = m_sessions.keys();
     for (int id : ids) {
         closeClient(id, WebSocketFrame::CloseNormal, QStringLiteral("server shutting down"));
-        Session session = m_sessions.take(id);
+        // WHY: closing can deliver `disconnected` synchronously, in which case onDisconnected has
+        // already erased the session and emitted clientDisconnected for it.
+        if (!m_sessions.contains(id)) {
+            continue;
+        }
+        const Session session = m_sessions.take(id);
         if (session.socket) {
             session.socket->disconnect(this);
             session.socket->abort();
             session.socket->deleteLater();
         }
-        emit clientDisconnected(id);
+        // Same rule as onDisconnected: a peer that never upgraded was never a client.
+        if (session.upgraded) {
+            emit clientDisconnected(id);
+        }
     }
     if (m_server->isListening()) {
         m_server->close();
@@ -162,8 +170,9 @@ bool WebSocketServer::tryUpgrade(int clientId) {
     if (key.isEmpty() || upgrade.compare(QStringLiteral("websocket"), Qt::CaseInsensitive) != 0) {
         // Answer plain HTTP rather than dropping silently: a browser or curl pointed here should
         // get a readable error, not a reset connection.
-        socket->write("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n"
-                      "Content-Length: 31\r\n\r\nThis endpoint expects WebSocket\n");
+        const QByteArray body = "This endpoint expects WebSocket\n";
+        socket->write("HTTP/1.1 400 Bad Request\r\nConnection: close\r\nContent-Length: " +
+                      QByteArray::number(body.size()) + "\r\n\r\n" + body);
         socket->flush();
         closeSocketBounded(socket);
         return false;

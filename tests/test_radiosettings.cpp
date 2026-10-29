@@ -42,6 +42,9 @@ private:
     QString m_realPath;
     qint64 m_realSize = -1;
     QDateTime m_realModified;
+    // What the singleton loaded from the hand-edited file written in initTestCase - captured there,
+    // because the singleton loads once and init() clears the radio list before every test.
+    QVariantMap m_loaded;
 
     RadioEntry makeRadio(const QString &name, const QString &host) const {
         RadioEntry e;
@@ -77,6 +80,83 @@ private slots:
                               QStringLiteral("QK4"));
         QVERIFY2(probe.fileName().startsWith(m_tempDir.path()),
                  qPrintable(QStringLiteral("settings not redirected; would have written to ") + probe.fileName()));
+
+        // A file nobody validated: out-of-range, zero and unparseable values, written BEFORE the
+        // singleton exists so its load() is what reads them.
+        {
+            QSettings raw(QSettings::defaultFormat(), QSettings::UserScope, QStringLiteral("QK4"),
+                          QStringLiteral("QK4"));
+            raw.setValue(QStringLiteral("catServer/port"), 70000); // would wrap to 4464 as quint16
+            raw.setValue(QStringLiteral("tciServer/port"), 0);
+            raw.setValue(QStringLiteral("kpa1500/port"), 70000);
+            raw.setValue(QStringLiteral("kpa1500/pollInterval"), 0); // would busy-poll
+            raw.setValue(QStringLiteral("dxCluster/spotAge"), 5);
+            raw.setValue(QStringLiteral("halikey/sidetoneVolume"), 500);
+            raw.setValue(QStringLiteral("halikey/deviceType"), 7);
+            raw.setValue(QStringLiteral("kpodPlus/encodeMode"), 9);
+            raw.beginWriteArray(QStringLiteral("radios"));
+            raw.setArrayIndex(0);
+            raw.setValue(QStringLiteral("name"), QStringLiteral("Wrapped"));
+            raw.setValue(QStringLiteral("port"), 70000);
+            raw.setArrayIndex(1);
+            raw.setValue(QStringLiteral("name"), QStringLiteral("Zero"));
+            raw.setValue(QStringLiteral("port"), 0);
+            raw.setValue(QStringLiteral("useTls"), true);
+            raw.endArray();
+            raw.beginWriteArray(QStringLiteral("dxClusters"));
+            raw.setArrayIndex(0);
+            raw.setValue(QStringLiteral("host"), QStringLiteral("dx.example"));
+            raw.setValue(QStringLiteral("port"), QStringLiteral("abc"));
+            raw.endArray();
+            raw.sync();
+        }
+        RadioSettings *s = RadioSettings::instance();
+        m_loaded[QStringLiteral("catPort")] = s->catServerPort();
+        m_loaded[QStringLiteral("tciPort")] = s->tciServerPort();
+        m_loaded[QStringLiteral("kpaPort")] = s->kpa1500Port();
+        m_loaded[QStringLiteral("kpaPoll")] = s->kpa1500PollInterval();
+        m_loaded[QStringLiteral("spotAge")] = s->dxClusterSpotAge();
+        m_loaded[QStringLiteral("sidetone")] = s->sidetoneVolume();
+        m_loaded[QStringLiteral("deviceType")] = s->halikeyDeviceType();
+        m_loaded[QStringLiteral("encodeMode")] = s->kpodPlusEncodeMode();
+        for (const RadioEntry &r : s->radios()) {
+            m_loaded[QStringLiteral("radio:") + r.name] = r.port;
+        }
+        m_loaded[QStringLiteral("dxPort")] = s->dxClusters().isEmpty() ? 0 : s->dxClusters().first().port;
+    }
+
+    void loadHoldsAHandEditedFileToTheSetterRules() {
+        QCOMPARE(m_loaded.value(QStringLiteral("catPort")).toInt(), 65535);
+        QCOMPARE(m_loaded.value(QStringLiteral("tciPort")).toInt(), 1024);
+        QCOMPARE(m_loaded.value(QStringLiteral("kpaPort")).toInt(), 1500);
+        QCOMPARE(m_loaded.value(QStringLiteral("kpaPoll")).toInt(), 100);
+        QCOMPARE(m_loaded.value(QStringLiteral("spotAge")).toInt(), 300);
+        QCOMPARE(m_loaded.value(QStringLiteral("sidetone")).toInt(), 100);
+        QCOMPARE(m_loaded.value(QStringLiteral("deviceType")).toInt(), 1);
+        QCOMPARE(m_loaded.value(QStringLiteral("encodeMode")).toInt(), 1);
+        // A K4 port that cannot be valid falls back to the default for its TLS mode, never 0.
+        QCOMPARE(m_loaded.value(QStringLiteral("radio:Wrapped")).toInt(), int(K4Protocol::DEFAULT_PORT));
+        QCOMPARE(m_loaded.value(QStringLiteral("radio:Zero")).toInt(), int(K4Protocol::TLS_PORT));
+        QCOMPARE(m_loaded.value(QStringLiteral("dxPort")).toInt(), int(kDefaultDxClusterPort));
+    }
+
+    void settersApplyTheSameRules() {
+        RadioSettings *s = RadioSettings::instance();
+        const quint16 kpaPort = s->kpa1500Port();
+        s->setKpa1500Port(0);
+        QCOMPARE(s->kpa1500Port(), kpaPort); // 0 is "any port"; refused
+        s->setHalikeyDeviceType(5);
+        QCOMPARE(s->halikeyDeviceType(), 1);
+        s->setHalikeyDeviceType(0);
+        RadioEntry r = makeRadio(QStringLiteral("NoPort"), QStringLiteral("10.0.0.9"));
+        r.port = 0;
+        s->addRadio(r);
+        QCOMPARE(s->radios().first().port, K4Protocol::DEFAULT_PORT);
+    }
+
+    void aRadioEntryHasAPortByDefault() {
+        const RadioEntry r;
+        QCOMPARE(r.port, K4Protocol::DEFAULT_PORT);
     }
 
     void cleanupTestCase() {

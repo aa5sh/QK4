@@ -24,8 +24,8 @@ public:
     enum OperatingState { StateUnknown = -1, StateStandby = 0, StateOperate = 1 };
     Q_ENUM(OperatingState)
 
-    // Fault status (^FS response)
-    enum FaultStatus { FaultNone = 0, FaultActive = 1, FaultHistory = 2 };
+    // Fault status, from the ^FL fault code
+    enum FaultStatus { FaultNone = 0, FaultActive = 1 };
     Q_ENUM(FaultStatus)
 
     explicit KPA1500Client(QObject *parent = nullptr);
@@ -55,7 +55,6 @@ public:
     OperatingState operatingState() const { return m_operatingState; }
     FaultStatus faultStatus() const { return m_faultStatus; }
     QString faultCode() const { return m_faultCode; }
-    bool atuPresent() const { return m_atuPresent; }
     bool atuModeInline() const { return m_atuModeInline; } // ^AM: ATU mode (enabled/disabled)
     bool atuInline() const { return m_atuInline; }         // ^AI: ATU relay state (in-circuit/bypassed)
     int antenna() const { return m_antenna; }
@@ -82,6 +81,7 @@ signals:
     void antennaChanged(int antenna);
     void antennaConnectorChanged(int connector); // connector of the active antenna became known/changed
     void bandNumberChanged(int bandNumber);
+    void deviceInfoChanged(); // ^SN serial number or ^RVM firmware version changed
 
 private slots:
     void onSocketConnected();
@@ -120,7 +120,6 @@ private:
     OperatingState m_operatingState = StateUnknown;
     FaultStatus m_faultStatus = FaultNone;
     QString m_faultCode;
-    bool m_atuPresent = false;
     bool m_atuModeInline = false; // ^AM: ATU mode (I=inline/enabled, B=bypassed/disabled)
     bool m_atuInline = false;     // ^AI: ATU relay state (1=relays inline, 0=relays bypassed)
     int m_antenna = 1;

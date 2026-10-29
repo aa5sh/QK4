@@ -75,6 +75,8 @@ KPA1500UiController::KPA1500UiController(StatusBarController *statusBar, RightSi
             &KPA1500UiController::onEnabledChanged);
     connect(RadioSettings::instance(), &RadioSettings::kpa1500SettingsChanged, this,
             &KPA1500UiController::onSettingsChanged);
+    connect(RadioSettings::instance(), &RadioSettings::kpa1500PollIntervalChanged, this,
+            &KPA1500UiController::onPollIntervalChanged);
 
     // Initialize status bar indicator to reflect current enable/disabled state.
     updateStatus();
@@ -121,6 +123,11 @@ void KPA1500UiController::onDisconnected() {
 
 void KPA1500UiController::onError(const QString &error) {
     qWarning() << "KPA1500: Error -" << error;
+}
+
+void KPA1500UiController::onPollIntervalChanged(int intervalMs) {
+    // startPolling() is a no-op unless connected; a later connect reads the setting itself.
+    m_client->startPolling(intervalMs);
 }
 
 void KPA1500UiController::onEnabledChanged(bool enabled) {

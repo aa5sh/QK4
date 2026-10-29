@@ -100,11 +100,15 @@ Kpa1500Page::Kpa1500Page(KPA1500Client *kpa1500Client, QWidget *parent)
     pollSlider->setValue(RadioSettings::instance()->kpa1500PollInterval());
     pollSlider->setStyleSheet(
         K4Styles::sliderHorizontal(K4Styles::Colors::DarkBackground, K4Styles::Colors::AccentAmber));
-    connect(pollSlider, &QSlider::valueChanged, this, [this](int value) {
-        RadioSettings::instance()->setKpa1500PollInterval(value);
-        if (m_kpa1500PollLabel)
-            m_kpa1500PollLabel->setText(QString("%1 ms").arg(value));
+    // WHY persist on release, not on every value: each set is a full settings save. Keyboard and
+    // click steps arrive with the slider up and are saved at once.
+    connect(pollSlider, &QSlider::valueChanged, this, [this, pollSlider](int value) {
+        m_kpa1500PollLabel->setText(QString("%1 ms").arg(value));
+        if (!pollSlider->isSliderDown())
+            RadioSettings::instance()->setKpa1500PollInterval(value);
     });
+    connect(pollSlider, &QSlider::sliderReleased, this,
+            [pollSlider]() { RadioSettings::instance()->setKpa1500PollInterval(pollSlider->value()); });
     pollLayout->addWidget(pollLabel);
     pollLayout->addWidget(pollSlider, 1);
     pollLayout->addWidget(m_kpa1500PollLabel);
@@ -174,6 +178,9 @@ Kpa1500Page::Kpa1500Page(KPA1500Client *kpa1500Client, QWidget *parent)
     if (m_kpa1500Client) {
         connect(m_kpa1500Client, &KPA1500Client::connected, this, &Kpa1500Page::updateKpa1500Status);
         connect(m_kpa1500Client, &KPA1500Client::disconnected, this, &Kpa1500Page::updateKpa1500Status);
+        // FW, SN and band arrive with the first polls, after `connected`.
+        connect(m_kpa1500Client, &KPA1500Client::deviceInfoChanged, this, &Kpa1500Page::updateKpa1500Status);
+        connect(m_kpa1500Client, &KPA1500Client::bandNumberChanged, this, &Kpa1500Page::updateKpa1500Status);
     }
 
     // Initialize status display
