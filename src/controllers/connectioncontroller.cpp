@@ -21,6 +21,8 @@ ConnectionController::ConnectionController(QObject *parent) : QObject(parent), m
     // Wire TcpClient signals to our internal handlers
     connect(m_tcpClient, &TcpClient::stateChanged, this, &ConnectionController::onStateChanged);
     connect(m_tcpClient, &TcpClient::errorOccurred, this, &ConnectionController::connectionError);
+    connect(m_tcpClient, &TcpClient::errorOccurred, this,
+            [](const QString &error) { qCWarning(lcLink) << "Link error:" << error; });
     connect(m_tcpClient, &TcpClient::authenticated, this, &ConnectionController::radioReady);
 
     // Re-emit Protocol signals so callers don't need tcpClient()->protocol() chains
@@ -70,9 +72,9 @@ void ConnectionController::connectToRadio(const RadioEntry &radio) {
     // next one and run although the operator has since removed or changed it.
     QMetaObject::invokeMethod(m_tcpClient, "setStartupMacro", Qt::QueuedConnection, Q_ARG(QString, macroToSend));
 
-    qCDebug(lcLink) << "Connecting to" << radio.host << ":" << radio.port
-                    << (radio.useTls ? "(TLS/PSK)" : "(unencrypted)") << "encodeMode:" << radio.encodeMode
-                    << "streamingLatency:" << radio.streamingLatency;
+    qCInfo(lcLink) << "Connecting to" << radio.host << ":" << radio.port
+                   << (radio.useTls ? "(TLS/PSK)" : "(unencrypted)") << "encodeMode:" << radio.encodeMode
+                   << "streamingLatency:" << radio.streamingLatency;
     QMetaObject::invokeMethod(m_tcpClient, "connectToHost", Qt::QueuedConnection, Q_ARG(QString, radio.host),
                               Q_ARG(quint16, radio.port), Q_ARG(QString, radio.password), Q_ARG(bool, radio.useTls),
                               Q_ARG(QString, radio.identity), Q_ARG(int, radio.encodeMode),
@@ -80,6 +82,7 @@ void ConnectionController::connectToRadio(const RadioEntry &radio) {
 }
 
 void ConnectionController::disconnectFromRadio() {
+    qCInfo(lcLink) << "Disconnect requested";
     QMetaObject::invokeMethod(m_tcpClient, "disconnectFromHost", Qt::QueuedConnection);
 }
 
@@ -100,5 +103,6 @@ TcpClient::ConnectionState ConnectionController::connectionState() const {
 }
 
 void ConnectionController::onStateChanged(TcpClient::ConnectionState state) {
+    qCInfo(lcLink) << "Link state:" << state;
     emit connectionStateChanged(state);
 }

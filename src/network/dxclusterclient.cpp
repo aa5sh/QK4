@@ -61,7 +61,7 @@ QString DxClusterClient::sanitizeLine(const QString &raw) {
 }
 
 void DxClusterClient::connectToHost(const QString &host, quint16 port, const QString &callsign) {
-    qCDebug(lcDxCluster) << "connectToHost:" << host << port << "callsign:" << callsign;
+    qCInfo(lcDxCluster) << "connectToHost:" << host << port << "callsign:" << callsign;
     if (m_state != Disconnected)
         disconnectFromHost();
 
@@ -147,7 +147,7 @@ void DxClusterClient::onReadyRead() {
 void DxClusterClient::onSocketError(QAbstractSocket::SocketError error) {
     Q_UNUSED(error)
     QString errorMsg = m_socket->errorString();
-    qCDebug(lcDxCluster) << "Socket error:" << errorMsg;
+    qCWarning(lcDxCluster) << "Socket error:" << errorMsg;
     setState(Disconnected);
     emit errorOccurred(errorMsg);
 }

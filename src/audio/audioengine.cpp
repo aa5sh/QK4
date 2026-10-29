@@ -235,9 +235,9 @@ bool AudioEngine::setupAudioOutput() {
     // Bluetooth device, so a sink held open on a headset can keep the OS from completing the
     // profile switch its own microphone needs.
     const QAudioFormat outPreferred = outputDevice.preferredFormat();
-    qCDebug(lcAudio, "AudioEngine: output device \"%s\" prefers %d Hz %d ch; we request %d Hz %d ch Float",
-            qUtf8Printable(outputDevice.description()), outPreferred.sampleRate(), outPreferred.channelCount(),
-            m_outputFormat.sampleRate(), m_outputFormat.channelCount());
+    qCInfo(lcAudio, "AudioEngine: output device \"%s\" prefers %d Hz %d ch; we request %d Hz %d ch Float",
+           qUtf8Printable(outputDevice.description()), outPreferred.sampleRate(), outPreferred.channelCount(),
+           m_outputFormat.sampleRate(), m_outputFormat.channelCount());
 
     m_activeOutputDeviceId = outputDevice.id();
     m_audioSink = new QAudioSink(outputDevice, m_outputFormat, this);
@@ -347,9 +347,9 @@ bool AudioEngine::setupAudioInput() {
         (m_micDecimationFactor > 0)
             ? QStringLiteral("%1:1").arg(m_micDecimationFactor)
             : QStringLiteral("resampled %1/%2").arg(m_micResampler.interpolation()).arg(m_micResampler.decimation());
-    qCDebug(lcAudio, "AudioEngine: mic device \"%s\" prefers %d Hz %d ch; capturing at %d Hz mono Float, %s to %d",
-            qUtf8Printable(inputDevice.description()), preferred.sampleRate(), preferred.channelCount(),
-            m_micSampleRate, qUtf8Printable(conversion), AudioDecimator::OUTPUT_RATE);
+    qCInfo(lcAudio, "AudioEngine: mic device \"%s\" prefers %d Hz %d ch; capturing at %d Hz mono Float, %s to %d",
+           qUtf8Printable(inputDevice.description()), preferred.sampleRate(), preferred.channelCount(), m_micSampleRate,
+           qUtf8Printable(conversion), AudioDecimator::OUTPUT_RATE);
 
     m_activeMicDeviceId = inputDevice.id();
     m_audioSource = new QAudioSource(inputDevice, format, this);
@@ -616,8 +616,8 @@ void AudioEngine::openMic() {
     // quietly converting", and the frame-level qk4.audio.tx peaks then say whether any audio is
     // actually arriving.
     const QAudioFormat actual = m_audioSource->format();
-    qCDebug(lcAudio, "AudioEngine: mic started at %d Hz %d ch, buffer %lld bytes", actual.sampleRate(),
-            actual.channelCount(), static_cast<long long>(m_audioSource->bufferSize()));
+    qCInfo(lcAudio, "AudioEngine: mic started at %d Hz %d ch, buffer %lld bytes", actual.sampleRate(),
+           actual.channelCount(), static_cast<long long>(m_audioSource->bufferSize()));
 
     m_micEnabled.store(true, std::memory_order_relaxed);
     // Use timer-based polling instead of readyRead signal
@@ -1068,9 +1068,9 @@ void AudioEngine::onSystemDefaultInputChanged() {
 
     // WHY logged either way: a handler that never runs and a handler that runs and declines to act
     // are indistinguishable from outside, which cost a bench session on 2026-09-19.
-    qCDebug(lcAudio, "AudioEngine: input device list changed (selection=\"%s\", active=\"%s\") -> %s",
-            m_selectedMicDeviceId.isEmpty() ? "system default" : qUtf8Printable(m_selectedMicDeviceId),
-            qUtf8Printable(m_activeMicDeviceId), decision.reason);
+    qCInfo(lcAudio, "AudioEngine: input device list changed (selection=\"%s\", active=\"%s\") -> %s",
+           m_selectedMicDeviceId.isEmpty() ? "system default" : qUtf8Printable(m_selectedMicDeviceId),
+           qUtf8Printable(m_activeMicDeviceId), decision.reason);
 
     if (decision.action != AudioDeviceSelection::Action::SwitchTo)
         return;
@@ -1103,9 +1103,9 @@ void AudioEngine::onSystemDefaultOutputChanged() {
         m_selectedOutputDeviceId.toStdString(), m_activeOutputDeviceId.toStdString(),
         QMediaDevices::defaultAudioOutput().id().toStdString(), pinnedPresent, m_audioSink != nullptr);
 
-    qCDebug(lcAudio, "AudioEngine: output device list changed (selection=\"%s\", active=\"%s\") -> %s",
-            m_selectedOutputDeviceId.isEmpty() ? "system default" : qUtf8Printable(m_selectedOutputDeviceId),
-            qUtf8Printable(m_activeOutputDeviceId), decision.reason);
+    qCInfo(lcAudio, "AudioEngine: output device list changed (selection=\"%s\", active=\"%s\") -> %s",
+           m_selectedOutputDeviceId.isEmpty() ? "system default" : qUtf8Printable(m_selectedOutputDeviceId),
+           qUtf8Printable(m_activeOutputDeviceId), decision.reason);
 
     if (!m_outputRunning)
         return; // not producing output yet - start() will resolve the current default

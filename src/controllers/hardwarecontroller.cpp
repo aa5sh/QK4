@@ -216,6 +216,12 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
 
 void HardwareController::applyKpod(UsbDeviceLifecycle::Event event) {
     const UsbDeviceLifecycle::Effects e = UsbDeviceLifecycle::apply(m_kpodState, event);
+    if (e.reportArrived)
+        qCInfo(lcKpod) << "KPOD available";
+    if (e.reportRemoved)
+        qCInfo(lcKpod) << "KPOD no longer available";
+    if (e.notifyOpenFailed)
+        qCWarning(lcKpod) << "KPOD could not be opened";
     if (e.open)
         m_kpodDevice->startPolling();
     if (e.close)
@@ -226,6 +232,8 @@ void HardwareController::applyKpod(UsbDeviceLifecycle::Event event) {
 
 void HardwareController::applyKpodPlus(UsbDeviceLifecycle::Event event) {
     const UsbDeviceLifecycle::Effects e = UsbDeviceLifecycle::apply(m_kpodPlusState, event);
+    if (e.notifyOpenFailed)
+        qCWarning(lcKpodPlus) << "KPOD+ could not be opened";
     if (e.open) {
         // Raise the CW gate BEFORE the open, not after: claiming the interface takes 10-100 ms and
         // a paddle event landing in that window would reach QK4's own keyer and sidetone.

@@ -146,13 +146,13 @@ void KPA1500Client::onSocketConnected() {
     // 40 ms Nagle/delayed-ACK windows. KeepAlive handles NAT timeout on long-running sessions.
     m_socket->setSocketOption(QAbstractSocket::LowDelayOption, 1);
     m_socket->setSocketOption(QAbstractSocket::KeepAliveOption, 1);
-    qCDebug(lcKpa1500) << "KPA1500Client: Connected to" << m_host << ":" << m_port;
+    qCInfo(lcKpa1500) << "KPA1500Client: Connected to" << m_host << ":" << m_port;
     setState(Connected);
     emit connected();
 }
 
 void KPA1500Client::onSocketDisconnected() {
-    qCDebug(lcKpa1500) << "KPA1500Client: Disconnected";
+    qCInfo(lcKpa1500) << "KPA1500Client: Disconnected";
     stopPolling();
     resetCachedState();
     setState(Disconnected);

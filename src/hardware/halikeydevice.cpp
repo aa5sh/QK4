@@ -47,6 +47,7 @@ bool HalikeyDevice::openPort(const QString &portName) {
     connect(m_worker, &HaliKeyWorkerBase::paddleChanged, this, &HalikeyDevice::paddleChanged, Qt::DirectConnection);
     m_worker->setStraightKey(m_straightKey.load(std::memory_order_acquire));
     connect(m_worker, &HaliKeyWorkerBase::portOpened, this, [this]() {
+        qCInfo(lcCwHalikey) << "HaliKey opened on" << m_portName << (m_deviceType == 1 ? "(MIDI)" : "(V1.4 serial)");
         m_connected = true;
         emit connected();
     });
