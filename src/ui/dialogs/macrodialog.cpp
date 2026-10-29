@@ -372,12 +372,13 @@ void MacroDialog::setupUi() {
     m_editBtn->setFixedSize(K4Styles::Dimensions::NavButtonWidth, K4Styles::Dimensions::PopupButtonHeight);
     m_editBtn->setStyleSheet(QString("QPushButton { background-color: %1; color: %2; border: none; "
                                      "border-radius: %3px; font-size: %4px; font-weight: bold; }"
-                                     "QPushButton:pressed { background-color: %5; }")
+                                     "QPushButton:pressed { background-color: %5; color: %6; }")
                                  .arg(K4Styles::Colors::OverlayNavButton)
                                  .arg(K4Styles::Colors::TextSecondaryOnRaised)
                                  .arg(K4Styles::Dimensions::BorderRadius)
                                  .arg(K4Styles::Dimensions::FontSizeCaption)
-                                 .arg(K4Styles::Colors::OverlayNavButtonPressed));
+                                 .arg(K4Styles::Colors::OverlayNavButtonPressed)
+                                 .arg(K4Styles::Colors::TextPrimary));
     connect(m_editBtn, &QPushButton::clicked, this, &MacroDialog::selectCurrent);
     row2->addWidget(m_editBtn);
 

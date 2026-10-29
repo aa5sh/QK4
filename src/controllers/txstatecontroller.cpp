@@ -45,7 +45,7 @@ void TxStateController::onTransmitStateChanged(bool transmitting) {
         m_vfoB->setTransmitting(false);
     }
 
-    const QString color = transmitting ? K4Styles::Colors::TxRed : K4Styles::Colors::AccentAmber;
+    const QString color = transmitting ? K4Styles::Colors::TextRed : K4Styles::Colors::AccentAmber;
     const QString indicatorStyle = QString("color: %1; font-size: %2px; font-weight: bold;")
                                        .arg(color)
                                        .arg(K4Styles::Dimensions::FontSizeIndicator);

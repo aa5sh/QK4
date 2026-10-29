@@ -147,7 +147,7 @@ QString menuBarButtonPttPressed() {
             font-weight: 600;
         }
     )")
-        .arg(Colors::TxRed, Colors::TextPrimary, QString::number(Dimensions::FontSizeBody));
+        .arg(Colors::TxActiveFill, Colors::TextPrimary, QString::number(Dimensions::FontSizeBody));
 }
 
 QColor withAlpha(const char *color, int alpha) {
@@ -687,7 +687,8 @@ const QString &comboBox() {
                 "QComboBox:focus { border-color: %4; }"
                 "QComboBox::drop-down { border: none; width: 20px; }"
                 "QComboBox::down-arrow { image: url(:/icons/arrow-down.svg); width: 10px; height: 6px; }"
-                "QComboBox QAbstractItemView { background-color: %1; color: %2; selection-background-color: %4; }")
+                "QComboBox QAbstractItemView { background-color: %1; color: %2; selection-background-color: %4; "
+                "                              selection-color: %1; }")
             .arg(Colors::DarkBackground, Colors::TextPrimary, Colors::DialogBorder, Colors::AccentAmber)
             .arg(Dimensions::FontSizeHeading)
             .arg(Dimensions::PaddingSmall)

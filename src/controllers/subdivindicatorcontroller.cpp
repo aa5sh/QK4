@@ -55,13 +55,13 @@ void SubDivIndicatorController::onDiversityChanged(bool enabled) {
 void SubDivIndicatorController::setSubLabelActive(bool active) {
     m_subLabel->setStyleSheet(active
                                   ? badgeStyle(K4Styles::Colors::StatusGreen, K4Styles::Colors::TextOnAccent)
-                                  : badgeStyle(K4Styles::Colors::DisabledBackground, K4Styles::Colors::TextSecondary));
+                                  : badgeStyle(K4Styles::Colors::BadgeOffBackground, K4Styles::Colors::TextSecondary));
 }
 
 void SubDivIndicatorController::setDivLabelActive(bool active) {
     m_divLabel->setStyleSheet(active
                                   ? badgeStyle(K4Styles::Colors::StatusGreen, K4Styles::Colors::TextOnAccent)
-                                  : badgeStyle(K4Styles::Colors::DisabledBackground, K4Styles::Colors::TextSecondary));
+                                  : badgeStyle(K4Styles::Colors::BadgeOffBackground, K4Styles::Colors::TextSecondary));
 }
 
 void SubDivIndicatorController::setVfoBDimmed(bool dimmed) {

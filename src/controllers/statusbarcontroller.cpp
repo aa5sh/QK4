@@ -41,7 +41,7 @@ struct ColorPair {
 };
 
 ColorPair temperatureColors(int celsius) {
-    const QColor red(K4Styles::Colors::TxRed);
+    const QColor red(K4Styles::Colors::TextRed);
     const QColor orange(K4Styles::Colors::MeterOrange);
     const QColor amber(K4Styles::Colors::AccentAmber);
     if (celsius >= kCritTempC)
@@ -53,7 +53,7 @@ ColorPair temperatureColors(int celsius) {
 }
 
 ColorPair voltageColors(double volts) {
-    const QColor red(K4Styles::Colors::TxRed);
+    const QColor red(K4Styles::Colors::TextRed);
     const QColor orange(K4Styles::Colors::MeterOrange);
     const QColor amber(K4Styles::Colors::AccentAmber);
     const QColor gold(K4Styles::Colors::FilterIndicatorGold);
@@ -257,7 +257,7 @@ void StatusBarController::showError(const QString &errorMessage) {
     m_errorShown = true;
     m_connectionStatusLabel->setText("K4");
     m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                               .arg(K4Styles::Colors::TxRed)
+                                               .arg(K4Styles::Colors::TextRed)
                                                .arg(K4Styles::Dimensions::FontSizeReadout));
 }
 

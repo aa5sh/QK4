@@ -52,9 +52,14 @@ another surface is named.
 | `TextDisabled` | `#666666` | 3.03:1 (exempt) | Disabled controls **only** — WCAG 1.4.3 does not apply to inactive components |
 | `TextOnLight` | `#333333` | 12.6:1 on `White`, 6.37:1 on `SelectedBottom` | Text on selected / lit fills |
 | `TextOnAccent` | = `Black` | 15.3:1 on `StatusGreen`, 4.69:1 on `OverlayBackground` | Text on saturated fills (B SET, SUB/DIV on, VFO A/B badges and squares) |
-| `TextRed` | `#FF6666` | 6.09:1 | All red text: over-S9 scale, errors, warnings |
+| `TextRed` | `#FF6666` | 6.09:1 | All red text: over-S9 scale, errors, warnings, the transmitting TX label and its arrows, TEST, the error `K4`, critical temperature/voltage, KPA1500 FAULT |
 
-`TxRed` is never text (4.35:1). The "button face" is `GradientTop` → `GradientMid1` at 0.75, the lightest point behind
+`TxRed` is never text (4.35:1) and never under white text (4.0:1); `TxActiveFill` is the red fill that carries text.
+A view whose selection fill is `AccentAmber` also sets `selection-color: DarkBackground` (10.6:1); left unset, the
+selected item takes the palette's HighlightedText, white, at 1.83:1. Pressed nav keys (NORM, EDIT) brighten their text to
+`TextPrimary`, because `TextSecondaryOnRaised` on `OverlayNavButtonPressed` is 3.40:1.
+
+The "button face" is `GradientTop` → `GradientMid1` at 0.75, the lightest point behind
 the glyph band of a gradient button.
 
 ### Accent and Status
@@ -65,7 +70,8 @@ the glyph band of a gradient button.
 | `VfoACyan` | `#00BFFF` | VFO A: square, passband, markers, overlays |
 | `StatusGreen` | `#00FF00` | Active/on/connected status indicators |
 | `VfoBGreen` | = `StatusGreen` | VFO B theme |
-| `TxRed` | `#FF0000` | TX fills, LEDs, markers — never text |
+| `TxRed` | `#FF0000` | LEDs, meters, markers — never text, never under text |
+| `TxActiveFill` | `#E00000` | PTT key while transmitting; white on it is 5.04:1 (`#EE0000` is the lightest pure red that passes, 4.53:1) |
 
 ### Meter Gradient Colors (S/Po Meter) — data colours
 
@@ -88,7 +94,8 @@ the glyph band of a gradient button.
 | `DialogBorder` | = `TextOnLight` (`#333333`) | Dialog borders, separators, slider grooves, menu-bar hover |
 | `PanelBorder` | `#444444` | Frame around panadapter / VFO panels |
 | `BorderDisabled` | = `PanelBorder` | Disabled checkbox-button border (was `#404040`) |
-| `DisabledBackground` | = `PanelBorder` | Off-state badges, disabled fills |
+| `DisabledBackground` | = `PanelBorder` | Disabled fills |
+| `BadgeOffBackground` | = `GradientBottom` (`#2a2a2a`) | SUB/DIV badge when off; `TextSecondary` on it is 5.04:1 (3.42:1 on the old `#444444`) |
 | `BorderNormal` | `#606060` | Default button border |
 | `MutedGraphic` | = `TextDisabled` (`#666666`) | Idle frames, ticks, unlit bars, unknown-state glyphs, input borders — 3.03:1 meets the 3:1 non-text rule (`#606060` would be 2.8:1) |
 | `BorderHover` | `#808080` | Button border on hover |
@@ -128,10 +135,14 @@ until the maintainer decides; see *Bluish overlay surfaces* below.
 
 | Stop | Normal | Hover | Light | Selected | Selected hover | Disabled |
 |------|--------|-------|-------|----------|----------------|----------|
-| 0 (Top) | `GradientTop` `#4a4a4a` | `HoverTop` `#5a5a5a` | `LightGradientTop` `#888888` | `SelectedTop` `#E0E0E0` | `SelectedHoverTop` `#F0F0F0` | `DisabledGradientTop` = `GradientMid1` |
-| 0.4 (Mid1) | `GradientMid1` `#3a3a3a` | `HoverMid1` = `GradientTop` | `LightGradientMid1` = `OverlayBackground` | `SelectedMid1` `#D0D0D0` | `SelectedHoverMid1` = `SelectedTop` | `DisabledGradientMid1` = `GradientBottom` |
+| 0 (Top) | `GradientTop` `#4a4a4a` | `HoverTop` `#5a5a5a` | `LightGradientTop` `#747474` | `SelectedTop` `#E0E0E0` | `SelectedHoverTop` `#F0F0F0` | `DisabledGradientTop` = `GradientMid1` |
+| 0.4 (Mid1) | `GradientMid1` `#3a3a3a` | `HoverMid1` = `GradientTop` | `LightGradientMid1` `#6E6E6E` | `SelectedMid1` `#D0D0D0` | `SelectedHoverMid1` = `SelectedTop` | `DisabledGradientMid1` = `GradientBottom` |
 | 0.6 (Mid2) | `GradientMid2` `#353535` | `HoverMid2` `#454545` | `LightGradientMid2` `#6a6a6a` | `SelectedMid2` `#C8C8C8` | `SelectedHoverMid2` `#D8D8D8` | `DisabledGradientMid2` `#252525` |
 | 1 (Bottom) | `GradientBottom` `#2a2a2a` | `HoverBottom` = `GradientMid1` | `LightGradientBottom` = `BorderNormal` | `SelectedBottom` `#B8B8B8` | `SelectedHoverBottom` = `SelectedMid2` | `DisabledGradientBottom` = `Background` |
+
+The light stops carry white text, so each is checked on its own rather than at the glyph band: two-line labels
+(ATU TUNE) reach the top edge, and the pressed state reverses the gradient. White on `LightGradientTop` is 4.67:1
+(3.54:1 on the old `#888888`).
 
 ### Feature Colours
 
@@ -532,8 +543,8 @@ edit->setStyleSheet(K4Styles::Dialog::lineEdit());
 `tests/test_tokenstandard.cpp` (`TokenStandardTests`):
 
 - every (text token, background) pair the UI draws meets 4.5:1, scrims and translucent fills judged as composited;
-  pairs that do not (disabled text, the SUB/DIV off badge, PTT pressed, the light side-panel buttons) are listed
-  with their reason and must stay below 4.5:1, so a fixed pair has to leave the list;
+  the only pairs allowed under it are disabled-control text (WCAG-exempt), listed and required to stay below 4.5:1 so a
+  pair that starts passing has to leave the list;
 - no hex value is repeated in `k4constants.h`;
 - outside `k4constants.h` (comments excluded): no `setPointSize`, no literal size in `setPixelSize` / `paintFont` /
   `dataFont` / `font-size:`, no hex colour, no `QColor(<digit>` or `QColor::fromRgb[F](<digit>`, no

@@ -107,7 +107,7 @@ void VfoRowWidget::setupWidgets() {
     m_testLabel = new QLabel("TEST", this);
     m_testLabel->setAlignment(Qt::AlignCenter);
     m_testLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                   .arg(K4Styles::Colors::TxRed)
+                                   .arg(K4Styles::Colors::TextRed)
                                    .arg(K4Styles::Dimensions::FontSizeHeading));
     m_testLabel->setVisible(false);
 
@@ -181,7 +181,7 @@ void VfoRowWidget::setupWidgets() {
                                       "font-size: %3px;"
                                       "font-weight: bold;"
                                       "border-radius: 2px;")
-                                  .arg(K4Styles::Colors::DisabledBackground)
+                                  .arg(K4Styles::Colors::BadgeOffBackground)
                                   .arg(K4Styles::Colors::TextSecondary)
                                   .arg(K4Styles::Dimensions::FontSizeCaption));
     subDivStack->addWidget(m_subLabel);
@@ -194,7 +194,7 @@ void VfoRowWidget::setupWidgets() {
                                       "font-size: %3px;"
                                       "font-weight: bold;"
                                       "border-radius: 2px;")
-                                  .arg(K4Styles::Colors::DisabledBackground)
+                                  .arg(K4Styles::Colors::BadgeOffBackground)
                                   .arg(K4Styles::Colors::TextSecondary)
                                   .arg(K4Styles::Dimensions::FontSizeCaption));
     subDivStack->addWidget(m_divLabel);

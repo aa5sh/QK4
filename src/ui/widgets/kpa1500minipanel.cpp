@@ -360,7 +360,7 @@ void Kpa1500MiniPanel::paintEvent(QPaintEvent *) {
         QColor stateColor;
         if (m_fault) {
             state = QStringLiteral("FAULT");
-            stateColor = QColor(K4Styles::Colors::TxRed);
+            stateColor = QColor(K4Styles::Colors::TextRed);
         } else if (m_operate) {
             state = QStringLiteral("OPER");
             stateColor = QColor(K4Styles::Colors::StatusGreen);

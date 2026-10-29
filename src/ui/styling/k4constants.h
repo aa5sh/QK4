@@ -54,7 +54,10 @@ constexpr const char *AccentAmber = "#FFB000"; // 9.5:1 - TX indicators, titles,
 constexpr const char *VfoACyan = "#00BFFF";    // VFO A theme
 constexpr const char *StatusGreen = "#00FF00"; // Active/on/connected; VFO B theme
 constexpr const char *VfoBGreen = StatusGreen;
-constexpr const char *TxRed = "#FF0000"; // Fills, LEDs, markers - never text; see TextRed
+constexpr const char *TxRed = "#FF0000"; // LEDs, meters, markers - never text (TextRed) or under text (TxActiveFill)
+// WHY #E00000: white on TxRed is 4.0:1; #EE0000 is the lightest pure red to pass (4.53:1), #E00000 keeps a margin
+// at 5.04:1 and still reads as transmitting.
+constexpr const char *TxActiveFill = "#E00000"; // PTT key while transmitting (TextPrimary)
 
 // Meter gradient (green -> yellow -> red). Data colours.
 constexpr const char *MeterGreenDark = "#00CC00";
@@ -75,7 +78,7 @@ constexpr const char *MeterIdLight = "#66BB6A"; // Lighter sage green
 constexpr const char *DialogBorder = TextOnLight; // Dialog borders, separators, slider grooves
 constexpr const char *PanelBorder = "#444444";    // Frame around panadapter/VFO panels
 constexpr const char *BorderDisabled = PanelBorder;
-constexpr const char *DisabledBackground = PanelBorder; // Off-state badges, disabled fills
+constexpr const char *DisabledBackground = PanelBorder; // Disabled fills
 constexpr const char *BorderNormal = "#606060";
 // WHY #666 and not BorderNormal: these strokes sit straight on Background, where #606060 is 2.8:1, under
 // the 3:1 that WCAG 1.4.11 asks of graphics. #666 is 3.03:1.
@@ -119,8 +122,10 @@ constexpr const char *HoverMid2 = "#454545";
 constexpr const char *HoverBottom = GradientMid1;
 
 // Lighter button gradients (for TX function buttons, REC/STORE/RCL)
-constexpr const char *LightGradientTop = "#888888";
-constexpr const char *LightGradientMid1 = OverlayBackground;
+// WHY these two stops: white on the old #888888 top was 3.54:1 and on #777777 4.48:1. Two-line labels (ATU TUNE)
+// reach almost to the top edge, so the top stop itself must pass: #747474 is 4.67:1, #6E6E6E 5.10:1.
+constexpr const char *LightGradientTop = "#747474";
+constexpr const char *LightGradientMid1 = "#6E6E6E";
 constexpr const char *LightGradientMid2 = "#6a6a6a";
 constexpr const char *LightGradientBottom = BorderNormal;
 
@@ -143,6 +148,10 @@ constexpr const char *DisabledGradientBottom = Background;
 // Feature colours
 // =============================================================================
 constexpr const char *ErrorBgDark = "#331111"; // Muted dark-red background for error toasts (with TextRed)
+
+// WHY GradientBottom and not DisabledBackground: TextSecondary on #444 was 3.42:1; on #2a2a2a it is 5.04:1, and the
+// darker fill reads as more clearly off beside the green on state.
+constexpr const char *BadgeOffBackground = GradientBottom; // SUB/DIV badge when off (TextSecondary)
 
 // Filter-edge indicator gold. Distinct from AccentAmber (#FFB000): brighter/yellower so it reads
 // clearly against the panadapter's amber passband fill. Used by FilterIndicatorWidget only.

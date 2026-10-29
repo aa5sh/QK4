@@ -137,6 +137,7 @@ private slots:
         // 0.3-0.7 of its height, and the lightest face behind them is at the top of that band.
         const QColor buttonFace = mix(GradientTop, GradientMid1, 0.75);
         const QColor white(White);
+        const QColor kpaLcd = over(Black, Alpha::LcdShade, over(White, Alpha::CardTint, QColor(Background)));
 
         const struct {
             const char *name;
@@ -147,6 +148,11 @@ private slots:
             {"TextPrimary on DarkBackground", QColor(TextPrimary), QColor(DarkBackground)},
             {"TextPrimary on PopupBackground", QColor(TextPrimary), QColor(PopupBackground)},
             {"TextPrimary on button face", QColor(TextPrimary), buttonFace},
+            // Light keys are judged at their lightest stop, not the glyph band: two-line labels reach the top
+            // edge, and the pressed state reverses the gradient so the top stop sits under the second line.
+            {"TextPrimary on LightGradientTop (light side-panel keys)", QColor(TextPrimary), QColor(LightGradientTop)},
+            {"TextPrimary on LightGradientMid1", QColor(TextPrimary), QColor(LightGradientMid1)},
+            {"TextPrimary on TxActiveFill (PTT transmitting)", QColor(TextPrimary), QColor(TxActiveFill)},
             {"TextPrimary on HoverTop", QColor(TextPrimary), QColor(HoverTop)},
             {"TextPrimary on OverlayNavButton", QColor(TextPrimary), QColor(OverlayNavButton)},
             {"TextPrimary on OverlayItemBg", QColor(TextPrimary), QColor(OverlayItemBg)},
@@ -155,6 +161,7 @@ private slots:
             {"TextPrimary on span-button scrim over white", QColor(TextPrimary),
              over(Black, Alpha::SpanButtonScrim, white)},
             {"TextSecondary on Background", QColor(TextSecondary), QColor(Background)},
+            {"TextSecondary on BadgeOffBackground (SUB/DIV off)", QColor(TextSecondary), QColor(BadgeOffBackground)},
             {"TextSecondary on DarkBackground", QColor(TextSecondary), QColor(DarkBackground)},
             {"TextSecondary on PopupBackground", QColor(TextSecondary), QColor(PopupBackground)},
             {"TextSecondary on OverlayContentBg", QColor(TextSecondary), QColor(OverlayContentBg)},
@@ -183,6 +190,17 @@ private slots:
             {"StatusGreen on Background", QColor(StatusGreen), QColor(Background)},
             {"VfoACyan on Background", QColor(VfoACyan), QColor(Background)},
             {"FilterIndicatorGold on Background", QColor(FilterIndicatorGold), QColor(Background)},
+            {"MeterOrange on Background (status-bar warning)", QColor(MeterOrange), QColor(Background)},
+            {"TextPrimary on OverlayNavButtonPressed", QColor(TextPrimary), QColor(OverlayNavButtonPressed)},
+            {"TextPrimary on DialogBorder (menu-bar item)", QColor(TextPrimary), QColor(DialogBorder)},
+            {"TextPrimary on GradientBottom (list hover)", QColor(TextPrimary), QColor(GradientBottom)},
+            {"DarkBackground on AccentAmber (list and combo selection)", QColor(DarkBackground), QColor(AccentAmber)},
+            {"DarkBackground on VfoACyan (text-decode title bar)", QColor(DarkBackground), QColor(VfoACyan)},
+            {"DarkBackground on VfoBGreen (text-decode title bar)", QColor(DarkBackground), QColor(VfoBGreen)},
+            {"TextRed on KPA1500 status box", QColor(TextRed), kpaLcd},
+            {"StatusGreen on KPA1500 status box", QColor(StatusGreen), kpaLcd},
+            {"AccentAmber on KPA1500 status box", QColor(AccentAmber), kpaLcd},
+            {"TextPrimary on KPA1500 status box", QColor(TextPrimary), kpaLcd},
         };
         for (const auto &p : pairs)
             QTest::newRow(p.name) << p.text << p.background;
@@ -198,7 +216,7 @@ private slots:
                 QString("%1 on %2 is %3:1, under 4.5:1").arg(text.name(), background.name()).arg(ratio, 0, 'f', 2)));
     }
 
-    // Pairs in use that do not meet 4.5:1, each with the reason it is allowed. A pair that starts
+    // Pairs in use that do not meet 4.5:1. Only disabled-control text belongs here. A pair that starts
     // passing should leave this list, so the test fails then too.
     void exemptPairsAreStillBelowAa_data() {
         using namespace K4Styles::Colors;
@@ -210,14 +228,6 @@ private slots:
             << QColor(TextDisabled) << mix(GradientTop, GradientMid1, 0.75);
         QTest::newRow("TextDisabled on OverlayNavButton (disabled NORM)")
             << QColor(TextDisabled) << QColor(OverlayNavButton);
-        // The off state of an indicator whose fill turns green when on; recommended for redesign.
-        QTest::newRow("TextSecondary on DisabledBackground (SUB/DIV off badge)")
-            << QColor(TextSecondary) << QColor(DisabledBackground);
-        // Transient PTT-pressed state on the TX red fill.
-        QTest::newRow("TextPrimary on TxRed (PTT pressed)") << QColor(TextPrimary) << QColor(TxRed);
-        // Light function buttons: owned by button-standard work, migrated at merge.
-        QTest::newRow("TextPrimary on LightGradientTop (light side-panel buttons)")
-            << QColor(TextPrimary) << QColor(LightGradientTop);
     }
 
     void exemptPairsAreStillBelowAa() {

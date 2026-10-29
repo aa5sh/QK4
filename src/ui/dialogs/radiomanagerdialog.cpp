@@ -225,6 +225,7 @@ void RadioManagerDialog::setupUi() {
                 "  background-color: %1; "
                 "  color: %2; "
                 "  selection-background-color: %5; "
+                "  selection-color: %1; "
                 "}")
             .arg(K4Styles::Colors::DarkBackground, K4Styles::Colors::TextPrimary, K4Styles::Colors::DialogBorder)
             .arg(K4Styles::Dimensions::PaddingSmall)
