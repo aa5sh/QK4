@@ -23,8 +23,8 @@ CwController::CwController(RadioState *radioState, ConnectionController *connect
     // =========================================================================
     // Keyer → K4
     // =========================================================================
-    // sendCAT queues to the I/O thread itself; one producer (the keyer thread, or the main thread
-    // for the monitor restore) keeps KZD/KZU in order. Never gated here: see invariant 6.
+    // sendCAT queues to the I/O thread itself; one producer (the keyer thread, which also sends the
+    // monitor restore) keeps KZD/KZU in order. Never gated here: see invariant 6.
     auto *tc = m_connection->tcpClient();
     m_link->setSender([tc](const std::string &command) { tc->sendCAT(QString::fromLatin1(command)); });
 

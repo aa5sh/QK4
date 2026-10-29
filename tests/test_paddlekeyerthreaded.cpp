@@ -13,6 +13,7 @@
 #include <QtTest/QtTest>
 #include <atomic>
 #include <mutex>
+#include <random>
 #include <thread>
 
 namespace {
@@ -67,6 +68,83 @@ int openKzd(const std::vector<std::string> &sent) {
     for (const auto &c : sent)
         open += c.rfind("KZD", 0) == 0 ? 1 : c.rfind("KZU", 0) == 0 ? -1 : 0;
     return open;
+}
+
+// The KZ frames as the radio would act on them: a KZU before its KZD, a second KZD while keyed,
+// or a run that ends keyed is a fault. Returns an empty string when the sequence is sound.
+std::string kzFault(const std::vector<std::string> &sent) {
+    bool keyed = false;
+    std::string seq;
+    for (const auto &c : sent) {
+        if (c.rfind("KZ", 0) != 0)
+            continue;
+        seq += c.substr(0, 3) + ' ';
+        const bool down = c.rfind("KZD", 0) == 0;
+        if (down == keyed)
+            return (down ? "KZD while keyed: " : "KZU before its KZD: ") + seq;
+        keyed = down;
+    }
+    if (keyed)
+        return "left keyed: " + seq;
+    return {};
+}
+
+// A link whose ML0000 takes a while to hand over, as a busy I/O queue can. The straight key sends
+// ML0000 just before its KZD, so this holds the keyer between deciding to key and sending the KZD.
+class SlowMuteLink : public CaptureLink {
+public:
+    void send(const std::string &c) override {
+        if (c == "ML0000;")
+            std::this_thread::sleep_for(std::chrono::microseconds(1500));
+        CaptureLink::send(c);
+    }
+};
+
+struct StraightRaceRig {
+    SteadyKeyerClock clock;
+    SlowMuteLink link;
+    NullTimer timer;
+    SidetoneScheduler sidetone{clock, []() -> std::optional<double> { return std::nullopt; }};
+    PaddleKeyer keyer{clock, link, sidetone, timer};
+    std::thread thread;
+
+    StraightRaceRig() {
+        keyer.setSpeed(30);
+        keyer.setStraightKeying(true);
+        keyer.setMuteRadioMonitor(true);
+        thread = std::thread([this] { keyer.run(); });
+    }
+    std::vector<std::string> closeAndCollect() {
+        keyer.close();
+        thread.join();
+        return link.sent();
+    }
+};
+
+enum class StopBy { Release, Inhibit };
+
+// One press of a straight key on a device thread, stopped from this thread at `offsetUs` after the
+// press: by a release (the key comes up later and its DitUp arrives) or by an inhibit (the DitUp is
+// dropped at the door, so nothing but the keyer's own release can unkey the radio).
+std::vector<std::string> straightKeyStoppedAt(StopBy how, int offsetUs) {
+    StraightRaceRig rig;
+    std::atomic<bool> pressed{false};
+    std::thread device([&] {
+        rig.keyer.paddleEvent(PaddleKeyer::Event::DitDown, 0.050);
+        pressed = true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        rig.keyer.paddleEvent(PaddleKeyer::Event::DitUp, 0.005);
+    });
+    while (!pressed)
+        std::this_thread::yield();
+    std::this_thread::sleep_for(std::chrono::microseconds(offsetUs));
+    if (how == StopBy::Release)
+        rig.keyer.releasePaddles();
+    else
+        rig.keyer.setInhibited(true);
+    device.join();
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    return rig.closeAndCollect();
 }
 
 } // namespace
@@ -172,6 +250,25 @@ private slots:
         QCOMPARE(openKzd(sent), 0);
         for (const auto &c : sent)
             QVERIFY2(std::stoi(c.substr(3, 4)) <= 5000, c.c_str());
+    }
+
+    // A straight key stopped from another thread at random offsets around the moment the keyer
+    // commits its KZD. The KZ frames must come out in the keyer's order, KZD then KZU, and the
+    // radio must never be left keyed, whether the stop is a release or an inhibit. Each run is
+    // checked after close() has joined the keyer, so its sequence is complete.
+    void straightKeyStopNeverOutrunsItsKzd() {
+        std::mt19937 rng(20261029);
+        std::uniform_int_distribution<int> offsetUs(0, 2500);
+        for (StopBy how : {StopBy::Release, StopBy::Inhibit}) {
+            for (int i = 0; i < 150; ++i) {
+                const int offset = offsetUs(rng);
+                const auto sent = straightKeyStoppedAt(how, offset);
+                const std::string fault = kzFault(sent);
+                const std::string where = std::string(how == StopBy::Release ? "release" : "inhibit") + " at " +
+                                          std::to_string(offset) + " us: " + fault;
+                QVERIFY2(fault.empty(), where.c_str());
+            }
+        }
     }
 
     // Close with nothing keyed returns promptly: the loop wakes on the Close event.

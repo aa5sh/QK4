@@ -275,11 +275,12 @@ void HardwareController::shutdownDevices() {
         m_halikeyDevice->closePort();
     }
 
-    // close() releases whatever is keyed (an open straight-key KZD gets its KZU) and posts Close,
-    // which ends run(). The keyer object outlives its thread; it's destroyed with this controller.
+    // close() releases whatever is keyed (an open straight-key KZD gets its KZU, queued for the
+    // keyer thread ahead of Close) and posts Close, which ends run(). The keyer object outlives its
+    // thread; it's destroyed with this controller.
     //
-    // WHY the link is cleared only after the join: close() may still have a KZU to send (a straight
-    // key held at quit). Dropping it would leave the K4 keyed. ConnectionController is still alive
+    // WHY the link is cleared only after the join: the keyer may still have a KZU to send (a
+    // straight key held at quit). Dropping it would leave the K4 keyed. ConnectionController is still alive
     // here (CONC-001), so the send is safe.
     if (m_keyerThread) {
         m_paddleKeyer->close();

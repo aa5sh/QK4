@@ -192,10 +192,11 @@ changing either.
   native handle and asserts both lines itself (`DTR_CONTROL_ENABLE`/`RTS_CONTROL_ENABLE` on
   Windows, `TIOCMBIS` on POSIX). `QSerialPortInfo` only lists the ports.
 - Shutdown, as built in `HardwareController`'s teardown: close the HaliKey port first, so no new
-  paddle events arrive → `PaddleKeyer::close()` (`releasePaddles()` → post Close →
-  `releasePaddles(true)`) → join the keyer thread (2 s) → clear the keyer's link. The link is
-  cleared only after the join because `close()` may still send a KZU for a held straight key;
-  `ConnectionController` is still alive at that point. Then the sidetone thread stops.
+  paddle events arrive → `PaddleKeyer::close()` (`releasePaddles(true)` refuses later events and
+  queues a held straight key's release, then Close is posted behind it) → join the keyer thread
+  (2 s) → clear the keyer's link. The link is cleared only after the join because the keyer thread
+  may still send a held straight key's KZU while draining; `ConnectionController` is still alive at
+  that point. Then the sidetone thread stops. Every KZ and ML frame is sent by the keyer thread.
 - Shared state written by the audio callback and read by the keyer (`sidetone_block_timing`,
   `sidetone_down_placed`, the lag and edge shift, the asked/late/cancelled/dropped stamps, the
   key-event queue) sits behind one short `SidetoneScheduler` mutex. K4-Companion relies on the GIL
@@ -203,8 +204,9 @@ changing either.
   callback waits at most a few hundred nanoseconds. If phase-2 profiling shows priority inversion
   on any platform, the fallback is per-field atomics with a seqlock for the tuples.
 - Keyer-side state follows K4-Companion's locks: `first_element_lock` becomes `m_firstElementMutex`;
-  paddle stamps and history get their own leaf mutex; straight-key on-air state gets a mutex plus
-  an atomic `k4Keyed` exchange, so two releases can never send two KZUs. No lock is held across
+  paddle stamps and history get their own leaf mutex; straight-key on-air state and the monitor
+  mute live on the keyer thread alone, so releases from other threads are queued to it and two
+  releases can never send two KZUs or a KZU ahead of its KZD. No lock is held across
   `Link::send` or `Clock::sleep`, which the virtual-clock harness relies on.
 - Deliberate deviation: after `close()`, paddle events are dropped at the door instead of queued
   for a thread that has gone.

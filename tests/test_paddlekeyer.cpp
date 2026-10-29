@@ -150,14 +150,42 @@ private slots:
     }
 
     // Releasing (Esc, disconnect, device lost) while a straight key is down closes the KZD with
-    // the real elapsed time, so the K4 is never left keyed.
+    // the time to the release, so the K4 is never left keyed. The KZU is the keyer thread's to
+    // send: the release only asks for it, and the keyer's delay in getting to it adds nothing.
     void releaseWhileStraightKeyDownSendsKzu() {
         StraightRig rig;
         rig.keyer.serialSignalChanged(PaddleKeyer::Signal::DSR, true, 0);
         rig.drain();
         rig.clock.t += 0.250;
         rig.keyer.releasePaddles();
+        QCOMPARE(rig.link.sent, (std::vector<std::string>{"KZD0000;"}));
+        rig.clock.t += 0.100;
+        rig.drain();
         QCOMPARE(rig.link.sent, (std::vector<std::string>{"KZD0000;", "KZU0250;"}));
+    }
+
+    // A release that lands after the key-down is queued but before the keyer has sent its KZD: the
+    // KZU follows the KZD, never precedes it, and the radio is not left keyed.
+    void releaseBeforeKzdIsSentFollowsIt() {
+        StraightRig rig;
+        rig.keyer.serialSignalChanged(PaddleKeyer::Signal::DSR, true, 0);
+        rig.clock.t += 0.040;
+        rig.keyer.releasePaddles();
+        QVERIFY(rig.link.sent.empty());
+        rig.drain();
+        QCOMPARE(rig.link.sent, (std::vector<std::string>{"KZD0000;", "KZU0040;"}));
+    }
+
+    // The same with an inhibit, where the key's own DitUp is dropped at the door: the keyer's
+    // release is the only thing that can unkey the radio.
+    void inhibitBeforeKzdIsSentFollowsIt() {
+        StraightRig rig;
+        rig.keyer.serialSignalChanged(PaddleKeyer::Signal::DSR, true, 0);
+        rig.clock.t += 0.040;
+        rig.keyer.setInhibited(true);
+        rig.keyer.serialSignalChanged(PaddleKeyer::Signal::DSR, false, 0.050);
+        rig.drain();
+        QCOMPARE(rig.link.sent, (std::vector<std::string>{"KZD0000;", "KZU0040;"}));
     }
 
     // The dah line is not a key in straight mode.

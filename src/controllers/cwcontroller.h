@@ -64,7 +64,9 @@ class KpodPlusDevice;
 //   2. m_cachedIsV14 and m_reversed are stored on the main thread (release) and loaded on those
 //      device threads (acquire).
 //   3. The keyer's commands reach TcpClient through FunctionLink → sendCAT, which queues to the
-//      I/O thread. One producer thread, one consumer: FIFO, so KZD/KZU stay in order.
+//      I/O thread. One producer thread, one consumer: FIFO, so KZD/KZU stay in order. The keyer
+//      thread is the only producer: a release, inhibit or close from the main thread, and the
+//      monitor-restore timer, post requests to the keyer's queue and never send KZ or ML.
 //   4. KPOD+ EP02 keyer data routes EP02 worker → I/O thread via QueuedConnection.
 //   5. The destructor cuts the V1.4 line handler first (CONVENTIONS Rule 11). That stops new
 //      calls only; an edge already in flight on the worker is ruled out by shutdownDevices().

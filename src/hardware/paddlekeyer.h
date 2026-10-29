@@ -11,7 +11,9 @@
 // the previous element was heard.
 //
 // Threads: paddleEvent/midiMessage/serialSignalChanged on the device thread; processNextEvent/run on
-// the keyer thread; configuration and releasePaddles from any thread.
+// the keyer thread; configuration, releasePaddles and close from any thread. Every KZ and ML frame
+// is sent from the keyer thread, in the order the keyer decides: other threads post a request to
+// its queue and never send.
 //
 // KPOD+ keying does not pass through here. See docs/cw-keyer-port-plan.md.
 
@@ -35,7 +37,9 @@ class SidetoneScheduler;
 class PaddleKeyer {
 public:
     enum class Mode { PlainIambic, IambicA, IambicB, Ultimatic };
-    enum class Event { DitDown, DitUp, DahDown, DahUp, Close };
+    // Release and RestoreMonitor are the keyer's own requests, posted by releasePaddles() and the
+    // monitor-restore timer; paddleEvent() ignores them, and Close.
+    enum class Event { DitDown, DitUp, DahDown, DahUp, Close, Release, RestoreMonitor };
     enum class Signal { CTS, DCD, DSR, RI };
 
     PaddleKeyer(CwKeying::Clock &clock, CwKeying::Link &link, SidetoneScheduler &sidetone,
@@ -74,15 +78,17 @@ public:
     void serialSignalChanged(Signal signal, bool asserted, double deltaTime);
 
     // Ends whatever is keyed: the running burst stops at its next element boundary with the
-    // current element sent whole; a straight key held down gets its KZU now. closing = true also
-    // refuses every later event.
+    // current element sent whole; a straight key held down gets its KZU from the keyer thread,
+    // after any KZD already queued ahead of it, timed to this call. closing = true also refuses
+    // every later event.
     void releasePaddles(bool closing = false);
 
     // ---- keyer thread ----
     bool hasPendingEvents() const;
     Event processNextEvent(); // one pass of the keyer loop; blocks until an event arrives
     void run();               // the keyer loop, until Close
-    // Releases, posts Close and refuses everything after. The owner joins the keyer thread.
+    // Releases, posts Close and refuses everything after. A straight key held down gets its KZU
+    // before the keyer sees Close. The owner joins the keyer thread.
     void close();
 
 private:
@@ -93,6 +99,8 @@ private:
     struct PaddleEventItem {
         Event event;
         double timestamp;
+        double keyDownAt = 0.0;              // Release: when the straight key went down
+        unsigned long long monitorToken = 0; // RestoreMonitor: the restore it belongs to
     };
     struct Stamps {
         double ditUp, dahUp, ditDown, dahDown;
@@ -114,7 +122,7 @@ private:
     Element missedFirstElement(std::optional<double> endedDue);
     Element placedFirstElement();
     std::optional<FirstElement> takeFirstElement();
-    void startBurstSidetone(Event event, double timestamp, double pressed);
+    void startBurstSidetoneLocked(Event event, double timestamp, double pressed);
     bool startElement(bool firstElement, const std::function<bool(double)> &wanted);
     void planSidetoneCatchup(bool firstElement);
     bool confirmElement(double sidetoneStart, const std::function<bool(double)> &wanted, double gridShift);
@@ -123,7 +131,7 @@ private:
     void waitUntilSidetoneHeard();
     void endElement(char element);
     void measureInherentSidetoneLag();
-    void endStraightKeyOnAir(double keyDownAt);
+    void endStraightKeyOnAir(double keyDownAt, double releasedAt);
     long long straightKeyMs(double seconds) const;
     double midiEventTimestamp(double delta);
     std::optional<double> sleepUntil(double when);
@@ -182,12 +190,12 @@ private:
     bool m_straightKeyDown = false;
     double m_straightKeyDownAt = 0.0; // read only under m_firstElementMutex, like its writer
 
-    // ---- straight-key on-air state (keyer thread, and releasePaddles from any thread) ----
+    // ---- straight-key on-air state (keyer thread; m_paddleTimestamp also the device thread) ----
     std::mutex m_straightMutex;
     double m_paddleTimestamp = 0;
     double m_previousKeyDownTimestamp = 0;
     double m_previousKeyUpTimestamp = 0;
-    std::atomic<bool> m_k4Keyed{false};
+    bool m_k4Keyed = false; // keyer thread only
 
     // ---- burst state (keyer thread only) ----
     std::optional<double> m_burstEndDue;
@@ -210,9 +218,9 @@ private:
     double m_wakeOverrun = 0.0;
     std::optional<long long> m_lastKzdMs;
 
-    // ---- monitor mute ----
-    std::mutex m_monitorMutex;
+    // ---- monitor mute (keyer thread only) ----
     bool m_monitorMuted = false;
+    unsigned long long m_monitorToken = 0;
 
     static constexpr double kUnmuteExtraDelay = 0.5;
     static constexpr double kTolerableSidetoneLagMargin = .001;

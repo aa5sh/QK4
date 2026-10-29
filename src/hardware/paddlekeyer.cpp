@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <utility>
 
 using CwKeying::pyRound;
 
@@ -162,41 +163,44 @@ bool PaddleKeyer::hasPendingEvents() const {
 
 void PaddleKeyer::releasePaddles(bool closing) {
     bool straightKeyDown;
-    double straightKeyDownAt;
     std::optional<FirstElement> scheduled;
     {
         std::lock_guard lock(m_firstElementMutex);
         if (closing)
             m_closed = true;
         straightKeyDown = m_straightKeyDown;
-        straightKeyDownAt = m_straightKeyDownAt;
         m_straightKeyDown = false;
         scheduled = m_firstElementScheduled;
         m_firstElementScheduled.reset();
         const double now = m_clock.now();
-        std::lock_guard paddles(m_paddleMutex);
-        m_stamps.ditUp = now;
-        m_stamps.dahUp = now;
-        m_history.emplace_back(now, Event::DitUp);
-        m_history.emplace_back(now, Event::DahUp);
-        while (m_history.size() > kHistoryLength)
-            m_history.pop_front();
+        {
+            std::lock_guard paddles(m_paddleMutex);
+            m_stamps.ditUp = now;
+            m_stamps.dahUp = now;
+            m_history.emplace_back(now, Event::DitUp);
+            m_history.emplace_back(now, Event::DahUp);
+            while (m_history.size() > kHistoryLength)
+                m_history.pop_front();
+        }
+        // WHY posted, and under this lock: the keyer thread may be between deciding to key and
+        // sending the KZD. A KZU sent from here could reach the radio first and leave it keyed.
+        // paddleEvent queues under the same lock, so the DitDown this release saw is ahead of it.
+        if (straightKeyDown)
+            pushEvent({Event::Release, now, m_straightKeyDownAt});
     }
-    if (straightKeyDown) {
+    if (straightKeyDown)
         m_sidetone.keyNow(false);
-        endStraightKeyOnAir(straightKeyDownAt);
-    } else if (scheduled && !m_sidetone.cancelDown()) {
+    else if (scheduled && !m_sidetone.cancelDown())
         m_sidetone.keyNow(false);
-    }
 }
 
-void PaddleKeyer::endStraightKeyOnAir(double keyDownAt) {
-    if (!m_k4Keyed.exchange(false))
+void PaddleKeyer::endStraightKeyOnAir(double keyDownAt, double releasedAt) {
+    if (!std::exchange(m_k4Keyed, false))
         return;
     long long ms;
     {
         std::lock_guard lock(m_straightMutex);
-        const double seconds = m_clock.now() - keyDownAt;
+        const double seconds = releasedAt - keyDownAt;
         m_previousKeyUpTimestamp = m_previousKeyDownTimestamp + seconds;
         m_paddleTimestamp = std::max(m_paddleTimestamp, m_previousKeyUpTimestamp);
         ms = straightKeyMs(seconds);
@@ -205,9 +209,8 @@ void PaddleKeyer::endStraightKeyOnAir(double keyDownAt) {
 }
 
 void PaddleKeyer::close() {
-    releasePaddles();
-    pushEvent({Event::Close, m_clock.now()});
     releasePaddles(true);
+    pushEvent({Event::Close, m_clock.now()});
     m_unmuteTimer.cancel();
 }
 
@@ -284,37 +287,33 @@ void PaddleKeyer::serialSignalChanged(Signal signal, bool asserted, double delta
 }
 
 void PaddleKeyer::paddleEvent(Event event, double deltaTime, std::optional<double> timestamp) {
-    if (m_inhibited)
+    if (event != Event::DitDown && event != Event::DitUp && event != Event::DahDown && event != Event::DahUp)
+        return;
+    // WHY one lock from the inhibit check to the queue: releasePaddles takes it too, so an event
+    // is either queued ahead of a release (which then ends it) or sees the inhibit and is dropped.
+    // Checked outside it, a key-down could slip in after the release and key with nothing to end it.
+    std::lock_guard lock(m_firstElementMutex);
+    // Deliberate deviation: after close() an event is dropped rather than queued for a keyer
+    // thread that has gone.
+    if (m_inhibited || m_closed)
         return;
     double stamp;
     if (m_straightKeying) {
-        {
-            std::lock_guard lock(m_firstElementMutex);
-            // Deliberate deviation: after close() an event is dropped rather than queued for a
-            // keyer thread that has gone.
-            if (m_closed)
-                return;
-            if (event == Event::DitDown) {
-                m_sidetone.keyNow(true);
-                m_straightKeyDown = true;
-                m_straightKeyDownAt = m_clock.now();
-            } else if (event == Event::DitUp) {
-                m_sidetone.keyNow(false);
-                m_straightKeyDown = false;
-            }
+        if (event == Event::DitDown) {
+            m_sidetone.keyNow(true);
+            m_straightKeyDown = true;
+            m_straightKeyDownAt = m_clock.now();
+        } else if (event == Event::DitUp) {
+            m_sidetone.keyNow(false);
+            m_straightKeyDown = false;
         }
-        std::lock_guard lock(m_straightMutex);
+        std::lock_guard straight(m_straightMutex);
         m_paddleTimestamp += deltaTime;
         stamp = m_paddleTimestamp;
     } else {
-        {
-            std::lock_guard lock(m_firstElementMutex);
-            if (m_closed)
-                return;
-        }
         const double arrived = m_clock.now();
         stamp = timestamp ? *timestamp : arrived;
-        startBurstSidetone(event, arrived, stamp);
+        startBurstSidetoneLocked(event, arrived, stamp);
     }
     {
         std::lock_guard lock(m_paddleMutex);
@@ -332,6 +331,8 @@ void PaddleKeyer::paddleEvent(Event event, double deltaTime, std::optional<doubl
             m_stamps.dahUp = stamp;
             break;
         case Event::Close:
+        case Event::Release:
+        case Event::RestoreMonitor:
             break;
         }
         m_history.emplace_back(stamp, event);
@@ -341,7 +342,8 @@ void PaddleKeyer::paddleEvent(Event event, double deltaTime, std::optional<doubl
     pushEvent({event, stamp});
 }
 
-void PaddleKeyer::startBurstSidetone(Event event, double timestamp, double pressed) {
+// Caller holds m_firstElementMutex.
+void PaddleKeyer::startBurstSidetoneLocked(Event event, double timestamp, double pressed) {
     char element;
     if (event == Event::DitDown)
         element = '.';
@@ -349,7 +351,6 @@ void PaddleKeyer::startBurstSidetone(Event event, double timestamp, double press
         element = '-';
     else
         return;
-    std::lock_guard lock(m_firstElementMutex);
     if (m_closed || m_inBurst || m_firstElementScheduled)
         return;
     if (m_sidetone.scheduleDown(timestamp))
@@ -375,8 +376,19 @@ void PaddleKeyer::run() {
 // keyer whenever straight keying is switched (set_device_type).
 PaddleKeyer::Event PaddleKeyer::processNextEvent() {
     const PaddleEventItem item = popEvent();
-    if (item.event == Event::Close)
+    switch (item.event) {
+    case Event::Close:
         return item.event;
+    case Event::Release:
+        endStraightKeyOnAir(item.keyDownAt, item.timestamp);
+        return item.event;
+    case Event::RestoreMonitor:
+        if (item.monitorToken == m_monitorToken)
+            unmuteSidetoneMonitor();
+        return item.event;
+    default:
+        break;
+    }
     if (m_straightKeying)
         sendStraightKey(item);
     else if (mode() == Mode::Ultimatic)
@@ -412,7 +424,7 @@ void PaddleKeyer::sendStraightKey(const PaddleEventItem &item) {
             ms = straightKeyMs(timestamp - m_previousKeyDownTimestamp);
             m_previousKeyUpTimestamp = timestamp;
         }
-        if (m_k4Keyed.exchange(false)) {
+        if (std::exchange(m_k4Keyed, false)) {
             send(fourDigits("KZU", ms));
             double delay = m_keyDownInitialDelayMs / 1000.0;
             delay += m_sidetone.delay();
@@ -797,13 +809,8 @@ void PaddleKeyer::muteSidetoneMonitor() {
     if (!m_muteRadioMonitor)
         return;
     m_unmuteTimer.cancel();
-    bool wasMuted;
-    {
-        std::lock_guard lock(m_monitorMutex);
-        wasMuted = m_monitorMuted;
-        m_monitorMuted = true;
-    }
-    if (!wasMuted)
+    ++m_monitorToken;
+    if (!std::exchange(m_monitorMuted, true))
         send("ML0000;");
 }
 
@@ -811,7 +818,6 @@ void PaddleKeyer::unmuteSidetoneMonitor() {
     char buf[16];
     std::snprintf(buf, sizeof buf, "ML0%03d;", m_monitorLevel.load());
     send(buf);
-    std::lock_guard lock(m_monitorMutex);
     m_monitorMuted = false;
 }
 
@@ -819,5 +825,8 @@ void PaddleKeyer::delayedUnmuteSidetoneMonitor(double delay) {
     if (!m_muteRadioMonitor)
         return;
     m_unmuteTimer.cancel();
-    m_unmuteTimer.start(delay, [this] { unmuteSidetoneMonitor(); });
+    const unsigned long long token = ++m_monitorToken;
+    // WHY posted: the timer fires on the main thread, and ML is sent only from the keyer thread. A
+    // burst that starts before the keyer reaches this request moves the token on and voids it.
+    m_unmuteTimer.start(delay, [this, token] { pushEvent({Event::RestoreMonitor, m_clock.now(), 0.0, token}); });
 }

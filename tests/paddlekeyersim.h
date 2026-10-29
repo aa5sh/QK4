@@ -214,6 +214,8 @@ public:
         const size_t before = m_sent.size();
         if (m_timer.fire)
             m_timer.fire();
+        while (m_keyer.hasPendingEvents())
+            m_keyer.processNextEvent();
         return {m_sent.begin() + static_cast<long>(before), m_sent.end()};
     }
     SidetoneScheduler &sidetone() { return m_sidetone; }
