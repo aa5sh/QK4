@@ -18,7 +18,6 @@ public:
     void setPrimaryText(const QString &text);
     void setAlternateText(const QString &text);
     void setHasAlternateFunction(bool has); // If false, alternate text is white (just label), not amber
-    QString primaryText() const { return m_primaryText; }
     bool hasAlternateFunction() const { return m_hasAlternateFunction; }
 
 signals:
@@ -61,7 +60,6 @@ public:
     // If hasAlternateFunction is false, alternate text is white (just a label, no right-click function)
     void setButtonLabel(int index, const QString &primary, const QString &alternate = QString(),
                         bool hasAlternateFunction = true);
-    QString buttonLabel(int index) const;
 
 signals:
     void buttonClicked(int index);      // Emits 0-6 for left-click

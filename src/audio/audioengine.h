@@ -144,7 +144,7 @@ signals:
     // encode pipeline here from AudioController (main thread) so a busy GUI
     // event loop can no longer stall voice TX packet emission.
     void txPacketReady(const QByteArray &packet);
-    void bufferStatus(int queueBytes, int maxBytes);
+    void bufferStatus(int queueBytes);
 
     // The microphone could not be opened, with the reason as a sentence for the operator. The
     // operator has to act - a different device, or a different rate.

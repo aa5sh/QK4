@@ -21,7 +21,9 @@ private:
             return nullptr;
         }
         QTcpSocket *peer = amp.nextPendingConnection();
-        QTest::qWaitFor([&]() { return client.isConnected(); }, 5000);
+        if (!QTest::qWaitFor([&]() { return client.isConnected(); }, 5000)) {
+            return nullptr;
+        }
         return peer;
     }
 

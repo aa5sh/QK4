@@ -12,8 +12,7 @@ const int ToggleButtonSpacing = 2;
 } // namespace
 
 ToggleGroupWidget::ToggleGroupWidget(const QString &leftLabel, const QString &rightLabel, QWidget *parent)
-    : QWidget(parent), m_leftLabel(leftLabel), m_rightLabel(rightLabel), m_leftSelected(true), m_rightSelected(false),
-      m_rightEnabled(true) {
+    : QWidget(parent), m_leftLabel(leftLabel), m_rightLabel(rightLabel), m_leftSelected(true), m_rightSelected(false) {
     // Calculate equal width for all three buttons (left, &, right)
     QFontMetrics fm(font());
     int leftTextWidth = fm.horizontalAdvance(leftLabel) + 16;
@@ -40,13 +39,6 @@ void ToggleGroupWidget::setLeftSelected(bool selected) {
 void ToggleGroupWidget::setRightSelected(bool selected) {
     if (m_rightSelected != selected) {
         m_rightSelected = selected;
-        update();
-    }
-}
-
-void ToggleGroupWidget::setRightEnabled(bool enabled) {
-    if (m_rightEnabled != enabled) {
-        m_rightEnabled = enabled;
         update();
     }
 }
@@ -137,10 +129,10 @@ void ToggleGroupWidget::paintEvent(QPaintEvent *event) {
 
     // Draw & button (selected when both left and right are selected)
     bool ampSelected = m_leftSelected && m_rightSelected;
-    drawButton(m_ampRect, ampSelected, m_rightEnabled, "&");
+    drawButton(m_ampRect, ampSelected, true, "&");
 
     // Draw right button
-    drawButton(m_rightRect, m_rightSelected, m_rightEnabled, m_rightLabel);
+    drawButton(m_rightRect, m_rightSelected, true, m_rightLabel);
 }
 
 void ToggleGroupWidget::mousePressEvent(QMouseEvent *event) {
@@ -148,9 +140,9 @@ void ToggleGroupWidget::mousePressEvent(QMouseEvent *event) {
         QPoint pos = event->pos();
         if (m_leftRect.contains(pos)) {
             emit leftClicked();
-        } else if (m_ampRect.contains(pos) && m_rightEnabled) {
+        } else if (m_ampRect.contains(pos)) {
             emit bothClicked();
-        } else if (m_rightRect.contains(pos) && m_rightEnabled) {
+        } else if (m_rightRect.contains(pos)) {
             emit rightClicked();
         }
     }

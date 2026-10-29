@@ -61,13 +61,11 @@ void NetworkMetrics::updateRttStats() {
 }
 
 void NetworkMetrics::onAudioSequence() {
-    m_totalPacketsInterval++;
     m_audioActive = true;
 }
 
-void NetworkMetrics::onBufferStatus(int queueBytes, int maxBytes) {
+void NetworkMetrics::onBufferStatus(int queueBytes) {
     m_bufferBytes = queueBytes;
-    m_bufferMaxBytes = maxBytes;
     pushHistory(m_bufferHistory, static_cast<float>(bufferMs()));
 }
 
@@ -83,7 +81,6 @@ void NetworkMetrics::onConnectionStateChanged(bool connected) {
         m_rttCurrent = -1;
         m_rttAvg = 0.0;
         m_rttJitter = 0.0;
-        m_totalPacketsInterval = 0;
         m_audioActive = false;
         m_audioWasActive = false;
         m_stalePingCount = 0;
@@ -156,8 +153,6 @@ void NetworkMetrics::onSummaryTimer() {
     // Track stale ping (reset in onLatencyChanged when PONG arrives)
     m_stalePingCount++;
 
-    // Reset per-interval counters
-    m_totalPacketsInterval = 0;
     if (m_audioActive)
         m_audioWasActive = true;
     m_audioActive = false; // Will be set true again when next audio packet arrives

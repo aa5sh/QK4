@@ -449,7 +449,7 @@ void AudioEngine::feedAudioDevice() {
         }
     }
 
-    emit bufferStatus(preDrainQueueBytes, MAX_QUEUE_BYTES);
+    emit bufferStatus(preDrainQueueBytes);
 
     // Apply mix/volume and write to audio sink without holding the lock
     for (QByteArray &packet : m_feedBatch) {

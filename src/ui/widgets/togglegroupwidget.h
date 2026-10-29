@@ -16,11 +16,9 @@ public:
 
     void setLeftSelected(bool selected);
     void setRightSelected(bool selected);
-    void setRightEnabled(bool enabled);
 
     bool isLeftSelected() const { return m_leftSelected; }
     bool isRightSelected() const { return m_rightSelected; }
-    bool isRightEnabled() const { return m_rightEnabled; }
 
 signals:
     void leftClicked();
@@ -36,7 +34,6 @@ private:
     QString m_rightLabel;
     bool m_leftSelected = true;
     bool m_rightSelected = false;
-    bool m_rightEnabled = true;
 
     // Hit test rectangles (calculated in paintEvent)
     QRect m_leftRect;

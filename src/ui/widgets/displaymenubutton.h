@@ -17,7 +17,6 @@ public:
     void setSelected(bool selected);
     bool isSelected() const { return m_selected; }
 
-    QString primaryText() const { return m_primaryText; }
     QString alternateText() const { return m_alternateText; }
 
     void setPrimaryText(const QString &text);

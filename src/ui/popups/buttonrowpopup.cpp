@@ -166,10 +166,3 @@ void ButtonRowPopup::setButtonLabel(int index, const QString &primary, const QSt
         m_buttons[index]->setHasAlternateFunction(hasAlternateFunction);
     }
 }
-
-QString ButtonRowPopup::buttonLabel(int index) const {
-    if (index >= 0 && index < m_buttons.size()) {
-        return m_buttons[index]->primaryText();
-    }
-    return QString();
-}

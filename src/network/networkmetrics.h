@@ -38,8 +38,6 @@ public:
     double rttAvg() const { return m_rttAvg; }
     double rttJitter() const { return m_rttJitter; }
     double bufferMs() const { return m_bufferBytes / kDecodedBytesPerMs; }
-    int bufferMaxBytes() const { return m_bufferMaxBytes; }
-    int packetRate() const { return m_totalPacketsInterval; }
 
     // 10-second rolling history for the live sparkline popup. Read on the main thread only.
     const std::deque<TimedSample> &rttHistory() const { return m_rttHistory; }
@@ -51,7 +49,7 @@ public:
 public slots:
     void onLatencyChanged(int ms);
     void onAudioSequence();
-    void onBufferStatus(int queueBytes, int maxBytes);
+    void onBufferStatus(int queueBytes);
     void onConnectionStateChanged(bool connected);
 
 signals:
@@ -87,15 +85,8 @@ private:
     double m_rttAvg = 0.0;
     double m_rttJitter = 0.0;
 
-    // Audio packets received this interval
-    int m_totalPacketsInterval = 0;
-
     // Audio buffer depth (latest snapshot).
-    // 96000 bytes = 1.0 s at 12 kHz stereo Float32 (12000 × 2 × 4 = 96000). The 1 s ceiling
-    // matches AudioEngine::MAX_QUEUE_BYTES so the health meter's denominator is meaningful.
-    static constexpr int kDefaultBufferMaxBytes = 96000;
     int m_bufferBytes = 0;
-    int m_bufferMaxBytes = kDefaultBufferMaxBytes;
 
     // Audio activity tracking
     bool m_audioActive = false;    // Received packets this interval
