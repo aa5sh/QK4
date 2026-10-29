@@ -175,6 +175,8 @@ set(SOURCES
     src/logging/logcategories.cpp
     src/logging/logpaths.cpp
     src/logging/logsink.cpp
+    src/logging/logrules.cpp
+    src/logging/logsession.cpp
     src/models/radiostate.cpp
     src/models/radiostate/antennastate.cpp
     src/models/radiostate/audioeffectsstate.cpp
@@ -328,6 +330,8 @@ set(HEADERS
     src/logging/logpaths.h
     src/logging/logqueue.h
     src/logging/logsink.h
+    src/logging/logrules.h
+    src/logging/logsession.h
     src/models/radiostate.h
     src/models/radiostate/antennastate.h
     src/models/radiostate/datacontrolstate.h

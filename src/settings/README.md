@@ -4,7 +4,7 @@
 
 ## Files
 
-- `radiosettings.{cpp,h}` — `RadioSettings` singleton (`RadioSettings::instance()`). Radio profiles, DX cluster list, KPA1500 config, CAT and TCI server config, audio device and gain preferences, hardware (KPOD, HaliKey, CW keyer) settings, macros, station data and the interface scale. Includes the password obfuscation helpers.
+- `radiosettings.{cpp,h}` — `RadioSettings` singleton (`RadioSettings::instance()`). Radio profiles, DX cluster list, KPA1500 config, CAT and TCI server config, audio device and gain preferences, hardware (KPOD, HaliKey, CW keyer) settings, macros, station data, the interface scale and the Diagnostics logging choices (`Logging/` keys; bench items are session-only). Includes the password obfuscation helpers.
 - `interfacescale.{cpp,h}` — `InterfaceScale::` namespace. Applies the saved interface scale through `QT_SCALE_FACTOR` before `QApplication` exists (never overriding one the operator set), fits Auto to the screen (down in 5% steps on a small one, up to 125% only — never 105–120% — on a large one, never up where the platform reports no work area) with at most one silent relaunch per launch, and relaunches for Options → Display → Restart Now only after the main window has shut down, so the new instance never races the old one for the CAT/TCI ports or USB devices.
 
 ## Scope

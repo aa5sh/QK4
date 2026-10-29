@@ -1,6 +1,7 @@
 #include <QApplication>
 #include "logging/logcategories.h"
 #include "logging/logpaths.h"
+#include "logging/logsession.h"
 #include "logging/logsink.h"
 #include <QDir>
 #include <QScreen>
@@ -31,21 +32,7 @@
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <cstdio>
-#include <io.h>
-#else
-#include <cstdio>
-#include <unistd.h>
 #endif
-
-// Whether stderr reaches a person: a terminal, or a pipe or file someone redirected it to is not
-// distinguished here, so --log-stderr asks for it explicitly.
-static bool stderrIsTerminal() {
-#ifdef Q_OS_WIN
-    return _isatty(_fileno(stderr)) != 0;
-#else
-    return isatty(fileno(stderr)) != 0;
-#endif
-}
 
 static QString packagingDescription() {
     if (qEnvironmentVariableIsSet("FLATPAK_ID"))
@@ -267,6 +254,12 @@ int main(int argc, char *argv[]) {
         QStringLiteral("log-stderr"),
         QStringLiteral("Also print log messages to the console while a log file is being written."));
     parser.addOption(logStderrOption);
+    const QCommandLineOption logRulesOption(
+        QStringLiteral("log-rules"),
+        QStringLiteral("Logging rules applied after the Diagnostics page's, separated by ';' - for example "
+                       "\"qk4.cw.*.debug=true;qk4.cat.tx.debug=true\". QT_LOGGING_RULES still wins."),
+        QStringLiteral("rules"));
+    parser.addOption(logRulesOption);
     const QStringList arguments = QCoreApplication::arguments();
     const bool parsedCleanly = parser.parse(arguments);
     // WHY: not showHelp()/showVersion() - both call ::exit(), which ends the process without
@@ -350,20 +343,24 @@ int main(int argc, char *argv[]) {
         qCWarning(lcApp) << "Ignoring command line:" << parser.errorText();
     }
 
-    const bool writeLogFile = parser.isSet(logFileOption);
-    Logging::LogSink *logSink = Logging::sink();
-    // WHY: with no file the console is the only place a message can go, as it always was. With a
-    // file, a Finder or Explorer launch would only send a second copy to the unified log or
-    // OutputDebugString, so the console copy is kept for a terminal or on request.
-    logSink->setConsoleEnabled(!writeLogFile || stderrIsTerminal() || parser.isSet(logStderrOption));
-    if (writeLogFile) {
-        Logging::LogSink::FileOptions file;
-        file.directory = Logging::logDirectory(Logging::currentPathInputs());
-        file.header = sessionHeader();
-        if (!logSink->setFile(file))
-            qCWarning(lcApp) << "Could not open a log file in" << QDir::toNativeSeparators(file.directory);
-    }
-    logSink->start();
+    Logging::CommandLine logCommandLine;
+    logCommandLine.extraRules = parser.value(logRulesOption);
+    logCommandLine.forceFile = parser.isSet(logFileOption);
+    logCommandLine.stderrRequested = parser.isSet(logStderrOption);
+    Logging::setCommandLine(logCommandLine);
+    Logging::setSessionHeader(sessionHeader());
+    auto applyLogging = [] {
+        RadioSettings *settings = RadioSettings::instance();
+        Logging::LogConfig config;
+        config.level = Logging::levelFromId(settings->logLevel());
+        config.groups = settings->logGroups();
+        config.bench = settings->logBench();
+        Logging::apply(settings->logFileEnabled(), config);
+    };
+    applyLogging();
+    QObject::connect(RadioSettings::instance(), &RadioSettings::loggingChanged, RadioSettings::instance(),
+                     applyLogging);
+    Logging::sink()->start();
 
     int exitCode = 0;
     bool relaunch = false;

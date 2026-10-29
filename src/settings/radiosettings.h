@@ -239,6 +239,19 @@ public:
     // from the same store, spelled the same way.
     static double startupInterfaceScale(bool *isAuto = nullptr);
 
+    // Diagnostics logging (Options -> Diagnostics). The log file is off until the operator turns
+    // it on. Level is a Logging::levelId ("warnings", "normal", "everything"); groups are
+    // Logging::groups() ids. Bench items are deliberately not saved: they are high-volume, so they
+    // switch themselves off at the next launch.
+    bool logFileEnabled() const;
+    void setLogFileEnabled(bool enabled);
+    QString logLevel() const;
+    void setLogLevel(const QString &level);
+    QStringList logGroups() const;
+    void setLogGroups(const QStringList &groups);
+    QStringList logBench() const;
+    void setLogBench(const QStringList &bench);
+
 signals:
     void radiosChanged();
     void kpodEnabledChanged(bool enabled);
@@ -272,6 +285,7 @@ signals:
     void bandPlanOverlayEnabledChanged(bool enabled);
     void temperatureInFahrenheitChanged(bool fahrenheit);
     void interfaceScaleChanged(int percent);
+    void loggingChanged();
 
 private:
     explicit RadioSettings(QObject *parent = nullptr);
@@ -329,6 +343,8 @@ private:
     // KPOD+ encode mode (0=KZ, 1=KX). Keyer speed / CW pitch / iambic mode /
     // paddle orientation are not stored — the KPOD+ mirrors the K4.
     int m_kpodPlusEncodeMode = 0;
+
+    QStringList m_logBench; // session only, see logBench()
 
     QSettings m_settings;
 };

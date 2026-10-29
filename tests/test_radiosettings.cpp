@@ -274,6 +274,44 @@ private slots:
         QCOMPARE(s->connectAtStartupIndex(), -1);
     }
 
+    void loggingIsOffAndNormalByDefault() {
+        QSettings raw(QSettings::defaultFormat(), QSettings::UserScope, QStringLiteral("QK4"), QStringLiteral("QK4"));
+        raw.remove(QStringLiteral("Logging"));
+        raw.sync();
+        RadioSettings *s = RadioSettings::instance();
+        QVERIFY(!s->logFileEnabled());
+        QCOMPARE(s->logLevel(), QStringLiteral("normal"));
+        QVERIFY(s->logGroups().isEmpty());
+        QVERIFY(s->logBench().isEmpty());
+    }
+
+    void loggingSettingsAreSanitisedAndSignalOnlyOnChange() {
+        RadioSettings *s = RadioSettings::instance();
+        QSignalSpy spy(s, &RadioSettings::loggingChanged);
+        s->setLogLevel(QStringLiteral("loud"));
+        QCOMPARE(spy.count(), 0); // unknown is Normal, which it already was
+        s->setLogLevel(QStringLiteral("everything"));
+        s->setLogGroups({QStringLiteral("tci"), QStringLiteral("bogus"), QStringLiteral("app")});
+        s->setLogGroups({QStringLiteral("app"), QStringLiteral("tci")});
+        s->setLogFileEnabled(true);
+        s->setLogBench({QStringLiteral("cat"), QStringLiteral("app")});
+        QCOMPARE(spy.count(), 4);
+        QCOMPARE(s->logLevel(), QStringLiteral("everything"));
+        QCOMPARE(s->logGroups(), (QStringList{QStringLiteral("app"), QStringLiteral("tci")}));
+        QCOMPARE(s->logBench(), QStringList{QStringLiteral("cat")});
+        QVERIFY(s->logFileEnabled());
+
+        // Bench items are never written to the store, so the next launch starts without them.
+        QSettings raw(QSettings::defaultFormat(), QSettings::UserScope, QStringLiteral("QK4"), QStringLiteral("QK4"));
+        QVERIFY(!raw.contains(QStringLiteral("Logging/bench")));
+        QCOMPARE(raw.value(QStringLiteral("Logging/level")).toString(), QStringLiteral("everything"));
+
+        s->setLogBench({});
+        s->setLogFileEnabled(false);
+        s->setLogLevel(QStringLiteral("normal"));
+        s->setLogGroups({});
+    }
+
     void interfaceScaleDefaultsToAuto() {
         QSettings raw(QSettings::defaultFormat(), QSettings::UserScope, QStringLiteral("QK4"), QStringLiteral("QK4"));
         raw.remove(QStringLiteral("ui"));

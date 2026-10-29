@@ -19,6 +19,8 @@ add_library(qk4_logging STATIC
     ${CMAKE_SOURCE_DIR}/src/logging/logcategories.cpp
     ${CMAKE_SOURCE_DIR}/src/logging/logpaths.cpp
     ${CMAKE_SOURCE_DIR}/src/logging/logsink.cpp
+    ${CMAKE_SOURCE_DIR}/src/logging/logrules.cpp
+    ${CMAKE_SOURCE_DIR}/src/logging/logsession.cpp
 )
 target_include_directories(qk4_logging PUBLIC ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(qk4_logging PUBLIC Qt6::Core)
@@ -711,6 +713,12 @@ add_executable(test_logsink test_logsink.cpp)
 target_include_directories(test_logsink PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_logsink Qt6::Core Qt6::Test)
 add_test(NAME LogSinkTests COMMAND test_logsink)
+
+# Diagnostics rules: level, groups, bench items and --log-rules, checked on the real categories.
+add_executable(test_logrules test_logrules.cpp)
+target_include_directories(test_logrules PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_logrules Qt6::Core Qt6::Test)
+add_test(NAME LogRulesTests COMMAND test_logrules)
 
 # Aggregate target: `cmake --build <dir> --target qk4_tests` builds every
 # test_* executable defined above. CI uses this so adding `add_executable(test_foo)`

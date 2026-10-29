@@ -1,4 +1,5 @@
 #include "radiosettings.h"
+#include "logging/logrules.h"
 #include "audio/rxoutputstage.h"
 #include "ui/styling/k4constants.h"
 #include "utils/windowfit.h"
@@ -401,6 +402,56 @@ void RadioSettings::setInterfaceScale(int percent) {
         m_settings.setValue("ui/interfaceScale", percent);
         m_settings.sync();
         emit interfaceScaleChanged(percent);
+    }
+}
+
+bool RadioSettings::logFileEnabled() const {
+    return m_settings.value("Logging/fileEnabled", false).toBool();
+}
+
+void RadioSettings::setLogFileEnabled(bool enabled) {
+    if (logFileEnabled() != enabled) {
+        m_settings.setValue("Logging/fileEnabled", enabled);
+        m_settings.sync();
+        emit loggingChanged();
+    }
+}
+
+QString RadioSettings::logLevel() const {
+    return Logging::levelId(Logging::levelFromId(m_settings.value("Logging/level").toString()));
+}
+
+void RadioSettings::setLogLevel(const QString &level) {
+    const QString sanitized = Logging::levelId(Logging::levelFromId(level));
+    if (logLevel() != sanitized) {
+        m_settings.setValue("Logging/level", sanitized);
+        m_settings.sync();
+        emit loggingChanged();
+    }
+}
+
+QStringList RadioSettings::logGroups() const {
+    return Logging::sanitizeGroupIds(m_settings.value("Logging/groups").toStringList());
+}
+
+void RadioSettings::setLogGroups(const QStringList &groups) {
+    const QStringList sanitized = Logging::sanitizeGroupIds(groups);
+    if (logGroups() != sanitized) {
+        m_settings.setValue("Logging/groups", sanitized);
+        m_settings.sync();
+        emit loggingChanged();
+    }
+}
+
+QStringList RadioSettings::logBench() const {
+    return m_logBench;
+}
+
+void RadioSettings::setLogBench(const QStringList &bench) {
+    const QStringList sanitized = Logging::sanitizeBenchIds(bench);
+    if (m_logBench != sanitized) {
+        m_logBench = sanitized;
+        emit loggingChanged();
     }
 }
 

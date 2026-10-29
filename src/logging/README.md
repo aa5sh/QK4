@@ -15,6 +15,12 @@ QK4's diagnostic logging. Links against `Qt6::Core` only, so every piece is test
   `~/Library/Preferences` on macOS.
 - `logqueue.h` — the bounded queue between the message handler and the writer: two rings allocated
   up front, a push is one slot assignment under a mutex, a full ring drops and counts.
+- `logrules.{h,cpp}` — the Diagnostics switches as data (`groups()`, `benchItems()`) and the pure
+  `buildRules()` that turns a level, groups, bench items and `--log-rules` into
+  `QLoggingCategory::setFilterRules()` text.
+- `logsession.{h,cpp}` — applies the operator's choices at runtime: rules (live, no restart), log
+  file on or off, console copy. `main.cpp` calls `Logging::apply()` at startup and on
+  `RadioSettings::loggingChanged`.
 - `logsink.{h,cpp}` — the message handler and the writer thread. `Logging::install()` is the first
   line of `main()`; `Logging::shutdown()` writes the footer and restores Qt's handler.
 
@@ -99,6 +105,19 @@ category that no rule or Options switch can address. The same test enforces it.
 | `qk4.spectrum.diag` | `lcSpectrumDiag` | waterfall tier and geometry diagnostics | `qk4.pan.diag` |
 
 ## Turning debug on
+
+Options → Diagnostics, or on the command line:
+
+- `--log-file` — write the log file for this launch, whatever the page says.
+- `--log-rules "<rules>"` — rules applied after the page's, separated by `;`.
+- `--log-stderr` — keep the console copy while a file is written.
+
+Settings live under `Logging/` in the QK4 settings store (`fileEnabled`, `level` =
+`warnings|normal|everything`, `groups`). Bench items (CAT traffic, audio RX levels, audio TX frames,
+spectrum geometry) are never saved, so they are off again at the next launch. `Everything` turns on
+debug for every category except bench items.
+
+Qt applies `QT_LOGGING_CONF` and `QT_LOGGING_RULES` after the app's rules, so they win over the page.
 
 `QT_LOGGING_RULES` works as Qt documents it. Separate rules with `;`. A trailing `*` matches the
 category's children but not the category itself, so name both:
