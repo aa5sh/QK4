@@ -120,10 +120,10 @@ brew install cmake opus openssl@3 hidapi libusb
 # Check which Qt version the installer put in ~/Qt
 ls ~/Qt
 
-# Clone and build (replace 6.10.1 with your Qt version)
+# Clone and build (the Qt version CI uses is in .github/qt-version)
 git clone https://github.com/mikeg-dal/QK4.git
 cd QK4
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$HOME/Qt/6.10.1/macos"
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$HOME/Qt/6.10.3/macos"
 cmake --build build
 
 # Run

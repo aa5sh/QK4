@@ -38,6 +38,21 @@ else()
     find_package(Qt6 REQUIRED COMPONENTS Core Widgets Network Multimedia ShaderTools Gui SerialPort Svg Test)
 endif()
 
+# WHY a warning and not an error: every CI runner builds with the exact Qt in .github/qt-version, so a
+# local build on another version can show bugs CI never sees (or hide ones it does). Flatpak and distro
+# Qt legitimately differ in the patch, so this only says so; scripts/check-qt-version.sh --local checks.
+set(QK4_QT_VERSION_FILE "${CMAKE_SOURCE_DIR}/.github/qt-version")
+if(EXISTS "${QK4_QT_VERSION_FILE}")
+    file(STRINGS "${QK4_QT_VERSION_FILE}" QK4_PINNED_QT_VERSION LIMIT_COUNT 1)
+    string(STRIP "${QK4_PINNED_QT_VERSION}" QK4_PINNED_QT_VERSION)
+    if(NOT Qt6_VERSION VERSION_EQUAL QK4_PINNED_QT_VERSION)
+        message(WARNING
+            "Building with Qt ${Qt6_VERSION}, but CI builds and tests with Qt ${QK4_PINNED_QT_VERSION} "
+            "(.github/qt-version). Install that version and point CMAKE_PREFIX_PATH at it, e.g. "
+            "\$HOME/Qt/${QK4_PINNED_QT_VERSION}/macos.")
+    endif()
+endif()
+
 # GuiPrivate is needed for QRhi access but may not have CMake config on all platforms
 if(APPLE)
     # Qt's macOS packages include the GuiPrivate CMake config
