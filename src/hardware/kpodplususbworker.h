@@ -7,6 +7,7 @@
 #include <QObject>
 #include <QString>
 #include <atomic>
+#include <condition_variable>
 #include <mutex>
 
 struct libusb_context;
@@ -184,6 +185,10 @@ private:
     std::atomic<bool> m_stopRequested{false};
     std::mutex m_transferMutex;
     std::atomic<CwKeying::Link *> m_keyerLink{nullptr};
+    // Where run() waits while there is no device. Taken only around that wait and by the two
+    // calls that end it, never while a transfer is in flight.
+    std::mutex m_idleMutex;
+    std::condition_variable m_idleWake;
 };
 
 #endif // KPODPLUSUSBWORKER_H

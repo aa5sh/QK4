@@ -665,11 +665,19 @@ void KpodPlusUsbWorker::setStuckTimeout(int seconds) {
 KpodPlusEp02Worker::KpodPlusEp02Worker(QObject *parent) : QObject(parent) {}
 
 void KpodPlusEp02Worker::setDeviceHandle(quintptr handle) {
-    m_handle.store(reinterpret_cast<libusb_device_handle *>(handle), std::memory_order_release);
+    {
+        std::lock_guard lock(m_idleMutex);
+        m_handle.store(reinterpret_cast<libusb_device_handle *>(handle), std::memory_order_release);
+    }
+    m_idleWake.notify_one();
 }
 
 void KpodPlusEp02Worker::requestStop() {
-    m_stopRequested.store(true, std::memory_order_release);
+    {
+        std::lock_guard lock(m_idleMutex);
+        m_stopRequested.store(true, std::memory_order_release);
+    }
+    m_idleWake.notify_one();
 }
 
 void KpodPlusEp02Worker::run() {
@@ -691,9 +699,13 @@ void KpodPlusEp02Worker::run() {
     while (!m_stopRequested.load(std::memory_order_acquire)) {
         libusb_device_handle *h = m_handle.load(std::memory_order_acquire);
         if (!h) {
-            // No device — sleep briefly and re-check. Using a short blocking
-            // wait keeps shutdown latency low without burning CPU.
-            QThread::msleep(20);
+            // WHY a wait and not a poll: without a KPOD+ (most machines) this thread used to wake
+            // 50 times a second forever (#92). setDeviceHandle() and requestStop() change the
+            // predicate under m_idleMutex and notify, so neither wake-up can be lost.
+            std::unique_lock lock(m_idleMutex);
+            m_idleWake.wait(lock, [this] {
+                return m_handle.load(std::memory_order_acquire) || m_stopRequested.load(std::memory_order_acquire);
+            });
             continue;
         }
 

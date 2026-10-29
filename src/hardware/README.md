@@ -31,7 +31,7 @@ USB / serial / MIDI device wrappers. Owned by `controllers/hardwarecontroller.cp
 - Each real-time thread promotes itself, because only the calling thread can be given a QoS class on macOS or join MMCSS on Windows; `QThread::HighPriority` is not used (a no-op on Linux, and on macOS its scheduling parameters opt the thread out of QoS). The outcome cannot be logged by the thread (CONVENTIONS Rule 16); `HardwareController::reportThreadScheduling()` logs it at info under `qk4.hardware` two seconds after startup and when the HaliKey opens, e.g. `Keyer thread: asked for real-time, got real-time - Mach time-constraint policy (1 ms period, 0.2 ms computation)`.
 - `HaliKeyPortScan` runs each port scan on a short-lived `QThread::create` thread and delivers the list queued to the caller's thread.
 - `KpodDevice` owns `m_hidThread`; all hidapi I/O is on it. On Linux `KpodHidWorker` starts a second thread for the udev hotplug poll.
-- `KpodPlusDevice` owns `m_usbThread` (EP01 + config) and `m_ep02Thread` (keyer reader, real-time, promoted in `KpodPlusEp02Worker::run()`).
+- `KpodPlusDevice` owns `m_usbThread` (EP01 + config) and `m_ep02Thread` (keyer reader, real-time, promoted in `KpodPlusEp02Worker::run()`; with no KPOD+ open it waits on a condition variable that `setDeviceHandle()` and `requestStop()` signal, so it costs nothing on a machine without one).
 
 **Neither device polls on the main thread.** Both used to, and the READMEs and header comments said so
 long after they stopped (USB-011); if a comment here claims main-thread USB I/O, it is stale, not a

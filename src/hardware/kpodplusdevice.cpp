@@ -56,8 +56,8 @@ KpodPlusDevice::KpodPlusDevice(QObject *parent) : QObject(parent) {
     connect(m_usbWorker, &KpodPlusUsbWorker::pollError, this, &KpodPlusDevice::pollError);
 
     // Route the live libusb_device_handle from the USB worker into the EP02
-    // reader. setDeviceHandle is just an atomic store on m_ep02Worker.m_handle,
-    // safe to invoke from any thread, so DirectConnection is intentional.
+    // reader. setDeviceHandle stores m_ep02Worker.m_handle and wakes the reader if
+    // it is idle; safe to invoke from any thread, so DirectConnection is intentional.
     //
     // WHY not QueuedConnection: m_ep02Worker::run() is a blocking sync-read
     // loop that never returns to its thread's event loop, so queued events to
@@ -96,8 +96,8 @@ KpodPlusDevice::~KpodPlusDevice() {
         QMetaObject::invokeMethod(m_usbWorker, "shutdown", Qt::BlockingQueuedConnection);
     }
 
-    // Then stop the EP02 reader. requestStop is an atomic the blocking read loop checks, so this
-    // returns within one EP02 timeout (100 ms).
+    // Then stop the EP02 reader. requestStop sets the flag the read loop checks and wakes it if it
+    // is idle, so this returns at once without a device and within one EP02 timeout (100 ms) with.
     if (m_ep02Worker) {
         m_ep02Worker->requestStop();
     }

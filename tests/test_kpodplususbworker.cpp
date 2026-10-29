@@ -8,6 +8,7 @@
 #include <QSignalSpy>
 #include <QtTest/QtTest>
 #include <cstring>
+#include <thread>
 
 class TestKpodPlusUsbWorker : public QObject {
     Q_OBJECT
@@ -36,6 +37,9 @@ private slots:
     void decode_buttonHoldTransition();
     void decode_rockerChangeEmitsOnce();
     void decode_rockerErrorStateIgnored();
+
+    // --- EP02 reader with no device ------------------------------------------
+    void ep02IdleReaderStopsAtOnce();
 };
 
 // =============================================================================
@@ -245,6 +249,21 @@ void TestKpodPlusUsbWorker::decode_rockerErrorStateIgnored() {
     const unsigned char err[8] = {'u', 0, 0, 0x60, 0, 0, 0, 0};
     const auto ev = w.decodeResponse(err);
     QVERIFY(!ev.emitRocker);
+}
+
+// Without a KPOD+ the EP02 reader waits rather than polling (#92): a handle cleared again keeps it
+// waiting, and requestStop() ends the wait at once instead of after a poll period.
+void TestKpodPlusUsbWorker::ep02IdleReaderStopsAtOnce() {
+    KpodPlusEp02Worker worker;
+    std::thread reader([&worker] { worker.run(); });
+    std::this_thread::sleep_for(std::chrono::milliseconds(30));
+    worker.setDeviceHandle(0);
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    QElapsedTimer t;
+    t.start();
+    worker.requestStop();
+    reader.join();
+    QVERIFY2(t.elapsed() < 15, qPrintable(QString::number(t.elapsed()) + " ms"));
 }
 
 QTEST_GUILESS_MAIN(TestKpodPlusUsbWorker)
