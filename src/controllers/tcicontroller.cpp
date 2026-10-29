@@ -16,6 +16,7 @@
 #include "dsp/spectrumscale.h"
 #include "network/tciaudiobridge.h"
 #include "network/tciserver.h"
+#include "utils/radioutils.h"
 
 namespace {
 
@@ -686,6 +687,11 @@ void TciController::sendCwMacro(const QVector<CwMacroSegment> &segments) {
 
 void TciController::applyCat(const QByteArray &frame) {
     const QString command = QString::fromLatin1(frame);
+
+    // A TCI client cannot move a locked VFO either. TciServer has already confirmed the request with
+    // the held frequency, so the client is told the truth without anything sent.
+    if (m_radioState && RadioUtils::catMovesLockedVfo(command, m_radioState->lockA(), m_radioState->lockB()))
+        return;
 
     // Mirrors what CatServer's wiring does for an external client (mainwindow.cpp:352-375): send it,
     // then parse it locally so the panadapter passband tracks immediately. K4 spectrum packets

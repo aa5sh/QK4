@@ -1,4 +1,6 @@
 #include "radioutils.h"
+
+#include <algorithm>
 #include <QHostAddress>
 #include <QRegularExpression>
 #include <QStringList>
@@ -206,6 +208,52 @@ qint64 vfoWheelTuneTarget(quint64 currentHz, int steps, int stepHz, bool locked)
         return 0;
     const qint64 target = static_cast<qint64>(currentHz) + static_cast<qint64>(steps) * stepHz;
     return target > 0 ? target : 0;
+}
+
+int vfosMovedByCat(const QString &command) {
+    QString cmd = command.trimmed();
+    if (cmd.endsWith(QLatin1Char(';')))
+        cmd.chop(1);
+    int split = 0;
+    while (split < cmd.size() && cmd.at(split).isLetter())
+        ++split;
+    const QString prefix = cmd.left(split).toUpper();
+    const QString args = cmd.mid(split);
+    auto allDigits = [](const QString &s) {
+        return std::all_of(s.cbegin(), s.cend(), [](QChar c) { return c.isDigit(); });
+    };
+
+    if (prefix == QLatin1String("FA") && !args.isEmpty() && allDigits(args))
+        return VfoA;
+    if (prefix == QLatin1String("FB") && !args.isEmpty() && allDigits(args))
+        return VfoB;
+    if ((prefix == QLatin1String("UP") || prefix == QLatin1String("DN")) && allDigits(args))
+        return VfoA;
+    if ((prefix == QLatin1String("UPB") || prefix == QLatin1String("DNB")) && allDigits(args))
+        return VfoB;
+    if (prefix == QLatin1String("VO") && !args.isEmpty())
+        return args.startsWith(QLatin1Char('$')) ? (args.size() > 1 ? VfoB : VfoNone) : VfoA;
+    if (prefix == QLatin1String("AB") && args.size() == 1) {
+        switch (args.at(0).toLatin1()) {
+        case '0': // FA > FB
+        case '3': // all A > B
+            return VfoB;
+        case '1': // FB > FA
+        case '4': // all B > A
+            return VfoA;
+        case '2': // swap
+        case '5': // all swap
+            return VfoA | VfoB;
+        default:
+            return VfoNone;
+        }
+    }
+    return VfoNone;
+}
+
+bool catMovesLockedVfo(const QString &command, bool lockA, bool lockB) {
+    const int moved = vfosMovedByCat(command);
+    return ((moved & VfoA) && lockA) || ((moved & VfoB) && lockB);
 }
 
 QString agcLabel(int agcSpeed) {

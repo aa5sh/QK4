@@ -860,7 +860,11 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     // Connect VFO A frequency entry - send FA command then query to refresh display
     connect(m_vfoA, &VFOWidget::frequencyEntered, this, [this](const QString &freqString) {
         // FA accepts 1-11 digits: 1-2 = MHz, 3-5 = kHz, 6+ = Hz
-        m_connectionController->sendCAT(QString("FA%1;FA;").arg(freqString));
+        // A locked VFO keeps its frequency: ask for it instead, so the display shows it again.
+        const QString set = QString("FA%1;").arg(freqString);
+        m_connectionController->sendCAT(RadioUtils::catMovesLockedVfo(set, m_radioState->lockA(), m_radioState->lockB())
+                                            ? QString("FA;")
+                                            : set + "FA;");
     });
 
     // Connect VFO A wheel tuning - same pattern as panadapter wheel tuning
@@ -1088,7 +1092,11 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     // Connect VFO B frequency entry - send FB command then query to refresh display
     connect(m_vfoB, &VFOWidget::frequencyEntered, this, [this](const QString &freqString) {
         // FB accepts 1-11 digits: 1-2 = MHz, 3-5 = kHz, 6+ = Hz
-        m_connectionController->sendCAT(QString("FB%1;FB;").arg(freqString));
+        // A locked VFO keeps its frequency: ask for it instead, so the display shows it again.
+        const QString set = QString("FB%1;").arg(freqString);
+        m_connectionController->sendCAT(RadioUtils::catMovesLockedVfo(set, m_radioState->lockA(), m_radioState->lockB())
+                                            ? QString("FB;")
+                                            : set + "FB;");
     });
 
     // Connect VFO B wheel tuning - same pattern as panadapter wheel tuning

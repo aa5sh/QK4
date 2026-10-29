@@ -10,6 +10,7 @@
 #include "catpushbroadcaster.h"
 #include "models/radiostate.h"
 #include "protocol.h"
+#include "utils/radioutils.h"
 
 #include <QLoggingCategory>
 #include <QTimer>
@@ -442,6 +443,13 @@ QByteArray CatServer::handleCommand(const QString &cmd, QTcpSocket *client) {
         qCDebug(lcCatServer) << "   PTT request: OFF";
         m_pttOwner = nullptr;
         emit pttRequested(false);
+        return QByteArray();
+    }
+
+    // A frequency change for a locked VFO is refused, as it is from QK4's own controls. The client
+    // sees the unchanged frequency on its next FA/FB poll or AI push.
+    if (RadioUtils::catMovesLockedVfo(command, m_radioState->lockA(), m_radioState->lockB())) {
+        qCDebug(lcCatServer) << "   refused SET, VFO locked:" << cmd;
         return QByteArray();
     }
 

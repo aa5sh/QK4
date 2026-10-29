@@ -148,6 +148,19 @@ qint64 snapFreqToStep(qint64 freq, int stepHz);
 /// panadapter and KPOD paths already do. Also 0 when the result is not a positive frequency.
 qint64 vfoWheelTuneTarget(quint64 currentHz, int steps, int stepHz, bool locked);
 
+/// The VFOs one CAT command would move, as a mask of VfoA and VfoB. Recognises the K4's frequency
+/// SETs (Programmer's Reference rev. D5): FAn / FBn, UP / DN (VFO A) and UPB / DNB (VFO B),
+/// VOsnnnnn (A) and VO$snnnnn (B), and ABn (0 A>B, 1 B>A, 2 swap, 3 all A>B, 4 all B>A, 5 all
+/// swap). A GET (FA;) moves nothing. The trailing ';' is optional. SWnn front-panel key
+/// emulations are not counted: those are the radio's own keys and the radio applies its own rules.
+enum VfoMask { VfoNone = 0, VfoA = 1, VfoB = 2 };
+int vfosMovedByCat(const QString &command);
+
+/// True when `command` would move a VFO that is locked (LK for A, LK$ for B, each on its own). Every
+/// path that sends a frequency change - QK4's own controls, TCI clients and CAT-server clients - asks
+/// this first. Honouring the lock is QK4's job: the K4 documents no lock exception for these SETs.
+bool catMovesLockedVfo(const QString &command, bool lockA, bool lockB);
+
 /// GT AGC speed (RadioState::AGCSpeed: 0 off, 1 slow, 2 fast) as the K4 labels it: "AGC", "AGC-S",
 /// "AGC-F". Anything else, including the not-yet-received sentinel, reads as off.
 QString agcLabel(int agcSpeed);

@@ -565,6 +565,38 @@ private slots:
         client.disconnectFromHost();
     }
 
+    // A locked VFO's frequency is not changed by a client: LK guards VFO A, LK$ guards VFO B, each on
+    // its own. Nothing is forwarded for the locked one; the other still is.
+    void testFrequencySetRefusedForLockedVfo() {
+        RadioState rs;
+        rs.parseCATCommand("LK1;"); // VFO A locked, B free
+        CatServer server(&rs);
+        QVERIFY(server.start(0));
+        QSignalSpy spy(&server, &CatServer::catCommandReceived);
+
+        QTcpSocket client;
+        client.connectToHost("127.0.0.1", server.port());
+        QVERIFY(client.waitForConnected(1000));
+        client.write("FA00014074000;UP;AB1;FB00007100000;UPB;AB0;");
+        client.flush();
+        QTest::qWait(100);
+
+        QStringList forwarded;
+        for (const auto &args : spy)
+            forwarded << args.at(0).toString();
+        QCOMPARE(forwarded, QStringList({"FB00007100000;", "UPB;", "AB0;"}));
+
+        rs.parseCATCommand("LK0;");
+        rs.parseCATCommand("LK$1;"); // now only VFO B locked
+        spy.clear();
+        client.write("FA00014074000;FB00007100000;AB2;");
+        client.flush();
+        QTest::qWait(100);
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toString(), QString("FA00014074000;"));
+        client.disconnectFromHost();
+    }
+
     void testTxCommandEmitsPtt() {
         RadioState rs;
         CatServer server(&rs);

@@ -442,6 +442,7 @@ add_test(NAME CwMacroTests COMMAND test_cwmacro)
 # CatServer command handler tests
 add_executable(test_catserver test_catserver.cpp
     ${CMAKE_SOURCE_DIR}/src/network/catserver.cpp
+    ${CMAKE_SOURCE_DIR}/src/utils/radioutils.cpp
     ${CMAKE_SOURCE_DIR}/src/network/catframes.cpp
     ${CMAKE_SOURCE_DIR}/src/network/catpushbroadcaster.cpp
     ${CMAKE_SOURCE_DIR}/src/network/protocol.cpp

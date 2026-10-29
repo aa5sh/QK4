@@ -314,6 +314,43 @@ private slots:
         QCOMPARE(RadioUtils::vfoWheelTuneTarget(1000, -1, 1000, false), Q_INT64_C(0));
     }
 
+    // vfosMovedByCat / catMovesLockedVfo — every frequency SET respects LK (A) and LK$ (B) on its own
+    void testVfosMoved_frequencySets() {
+        QCOMPARE(RadioUtils::vfosMovedByCat("FA00014074000;"), int(RadioUtils::VfoA));
+        QCOMPARE(RadioUtils::vfosMovedByCat("FB7100"), int(RadioUtils::VfoB));
+        QCOMPARE(RadioUtils::vfosMovedByCat("UP;"), int(RadioUtils::VfoA));
+        QCOMPARE(RadioUtils::vfosMovedByCat("DN;"), int(RadioUtils::VfoA));
+        QCOMPARE(RadioUtils::vfosMovedByCat("UPB;"), int(RadioUtils::VfoB));
+        QCOMPARE(RadioUtils::vfosMovedByCat("DNB;"), int(RadioUtils::VfoB));
+        QCOMPARE(RadioUtils::vfosMovedByCat("VO+00100;"), int(RadioUtils::VfoA));
+        QCOMPARE(RadioUtils::vfosMovedByCat("VO$-00100;"), int(RadioUtils::VfoB));
+    }
+    void testVfosMoved_copyAndSwap() {
+        QCOMPARE(RadioUtils::vfosMovedByCat("AB0;"), int(RadioUtils::VfoB));
+        QCOMPARE(RadioUtils::vfosMovedByCat("AB1;"), int(RadioUtils::VfoA));
+        QCOMPARE(RadioUtils::vfosMovedByCat("AB2;"), int(RadioUtils::VfoA | RadioUtils::VfoB));
+        QCOMPARE(RadioUtils::vfosMovedByCat("AB3;"), int(RadioUtils::VfoB));
+        QCOMPARE(RadioUtils::vfosMovedByCat("AB4;"), int(RadioUtils::VfoA));
+        QCOMPARE(RadioUtils::vfosMovedByCat("AB5;"), int(RadioUtils::VfoA | RadioUtils::VfoB));
+        QCOMPARE(RadioUtils::vfosMovedByCat("AB9;"), int(RadioUtils::VfoNone));
+    }
+    void testVfosMoved_notFrequencySets() {
+        for (const char *c : {"FA;", "FB;", "FT1;", "FR0;", "LK1;", "LK$1;", "MD3;", "SW72;", "RU;", "VO;", "VO$;", ""})
+            QVERIFY2(RadioUtils::vfosMovedByCat(c) == RadioUtils::VfoNone, c);
+    }
+    void testLockedVfo_eachLockOnItsOwn() {
+        QVERIFY(!RadioUtils::catMovesLockedVfo("FA14074000;", false, true));
+        QVERIFY(RadioUtils::catMovesLockedVfo("FA14074000;", true, false));
+        QVERIFY(!RadioUtils::catMovesLockedVfo("FB14074000;", true, false));
+        QVERIFY(RadioUtils::catMovesLockedVfo("FB14074000;", false, true));
+        // A copy into B is refused only when B is locked; a swap when either is.
+        QVERIFY(!RadioUtils::catMovesLockedVfo("AB0;", true, false));
+        QVERIFY(RadioUtils::catMovesLockedVfo("AB0;", false, true));
+        QVERIFY(RadioUtils::catMovesLockedVfo("AB2;", true, false));
+        QVERIFY(RadioUtils::catMovesLockedVfo("AB2;", false, true));
+        QVERIFY(!RadioUtils::catMovesLockedVfo("AB2;", false, false));
+    }
+
     // isValidIpv4 — strict dotted-quad
     void testIpv4_simple() { QVERIFY(RadioUtils::isValidIpv4("192.168.1.10")); }
     void testIpv4_zeros() { QVERIFY(RadioUtils::isValidIpv4("0.0.0.0")); }
