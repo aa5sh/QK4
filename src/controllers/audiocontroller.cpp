@@ -12,6 +12,7 @@
 #include "network/tcpclient.h"
 #include "settings/radiosettings.h"
 #include "utils/radioutils.h"
+#include "utils/threadshutdown.h"
 
 #include <chrono>
 
@@ -22,6 +23,18 @@ constexpr int kMetricsSampleMs = 50;
 constexpr int kStreamIdleTicks = 5;
 // One RX playout line at most this often, and only when something happened.
 constexpr int kRxLogEveryTicks = 2000 / kMetricsSampleMs;
+
+// Shutdown deadlines, each covering the worker's stop() and the join.
+//
+// WHY 2.5 s for TX: stop() closes the microphone, and the TX thread may still be inside opening it
+// - 200 ms to 1.5 s measured on PipeWire, CoreAudio and WASAPI, longest for a Bluetooth profile
+// switch (see TxAudioPipeline). Past that the thread is wedged and is disowned.
+constexpr std::chrono::milliseconds kTxStopTimeout{2500};
+// WHY 2 s for RX: stop() destroys the QAudioSink. reset() before stop() means it does not drain,
+// but a device going away mid-call can still hold CoreAudio or PipeWire for a while.
+constexpr std::chrono::milliseconds kRxStopTimeout{2000};
+// The I/O thread never blocks by design, so the decode-handler removal takes milliseconds.
+constexpr std::chrono::milliseconds kDecodeDisconnectTimeout{1000};
 } // namespace
 
 AudioController::AudioController(ConnectionController *connController, RadioState *radioState, QObject *parent)
@@ -47,6 +60,7 @@ AudioController::AudioController(ConnectionController *connController, RadioStat
     m_audioThread->setObjectName("AudioEngine");
     Logging::markRealtimeOnStart(m_audioThread);
     m_audioEngine->moveToThread(m_audioThread);
+    connect(m_audioThread, &QThread::finished, m_audioEngine, &QObject::deleteLater);
     m_audioThread->start();
 
     // Transmit audio on a thread of its own. WHY: opening a microphone is synchronous and can take
@@ -55,6 +69,7 @@ AudioController::AudioController(ConnectionController *connController, RadioStat
     m_txThread->setObjectName("AudioTX");
     Logging::markRealtimeOnStart(m_txThread);
     m_txPipeline->moveToThread(m_txThread);
+    connect(m_txThread, &QThread::finished, m_txPipeline, &QObject::deleteLater);
     m_txThread->start();
 
     // RX audio path: Protocol → decode → enqueue, entirely on the I/O thread.
@@ -144,36 +159,37 @@ AudioController::~AudioController() {
     // WHY first, and ON the I/O thread: the decode handler runs there and uses this object and the
     // engine. On the normal quit path ConnectionController, and Protocol with it, is already gone,
     // the handler went with it, and this is a no-op. If the I/O link outlives this controller, the
-    // disconnect is run as a blocking call on the I/O thread: that thread runs one event at a time,
+    // disconnect runs on the I/O thread and is waited for: that thread runs one event at a time,
     // so once the call returns no decode is in flight and none can start. Safe from deadlock
-    // because the I/O thread never waits on the main thread (only main → I/O blocking calls
-    // exist). With the thread not running, nothing can be in flight and a plain disconnect does.
+    // because the I/O thread never waits on the main thread (only main -> I/O blocking calls
+    // exist). With the thread not running, nothing can be in flight and it runs here.
     if (QObject *context = m_rxDecodeContext.data()) {
-        QThread *ioThread = context->thread();
-        if (ioThread && ioThread->isRunning() && ioThread != QThread::currentThread()) {
-            QMetaObject::invokeMethod(
-                context, [connection = m_rxDecodeConnection]() { QObject::disconnect(connection); },
-                Qt::BlockingQueuedConnection);
-        } else {
-            disconnect(m_rxDecodeConnection);
+        const QMetaObject::Connection connection = m_rxDecodeConnection;
+        if (!ThreadShutdown::callBlocking(
+                context, [connection]() { QObject::disconnect(connection); },
+                QDeadlineTimer(kDecodeDisconnectTimeout))) {
+            qCWarning(lcAudio) << "I/O thread did not remove the RX decode handler in time; a decode still queued "
+                                  "there may run after this controller is gone";
         }
     }
 
-    if (m_txThread) {
-        QMetaObject::invokeMethod(m_txPipeline, "stop", Qt::BlockingQueuedConnection);
-        m_txThread->quit();
-        m_txThread->wait(2000);
-    }
-    delete m_txPipeline;
+    // Each worker is destroyed on its own thread by the finished -> deleteLater wired at
+    // construction, after its stop() has run there. A thread that misses its deadline is left
+    // running with its worker rather than having either destroyed underneath it.
+    stopThread(m_txThread, m_txPipeline, kTxStopTimeout);
     m_txPipeline = nullptr;
-
-    if (m_audioThread) {
-        QMetaObject::invokeMethod(m_audioEngine, "stop", Qt::BlockingQueuedConnection);
-        m_audioThread->quit();
-        m_audioThread->wait(2000);
-    }
-    delete m_audioEngine;
+    stopThread(m_audioThread, m_audioEngine, kRxStopTimeout);
     m_audioEngine = nullptr;
+}
+
+template <typename Worker>
+void AudioController::stopThread(QThread *&thread, Worker *worker, std::chrono::milliseconds timeout) {
+    if (!thread) {
+        return;
+    }
+    const QDeadlineTimer deadline(timeout);
+    ThreadShutdown::callBlocking(worker, [worker]() { worker->stop(); }, deadline);
+    ThreadShutdown::retire(thread, deadline, lcAudio());
 }
 
 void AudioController::startAudio(float mainVolume, float subVolume, float micGain) {
@@ -215,11 +231,20 @@ void AudioController::shutdown() {
     // Synchronous audio teardown — required from MainWindow::closeEvent so
     // QAudioSink/QAudioSource are destroyed while the event loop is still
     // alive, not during libc atexit (which races PipeWire's RT worker on Linux).
-    if (m_txPipeline && m_txThread && m_txThread->isRunning()) {
-        QMetaObject::invokeMethod(m_txPipeline, "stop", Qt::BlockingQueuedConnection);
+    //
+    // Bounded: a TX thread still inside opening the microphone must not hold the window open.
+    if (m_txPipeline) {
+        TxAudioPipeline *pipeline = m_txPipeline;
+        if (!ThreadShutdown::callBlocking(
+                pipeline, [pipeline]() { pipeline->stop(); }, QDeadlineTimer(kTxStopTimeout))) {
+            qCWarning(lcAudio) << "TX audio thread did not stop the microphone in time";
+        }
     }
-    if (m_audioEngine && m_audioThread && m_audioThread->isRunning()) {
-        QMetaObject::invokeMethod(m_audioEngine, "stop", Qt::BlockingQueuedConnection);
+    if (m_audioEngine) {
+        AudioEngine *engine = m_audioEngine;
+        if (!ThreadShutdown::callBlocking(engine, [engine]() { engine->stop(); }, QDeadlineTimer(kRxStopTimeout))) {
+            qCWarning(lcAudio) << "RX audio thread did not close the speaker in time";
+        }
     }
 }
 

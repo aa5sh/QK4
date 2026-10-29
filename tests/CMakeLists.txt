@@ -507,6 +507,7 @@ add_test(NAME DxClusterTests COMMAND test_dxcluster)
 add_executable(test_dxclustercontroller test_dxclustercontroller.cpp
     ${CMAKE_SOURCE_DIR}/src/controllers/dxclustercontroller.cpp
     ${CMAKE_SOURCE_DIR}/src/network/dxclusterclient.cpp
+    ${CMAKE_SOURCE_DIR}/src/utils/threadshutdown.cpp
 )
 target_include_directories(test_dxclustercontroller PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_dxclustercontroller Qt6::Core Qt6::Network Qt6::Test)
@@ -552,6 +553,7 @@ add_executable(test_kpodplususbworker test_kpodplususbworker.cpp
     ${CMAKE_SOURCE_DIR}/src/hardware/kpodplususbworker.cpp
     ${CMAKE_SOURCE_DIR}/src/utils/rtscheduling.cpp
     ${CMAKE_SOURCE_DIR}/src/hardware/kpodplusdevice.cpp
+    ${CMAKE_SOURCE_DIR}/src/utils/threadshutdown.cpp
 )
 target_include_directories(test_kpodplususbworker PRIVATE
     ${CMAKE_SOURCE_DIR}/src
@@ -748,6 +750,7 @@ add_executable(test_optionspagelayout
     ${CMAKE_SOURCE_DIR}/src/settings/interfacescale.cpp
     ${CMAKE_SOURCE_DIR}/src/controllers/dxclustercontroller.cpp
     ${CMAKE_SOURCE_DIR}/src/network/dxclusterclient.cpp
+    ${CMAKE_SOURCE_DIR}/src/utils/threadshutdown.cpp
 )
 target_include_directories(test_optionspagelayout PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_optionspagelayout Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Test)

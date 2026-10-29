@@ -1,14 +1,20 @@
 #include "dxclustercontroller.h"
 #include "logging/logcategories.h"
+#include "utils/threadshutdown.h"
 
 #include <QDebug>
 #include <QMetaObject>
 #include <algorithm>
+#include <chrono>
 
 namespace {
 // Spot aging cadence. 30 s matches typical cluster post rate; shorter churns the overlay,
 // longer lets stale spots linger after the spotter gives up.
 constexpr int kSpotAgingIntervalMs = 30000;
+
+// WHY 1 s: a cluster thread only runs an event loop around one telnet socket; closing it does not
+// block. Anything near this long means it is wedged.
+constexpr std::chrono::milliseconds kClusterStopTimeout{1000};
 } // namespace
 
 DxClusterController::DxClusterController(QObject *parent) : QObject(parent) {
@@ -21,17 +27,25 @@ DxClusterController::DxClusterController(QObject *parent) : QObject(parent) {
 }
 
 DxClusterController::~DxClusterController() {
-    // Shut down all cluster instances
     for (auto it = m_instances.begin(); it != m_instances.end(); ++it) {
-        auto &inst = it.value();
-        if (inst.thread) {
-            QMetaObject::invokeMethod(inst.client, "disconnectFromHost", Qt::BlockingQueuedConnection);
-            inst.thread->quit();
-            inst.thread->wait(2000);
-        }
-        delete inst.client;
+        stopInstance(it.value());
     }
     m_instances.clear();
+}
+
+void DxClusterController::stopInstance(DxClusterInstance &inst) {
+    // The client is cut from this controller first: a disconnect it reports on the way out is not
+    // news to anyone, and a disowned client must not reach this object after it is gone.
+    if (inst.client) {
+        inst.client->disconnect(this);
+    }
+    const QDeadlineTimer deadline(kClusterStopTimeout);
+    if (DxClusterClient *client = inst.client) {
+        ThreadShutdown::callBlocking(client, [client]() { client->disconnectFromHost(); }, deadline);
+    }
+    // The client is deleted with its thread (finished -> deleteLater), or left on it if disowned.
+    ThreadShutdown::retire(inst.thread, deadline, lcDxCluster());
+    inst.client = nullptr;
 }
 
 DxClusterInstance &DxClusterController::ensureInstance(int index) {
@@ -41,6 +55,7 @@ DxClusterInstance &DxClusterController::ensureInstance(int index) {
         inst.thread = new QThread(this);
         inst.thread->setObjectName(QString("DxCluster-%1").arg(index));
         inst.client->moveToThread(inst.thread);
+        connect(inst.thread, &QThread::finished, inst.client, &QObject::deleteLater);
         inst.thread->start();
 
         // Wire signals by client, not by index: removeCluster() renumbers instances, so the index a
@@ -116,22 +131,7 @@ DxClusterInstance &DxClusterController::ensureInstance(int index) {
 void DxClusterController::destroyInstance(int index) {
     if (!m_instances.contains(index))
         return;
-    auto &inst = m_instances[index];
-    bool threadJoined = true;
-    if (inst.thread) {
-        QMetaObject::invokeMethod(inst.client, "disconnectFromHost", Qt::BlockingQueuedConnection);
-        inst.thread->quit();
-        threadJoined = inst.thread->wait(2000);
-    }
-    delete inst.client;
-    if (inst.thread) {
-        // WHY: deleting a QThread that is still running aborts the process; one that missed the
-        // join deletes itself once its event loop does exit.
-        if (threadJoined)
-            delete inst.thread;
-        else
-            connect(inst.thread, &QThread::finished, inst.thread, &QObject::deleteLater);
-    }
+    stopInstance(m_instances[index]);
     m_instances.remove(index);
     if (m_instances.isEmpty())
         m_agingTimer->stop();

@@ -7,6 +7,7 @@
 #include <QTimer>
 
 #include <atomic>
+#include <chrono>
 #include <memory>
 #include <mutex>
 
@@ -141,6 +142,9 @@ private slots:
     void sampleAudioMetrics();
 
 private:
+    // stop() on the worker's own thread, then the thread retired, within one deadline.
+    template <typename Worker> void stopThread(QThread *&thread, Worker *worker, std::chrono::milliseconds timeout);
+
     ConnectionController *m_connectionController;
     RadioState *m_radioState;
 

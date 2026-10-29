@@ -4,7 +4,15 @@
 #include "network/networkmetrics.h"
 #include "network/protocol.h"
 #include "utils/macroids.h"
+#include "utils/threadshutdown.h"
 #include <QLoggingCategory>
+#include <chrono>
+
+namespace {
+// WHY 1 s: the I/O thread only runs an event loop and never blocks by design, so the graceful
+// disconnect and the join take a few milliseconds. Anything near this long means it is wedged.
+constexpr std::chrono::milliseconds kIoStopTimeout{1000};
+} // namespace
 
 ConnectionController::ConnectionController(QObject *parent) : QObject(parent), m_tcpClient(new TcpClient(nullptr)) {
     // Move TcpClient (+ Protocol, socket, timers as children) to dedicated I/O thread
@@ -13,6 +21,9 @@ ConnectionController::ConnectionController(QObject *parent) : QObject(parent), m
     m_ioThread->setObjectName("I/O");
     Logging::markRealtimeOnStart(m_ioThread);
     m_tcpClient->moveToThread(m_ioThread);
+    // Destroyed on its own thread when that thread finishes (Rule 14), with Protocol, the socket
+    // and the timers as its children.
+    connect(m_ioThread, &QThread::finished, m_tcpClient, &QObject::deleteLater);
     m_ioThread->start();
 
     // NetworkMetrics tracks connection health (latency, buffer, packet loss)
@@ -40,12 +51,15 @@ ConnectionController::ConnectionController(QObject *parent) : QObject(parent), m
 }
 
 ConnectionController::~ConnectionController() {
-    if (m_ioThread) {
-        QMetaObject::invokeMethod(m_tcpClient, "disconnectFromHost", Qt::BlockingQueuedConnection);
-        m_ioThread->quit();
-        m_ioThread->wait(2000);
-    }
-    delete m_tcpClient; // No parent, must delete manually
+    // The graceful disconnect (a held straight-key KZU, then the K4's disconnect command) runs on
+    // the I/O thread and is waited for before the quit: a call queued just ahead of quit() is not
+    // guaranteed to be delivered. One deadline covers both steps.
+    const QDeadlineTimer deadline(kIoStopTimeout);
+    TcpClient *client = m_tcpClient;
+    ThreadShutdown::callBlocking(client, [client]() { client->disconnectFromHost(); }, deadline);
+    // Joined: TcpClient was deleted on the I/O thread. Disowned: it is left alive on that thread.
+    ThreadShutdown::retire(m_ioThread, deadline, lcLink());
+    m_tcpClient = nullptr;
 }
 
 void ConnectionController::connectToRadio(const RadioEntry &radio) {

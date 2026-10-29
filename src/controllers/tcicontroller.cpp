@@ -17,13 +17,15 @@
 #include "network/tciaudiobridge.h"
 #include "network/tciserver.h"
 #include "utils/radioutils.h"
+#include "utils/threadshutdown.h"
+#include <chrono>
 
 namespace {
 
-// How long to wait for the TCI thread to finish at shutdown. Long enough for an audio callback in
-// flight; short enough that a wedged thread does not hold up quitting. Exceeding it is handled
-// rather than ignored - see the destructor.
-constexpr int kThreadShutdownMs = 2000;
+// How long the TCI thread gets at shutdown, for the server's stop() and the join together. Long
+// enough for an audio callback in flight; short enough that a wedged thread does not hold up
+// quitting. Exceeding it is handled rather than ignored - see the destructor.
+constexpr std::chrono::milliseconds kThreadShutdownTimeout{2000};
 
 // K4 mode -> TCI modulation name. Only the modes in modulations_list are legal on the wire; an
 // unknown one is reported as usb rather than invented, because a client that cannot parse the
@@ -864,8 +866,8 @@ TciController::~TciController() {
     // UNKEY FROM HERE, because the unkey the server is about to ask for cannot arrive.
     //
     // TciServer::stop releases a held PTT and emits pttRequested(false) - but that signal is
-    // queued to this controller on the main thread, and stop is called with a
-    // BlockingQueuedConnection: the main thread is sitting inside that call, and the event is
+    // queued to this controller on the main thread, and the main thread is blocked waiting for
+    // stop to finish (ThreadShutdown::callBlocking), and the event is
     // discarded unprocessed when this object is destroyed. A client holding the transmitter when
     // QK4 quit left the radio keyed with the audio path still gated to the TCI source.
     //
@@ -875,36 +877,25 @@ TciController::~TciController() {
     // raw-pointer call is what segfaulted on every quit-while-connected.
     shutdown();
 
-    QMetaObject::invokeMethod(m_server, "stop", Qt::BlockingQueuedConnection);
+    const QDeadlineTimer deadline(kThreadShutdownTimeout);
+    TciServer *server = m_server;
+    ThreadShutdown::callBlocking(server, [server]() { server->stop(); }, deadline);
 
     // DESTROYED ON THEIR OWN THREAD, not from here.
     //
     // Both objects live on m_tciThread. Deleting one from another thread is undefined - it may be
     // inside a slot at the time - and this destructor used to do exactly that whenever the join
-    // below timed out, because it deleted them regardless of the result. A deferred delete posted
-    // to a thread is run when that thread's event loop finishes (Qt guarantees it even for a thread
-    // with no loop left running), so these are gone before the thread exits, and nothing here
-    // touches the pointers again either way.
+    // below timed out, because it deleted them regardless of the result. "If deleteLater() is
+    // called on an object that lives in a thread with no running event loop, the object will be
+    // destroyed when the thread finishes" (QObject::deleteLater), and a thread processes deferred
+    // deletions after its loop has stopped (QThread::finished). So these are gone before the thread
+    // exits - or stay with a thread that never does, which is then disowned, not destroyed.
     m_bridge->deleteLater();
     m_server->deleteLater();
     m_bridge = nullptr;
     m_server = nullptr;
 
-    m_tciThread->quit();
-    if (m_tciThread->wait(kThreadShutdownMs)) {
-        return;
-    }
-
-    // THE TIMEOUT PATH, which is the one that crashed.
-    //
-    // m_tciThread is a child of this controller, so simply returning would have ~QObject destroy a
-    // QThread that is still running - which aborts. Disown it instead. The thread, and whatever it
-    // still holds, is leaked; at application exit that costs nothing, where the abort cost the user
-    // a crash on every quit slow enough to reach this line.
-    qCWarning(lcTci) << "TCI thread did not stop within" << kThreadShutdownMs
-                     << "ms - leaving it running rather than destroying it underneath itself";
-    m_tciThread->setParent(nullptr);
-    m_tciThread = nullptr;
+    ThreadShutdown::retire(m_tciThread, deadline, lcTci());
 }
 
 // The RX audio fan-out, connected only while the server is up.

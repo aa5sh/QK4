@@ -60,6 +60,8 @@ private:
     // up at delivery rather than capturing it, because removeCluster() renumbers instances.
     int indexOf(const DxClusterClient *client) const;
     void destroyInstance(int index);
+    // Closes the instance's connection and retires its thread; the client goes with the thread.
+    void stopInstance(DxClusterInstance &inst);
     // Drops the spots that came from the cluster at `index`, leaving every other cluster's intact.
     // A spot both clusters reported is held once, under whichever reported it last.
     void clearSpotsFrom(int index);
