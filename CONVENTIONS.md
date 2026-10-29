@@ -390,9 +390,13 @@ List the threads with `rg -n "new QThread|QThread::create|moveToThread" src`.
 
 - **Worker objects, not `QThread` subclasses with slots.** Create the worker without a parent,
   `moveToThread()` it, connect `&QThread::finished` to the worker's `deleteLater`, then `start()`.
-  Stop with `quit()` + `wait()` in the owner (*QThread*, Detailed Description). A `QThread` object
-  itself lives in the creating thread, so slots on a `QThread` subclass run there, not in the new
-  thread.
+  Stop it through `ThreadShutdown` (`src/utils/threadshutdown.h`), never a bare `quit()` +
+  `wait()`: `callBlocking()` for the worker's last call (a `BlockingQueuedConnection` has no
+  timeout), then `retire()`, or `join()` for a thread without an event loop. A thread that misses
+  its deadline is disowned and reported, because deleting a running `QThread` crashes, and one made
+  by `QThread::create()` instead blocks until it finishes (*~QThread*). Anything that thread's code
+  uses that is not a `QObject` living on it is the owner's to leak too. A `QThread` object itself
+  lives in the creating thread, so slots on a `QThread` subclass run there, not in the new thread.
 - **A thread without an event loop gets no events.** `QThread::create(fn)` (the keyer, the HaliKey
   port scan) runs `fn` and exits; queued calls, timers and `deleteLater()` aimed at objects living
   there are never delivered (*Threads and QObjects*, Per-Thread Event Loop). Hand such a thread
