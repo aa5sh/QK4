@@ -560,6 +560,17 @@ target_include_directories(test_meterscale PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_meterscale Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
 add_test(NAME MeterScaleTests COMMAND test_meterscale)
 
+# Idle wake-ups (#92) — widget timers that must not run without work, offscreen.
+add_executable(test_idlewakeups
+    test_idlewakeups.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/widgets/txmeterwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/styling/k4styles.cpp
+)
+target_include_directories(test_idlewakeups PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_idlewakeups Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test)
+add_test(NAME IdleWakeupTests COMMAND test_idlewakeups)
+set_tests_properties(IdleWakeupTests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 # RX playback boost + soft limiter - header-only, no audio device.
 add_executable(test_rxoutputstage test_rxoutputstage.cpp)
 target_include_directories(test_rxoutputstage PRIVATE ${CMAKE_SOURCE_DIR}/src)

@@ -120,8 +120,9 @@ private:
     bool m_isQrp = false;
     bool m_isTransmitting = false; // RX mode shows S-meter, TX mode shows Po
 
-    // Decay timer
+    // Decay timer: runs only while a display or peak value is still above its target.
     QTimer *m_decayTimer;
+    void startDecay();
     static constexpr int DecayIntervalMs = 50;    // Timer fires every 50ms
     static constexpr double DecayRate = 0.1;      // Ratio units per interval (~500ms full decay)
     static constexpr double PeakDecayRate = 0.05; // Peak decays slower

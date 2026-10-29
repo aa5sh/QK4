@@ -17,10 +17,17 @@ TxMeterWidget::TxMeterWidget(QWidget *parent) : QWidget(parent) {
     // Transparent background - let parent show through
     setAttribute(Qt::WA_TranslucentBackground);
 
-    // Setup decay timer
+    // WHY started on demand: the decay only has work while a bar or peak sits above its target.
+    // Free-running, both VFOs' meters woke the GUI thread 40 times a second while idle and
+    // disconnected (#92).
     m_decayTimer = new QTimer(this);
+    m_decayTimer->setInterval(DecayIntervalMs);
     connect(m_decayTimer, &QTimer::timeout, this, &TxMeterWidget::decayValues);
-    m_decayTimer->start(DecayIntervalMs);
+}
+
+void TxMeterWidget::startDecay() {
+    if (!m_decayTimer->isActive())
+        m_decayTimer->start();
 }
 
 void TxMeterWidget::setCurrent(double amps) {
@@ -33,6 +40,7 @@ void TxMeterWidget::setCurrent(double amps) {
         m_currentPeak = ratio;
         m_currentPeakHold = PeakHoldTicks;
     }
+    startDecay();
     update();
 }
 
@@ -85,6 +93,7 @@ void TxMeterWidget::setTxMeters(int alc, int compDb, double fwdPower, double swr
         m_swrPeakHold = PeakHoldTicks;
     }
 
+    startDecay();
     update();
 }
 
@@ -99,6 +108,7 @@ void TxMeterWidget::setSMeter(double sValue) {
         m_sMeterPeak = ratio;
         m_sMeterPeakHold = PeakHoldTicks;
     }
+    startDecay();
     update();
 }
 
@@ -152,6 +162,8 @@ void TxMeterWidget::decayValues() {
 
     if (needsUpdate) {
         update();
+    } else {
+        m_decayTimer->stop();
     }
 }
 
