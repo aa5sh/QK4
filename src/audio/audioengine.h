@@ -84,9 +84,14 @@ public:
     bool takeRxLevelReport(AudioDiagnostics::RxLevelReport &out);
     bool takeRxPlayoutReport(AudioDiagnostics::RxPlayoutReport &out);
 
-    // Transmitting: the K4 stops sending RX audio, so the sink running dry is expected and not
-    // counted as an underrun. Atomic, safe from any thread.
+    // Transmitting: the half-duplex K4 stops sending RX audio, so the sink running dry is expected
+    // and not counted as an underrun, and the jitter buffer is told RX has paused (it re-anchors on
+    // the packets that follow instead of measuring the gap as delay). Two sources, either of which
+    // pauses RX: our own PTT (setTransmitting) and the radio's reported TX state
+    // (setRadioTransmitting: its front panel, another CAT client, TUNE). Atomics, safe from any
+    // thread; the feed picks up the edge on its next tick.
     void setTransmitting(bool transmitting) { m_transmitting.store(transmitting, std::memory_order_relaxed); }
+    void setRadioTransmitting(bool transmitting) { m_radioTransmitting.store(transmitting, std::memory_order_relaxed); }
 
     // Output device settings
     Q_INVOKABLE void setOutputDevice(const QString &deviceId);
@@ -172,6 +177,10 @@ private:
     std::atomic<quint32> m_rxUnderruns{0};
     std::atomic<quint32> m_rxDroppedPackets{0};
     std::atomic<bool> m_transmitting{false};
+    std::atomic<bool> m_radioTransmitting{false};
+    bool rxPaused() const {
+        return m_transmitting.load(std::memory_order_relaxed) || m_radioTransmitting.load(std::memory_order_relaxed);
+    }
     std::atomic<int> m_rxBufferedBytes{0};
 
     // Jitter buffer for RX audio playback: one decoded K4 packet per slot, filled in place by the
@@ -195,6 +204,9 @@ private:
     RxPlayout::JitterBuffer m_jitter;
     // Ring packets, counted from the front, that m_jitter has already observed.
     std::size_t m_rxSeen = 0;
+    // The RX-paused state m_jitter was last told. Cleared with it by flushQueue(), so a reset while
+    // transmitting is told again on the next tick.
+    bool m_rxPauseTold = false;
     // qk4.audio.rx playout record, one per second of feed ticks while that category is enabled.
     int m_playoutReportTicks = 0;
     void reportRxPlayout(int bufferedBytes);

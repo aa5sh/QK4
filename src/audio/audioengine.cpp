@@ -128,9 +128,9 @@ void AudioEngine::onSinkStateChanged(QtAudio::State state) {
     const QtAudio::Error error = m_audioSink->error();
     if (state == QtAudio::IdleState && error == QtAudio::UnderrunError) {
         // In push mode the sink goes Idle when it runs dry and back to Active by itself on the next
-        // write, so there is nothing to restart - only to count. Not counted while transmitting:
-        // the K4 stops sending RX then, and the sink running dry is expected.
-        if (!m_transmitting.load(std::memory_order_relaxed))
+        // write, so there is nothing to restart - only to count. Not counted while transmitting
+        // (ours or the radio's): the K4 stops sending RX then, and the sink running dry is expected.
+        if (!rxPaused())
             m_rxUnderruns.fetch_add(1, std::memory_order_relaxed);
         return;
     }
@@ -275,6 +275,7 @@ void AudioEngine::flushQueue() {
     while (m_rxRing.front())
         popRxHead();
     m_rxSeen = 0;
+    m_rxPauseTold = false;
     m_jitter.reset();
 }
 
@@ -289,6 +290,14 @@ void AudioEngine::feedAudioDevice() {
     const int sinkSize = static_cast<int>(m_audioSink->bufferSize());
     int bytesFree = static_cast<int>(m_audioSink->bytesFree());
     int sinkFill = qMax(0, sinkSize - bytesFree);
+    // A transmit edge, ours or the radio's: tell the jitter buffer before it sees this tick's packets.
+    if (const bool paused = rxPaused(); paused != m_rxPauseTold) {
+        if (paused)
+            m_jitter.receivePaused();
+        else
+            m_jitter.receiveResumed();
+        m_rxPauseTold = paused;
+    }
     m_jitter.observeSink(sinkFill, nowUs);
 
     int queued = 0;

@@ -113,7 +113,8 @@ constexpr int bytesToWrite(int headBytes, int bytesFree, int sinkFillBytes) {
 //                   before it). A constant network delay cancels out; what is left varies only
 //                   with jitter (and slowly with clock drift, which the window follows).
 //   jitter J        max d - min d over a 10 s window of 1 s buckets: a peak held for ten seconds,
-//                   then dropped bucket by bucket. Grows on the packet that shows it.
+//                   then dropped bucket by bucket. Grows on the packet that shows it. The window
+//                   is aged by audio received, not wall time, so a long transmit does not expire it.
 //   lateness        d - min d for one packet: how much later than the earliest recent packet.
 //   delay L         per packet: the audio ahead of it, net of what the device has already claimed,
 //                   plus its lateness. It is the delay an ON-TIME packet gets, so it is comparable
@@ -152,6 +153,15 @@ constexpr int bytesToWrite(int headBytes, int bytesFree, int sinkFillBytes) {
 // on its old timeline. If it is not back within STALL_SETTLE_MS (the radio stopped sending - we
 // transmitted - rather than the network holding packets back) the timeline is re-anchored at the
 // stall's earliest packet, keeping the jitter learned before it.
+//
+// A pause restarts the stall from the first packet after it: one the engine announces
+// (receivePaused / receiveResumed, at our own transmit edges and the radio's TX state), or a gap in
+// arrivals longer than JITTER_MAX_MS. WHY: Mike's bench log, 2026-10-29. The radio's last packet
+// before a 2 s transmit arrived over 200 ms late and opened a stall; by the time RX resumed its
+// settle timer had long run out, the first packet back was re-anchored against that stale packet
+// and entered the window as a 1.9 s delay, the target sat at its cap with ~230 ms buffered, and every
+// later packet counted as a new stall. As a last guard, no sample later than JITTER_MAX_MS ever
+// enters the window, however it got there.
 class JitterBuffer {
 public:
     static constexpr int TARGET_SLACK_MS = 2;
@@ -195,61 +205,75 @@ public:
             m_anchorUs = nowUs;
             m_sentUs = 0;
         }
+        const std::int64_t streamUs = m_sentUs; // the window's clock: audio received, not wall time
+        const std::int64_t durUs = usFor(packetBytes);
         std::int64_t d = nowUs - m_anchorUs - m_sentUs;
-        m_sentUs += usFor(packetBytes);
+        m_sentUs += durUs;
+        const std::int64_t gapUs = m_havePacket ? nowUs - m_lastPacketUs - m_lastPacketDurUs : 0;
+        m_havePacket = true;
+        m_lastPacketUs = nowUs;
+        m_lastPacketDurUs = durUs;
+        constexpr std::int64_t kMaxUs = std::int64_t(JITTER_MAX_MS) * 1000;
 
-        if (!m_inStall && m_haveWindow && d - m_windowMinUs > std::int64_t(JITTER_MAX_MS) * 1000) {
-            m_inStall = true;
-            m_stallSinceUs = nowUs;
-            m_stallMinUs = d;
+        // A pause - announced by the engine, or a gap in arrivals no jitter explains - starts the
+        // stall afresh from this packet, open or not, so nothing measured before it can anchor what
+        // comes after. One stall event is counted once, however many packets or restarts it spans.
+        if (m_resumePending || (m_inStall && gapUs > kMaxUs)) {
+            if (!m_inStall)
+                ++m_stalls;
+            beginStall(nowUs, d);
+            m_resumePending = false;
+        } else if (!m_inStall && m_haveWindow && d - m_windowMinUs > kMaxUs) {
             ++m_stalls;
+            beginStall(nowUs, d);
         }
         if (m_inStall) {
             m_stallMinUs = std::min(m_stallMinUs, d);
             if (d - m_windowMinUs <= m_jitterUs + std::int64_t(TARGET_SLACK_MS) * 1000) {
                 m_inStall = false; // back on the old timeline: the network held packets back
             } else if (nowUs - m_stallSinceUs >= std::int64_t(STALL_SETTLE_MS) * 1000) {
-                const std::int64_t shift = m_stallMinUs - m_windowMinUs; // the radio paused
+                const std::int64_t shift = m_stallMinUs - m_windowMinUs; // the timeline moved
                 m_anchorUs += shift;
                 d -= shift;
                 m_inStall = false;
             }
         }
-        std::int64_t latenessUs;
-        if (m_inStall) {
-            latenessUs = d - m_stallMinUs;
-            m_shrinkValid = false;
-        } else {
-            addToWindow(nowUs, d);
-            latenessUs = d - m_windowMinUs;
+        // The invariant the window relies on: no sample later than JITTER_MAX_MS ever enters it. A
+        // packet that would (a new excursion right at a re-anchor) opens a stall instead.
+        if (!m_inStall && m_haveWindow && d - m_windowMinUs > kMaxUs) {
+            ++m_stalls;
+            beginStall(nowUs, d);
         }
-
-        const std::int64_t delay = std::int64_t(bufferedThroughBytes) + m_pendingSilence - m_pendingSkip - packetBytes -
-                                   bytesFor(sinceLastPullUs(nowUs)) + bytesFor(latenessUs);
-        const int target = targetBytes();
-        if (delay < target) {
-            int grow = alignUp(int(target - delay) + GROW_HEADROOM_MS * BYTES_PER_MS);
-            const int cancelled = std::min(m_pendingSkip, grow);
-            m_pendingSkip -= cancelled;
-            grow -= cancelled;
-            m_pendingSilence += grow;
-            ++m_silenceInserts;
-            m_shrinkValid = false;
-        } else if (!m_inStall) {
-            if (!m_shrinkValid) {
-                m_shrinkValid = true;
-                m_shrinkMinDelay = delay;
-                m_shrinkSinceUs = nowUs;
-            } else {
-                m_shrinkMinDelay = std::min(m_shrinkMinDelay, delay);
-            }
-        }
+        if (!m_inStall)
+            addToWindow(streamUs, d);
+        // Decided in decide(), once every packet of this tick has moved the minimum: a packet judged
+        // alone would be measured against a minimum the packets behind it are about to lower - after
+        // a pause that ends in a burst, the first packet back looked on time and got silence with
+        // 80 ms of audio queued behind it.
+        if (m_tickCount < m_tick.size())
+            m_tick[m_tickCount++] = Observed{d, bufferedThroughBytes - packetBytes, m_inStall};
     }
 
-    // 3. After the tick's packets are observed, when anything is queued. bufferedBytes is sink fill +
+    // Receive paused / resumed: we are transmitting, so the half-duplex radio sends no RX audio.
+    // Called by the engine on the audio thread at its transmit edges. The first packet after a
+    // resume starts a fresh stall: the timeline is re-anchored on the packets that follow, and the
+    // jitter learned before the pause is kept. A pause the engine does not know about (another
+    // client keying the radio, a network outage) is caught by the arrival gap instead.
+    void receivePaused() { m_paused = true; }
+    void receiveResumed() {
+        if (m_paused)
+            m_resumePending = true;
+        m_paused = false;
+    }
+
+    // 3. After the tick's packets are observed, when anything is queued: grows for any of them that
+    // would fall short, then the shrink and backlog trim. bufferedBytes is sink fill +
     // queue; packetBytes the current tier's packet.
     void decide(int bufferedBytes, int packetBytes, std::int64_t nowUs) {
         const int target = targetBytes();
+        for (std::size_t i = 0; i < m_tickCount; ++i)
+            judge(m_tick[i], target, nowUs);
+        m_tickCount = 0;
         const int depth = target + packetBytes;
         const int trimAbove = std::max(highWaterBytes(packetBytes), depth + packetBytes);
         const int net = bufferedBytes + m_pendingSilence - m_pendingSkip - bytesFor(sinceLastPullUs(nowUs));
@@ -316,12 +340,50 @@ private:
     static constexpr int alignDown(int bytes) { return bytes - bytes % FRAME_BYTES; }
     static constexpr int alignUp(int bytes) { return alignDown(bytes + FRAME_BYTES - 1); }
 
+    // One packet seen this tick, waiting for decide().
+    struct Observed {
+        std::int64_t d = 0; // relative delay, in the frame of the window or of the open stall
+        int aheadBytes = 0; // sink fill + queued audio ahead of it when it was seen
+        bool inStall = false;
+    };
+
+    // Grow or note for shrinking, from the delay an on-time packet would get behind this one.
+    void judge(const Observed &o, int target, std::int64_t nowUs) {
+        // In a stall, against its running minimum, which only falls as packets arrive: an
+        // underestimate, so growing errs long and shrinking errs short - both safe.
+        const std::int64_t latenessUs = o.d - (o.inStall ? m_stallMinUs : m_windowMinUs);
+        const std::int64_t delay = std::int64_t(o.aheadBytes) + m_pendingSilence - m_pendingSkip -
+                                   bytesFor(sinceLastPullUs(nowUs)) + bytesFor(latenessUs);
+        if (delay < target) {
+            int grow = alignUp(int(target - delay) + GROW_HEADROOM_MS * BYTES_PER_MS);
+            const int cancelled = std::min(m_pendingSkip, grow);
+            m_pendingSkip -= cancelled;
+            grow -= cancelled;
+            m_pendingSilence += grow;
+            ++m_silenceInserts;
+            m_shrinkValid = false;
+        } else if (!m_shrinkValid) {
+            m_shrinkValid = true;
+            m_shrinkMinDelay = delay;
+            m_shrinkSinceUs = nowUs;
+        } else {
+            m_shrinkMinDelay = std::min(m_shrinkMinDelay, delay);
+        }
+    }
+
+    void beginStall(std::int64_t nowUs, std::int64_t d) {
+        m_inStall = true;
+        m_stallSinceUs = nowUs;
+        m_stallMinUs = d;
+        m_shrinkValid = false;
+    }
+
     std::int64_t sinceLastPullUs(std::int64_t nowUs) const {
         return std::clamp<std::int64_t>(nowUs - m_lastPullUs, 0, std::int64_t(DEVICE_PERIOD_MAX_MS) * 1000);
     }
 
-    void addToWindow(std::int64_t nowUs, std::int64_t d) {
-        const std::int64_t id = nowUs / BUCKET_US;
+    void addToWindow(std::int64_t streamUs, std::int64_t d) {
+        const std::int64_t id = streamUs / BUCKET_US;
         Bucket &b = m_buckets[static_cast<std::size_t>(id % WINDOW_BUCKETS)];
         if (b.id != id) {
             b = Bucket{id, d, d};
@@ -351,6 +413,12 @@ private:
     std::int64_t m_anchorUs = 0;
     std::int64_t m_sentUs = 0; // audio received since the anchor, as playing time
 
+    bool m_havePacket = false;
+    std::int64_t m_lastPacketUs = 0;
+    std::int64_t m_lastPacketDurUs = 0;
+    bool m_paused = false;
+    bool m_resumePending = false;
+
     bool m_inStall = false;
     std::int64_t m_stallSinceUs = 0;
     std::int64_t m_stallMinUs = 0;
@@ -363,6 +431,10 @@ private:
 
     int m_pendingSilence = 0;
     int m_pendingSkip = 0;
+
+    // WHY 64: the engine's ring holds 64 packets, so one tick can never see more.
+    std::array<Observed, 64> m_tick{};
+    std::size_t m_tickCount = 0;
 
     bool m_shrinkValid = false;
     std::int64_t m_shrinkMinDelay = 0;

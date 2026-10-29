@@ -135,6 +135,13 @@ AudioController::AudioController(ConnectionController *connController, RadioStat
                        fromMicrophone ? "microphone" : "TCI", micOpenUs / 1000.0);
             });
 
+    // The radio's own TX state pauses RX audio as our PTT does: front-panel PTT, another CAT client,
+    // TUNE. The engine tells its jitter buffer, which re-anchors after the pause instead of measuring it.
+    connect(m_radioState, &RadioState::transmitStateChanged, this, [this](bool transmitting) {
+        if (m_audioEngine)
+            m_audioEngine->setRadioTransmitting(transmitting);
+    });
+
     // SL tier changes → update TX frame size
     connect(m_radioState, &RadioState::streamingLatencyChanged, this, &AudioController::onStreamingLatencyChanged);
 
@@ -227,6 +234,7 @@ void AudioController::stopAudio() {
     }
     if (m_audioEngine) {
         m_audioEngine->setTransmitting(false);
+        m_audioEngine->setRadioTransmitting(false);
         QMetaObject::invokeMethod(m_audioEngine, "stop", Qt::QueuedConnection);
     }
 }

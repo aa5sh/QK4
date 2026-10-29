@@ -65,7 +65,10 @@ struct SimConfig {
     int stallMs = 0;
     int pauseAtMs = -1; // packets due in [pauseAtMs, pauseAtMs + pauseMs) are never sent (we transmit)
     int pauseMs = 0;
-    int spikeFromMs = -1; // packets due in [spikeFromMs, spikeToMs) get spikeJitterMs instead
+    int pauseLastLateMs = 0; // the last packet before the pause arrives this much late (the radio's final one)
+    int pauseBurstMs = 0;    // packets due in the first pauseBurstMs after it arrive together at its end
+    bool pauseKnown = false; // QK4 knows it is transmitting: the engine tells the jitter buffer
+    int spikeFromMs = -1;    // packets due in [spikeFromMs, spikeToMs) get spikeJitterMs instead
     int spikeToMs = -1;
     int spikeJitterMs = 0;
     int devicePpm = 0; // device clock fast (+) or slow (-) against the radio's
@@ -94,6 +97,17 @@ struct SimResult {
     int backlogTrims = 0;
     int finalJitterMs = 0;
     int finalTargetMs = 0;
+    // Around SimConfig's pause: the target and jitter just before it, how far the target strays from
+    // that from one packet after the first packet back, and the most audio buffered from then on.
+    int targetBeforePauseMs = -1;
+    int jitterBeforePauseMs = -1;
+    int maxTargetDriftAfterPauseMs = 0;
+    int maxBufferedAfterPauseMs = 0;
+    // From a second after the first packet back; three when the pause ends in a burst under the
+    // high-water mark, which the shrink eases out at up to SHRINK_STEP_MAX_MS a second.
+    int maxBufferedSettledAfterPauseMs = 0;
+    int maxBufferedOneSecondAfterPauseMs = 0;
+    int stalls = 0;
 };
 
 SimResult simulate(const SimConfig &c) {
@@ -114,6 +128,11 @@ SimResult simulate(const SimConfig &c) {
         int at = due + c.phaseMs + jitter.next(spike ? c.spikeJitterMs : c.jitterMs);
         if (c.stallAtMs >= 0 && due >= c.stallAtMs && due < c.stallAtMs + c.stallMs)
             at = c.stallAtMs + c.stallMs + (due - c.stallAtMs) / c.packetMs; // the backlog, at link speed
+        if (c.pauseAtMs >= 0 && due < c.pauseAtMs && due + c.packetMs >= c.pauseAtMs)
+            at += c.pauseLastLateMs;
+        const int resumeMs = c.pauseAtMs + c.pauseMs;
+        if (c.pauseAtMs >= 0 && due >= resumeMs && due < resumeMs + c.pauseBurstMs)
+            at = resumeMs + c.pauseBurstMs + (due - resumeMs) / c.packetMs;
         at = std::max(at, last);
         last = at;
         arrivals.push_back(at);
@@ -134,6 +153,8 @@ SimResult simulate(const SimConfig &c) {
     double sumBuffered = 0;
     int samples = 0;
     const int stallEnd = c.stallAtMs + c.stallMs;
+    int firstBackMs = -1; // the first packet after the pause
+    bool wasPaused = false;
 
     auto popFront = [&] {
         queue.pop_front();
@@ -143,6 +164,8 @@ SimResult simulate(const SimConfig &c) {
 
     for (int t = 0; t < c.durationMs; ++t) {
         while (next < arrivals.size() && arrivals[next] <= t) {
+            if (c.pauseAtMs >= 0 && firstBackMs < 0 && arrivals[next] >= c.pauseAtMs + c.pauseMs)
+                firstBackMs = t;
             ++next;
             if (legacy && queued + pkt > HIGH_WATER_PACKETS * pkt) { // the old marks, queue only
                 while (queued > kOldTargetPackets * pkt && !queue.empty()) {
@@ -164,6 +187,14 @@ SimResult simulate(const SimConfig &c) {
             const std::int64_t nowUs = std::int64_t(t) * 1000;
             if (c.policy == Policy::JitterBuffer) {
                 // AudioEngine::feedAudioDevice, step for step.
+                const bool paused = c.pauseKnown && t >= c.pauseAtMs && t < c.pauseAtMs + c.pauseMs;
+                if (paused != wasPaused) {
+                    if (paused)
+                        jb.receivePaused();
+                    else
+                        jb.receiveResumed();
+                    wasPaused = paused;
+                }
                 jb.observeSink(sink, nowUs);
                 if (!queue.empty()) {
                     int through = sink;
@@ -217,6 +248,14 @@ SimResult simulate(const SimConfig &c) {
             }
             if (c.policy == Policy::JitterBuffer) {
                 jb.noteWritten(sink);
+                if (c.pauseAtMs >= 0 && r.targetBeforePauseMs < 0 && t >= c.pauseAtMs - c.packetMs) {
+                    r.targetBeforePauseMs = jb.targetBytes() / BYTES_PER_MS;
+                    r.jitterBeforePauseMs = jb.jitterMs();
+                }
+                if (firstBackMs >= 0 && t >= firstBackMs + c.packetMs)
+                    r.maxTargetDriftAfterPauseMs =
+                        std::max(r.maxTargetDriftAfterPauseMs,
+                                 std::abs(jb.targetBytes() / BYTES_PER_MS - r.targetBeforePauseMs));
                 if (r.settledAtMs < 0 && next > 0 && jb.jitterMs() >= c.jitterMs - 1)
                     r.settledAtMs = t;
             }
@@ -247,6 +286,12 @@ SimResult simulate(const SimConfig &c) {
             sumBuffered += (queued + sink) / double(BYTES_PER_MS);
             ++samples;
         }
+        if (firstBackMs >= 0)
+            r.maxBufferedAfterPauseMs = std::max(r.maxBufferedAfterPauseMs, bufferedMs);
+        if (firstBackMs >= 0 && t >= firstBackMs + 1000)
+            r.maxBufferedOneSecondAfterPauseMs = std::max(r.maxBufferedOneSecondAfterPauseMs, bufferedMs);
+        if (firstBackMs >= 0 && t >= firstBackMs + (c.pauseBurstMs > 0 ? 3000 : 1000))
+            r.maxBufferedSettledAfterPauseMs = std::max(r.maxBufferedSettledAfterPauseMs, bufferedMs);
         if (t >= c.durationMs - 1000)
             r.maxBufferedLastSecondMs = std::max(r.maxBufferedLastSecondMs, bufferedMs);
         if (c.stallAtMs >= 0 && t >= stallEnd + 1000 && t < stallEnd + 2000)
@@ -258,6 +303,7 @@ SimResult simulate(const SimConfig &c) {
     r.backlogTrims = jb.backlogTrims();
     r.finalJitterMs = jb.jitterMs();
     r.finalTargetMs = jb.targetBytes() / BYTES_PER_MS;
+    r.stalls = jb.stalls();
     return r;
 }
 
@@ -300,6 +346,8 @@ private slots:
     void bufferShrinksBackAfterJitterSpike_data();
     void bufferShrinksBackAfterJitterSpike();
     void transmitPauseKeepsLatency();
+    void transmitPauseNeverEntersTheEstimate_data();
+    void transmitPauseNeverEntersTheEstimate();
     void deviceClockDriftIsAbsorbed_data();
     void deviceClockDriftIsAbsorbed();
 };
@@ -664,6 +712,90 @@ void TestRxPlayout::transmitPauseKeepsLatency() {
         QVERIFY(r.meanBufferedMs <= calm.meanBufferedMs + 5);
         QCOMPARE(r.underrunsAfterMs, 0);
     }
+}
+
+void TestRxPlayout::transmitPauseNeverEntersTheEstimate_data() {
+    QTest::addColumn<int>("pauseMs");
+    QTest::addColumn<int>("lastLateMs");
+    QTest::addColumn<int>("burstMs");
+    QTest::addColumn<bool>("known");
+    for (bool known : {false, true}) {
+        for (int pause : {500, 1000, 1500, 2100, 5000, 12000}) {
+            for (int late : {0, 250}) {
+                for (int burst : {0, 100}) {
+                    QTest::newRow(qPrintable(QStringLiteral("%1 %2 ms pause, last packet +%3 ms, burst %4 ms")
+                                                 .arg(known ? "known" : "unannounced")
+                                                 .arg(pause)
+                                                 .arg(late)
+                                                 .arg(burst)))
+                        << pause << late << burst << known;
+                }
+            }
+        }
+    }
+}
+
+// Mike's bench log, 2026-10-29 (SL0, 11 ms device, 10-26 ms of jitter): after a 2 s transmit the
+// estimate read 2100 ms, the target sat at its 202 ms cap with ~230 ms buffered until the backlog
+// trim, and one pause counted as 99 stalls. The last packet before the transmit had arrived over
+// 200 ms late and opened a stall; its settle timer had long expired when the radio resumed, so the
+// first packet back was re-anchored against that stale packet and entered the window as a 1.9 s
+// delay, after which every packet looked like a new stall. A pause of any length, announced or not,
+// however packets straddle it, must never reach the estimate: the target is back to its value before
+// the pause one packet after the first packet back, the buffer is back within the packet, the
+// learned jitter, the device period and the usual 15 ms once the shrink has run, and one pause is
+// one stall.
+void TestRxPlayout::transmitPauseNeverEntersTheEstimate() {
+    QFETCH(int, pauseMs);
+    QFETCH(int, lastLateMs);
+    QFETCH(int, burstMs);
+    QFETCH(bool, known);
+    SimConfig c;
+    c.packetMs = 20;
+    c.devicePeriodMs = 11;
+    c.jitterMs = 20;
+    c.phaseMs = 2;
+    c.durationMs = 20000 + pauseMs + 10000;
+    c.pauseAtMs = 20000;
+    c.pauseMs = pauseMs;
+    c.pauseLastLateMs = lastLateMs;
+    c.pauseBurstMs = burstMs;
+    c.pauseKnown = known;
+    const SimResult r = simulate(c);
+    qInfo("target %d ms before the pause, drifts %d ms after it; jitter %d ms before, %d ms at end; most buffered "
+          "after it %d ms, %d ms from a second after; %d stalls; underruns after it %d",
+          r.targetBeforePauseMs, r.maxTargetDriftAfterPauseMs, r.jitterBeforePauseMs, r.finalJitterMs,
+          r.maxBufferedAfterPauseMs, r.maxBufferedSettledAfterPauseMs, r.stalls, r.underrunsAfterMs);
+
+    QVERIFY(r.targetBeforePauseMs > RxPlayout::JitterBuffer::TARGET_SLACK_MS); // it had learned the jitter
+    QVERIFY2(r.maxTargetDriftAfterPauseMs <= 3, qPrintable(QStringLiteral("target moved %1 ms from %2 ms")
+                                                               .arg(r.maxTargetDriftAfterPauseMs)
+                                                               .arg(r.targetBeforePauseMs)));
+    // Once the shrink has run - a second after the first packet back, three when a burst under the
+    // high-water mark has to be eased out at SHRINK_STEP_MAX_MS a second - the buffer is held to the
+    // steady-state bound.
+    const int bound = c.packetMs + r.jitterBeforePauseMs + c.devicePeriodMs + 15;
+    QVERIFY2(r.maxBufferedSettledAfterPauseMs <= bound,
+             qPrintable(QStringLiteral("%1 ms buffered, bound %2").arg(r.maxBufferedSettledAfterPauseMs).arg(bound)));
+    if (burstMs > 0) {
+        // A burst is real audio arriving at once: held to the burst contract (burstBacklogIsTrimmed).
+        const int burstBound =
+            RxPlayout::highWaterBytes(c.packetMs * RxPlayout::BYTES_PER_MS) / RxPlayout::BYTES_PER_MS + c.packetMs;
+        QVERIFY2(r.maxBufferedOneSecondAfterPauseMs <= burstBound,
+                 qPrintable(QStringLiteral("%1 ms buffered, burst bound %2")
+                                .arg(r.maxBufferedOneSecondAfterPauseMs)
+                                .arg(burstBound)));
+    } else {
+        // The first packet back is taken as on time: how late it really was cannot be known when it
+        // arrives, and assuming less risks an underrun. So until the shrink the resume can overshoot
+        // by at most that packet's lateness - at most the learned jitter.
+        QVERIFY2(r.maxBufferedAfterPauseMs <= bound + r.jitterBeforePauseMs,
+                 qPrintable(QStringLiteral("%1 ms buffered at the resume, bound %2")
+                                .arg(r.maxBufferedAfterPauseMs)
+                                .arg(bound + r.jitterBeforePauseMs)));
+    }
+    QVERIFY2(r.stalls == 1, qPrintable(QStringLiteral("%1 stalls for one pause").arg(r.stalls)));
+    QCOMPARE(r.underrunsAfterMs, 0);
 }
 
 void TestRxPlayout::deviceClockDriftIsAbsorbed_data() {
