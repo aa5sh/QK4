@@ -70,6 +70,10 @@ int spanAfterZoom(int currentSpan, bool zoomIn);
 /// Returns -1 for anything outside 1-3 (preset not known yet).
 int nextFilterPreset(int currentPreset);
 
+/// Next panadapter (DDC) noise blanker mode (#NB$) when the DISPLAY menu's NB key is tapped:
+/// OFF (0) -> ON (1) -> AUTO (2) -> OFF. A mode not reported yet (-1) is taken as OFF.
+int nextDdcNoiseBlankerMode(int currentMode);
+
 /// Filter as the K4 holds it: bandwidth and IF shift (centre), both in decahertz.
 struct FilterBwIs {
     int bwDah;

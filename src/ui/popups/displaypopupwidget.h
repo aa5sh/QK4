@@ -74,6 +74,7 @@ signals:
     void scaleDecrementRequested();
 
     // DDC NB control signals
+    void ddcNbModeCycleRequested(); // NB key tapped: next panadapter NB mode (#NB$)
     void nbLevelIncrementRequested();
     void nbLevelDecrementRequested();
 

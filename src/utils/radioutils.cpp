@@ -55,6 +55,17 @@ int spanAfterZoom(int currentSpan, bool zoomIn) {
     return zoomIn ? getNextSpanDown(currentSpan) : getNextSpanUp(currentSpan);
 }
 
+int nextDdcNoiseBlankerMode(int currentMode) {
+    switch (currentMode) {
+    case 1:
+        return 2; // ON -> AUTO
+    case 2:
+        return 0; // AUTO -> OFF
+    default:
+        return 1; // OFF, or not reported yet -> ON
+    }
+}
+
 int nextFilterPreset(int currentPreset) {
     switch (currentPreset) {
     case 1:

@@ -686,6 +686,10 @@ add_executable(test_widgetstate
     ${CMAKE_SOURCE_DIR}/src/ui/popups/confirmpopup.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/popups/lineoutpopup.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/popups/fnpopupwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/popups/displaypopupwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/widgets/controlgroupwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/widgets/displaymenubutton.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/widgets/togglegroupwidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/dialogs/macrodialog.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/overlays/dxspotoverlay.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/styling/k4styles.cpp

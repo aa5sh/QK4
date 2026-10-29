@@ -7,8 +7,10 @@
 #include "ui/dialogs/macrodialog.h"
 #include "ui/overlays/dxspotoverlay.h"
 #include "ui/popups/confirmpopup.h"
+#include "ui/popups/displaypopupwidget.h"
 #include "ui/styling/k4glyphs.h"
 #include "ui/popups/lineoutpopup.h"
+#include "ui/widgets/displaymenubutton.h"
 #include "ui/widgets/dualcontrolbutton.h"
 #include "ui/widgets/featuremenubar.h"
 #include "ui/widgets/frequencydisplaywidget.h"
@@ -186,6 +188,25 @@ private slots:
         link->click();
         QVERIFY(!popup.rightEqualsLeft());
         QVERIFY(!link->isChecked());
+    }
+
+    // --- DisplayPopupWidget ---
+
+    void displayNbKeyAsksForTheNextPanadapterNbMode() {
+        // The NB key sent "NB;" - a GET of the receiver noise blanker - so tapping it changed nothing.
+        // It must ask for the next panadapter (DDC, #NB$) mode, the one its control page shows.
+        DisplayPopupWidget popup;
+        DisplayMenuButton *nbKey = nullptr;
+        for (DisplayMenuButton *b : popup.findChildren<DisplayMenuButton *>()) {
+            if (b->alternateText() == QStringLiteral("WTR CLRS"))
+                nbKey = b;
+        }
+        QVERIFY(nbKey);
+        QSignalSpy cycle(&popup, &DisplayPopupWidget::ddcNbModeCycleRequested);
+        QSignalSpy cat(&popup, &DisplayPopupWidget::catCommandRequested);
+        QTest::mouseClick(nbKey, Qt::LeftButton);
+        QCOMPARE(cycle.count(), 1);
+        QCOMPARE(cat.count(), 0);
     }
 
     // --- ConfirmPopup ---

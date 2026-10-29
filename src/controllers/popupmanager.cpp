@@ -387,6 +387,12 @@ void PopupManager::wireDisplayPopup() {
         m_radioState->setAveraging(next);
     });
 
+    // DDC NB key → next panadapter NB mode (OFF → ON → AUTO), from the mode the radio last reported.
+    connect(m_displayPopup, &DisplayPopupWidget::ddcNbModeCycleRequested, this, [this]() {
+        m_connection->sendCAT(QString::fromLatin1(
+            CatFrames::ddcNoiseBlanker(RadioUtils::nextDdcNoiseBlankerMode(m_radioState->ddcNbMode()))));
+    });
+
     // DDC NB level control +/- → CAT.
     connect(m_displayPopup, &DisplayPopupWidget::nbLevelIncrementRequested, this, [this]() {
         const int next = qMin(m_radioState->ddcNbLevel() + 1, 14);

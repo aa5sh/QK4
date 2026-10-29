@@ -75,6 +75,10 @@ QByteArray cwAbort();
 // command and change only the level and the on/off flag.
 QByteArray setNoiseBlanker(int level, bool on, int filterWidth = -1);
 
+// #NB$n - the panadapter (DDC) noise blanker: 0 off, 1 on, 2 auto (follows the receiver NB).
+// Not the receiver noise blanker, which is NB / NB$. Out-of-range modes are clamped.
+QByteArray ddcNoiseBlanker(int mode);
+
 // LKn / LK$n - VFO tuning lock, per VFO.
 QByteArray setVfoLock(bool locked, bool subVfo);
 

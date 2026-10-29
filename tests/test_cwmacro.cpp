@@ -268,6 +268,19 @@ private slots:
         QCOMPARE(CatFrames::keyerSpeed(-30), QByteArray("KS008;"));
     }
 
+    void thePanadapterNoiseBlankerFrameIsWhatRadioStateParses() {
+        // #NB$n, not the receiver's NB: what the DISPLAY popup's NB key sends.
+        QCOMPARE(CatFrames::ddcNoiseBlanker(0), QByteArray("#NB$0;"));
+        QCOMPARE(CatFrames::ddcNoiseBlanker(2), QByteArray("#NB$2;"));
+        QCOMPARE(CatFrames::ddcNoiseBlanker(7), QByteArray("#NB$2;"));
+        QCOMPARE(CatFrames::ddcNoiseBlanker(-1), QByteArray("#NB$0;"));
+        for (int mode : {1, 2, 0}) {
+            RadioState rs;
+            rs.parseCATCommand(QString::fromLatin1(CatFrames::ddcNoiseBlanker(mode)));
+            QCOMPARE(rs.ddcNbMode(), mode);
+        }
+    }
+
     void theKeyerPaddleFrameCarriesAllThreeFields() {
         QCOMPARE(CatFrames::keyerPaddle('B', 'R', 95), QByteArray("KPBR095;"));
         QCOMPARE(CatFrames::keyerPaddle('A', 'N', 125), QByteArray("KPAN125;"));

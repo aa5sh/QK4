@@ -92,6 +92,14 @@ private slots:
         }
     }
 
+    // nextDdcNoiseBlankerMode - DISPLAY NB key: OFF -> ON -> AUTO -> OFF
+    void testDdcNbCycle() {
+        QCOMPARE(RadioUtils::nextDdcNoiseBlankerMode(0), 1);
+        QCOMPARE(RadioUtils::nextDdcNoiseBlankerMode(1), 2);
+        QCOMPARE(RadioUtils::nextDdcNoiseBlankerMode(2), 0);
+        QCOMPARE(RadioUtils::nextDdcNoiseBlankerMode(-1), 1); // not reported yet: taken as OFF
+    }
+
     // nextFilterPreset
     void testFilterPreset_1GoesTo3() { QCOMPARE(RadioUtils::nextFilterPreset(1), 3); }
     void testFilterPreset_3GoesTo2() { QCOMPARE(RadioUtils::nextFilterPreset(3), 2); }

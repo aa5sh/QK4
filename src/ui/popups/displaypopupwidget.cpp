@@ -414,8 +414,8 @@ void DisplayPopupWidget::onMenuItemClicked(MenuItem item) {
         break;
     }
     case NbWtrClrs:
-        // Toggle NB - handled elsewhere via existing NB command
-        emit catCommandRequested("NB;");
+        // The panadapter (DDC) noise blanker this key's control page shows, not the receiver NB.
+        emit ddcNbModeCycleRequested();
         break;
     // Note: AveragePeak only shows control page (first switch) - no CAT command on click
     // The +/- buttons in the control page handle averaging changes via averagingIncrement/DecrementRequested signals

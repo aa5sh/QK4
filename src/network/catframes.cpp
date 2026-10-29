@@ -261,6 +261,10 @@ QByteArray setNoiseBlanker(int level, bool on, int filterWidth) {
     return (cmd + QLatin1Char(';')).toUtf8();
 }
 
+QByteArray ddcNoiseBlanker(int mode) {
+    return QString("#NB$%1;").arg(qBound(0, mode, 2)).toUtf8();
+}
+
 QByteArray setVfoLock(bool locked, bool subVfo) {
     return QString("LK%1%2;").arg(subVfo ? "$" : "").arg(locked ? 1 : 0).toUtf8();
 }
