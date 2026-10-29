@@ -1,5 +1,6 @@
 #include "hardwarecontroller.h"
 #include "logging/logcategories.h"
+#include "logging/logsink.h"
 #include "audio/sidetonegenerator.h"
 #include "audio/sidetonescheduler.h"
 #include "connectioncontroller.h"
@@ -131,6 +132,7 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     m_sidetoneScheduler->setStreamTimeSource([sg = m_sidetoneGenerator]() { return sg->streamTime(); });
     m_sidetoneThread = new QThread(this);
     m_sidetoneThread->setObjectName("Sidetone");
+    Logging::markRealtimeOnStart(m_sidetoneThread);
     m_sidetoneGenerator->moveToThread(m_sidetoneThread);
     // WHY HighPriority: sidetone shares the real-time CW perception path with the keyer
     // thread (also HighPriority); at default priority the OS could preempt the per-element
@@ -173,6 +175,7 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     m_keyerThread = QThread::create([keyer = m_paddleKeyer.get()]() { keyer->run(); });
     m_keyerThread->setParent(this);
     m_keyerThread->setObjectName("Keyer");
+    Logging::markRealtimeOnStart(m_keyerThread);
     // WHY HighPriority: every element boundary is a sleep on this thread; a preempted wake is a late
     // decision (the keyer learns and subtracts a steady overrun, not a random one).
     m_keyerThread->start(QThread::HighPriority);

@@ -174,6 +174,7 @@ set(SOURCES
     src/settings/interfacescale.cpp
     src/logging/logcategories.cpp
     src/logging/logpaths.cpp
+    src/logging/logsink.cpp
     src/models/radiostate.cpp
     src/models/radiostate/antennastate.cpp
     src/models/radiostate/audioeffectsstate.cpp
@@ -325,6 +326,8 @@ set(HEADERS
     src/settings/interfacescale.h
     src/logging/logcategories.h
     src/logging/logpaths.h
+    src/logging/logqueue.h
+    src/logging/logsink.h
     src/models/radiostate.h
     src/models/radiostate/antennastate.h
     src/models/radiostate/datacontrolstate.h
@@ -464,6 +467,8 @@ endif()
 # Pass version to source code as compile definition
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     QK4_VERSION="${QK4_VERSION_FULL}"
+    # Source file and line in release builds too; the log file prints them for warnings.
+    QT_MESSAGELOGCONTEXT
 )
 
 # Add Qt private headers for QRhi access

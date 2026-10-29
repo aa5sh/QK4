@@ -1,5 +1,6 @@
 #include "halikeymidiworker.h"
 #include "logging/logcategories.h"
+#include "logging/logsink.h"
 #include "halikey_midi_ports.h"
 #include <RtMidi.h>
 #include <QLoggingCategory>
@@ -165,6 +166,7 @@ void HaliKeyMidiWorker::start() {
 }
 
 void HaliKeyMidiWorker::midiCallback(double deltaTime, std::vector<unsigned char> *message, void *userData) {
+    Logging::markRealtimeThread();
     auto *self = static_cast<HaliKeyMidiWorker *>(userData);
     if (self->stopRequested())
         return;

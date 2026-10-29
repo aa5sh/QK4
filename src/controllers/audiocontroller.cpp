@@ -2,6 +2,7 @@
 #include "connectioncontroller.h"
 #include "audio/audioengine.h"
 #include "logging/logcategories.h"
+#include "logging/logsink.h"
 #include "audio/opusdecoder.h"
 #include "models/radiostate.h"
 #include "network/networkmetrics.h"
@@ -34,6 +35,7 @@ AudioController::AudioController(ConnectionController *connController, RadioStat
     // Move AudioEngine to dedicated thread for glitch-free audio playback
     m_audioThread = new QThread(this);
     m_audioThread->setObjectName("AudioEngine");
+    Logging::markRealtimeOnStart(m_audioThread);
     m_audioEngine->moveToThread(m_audioThread);
     m_audioThread->start();
 

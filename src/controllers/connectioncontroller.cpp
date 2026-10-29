@@ -1,5 +1,6 @@
 #include "connectioncontroller.h"
 #include "logging/logcategories.h"
+#include "logging/logsink.h"
 #include "network/networkmetrics.h"
 #include "network/protocol.h"
 #include "utils/macroids.h"
@@ -10,6 +11,7 @@ ConnectionController::ConnectionController(QObject *parent) : QObject(parent), m
     // so network data flows independently of UI work
     m_ioThread = new QThread(this);
     m_ioThread->setObjectName("I/O");
+    Logging::markRealtimeOnStart(m_ioThread);
     m_tcpClient->moveToThread(m_ioThread);
     m_ioThread->start();
 

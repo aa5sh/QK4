@@ -13,6 +13,45 @@ QK4's diagnostic logging. Links against `Qt6::Core` only, so every piece is test
   (default `~/.local/state/QK4/logs`), Flatpak `~/.var/app/io.github.mikeg_dal.QK4/.local/state/QK4/logs`.
   Reads the environment itself because `QStandardPaths::StateLocation` needs Qt 6.7 and is
   `~/Library/Preferences` on macOS.
+- `logqueue.h` — the bounded queue between the message handler and the writer: two rings allocated
+  up front, a push is one slot assignment under a mutex, a full ring drops and counts.
+- `logsink.{h,cpp}` — the message handler and the writer thread. `Logging::install()` is the first
+  line of `main()`; `Logging::shutdown()` writes the footer and restores Qt's handler.
+
+## How a message travels
+
+1. The handler (`LogSink::post`) runs on the thread that logged. It copies the message into the
+   queue (a reference-count increment, no allocation) and returns. It never formats, never touches a
+   file and never waits on the console.
+2. Threads marked real-time (`Logging::markRealtimeOnStart`: Keyer, Sidetone, AudioEngine, HaliKey,
+   KpodPlusEP02, I/O; the RtMidi callback marks itself) only `try_lock` the queue: under contention
+   or when it is full the message is dropped and counted. They never wake the writer.
+3. The writer thread wakes every 200 ms, or at once for a warning from an ordinary thread. It
+   formats each line, writes the log file if one is open, and passes the message on to Qt's own
+   handler (the console) when the console copy is on. The file gets
+   `[logging] N messages dropped` whenever something was dropped.
+4. A fatal message is written synchronously before Qt aborts.
+
+What remains on the logging thread when a category is enabled is `QDebug`'s own formatting, which
+happens before the handler is called. That is why per-element, per-frame and per-response lines
+stay at debug in categories that are off by default.
+
+## The log file
+
+Off unless asked for (`--log-file`, or the Diagnostics page). Line format:
+
+```
+2026-10-29T14:03:12.345-05:00 W [Keyer] qk4.cw.keyer: message (paddlekeyer.cpp:412)
+```
+
+The source file and line are printed for warnings and worse (`QT_MESSAGELOGCONTEXT` is defined on
+the app target, so release builds have them). Each launch rotates `qk4.log` to `qk4.1.log`, keeping
+five files, and a file that passes 10 MB rotates the same way mid-session. So the current session
+is always `qk4.log` and a session that crashed is `qk4.1.log`, whose missing footer the next header
+reports. A second QK4 running at the same time writes `qk4-<pid>.log` instead.
+
+The console copy stays on when there is no file (as before), and with a file only when stderr is a
+terminal or `--log-stderr` is given.
 
 ## Category names
 

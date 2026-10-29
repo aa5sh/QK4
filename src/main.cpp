@@ -1,5 +1,9 @@
 #include <QApplication>
 #include "logging/logcategories.h"
+#include "logging/logpaths.h"
+#include "logging/logsink.h"
+#include <QDir>
+#include <QScreen>
 #include <QCommandLineParser>
 #include <QDebug>
 #include <QSysInfo>
@@ -27,21 +31,56 @@
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <cstdio>
+#include <io.h>
+#else
+#include <cstdio>
+#include <unistd.h>
 #endif
 
-// Filter out known benign Qt warnings on macOS
-// QSocketNotifier::Exception is not supported by kqueue (macOS's event system)
-// This warning comes from Qt's internal socket code and doesn't affect functionality
-static QtMessageHandler originalHandler = nullptr;
-void messageFilter(QtMsgType type, const QMessageLogContext &context, const QString &msg) {
-#ifdef Q_OS_MACOS
-    if (msg.contains("QSocketNotifier::Exception is not supported")) {
-        return; // Suppress this known benign warning
-    }
+// Whether stderr reaches a person: a terminal, or a pipe or file someone redirected it to is not
+// distinguished here, so --log-stderr asks for it explicitly.
+static bool stderrIsTerminal() {
+#ifdef Q_OS_WIN
+    return _isatty(_fileno(stderr)) != 0;
+#else
+    return isatty(fileno(stderr)) != 0;
 #endif
-    if (originalHandler) {
-        originalHandler(type, context, msg);
+}
+
+static QString packagingDescription() {
+    if (qEnvironmentVariableIsSet("FLATPAK_ID"))
+        return QStringLiteral("Flatpak ") + qEnvironmentVariable("FLATPAK_ID");
+#ifdef Q_OS_MACOS
+    return QCoreApplication::applicationDirPath().contains(QLatin1String(".app/Contents/MacOS"))
+               ? QStringLiteral("macOS app bundle")
+               : QStringLiteral("macOS executable");
+#elif defined(Q_OS_WIN)
+    return QStringLiteral("Windows");
+#else
+    return QStringLiteral("Linux executable");
+#endif
+}
+
+// The environment a log was written in, at the top of every log file.
+static QStringList sessionHeader() {
+    QStringList lines;
+    lines << QStringLiteral("QK4 %1").arg(QStringLiteral(QK4_VERSION));
+    lines << QStringLiteral("Qt build %1, runtime %2")
+                 .arg(QStringLiteral(QT_VERSION_STR), QString::fromLatin1(qVersion()));
+    lines << QStringLiteral("OS %1 (%2 %3, %4)")
+                 .arg(QSysInfo::prettyProductName(), QSysInfo::kernelType(), QSysInfo::kernelVersion(),
+                      QSysInfo::currentCpuArchitecture());
+    lines << QStringLiteral("Packaging %1").arg(packagingDescription());
+    lines
+        << QStringLiteral("TLS backend %1, %2").arg(QSslSocket::activeBackend(), QSslSocket::sslLibraryVersionString());
+    for (const QScreen *screen : QGuiApplication::screens()) {
+        lines << QStringLiteral("Screen %1 %2x%3 at %4x")
+                     .arg(screen->name())
+                     .arg(screen->size().width())
+                     .arg(screen->size().height())
+                     .arg(screen->devicePixelRatio());
     }
+    return lines;
 }
 
 // Load embedded fonts and set application defaults
@@ -155,8 +194,12 @@ static void reportToOperator(const QString &text, QMessageBox::Icon icon) {
 }
 
 int main(int argc, char *argv[]) {
-    // Install message filter to suppress known benign Qt warnings
-    originalHandler = qInstallMessageHandler(messageFilter);
+    // First, so every message from here on goes through the log writer and none is written
+    // synchronously on the thread that raised it.
+    Logging::install();
+    struct LoggingSession {
+        ~LoggingSession() { Logging::shutdown(); }
+    } loggingSession;
 
     // Enable HiDPI scaling for crisp rendering on Retina/4K displays
     QApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
@@ -215,6 +258,15 @@ int main(int argc, char *argv[]) {
         QStringLiteral("tls-self-check"),
         QStringLiteral("Report the TLS backend and OpenSSL library in use, then exit (0 = TLS-PSK available)."));
     parser.addOption(tlsSelfCheckOption);
+    const QCommandLineOption logFileOption(
+        QStringLiteral("log-file"),
+        QStringLiteral("Write a log file for this session, whatever the Diagnostics page says. It goes in ") +
+            QDir::toNativeSeparators(Logging::logDirectory(Logging::currentPathInputs())) + QStringLiteral("."));
+    parser.addOption(logFileOption);
+    const QCommandLineOption logStderrOption(
+        QStringLiteral("log-stderr"),
+        QStringLiteral("Also print log messages to the console while a log file is being written."));
+    parser.addOption(logStderrOption);
     const QStringList arguments = QCoreApplication::arguments();
     const bool parsedCleanly = parser.parse(arguments);
     // WHY: not showHelp()/showVersion() - both call ::exit(), which ends the process without
@@ -298,6 +350,21 @@ int main(int argc, char *argv[]) {
         qCWarning(lcApp) << "Ignoring command line:" << parser.errorText();
     }
 
+    const bool writeLogFile = parser.isSet(logFileOption);
+    Logging::LogSink *logSink = Logging::sink();
+    // WHY: with no file the console is the only place a message can go, as it always was. With a
+    // file, a Finder or Explorer launch would only send a second copy to the unified log or
+    // OutputDebugString, so the console copy is kept for a terminal or on request.
+    logSink->setConsoleEnabled(!writeLogFile || stderrIsTerminal() || parser.isSet(logStderrOption));
+    if (writeLogFile) {
+        Logging::LogSink::FileOptions file;
+        file.directory = Logging::logDirectory(Logging::currentPathInputs());
+        file.header = sessionHeader();
+        if (!logSink->setFile(file))
+            qCWarning(lcApp) << "Could not open a log file in" << QDir::toNativeSeparators(file.directory);
+    }
+    logSink->start();
+
     int exitCode = 0;
     bool relaunch = false;
     {
@@ -319,7 +386,10 @@ int main(int argc, char *argv[]) {
     }
     // WHY: only after MainWindow is destroyed. Its teardown closes the CAT and TCI listeners and
     // releases the USB devices; a new instance started any earlier would race this one for them.
-    if (relaunch)
+    if (relaunch) {
+        // Before the new instance starts, so it finds this one's log closed and rotates it.
+        Logging::shutdown();
         InterfaceScale::relaunch();
+    }
     return exitCode;
 }

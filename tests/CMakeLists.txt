@@ -18,6 +18,7 @@ endif()
 add_library(qk4_logging STATIC
     ${CMAKE_SOURCE_DIR}/src/logging/logcategories.cpp
     ${CMAKE_SOURCE_DIR}/src/logging/logpaths.cpp
+    ${CMAKE_SOURCE_DIR}/src/logging/logsink.cpp
 )
 target_include_directories(qk4_logging PUBLIC ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(qk4_logging PUBLIC Qt6::Core)
@@ -698,6 +699,18 @@ add_executable(test_logpaths test_logpaths.cpp)
 target_include_directories(test_logpaths PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_logpaths Qt6::Core Qt6::Test)
 add_test(NAME LogPathsTests COMMAND test_logpaths)
+
+# Log queue: bounded, drop-and-count, real-time producers never wait. Run under TSan weekly.
+add_executable(test_logqueue test_logqueue.cpp)
+target_include_directories(test_logqueue PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_logqueue Qt6::Core Qt6::Test)
+add_test(NAME LogQueueTests COMMAND test_logqueue)
+
+# Log file writer: rotation per launch and by size, header and footer, second instance, drops.
+add_executable(test_logsink test_logsink.cpp)
+target_include_directories(test_logsink PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_logsink Qt6::Core Qt6::Test)
+add_test(NAME LogSinkTests COMMAND test_logsink)
 
 # Aggregate target: `cmake --build <dir> --target qk4_tests` builds every
 # test_* executable defined above. CI uses this so adding `add_executable(test_foo)`

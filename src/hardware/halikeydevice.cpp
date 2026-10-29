@@ -1,5 +1,6 @@
 #include "halikeydevice.h"
 #include "logging/logcategories.h"
+#include "logging/logsink.h"
 #include "halikeymidiworker.h"
 #include "halikeyv14worker.h"
 #include "halikeyworkerbase.h"
@@ -39,6 +40,7 @@ bool HalikeyDevice::openPort(const QString &portName) {
 
     m_workerThread = new QThread(this);
     m_workerThread->setObjectName(QStringLiteral("HaliKey"));
+    Logging::markRealtimeOnStart(m_workerThread);
     m_worker->moveToThread(m_workerThread);
 
     // Straight through, on the worker thread: the keyer stamps the edge on arrival.

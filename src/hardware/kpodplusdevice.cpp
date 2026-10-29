@@ -1,5 +1,6 @@
 #include "kpodplusdevice.h"
 #include "logging/logcategories.h"
+#include "logging/logsink.h"
 #include "kpodplususbworker.h"
 #include <QLoggingCategory>
 #include <QThread>
@@ -8,6 +9,7 @@ KpodPlusDevice::KpodPlusDevice(QObject *parent) : QObject(parent) {
     // --- EP02 reader thread (HighPriority) -----------------------------------
     m_ep02Thread = new QThread(this);
     m_ep02Thread->setObjectName("KpodPlusEP02");
+    Logging::markRealtimeOnStart(m_ep02Thread);
     m_ep02Worker = new KpodPlusEp02Worker();
     m_ep02Worker->moveToThread(m_ep02Thread);
     connect(m_ep02Thread, &QThread::started, m_ep02Worker, &KpodPlusEp02Worker::run);
