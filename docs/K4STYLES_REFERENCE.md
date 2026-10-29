@@ -358,6 +358,27 @@ Series colors are aliases, not new values: `ChartSeriesRtt` = `VfoACyan`,
 | `PaddingMedium` | `10` | Medium padding (buttons) (px) |
 | `PaddingLarge` | `15` | Large padding (list items) (px) |
 
+### Options Dialog Pages
+
+Geometry only. Applied through `ui/pages/optionspagelayout` — pages call its helpers rather than
+reading these directly, so every page has the same margins, spacing and field widths.
+
+| Constant | Value | Usage |
+|----------|-------|-------|
+| `OptionsDialogMinWidth` / `OptionsDialogMinHeight` | `700` / `550` | Options dialog minimum size (px) |
+| `OptionsPageMargin` | `16` | Page edge to content (px) |
+| `OptionsRowSpacing` | `8` | Between form rows and between items of a section (px) |
+| `OptionsSectionGap` | `12` | Added above each section header (px) |
+| `OptionsLabelGap` | `12` | Form label column to field column (px) |
+| `OptionsFieldMaxWidth` | `360` | Growable fields (host, slider, device list) stop here (px) |
+| `OptionsShortFieldWidth` | `InputFieldWidthSmall` | Ports, call signs, small numbers (px) |
+| `OptionsDeviceComboChars` | `24` | Characters a device list shows before eliding |
+| `OptionsConsoleMinHeight` | `120` | DX cluster console floor (px) |
+
+Text on the pages uses the type roles: page title `Indicator` (amber, bold), section header and
+form labels/fields/status `Heading` (the "dialog forms" role), descriptions and data views (DX
+console, cluster list, TCI client table, version list) `Readout`, help text `Body` italic.
+
 ---
 
 ## Fonts (`K4Styles::Fonts::*`)

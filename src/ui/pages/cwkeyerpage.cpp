@@ -4,50 +4,35 @@
 #include "hardware/halikeydevice.h"
 #include "models/radiostate.h"
 #include "settings/radiosettings.h"
-#include <QVBoxLayout>
-#include <QHBoxLayout>
+#include "hardware/halikeyportscan.h"
+#include "ui/pages/optionspagelayout.h"
 #include <QCheckBox>
-#include <QFrame>
+#include <QFormLayout>
+#include <QHBoxLayout>
 #include <QSignalBlocker>
+#include <QVBoxLayout>
 
 CwKeyerPage::CwKeyerPage(HalikeyDevice *halikeyDevice, RadioState *radioState, CwController *cwController,
                          QWidget *parent)
     : QWidget(parent), m_halikeyDevice(halikeyDevice), m_radioState(radioState), m_cwController(cwController) {
-    setStyleSheet(K4Styles::Dialog::pageBackground());
-
-    auto *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(K4Styles::Dimensions::DialogMargin, K4Styles::Dimensions::DialogMargin,
-                               K4Styles::Dimensions::DialogMargin, K4Styles::Dimensions::DialogMargin);
-    layout->setSpacing(K4Styles::Dimensions::PaddingLarge);
-
-    // Title
-    auto *titleLabel = new QLabel("HaliKey", this);
-    titleLabel->setStyleSheet(K4Styles::Dialog::titleLabel());
-    layout->addWidget(titleLabel);
+    namespace D = K4Styles::Dimensions;
+    auto *layout = OptionsPageLayout::createPage(this);
+    OptionsPageLayout::addTitle(layout, this, "HaliKey");
 
     // Description (dynamic based on device type)
-    m_cwKeyerDescLabel = new QLabel(this);
-    m_cwKeyerDescLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                          .arg(K4Styles::Colors::TextSecondary)
-                                          .arg(K4Styles::Dimensions::FontSizeReadout));
-    m_cwKeyerDescLabel->setWordWrap(true);
-    layout->addWidget(m_cwKeyerDescLabel);
+    m_cwKeyerDescLabel = OptionsPageLayout::addDescription(layout, this, QString());
 
-    // Device Type selector
-    auto *deviceTypeLayout = new QHBoxLayout();
-    auto *deviceTypeLabel = new QLabel("Device Type:", this);
-    deviceTypeLabel->setStyleSheet(K4Styles::Dialog::formLabel());
-    deviceTypeLabel->setFixedWidth(K4Styles::Dimensions::FormLabelWidth);
+    m_portScan = new HaliKeyPortScan(this);
+    connect(m_portScan, &HaliKeyPortScan::finished, this, &CwKeyerPage::applyCwKeyerPorts);
+
+    auto *form = OptionsPageLayout::addForm(layout);
 
     m_cwKeyerDeviceTypeCombo = new QComboBox(this);
     m_cwKeyerDeviceTypeCombo->setStyleSheet(K4Styles::Dialog::comboBox());
-    m_cwKeyerDeviceTypeCombo->addItem("HaliKey V1.4", 0);
-    m_cwKeyerDeviceTypeCombo->addItem("HaliKey MIDI", 1);
-
-    int savedDeviceType = RadioSettings::instance()->halikeyDeviceType();
-    m_cwKeyerDeviceTypeCombo->setCurrentIndex(savedDeviceType);
+    m_cwKeyerDeviceTypeCombo->addItem("HaliKey V1.4", HaliKeyPortScan::kSerialType);
+    m_cwKeyerDeviceTypeCombo->addItem("HaliKey MIDI", HaliKeyPortScan::kMidiType);
+    m_cwKeyerDeviceTypeCombo->setCurrentIndex(RadioSettings::instance()->halikeyDeviceType());
     updateCwKeyerDescription();
-
     connect(m_cwKeyerDeviceTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
         int type = m_cwKeyerDeviceTypeCombo->itemData(index).toInt();
         RadioSettings::instance()->setHalikeyDeviceType(type);
@@ -58,92 +43,44 @@ CwKeyerPage::CwKeyerPage(HalikeyDevice *halikeyDevice, RadioState *radioState, C
         updateCwKeyerDescription();
         populateCwKeyerPorts();
     });
-
-    deviceTypeLayout->addWidget(deviceTypeLabel);
-    deviceTypeLayout->addWidget(m_cwKeyerDeviceTypeCombo, 1);
-    layout->addLayout(deviceTypeLayout);
-
-    // Separator line
-    auto *line = new QFrame(this);
-    line->setFrameShape(QFrame::HLine);
-    line->setStyleSheet(K4Styles::Dialog::separator());
-    line->setFixedHeight(K4Styles::Dimensions::SeparatorHeight);
-    layout->addWidget(line);
-
-    // Status indicator
-    auto *statusLayout = new QHBoxLayout();
-    auto *statusTitleLabel = new QLabel("Status:", this);
-    statusTitleLabel->setStyleSheet(K4Styles::Dialog::formLabel());
-    statusTitleLabel->setFixedWidth(K4Styles::Dimensions::FormLabelWidth);
+    OptionsPageLayout::addRow(form, this, "Device Type", m_cwKeyerDeviceTypeCombo);
 
     m_cwKeyerStatusLabel = new QLabel("Not Connected", this);
     m_cwKeyerStatusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::TextRed));
+    OptionsPageLayout::addRow(form, this, "Status", m_cwKeyerStatusLabel);
 
-    statusLayout->addWidget(statusTitleLabel);
-    statusLayout->addWidget(m_cwKeyerStatusLabel);
-    statusLayout->addStretch();
-    layout->addLayout(statusLayout);
-
-    // Separator line
-    auto *line2 = new QFrame(this);
-    line2->setFrameShape(QFrame::HLine);
-    line2->setStyleSheet(K4Styles::Dialog::separator());
-    line2->setFixedHeight(K4Styles::Dimensions::SeparatorHeight);
-    layout->addWidget(line2);
-
-    // Connection Settings section
-    auto *sectionLabel = new QLabel("Connection Settings", this);
-    sectionLabel->setStyleSheet(K4Styles::Dialog::sectionHeader());
-    layout->addWidget(sectionLabel);
-
-    // Port selection
-    auto *portLayout = new QHBoxLayout();
-    auto *portLabel = new QLabel("Port:", this);
-    portLabel->setStyleSheet(K4Styles::Dialog::formLabel());
-    portLabel->setFixedWidth(K4Styles::Dimensions::FormLabelWidth);
+    OptionsPageLayout::addSection(form, this, "Connection");
 
     m_cwKeyerPortCombo = new QComboBox(this);
     m_cwKeyerPortCombo->setStyleSheet(K4Styles::Dialog::comboBox());
-    populateCwKeyerPorts();
+    OptionsPageLayout::fitDeviceCombo(m_cwKeyerPortCombo);
+    connect(m_cwKeyerPortCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
+        const QString portName = index >= 0 ? m_cwKeyerPortCombo->itemData(index).toString() : QString();
+        if (!portName.isEmpty())
+            RadioSettings::instance()->setHalikeyPortName(portName);
+    });
 
     m_cwKeyerRefreshBtn = new QPushButton("Refresh", this);
     m_cwKeyerRefreshBtn->setStyleSheet(K4Styles::Dialog::actionButtonSmall());
     connect(m_cwKeyerRefreshBtn, &QPushButton::clicked, this, &CwKeyerPage::onCwKeyerRefreshClicked);
 
-    portLayout->addWidget(portLabel);
-    portLayout->addWidget(m_cwKeyerPortCombo, 1);
-    portLayout->addWidget(m_cwKeyerRefreshBtn);
-    layout->addLayout(portLayout);
+    auto *portField = new QWidget(this);
+    auto *portRow = new QHBoxLayout(portField);
+    portRow->setContentsMargins(0, 0, 0, 0);
+    portRow->setSpacing(D::OptionsRowSpacing);
+    portRow->addWidget(m_cwKeyerPortCombo, 1);
+    portRow->addWidget(m_cwKeyerRefreshBtn);
+    OptionsPageLayout::capWidth(portField, D::OptionsFieldMaxWidth);
+    OptionsPageLayout::addRow(form, this, "Port", portField);
 
-    // Connect/Disconnect button
     m_cwKeyerConnectBtn = new QPushButton("Connect", this);
-    m_cwKeyerConnectBtn->setStyleSheet(K4Styles::Dialog::actionButton());
+    m_cwKeyerConnectBtn->setStyleSheet(K4Styles::Dialog::actionButtonSmall());
+    m_cwKeyerConnectBtn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     connect(m_cwKeyerConnectBtn, &QPushButton::clicked, this, &CwKeyerPage::onCwKeyerConnectClicked);
-    layout->addWidget(m_cwKeyerConnectBtn);
-
-    // Separator line
-    auto *line3 = new QFrame(this);
-    line3->setFrameShape(QFrame::HLine);
-    line3->setStyleSheet(K4Styles::Dialog::separator());
-    line3->setFixedHeight(K4Styles::Dimensions::SeparatorHeight);
-    layout->addWidget(line3);
+    form->addRow(QString(), m_cwKeyerConnectBtn);
 
     // Keyer section: the PaddleKeyer settings (port of K4-Companion's keyer).
-    auto *keyerLabel = new QLabel("Keyer", this);
-    keyerLabel->setStyleSheet(K4Styles::Dialog::sectionHeader());
-    layout->addWidget(keyerLabel);
-
-    auto addRow = [this, layout](const QString &label, QWidget *field, QWidget *trailing = nullptr) {
-        auto *row = new QHBoxLayout();
-        auto *l = new QLabel(label, this);
-        l->setStyleSheet(K4Styles::Dialog::formLabel());
-        l->setFixedWidth(K4Styles::Dimensions::FormLabelWidth);
-        row->addWidget(l);
-        row->addWidget(field, 1);
-        if (trailing)
-            row->addWidget(trailing);
-        layout->addLayout(row);
-    };
+    OptionsPageLayout::addSection(form, this, "Keyer");
 
     auto *modeCombo = new QComboBox(this);
     modeCombo->setStyleSheet(K4Styles::Dialog::comboBox());
@@ -154,7 +91,7 @@ CwKeyerPage::CwKeyerPage(HalikeyDevice *halikeyDevice, RadioState *radioState, C
     connect(modeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [modeCombo](int index) {
         RadioSettings::instance()->setHalikeyKeyerMode(modeCombo->itemData(index).toInt());
     });
-    addRow("Keyer Mode:", modeCombo);
+    OptionsPageLayout::addRow(form, this, "Keyer Mode", modeCombo);
 
     auto *inputCombo = new QComboBox(this);
     inputCombo->setStyleSheet(K4Styles::Dialog::comboBox());
@@ -164,18 +101,14 @@ CwKeyerPage::CwKeyerPage(HalikeyDevice *halikeyDevice, RadioState *radioState, C
     connect(inputCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [inputCombo](int index) {
         RadioSettings::instance()->setHalikeyStraightKey(inputCombo->itemData(index).toBool());
     });
-    addRow("Input:", inputCombo);
+    OptionsPageLayout::addRow(form, this, "Input", inputCombo);
 
     auto *ditMemSlider = new QSlider(Qt::Horizontal, this);
     ditMemSlider->setRange(0, 100);
     ditMemSlider->setValue(RadioSettings::instance()->halikeyDitMemoryDelay());
     ditMemSlider->setStyleSheet(
         K4Styles::sliderHorizontal(K4Styles::Colors::DarkBackground, K4Styles::Colors::AccentAmber));
-    auto *ditMemValue = new QLabel(QString("%1%").arg(ditMemSlider->value()), this);
-    ditMemValue->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                   .arg(K4Styles::Colors::TextPrimary)
-                                   .arg(K4Styles::Dimensions::FontSizeHeading));
-    ditMemValue->setFixedWidth(K4Styles::Dimensions::SliderValueLabelWidth);
+    auto *ditMemValue = OptionsPageLayout::sliderValue(QString("%1%").arg(ditMemSlider->value()), this);
     // WHY applied on release, not on every value: each setting is a full save of every setting.
     // Keyboard and click steps arrive with the slider up and are applied at once.
     connect(ditMemSlider, &QSlider::valueChanged, this, [ditMemSlider, ditMemValue](int value) {
@@ -185,54 +118,32 @@ CwKeyerPage::CwKeyerPage(HalikeyDevice *halikeyDevice, RadioState *radioState, C
     });
     connect(ditMemSlider, &QSlider::sliderReleased, this,
             [ditMemSlider]() { RadioSettings::instance()->setHalikeyDitMemoryDelay(ditMemSlider->value()); });
-    addRow("Dit Memory Delay:", ditMemSlider, ditMemValue);
+    OptionsPageLayout::addRow(form, this, "Dit Memory Delay",
+                              OptionsPageLayout::sliderField(ditMemSlider, ditMemValue, this));
 
     auto *muteCheck = new QCheckBox("Mute the K4's CW monitor while keying", this);
     muteCheck->setStyleSheet(K4Styles::Dialog::checkBox());
     muteCheck->setChecked(RadioSettings::instance()->halikeyMuteRadioMonitor());
     connect(muteCheck, &QCheckBox::toggled, this,
             [](bool on) { RadioSettings::instance()->setHalikeyMuteRadioMonitor(on); });
-    layout->addWidget(muteCheck);
+    form->addRow(QString(), muteCheck);
 
-    auto *keyerHelpLabel =
-        new QLabel("Iambic A or B follows the K4's own keyer setting. Dit Memory Delay applies to Iambic B: a dit "
-                   "tapped in the first part of a dah is ignored rather than remembered, which stops unwanted extra "
-                   "dits from a quick squeeze. 33% is the tested default. Mute the K4's monitor only if you hear the "
-                   "radio's sidetone come back late through the receive audio.",
-                   this);
-    keyerHelpLabel->setStyleSheet(K4Styles::Dialog::helpText());
-    keyerHelpLabel->setWordWrap(true);
-    layout->addWidget(keyerHelpLabel);
+    OptionsPageLayout::addFieldHelp(
+        form, this,
+        "Iambic A or B follows the K4's own keyer setting. Dit Memory Delay applies to Iambic B: a dit "
+        "tapped in the first part of a dah is ignored rather than remembered, which stops unwanted extra "
+        "dits from a quick squeeze. 33% is the tested default. Mute the K4's monitor only if you hear the "
+        "radio's sidetone come back late through the receive audio.");
 
-    // Separator line
-    auto *line5 = new QFrame(this);
-    line5->setFrameShape(QFrame::HLine);
-    line5->setStyleSheet(K4Styles::Dialog::separator());
-    line5->setFixedHeight(K4Styles::Dimensions::SeparatorHeight);
-    layout->addWidget(line5);
-
-    // Sidetone Settings section
-    auto *sidetoneLabel = new QLabel("Sidetone Settings", this);
-    sidetoneLabel->setStyleSheet(K4Styles::Dialog::sectionHeader());
-    layout->addWidget(sidetoneLabel);
-
-    // Sidetone volume slider
-    auto *volumeLayout = new QHBoxLayout();
-    auto *volumeLabel = new QLabel("Volume:", this);
-    volumeLabel->setStyleSheet(K4Styles::Dialog::formLabel());
-    volumeLabel->setFixedWidth(K4Styles::Dimensions::FormLabelWidth);
+    OptionsPageLayout::addSection(form, this, "Sidetone");
 
     m_sidetoneVolumeSlider = new QSlider(Qt::Horizontal, this);
     m_sidetoneVolumeSlider->setRange(0, 100);
     m_sidetoneVolumeSlider->setValue(RadioSettings::instance()->sidetoneVolume());
     m_sidetoneVolumeSlider->setStyleSheet(
         K4Styles::sliderHorizontal(K4Styles::Colors::DarkBackground, K4Styles::Colors::AccentAmber));
-
-    m_sidetoneVolumeValueLabel = new QLabel(QString("%1%").arg(RadioSettings::instance()->sidetoneVolume()), this);
-    m_sidetoneVolumeValueLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                                  .arg(K4Styles::Colors::TextPrimary)
-                                                  .arg(K4Styles::Dimensions::FontSizeHeading));
-    m_sidetoneVolumeValueLabel->setFixedWidth(K4Styles::Dimensions::SliderValueLabelWidth);
+    m_sidetoneVolumeValueLabel =
+        OptionsPageLayout::sliderValue(QString("%1%").arg(RadioSettings::instance()->sidetoneVolume()), this);
 
     // Applied on release for the same reason as Dit Memory Delay above.
     connect(m_sidetoneVolumeSlider, &QSlider::valueChanged, this, [this](int value) {
@@ -243,34 +154,14 @@ CwKeyerPage::CwKeyerPage(HalikeyDevice *halikeyDevice, RadioState *radioState, C
     connect(m_sidetoneVolumeSlider, &QSlider::sliderReleased, this,
             [this]() { RadioSettings::instance()->setSidetoneVolume(m_sidetoneVolumeSlider->value()); });
 
-    volumeLayout->addWidget(volumeLabel);
-    volumeLayout->addWidget(m_sidetoneVolumeSlider, 1);
-    volumeLayout->addWidget(m_sidetoneVolumeValueLabel);
-    layout->addLayout(volumeLayout);
-
-    // Sidetone help text
-    auto *sidetoneHelpLabel =
-        new QLabel("Local sidetone volume for CW keying feedback. Frequency is linked to K4's CW pitch setting.", this);
-    sidetoneHelpLabel->setStyleSheet(K4Styles::Dialog::helpText());
-    sidetoneHelpLabel->setWordWrap(true);
-    layout->addWidget(sidetoneHelpLabel);
-
-    auto *line6 = new QFrame(this);
-    line6->setFrameShape(QFrame::HLine);
-    line6->setStyleSheet(K4Styles::Dialog::separator());
-    line6->setFixedHeight(K4Styles::Dimensions::SeparatorHeight);
-    layout->addWidget(line6);
+    OptionsPageLayout::addRow(form, this, "Volume",
+                              OptionsPageLayout::sliderField(m_sidetoneVolumeSlider, m_sidetoneVolumeValueLabel, this));
+    OptionsPageLayout::addFieldHelp(
+        form, this, "Local sidetone volume for CW keying feedback. Frequency is linked to K4's CW pitch setting.");
 
     // Remote keying: the K4's key-down initial delay (KZL). Same control as K4-Companion's "Key Down
     // Initial Delay": 0-1000 ms in 10 ms steps, showing what the radio holds.
-    auto *remoteLabel = new QLabel("Remote Keying", this);
-    remoteLabel->setStyleSheet(K4Styles::Dialog::sectionHeader());
-    layout->addWidget(remoteLabel);
-
-    auto *delayLayout = new QHBoxLayout();
-    auto *delayLabel = new QLabel("Key-Down Delay:", this);
-    delayLabel->setStyleSheet(K4Styles::Dialog::formLabel());
-    delayLabel->setFixedWidth(K4Styles::Dimensions::FormLabelWidth);
+    OptionsPageLayout::addSection(form, this, "Remote Keying");
 
     m_keyDownDelaySlider = new QSlider(Qt::Horizontal, this);
     m_keyDownDelaySlider->setRange(0, 1000);
@@ -278,12 +169,7 @@ CwKeyerPage::CwKeyerPage(HalikeyDevice *halikeyDevice, RadioState *radioState, C
     m_keyDownDelaySlider->setPageStep(100);
     m_keyDownDelaySlider->setStyleSheet(
         K4Styles::sliderHorizontal(K4Styles::Colors::DarkBackground, K4Styles::Colors::AccentAmber));
-
-    m_keyDownDelayValueLabel = new QLabel(this);
-    m_keyDownDelayValueLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                                .arg(K4Styles::Colors::TextPrimary)
-                                                .arg(K4Styles::Dimensions::FontSizeHeading));
-    m_keyDownDelayValueLabel->setFixedWidth(K4Styles::Dimensions::SliderValueLabelWidth);
+    m_keyDownDelayValueLabel = OptionsPageLayout::sliderValue(QString(), this);
 
     // WHY send on release, not on every value: a drag would otherwise put dozens of KZL SETs on the
     // wire. Keyboard and click steps arrive with the slider up and are sent at once.
@@ -294,20 +180,13 @@ CwKeyerPage::CwKeyerPage(HalikeyDevice *halikeyDevice, RadioState *radioState, C
     });
     connect(m_keyDownDelaySlider, &QSlider::sliderReleased, this, &CwKeyerPage::sendKeyDownDelay);
 
-    delayLayout->addWidget(delayLabel);
-    delayLayout->addWidget(m_keyDownDelaySlider, 1);
-    delayLayout->addWidget(m_keyDownDelayValueLabel);
-    layout->addLayout(delayLayout);
-
-    auto *delayHelpLabel =
-        new QLabel("How long the K4 holds a remote key-down before it transmits, so keying sent over "
-                   "the network arrives in time. Raise it if CW breaks up over a slow or busy link; "
-                   "lower it for a quicker start on a fast LAN. Stored in the K4, whose default is "
-                   "80 ms. Applies to HaliKey and KPOD+ keying.",
-                   this);
-    delayHelpLabel->setStyleSheet(K4Styles::Dialog::helpText());
-    delayHelpLabel->setWordWrap(true);
-    layout->addWidget(delayHelpLabel);
+    OptionsPageLayout::addRow(form, this, "Key-Down Delay",
+                              OptionsPageLayout::sliderField(m_keyDownDelaySlider, m_keyDownDelayValueLabel, this));
+    OptionsPageLayout::addFieldHelp(form, this,
+                                    "How long the K4 holds a remote key-down before it transmits, so keying sent over "
+                                    "the network arrives in time. Raise it if CW breaks up over a slow or busy link; "
+                                    "lower it for a quicker start on a fast LAN. Stored in the K4, whose default is "
+                                    "80 ms. Applies to HaliKey and KPOD+ keying.");
 
     if (m_radioState)
         connect(m_radioState, &RadioState::keyDownInitialDelayChanged, this, &CwKeyerPage::showKeyDownDelay);
@@ -321,7 +200,7 @@ CwKeyerPage::CwKeyerPage(HalikeyDevice *halikeyDevice, RadioState *radioState, C
         connect(m_halikeyDevice, &HalikeyDevice::disconnected, this, &CwKeyerPage::updateCwKeyerStatus);
     }
 
-    // Initialize status
+    populateCwKeyerPorts();
     updateCwKeyerStatus();
 }
 
@@ -354,56 +233,44 @@ void CwKeyerPage::populateCwKeyerPorts() {
     if (!m_cwKeyerPortCombo)
         return;
 
-    // Block signals to avoid triggering save during repopulation
-    m_cwKeyerPortCombo->blockSignals(true);
-    m_cwKeyerPortCombo->clear();
-
-    int deviceType = m_cwKeyerDeviceTypeCombo ? m_cwKeyerDeviceTypeCombo->currentData().toInt() : 0;
-    QString savedPort = RadioSettings::instance()->halikeyPortName();
-    int selectedIndex = -1;
-
-    if (deviceType == 1) {
-        // MIDI device -- enumerate MIDI ports
-        QStringList midiDevices = HalikeyDevice::availableMidiDevices();
-        for (int i = 0; i < midiDevices.size(); i++) {
-            m_cwKeyerPortCombo->addItem(midiDevices[i], midiDevices[i]);
-            if (midiDevices[i] == savedPort) {
-                selectedIndex = i;
-            }
-        }
-        // Auto-select first HaliKey MIDI device if no saved selection matched
-        if (selectedIndex < 0) {
-            for (int i = 0; i < midiDevices.size(); i++) {
-                if (midiDevices[i].contains("HaliKey", Qt::CaseInsensitive)) {
-                    selectedIndex = i;
-                    break;
-                }
-            }
-        }
-    } else {
-        // V14 device -- enumerate serial ports
-        auto ports = HalikeyDevice::availablePortsDetailed();
-        for (int i = 0; i < ports.size(); i++) {
-            m_cwKeyerPortCombo->addItem(ports[i].portName, ports[i].portName);
-            if (ports[i].portName == savedPort) {
-                selectedIndex = i;
-            }
-        }
+    const int deviceType = m_cwKeyerDeviceTypeCombo ? m_cwKeyerDeviceTypeCombo->currentData().toInt() : 0;
+    if (m_cwKeyerPortCombo->count() == 0 || m_scanType != deviceType) {
+        const QSignalBlocker block(m_cwKeyerPortCombo);
+        m_cwKeyerPortCombo->clear();
+        m_cwKeyerPortCombo->addItem(QStringLiteral("Scanning\u2026"));
+        m_cwKeyerPortCombo->setEnabled(false);
     }
+    m_scanType = deviceType;
+    m_cwKeyerRefreshBtn->setEnabled(false);
 
-    if (selectedIndex >= 0) {
-        m_cwKeyerPortCombo->setCurrentIndex(selectedIndex);
-    }
-    m_cwKeyerPortCombo->blockSignals(false);
-
-    // Save selection when changed (reconnect since we may be called multiple times)
-    m_cwKeyerPortCombo->disconnect(this);
-    connect(m_cwKeyerPortCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
-        if (index >= 0) {
-            QString portName = m_cwKeyerPortCombo->itemData(index).toString();
-            RadioSettings::instance()->setHalikeyPortName(portName);
-        }
+    m_portScan->request(deviceType, [deviceType]() {
+        if (deviceType == HaliKeyPortScan::kMidiType)
+            return HalikeyDevice::availableMidiDevices();
+        QStringList names;
+        const auto ports = HalikeyDevice::availablePortsDetailed();
+        for (const auto &port : ports)
+            names.append(port.portName);
+        return names;
     });
+}
+
+void CwKeyerPage::applyCwKeyerPorts(int deviceType, const QStringList &ports) {
+    if (deviceType != m_scanType)
+        return;
+
+    {
+        // Blocked: refilling the list must not save a port the operator did not pick.
+        const QSignalBlocker block(m_cwKeyerPortCombo);
+        m_cwKeyerPortCombo->clear();
+        for (const QString &port : ports)
+            m_cwKeyerPortCombo->addItem(port, port);
+        const int selected =
+            HaliKeyPortScan::chooseIndex(ports, RadioSettings::instance()->halikeyPortName(), deviceType);
+        if (selected >= 0)
+            m_cwKeyerPortCombo->setCurrentIndex(selected);
+    }
+    m_cwKeyerPortCombo->setEnabled(true);
+    m_cwKeyerRefreshBtn->setEnabled(true);
 }
 
 void CwKeyerPage::updateCwKeyerDescription() {

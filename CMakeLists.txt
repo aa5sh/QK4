@@ -215,6 +215,7 @@ set(SOURCES
     src/ui/pages/kpodpage.cpp
     src/ui/pages/kpa1500page.cpp
     src/ui/pages/dxclusterpage.cpp
+    src/ui/pages/optionspagelayout.cpp
     src/ui/overlays/dxspotoverlay.cpp
     src/ui/widgets/rightsidepanel.cpp
     src/ui/widgets/featuremenubar.cpp
@@ -255,6 +256,7 @@ set(SOURCES
     src/hardware/halikeyworkerbase.cpp
     src/hardware/halikeyv14worker.cpp
     src/hardware/halikeymidiworker.cpp
+    src/hardware/halikeyportscan.cpp
     src/hardware/paddlekeyer.cpp
     src/hardware/keyerruntime.cpp
     src/hardware/seriallinepoller.cpp
@@ -356,6 +358,7 @@ set(HEADERS
     src/ui/pages/kpodpage.h
     src/ui/pages/kpa1500page.h
     src/ui/pages/dxclusterpage.h
+    src/ui/pages/optionspagelayout.h
     src/ui/overlays/dxspotoverlay.h
     src/ui/widgets/rightsidepanel.h
     src/ui/widgets/featuremenubar.h
@@ -394,6 +397,7 @@ set(HEADERS
     src/hardware/halikeyworkerbase.h
     src/hardware/halikeyv14worker.h
     src/hardware/halikeymidiworker.h
+    src/hardware/halikeyportscan.h
     src/hardware/paddlekeyer.h
     src/hardware/keyertiming.h
     src/hardware/keyerruntime.h

@@ -645,6 +645,34 @@ target_include_directories(test_micrate PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_micrate Qt6::Core Qt6::Test)
 add_test(NAME MicRateTests COMMAND test_micrate)
 
+# Options dialog pages: none wider than the dialog, the DX cluster console takes the spare height,
+# and the page list repaints all of itself on hover and selection (the stale-amber-edge fix). Offscreen.
+add_executable(test_optionspagelayout
+    test_optionspagelayout.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/pages/optionspagelayout.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/pages/stationpage.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/pages/displaypage.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/pages/dxclusterpage.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/styling/k4styles.cpp
+    ${CMAKE_SOURCE_DIR}/src/settings/radiosettings.cpp
+    ${CMAKE_SOURCE_DIR}/src/settings/interfacescale.cpp
+    ${CMAKE_SOURCE_DIR}/src/controllers/dxclustercontroller.cpp
+    ${CMAKE_SOURCE_DIR}/src/network/dxclusterclient.cpp
+)
+target_include_directories(test_optionspagelayout PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_optionspagelayout Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::Test)
+add_test(NAME OptionsPageLayoutTests COMMAND test_optionspagelayout)
+set_tests_properties(OptionsPageLayoutTests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+# HaliKey port enumeration off the GUI thread - selection rule, queued delivery, superseded scans.
+add_executable(test_halikeyportscan
+    test_halikeyportscan.cpp
+    ${CMAKE_SOURCE_DIR}/src/hardware/halikeyportscan.cpp
+)
+target_include_directories(test_halikeyportscan PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_halikeyportscan Qt6::Core Qt6::Test)
+add_test(NAME HaliKeyPortScanTests COMMAND test_halikeyportscan)
+
 # Aggregate target: `cmake --build <dir> --target qk4_tests` builds every
 # test_* executable defined above. CI uses this so adding `add_executable(test_foo)`
 # automatically gets the new test built — no parallel maintenance of an explicit

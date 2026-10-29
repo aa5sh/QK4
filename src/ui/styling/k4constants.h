@@ -373,6 +373,22 @@ constexpr int CheckboxSize = 18;           // Checkbox indicator dimensions
 constexpr int PaddingSmall = 6;            // Small padding (inputs)
 constexpr int PaddingMedium = 10;          // Medium padding (buttons)
 constexpr int PaddingLarge = 15;           // Large padding (list items)
+
+// =============================================================================
+// Options dialog pages - geometry only, applied by ui/pages/optionspagelayout
+// =============================================================================
+constexpr int OptionsDialogMinWidth = 700;
+constexpr int OptionsDialogMinHeight = 550;
+constexpr int OptionsPageMargin = 16;                        // Page edge to content
+constexpr int OptionsRowSpacing = 8;                         // Between rows of a form, and between items of one section
+constexpr int OptionsSectionGap = 12;                        // Added above each section, on top of the row spacing
+constexpr int OptionsLabelGap = 12;                          // Form label column to field column
+constexpr int OptionsFieldMaxWidth = 360;                    // Growable fields (host, slider, device list) stop here
+constexpr int OptionsShortFieldWidth = InputFieldWidthSmall; // Ports, call signs, small numbers
+// WHY 24: a device list sized to its longest name made the Audio Input page wider than the dialog.
+// The closed box shows this many characters and elides the rest; the open list shows every name.
+constexpr int OptionsDeviceComboChars = 24;
+constexpr int OptionsConsoleMinHeight = 120; // DX cluster console never shrinks below about 8 lines
 } // namespace Dimensions
 
 } // namespace K4Styles

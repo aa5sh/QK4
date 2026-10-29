@@ -8,6 +8,7 @@
 #include <QSlider>
 
 class HalikeyDevice;
+class HaliKeyPortScan;
 class RadioState;
 class CwController;
 
@@ -32,6 +33,7 @@ private slots:
 
 private:
     void populateCwKeyerPorts();
+    void applyCwKeyerPorts(int deviceType, const QStringList &ports);
     void updateCwKeyerDescription();
     void showKeyDownDelay(int ms);
     void sendKeyDownDelay();
@@ -49,6 +51,8 @@ private:
     CwController *m_cwController;
     QSlider *m_keyDownDelaySlider = nullptr;
     QLabel *m_keyDownDelayValueLabel = nullptr;
+    HaliKeyPortScan *m_portScan = nullptr;
+    int m_scanType = -1; // device type of the list being shown or scanned
 };
 
 #endif // CWKEYERPAGE_H

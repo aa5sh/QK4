@@ -9,12 +9,12 @@
 #include "ui/pages/cwkeyerpage.h"
 #include "ui/pages/kpodpage.h"
 #include "ui/pages/kpa1500page.h"
+#include "ui/pages/optionspagelayout.h"
 #include "ui/pages/dxclusterpage.h"
 #include "ui/styling/k4constants.h"
 #include "ui/styling/k4styles.h"
 #include "controllers/audiocontroller.h"
 #include "controllers/hardwarecontroller.h"
-#include <QFrame>
 #include <QHBoxLayout>
 #include <QScrollArea>
 
@@ -33,23 +33,11 @@ OptionsDialog::~OptionsDialog() = default;
 
 void OptionsDialog::setupUi() {
     setWindowTitle("Options");
-    setMinimumSize(700, 550);
+    setMinimumSize(K4Styles::Dimensions::OptionsDialogMinWidth, K4Styles::Dimensions::OptionsDialogMinHeight);
     resize(800, 650);
 
-    // Dark theme styling
-    setStyleSheet(QString("QDialog { background-color: %1; }"
-                          "QLabel { color: %2; }"
-                          "QListWidget { background-color: %3; color: %2; border: 1px solid %4; "
-                          "             font-size: %6px; outline: none; }"
-                          "QListWidget::item { padding: 10px 15px; border-bottom: 1px solid %4; }"
-                          "QListWidget::item:selected { background-color: %5; color: %3; }"
-                          "QListWidget::item:hover { background-color: %7; }"
-                          "QListWidget::item:selected:hover { background-color: %5; color: %3; }")
-                      .arg(K4Styles::Colors::Background, K4Styles::Colors::TextPrimary,
-                           K4Styles::Colors::DarkBackground, K4Styles::Colors::DialogBorder,
-                           K4Styles::Colors::AccentAmber)
-                      .arg(K4Styles::Dimensions::FontSizeHeading)
-                      .arg(K4Styles::Colors::GradientBottom));
+    setStyleSheet(QString("QDialog { background-color: %1; } QLabel { color: %2; }")
+                      .arg(K4Styles::Colors::Background, K4Styles::Colors::TextPrimary));
 
     auto *mainLayout = new QHBoxLayout(this);
     mainLayout->setContentsMargins(0, 0, 0, 0);
@@ -58,6 +46,7 @@ void OptionsDialog::setupUi() {
     // Left side: vertical tab list
     m_tabList = new QListWidget(this);
     m_tabList->setFixedWidth(K4Styles::Dimensions::TabListWidth);
+    OptionsPageLayout::configureNavList(m_tabList);
     m_tabList->addItem("About");
     m_tabList->addItem("Station");
     m_tabList->addItem("Display");
@@ -74,7 +63,7 @@ void OptionsDialog::setupUi() {
     // Right side: stacked pages -- lazy creation (only About page created eagerly)
     m_pageStack = new QStackedWidget(this);
     m_aboutPage = new AboutPage(m_radioState, this);
-    m_pageStack->addWidget(m_aboutPage);
+    m_pageStack->addWidget(OptionsPageLayout::wrapInScrollArea(m_aboutPage, this));
     m_pageCreated[PageAbout] = true;
     for (int i = 1; i < PageCount; ++i)
         m_pageStack->addWidget(new QWidget(this)); // placeholders
@@ -163,22 +152,7 @@ void OptionsDialog::ensurePageCreated(int index) {
         return;
     }
 
-    // WHY every page scrolls: a page taller than the dialog was squeezed to fit, its rows crushed
-    // flat and its labels clipped (the HaliKey page once the keyer settings were added). A page
-    // that fits shows no scrollbar.
-    auto *scroll = new QScrollArea(this);
-    scroll->setWidgetResizable(true);
-    scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    scroll->setStyleSheet(
-        QString("QScrollArea { border: none; background: transparent; }"
-                "QScrollBar:vertical { background: %1; width: 8px; }"
-                "QScrollBar::handle:vertical { background: %2; border-radius: 4px; min-height: 20px; }"
-                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }")
-            .arg(K4Styles::Colors::DarkBackground)
-            .arg(K4Styles::Colors::BorderNormal));
-    scroll->setWidget(page);
+    QScrollArea *scroll = OptionsPageLayout::wrapInScrollArea(page, this);
 
     QWidget *placeholder = m_pageStack->widget(index);
     m_pageStack->removeWidget(placeholder);
