@@ -10,8 +10,10 @@
 #include <QTimer>
 #include <atomic>
 
+#include "audio/audiodiagnostics.h"
 #include "audio/audioresampler.h"
 #include "audio/opusencoder.h"
+#include "audio/spscring.h"
 
 /**
  * @brief The transmit audio path: microphone capture, TCI transmit audio, 12 kHz conversion, frame
@@ -82,6 +84,10 @@ public:
     Q_INVOKABLE void setOutputDeviceHint(const QString &deviceId);
     Q_INVOKABLE void flushMicBuffer();
 
+    // Consumer side of the qk4.audio.tx diagnostics: ONE thread only (AudioController's main-thread
+    // sampler). False when there is nothing to report.
+    bool takeTxFrameReport(AudioDiagnostics::TxFrameReport &out);
+
     // (id, description), "System Default" first. For the settings UI.
     static QList<QPair<QString, QString>> availableInputDevices();
 
@@ -142,9 +148,11 @@ private:
     // Encode + packetize one captured Float32 mono frame and emit txPacketReady.
     void encodeAndSendFrame(const QByteArray &f32MonoFrame, int frameSamples, int encodeMode);
 
-    // Report what one TX frame actually put on the wire, under qk4.audio.tx.
-    void logTxFrameDiagnostic(const QByteArray &f32MonoFrame, const QByteArray &wireData, int frameSamples,
-                              int encodeMode) const;
+    // Record what one TX frame actually put on the wire, for qk4.audio.tx. Fills a record in
+    // m_txDiagnostics; formatting happens on the main thread (audio/audiodiagnostics.h).
+    void recordTxFrameDiagnostic(const QByteArray &f32MonoFrame, const QByteArray &wireData, int frameSamples,
+                                 int encodeMode);
+    SpscRing<AudioDiagnostics::TxFrameReport, 16> m_txDiagnostics;
 
     // Frames between qk4.audio.tx reports during a transmission. The first frame of
     // every transmission is always reported; this throttles the rest.

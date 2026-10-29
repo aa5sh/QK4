@@ -10,6 +10,7 @@
 #include <array>
 #include <atomic>
 
+#include "audio/audiodiagnostics.h"
 #include "audio/spscring.h"
 
 /**
@@ -77,6 +78,10 @@ public:
     // Sampled by the UI rather than pushed: the feed runs at 200 Hz.
     int rxBufferedBytes() const { return m_rxBufferedBytes.load(std::memory_order_relaxed); }
 
+    // Consumer side of the qk4.audio.rx diagnostics: ONE thread only (AudioController's main-thread
+    // sampler). False when there is nothing to report.
+    bool takeRxLevelReport(AudioDiagnostics::RxLevelReport &out);
+
     // Transmitting: the K4 stops sending RX audio, so the sink running dry is expected and not
     // counted as an underrun. Atomic, safe from any thread.
     void setTransmitting(bool transmitting) { m_transmitting.store(transmitting, std::memory_order_relaxed); }
@@ -120,7 +125,9 @@ private:
         int clipped = 0;      // samples over full scale before that stage: clipped at 0 dB, rounded off when boosted
     };
     RxLevelStats m_rxStats;
+    // Turn a second of m_rxStats into a record for the main thread to format (Rule 16), and reset.
     void reportRxLevels(float mainVol, float subVol, float boost);
+    SpscRing<AudioDiagnostics::RxLevelReport, 8> m_rxDiagnostics;
 
     // Audio output format: 12kHz stereo Float32 (K4 RX audio, L=Main R=Sub)
     QAudioFormat m_outputFormat;

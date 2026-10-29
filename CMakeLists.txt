@@ -174,6 +174,7 @@ set(SOURCES
     src/network/tciserverstate.cpp
     src/network/tciaudiobridge.cpp
     src/dsp/audioupsampler.cpp
+    src/audio/audiodiagnostics.cpp
     src/audio/audioengine.cpp
     src/audio/opusdecoder.cpp
     src/audio/opusencoder.cpp
@@ -334,6 +335,7 @@ set(HEADERS
     src/network/catpushbroadcaster.h
     src/network/k4discovery.h
     src/network/tlsbackend.h
+    src/audio/audiodiagnostics.h
     src/audio/audioengine.h
     src/audio/opusdecoder.h
     src/audio/opusencoder.h

@@ -93,7 +93,8 @@ AudioController::AudioController(ConnectionController *connController, RadioStat
     m_metricsTimer = new QTimer(this);
     m_metricsTimer->setInterval(kMetricsSampleMs);
     connect(m_metricsTimer, &QTimer::timeout, this, &AudioController::sampleAudioMetrics);
-    m_metricsTimer->start();
+    // Started by startAudio() and stopped by stopAudio(): nothing to sample while disconnected,
+    // and an idle QK4 should not wake 20 times a second for it.
 
     // TX audio path: encode + packetize run on the TX thread; the wire-ready packet goes straight
     // to TcpClient::sendRaw on the I/O thread, queued (one hop).
@@ -182,6 +183,7 @@ void AudioController::startAudio(float mainVolume, float subVolume, float micGai
     const int frameSamples = RadioUtils::slTierToFrameSamples(sl);
     QMetaObject::invokeMethod(m_audioEngine, "setRxPacketFrameSamples", Qt::QueuedConnection, Q_ARG(int, frameSamples));
     QMetaObject::invokeMethod(m_audioEngine, "start", Qt::QueuedConnection);
+    m_metricsTimer->start();
 
     // Volume setters are atomic — safe as direct calls from any thread
     m_audioEngine->setMainVolume(mainVolume);
@@ -198,6 +200,8 @@ void AudioController::startAudio(float mainVolume, float subVolume, float micGai
 }
 
 void AudioController::stopAudio() {
+    if (m_metricsTimer)
+        m_metricsTimer->stop();
     if (m_txPipeline) {
         QMetaObject::invokeMethod(m_txPipeline, "stop", Qt::QueuedConnection);
     }
@@ -363,11 +367,17 @@ void AudioController::setOutputDevice(const QString &deviceId) {
 }
 
 void AudioController::setMicGain(float gain) {
+    // Logged here, not on the TX thread. Recorded so a bench log shows slider moves between
+    // transmissions, not only during them.
+    qCDebug(lcAudioTx, "mic slider %.0f%% -> gain %.4f", static_cast<double>(gain) * 100.0,
+            static_cast<double>(gain * gain * gain));
     if (m_txPipeline)
         QMetaObject::invokeMethod(m_txPipeline, "setMicGain", Qt::QueuedConnection, Q_ARG(float, gain));
 }
 
 void AudioController::setTciTxGain(float gain) {
+    qCDebug(lcAudioTx, "TCI TX slider %.0f%% -> gain %.4f", static_cast<double>(gain) * 100.0,
+            static_cast<double>(gain * gain * gain));
     if (m_txPipeline)
         QMetaObject::invokeMethod(m_txPipeline, "setTciTxGain", Qt::QueuedConnection, Q_ARG(float, gain));
 }
@@ -396,6 +406,14 @@ void AudioController::sampleAudioMetrics() {
     // few ticks so SL6-7's 120 ms packets still give a sample every tick.
     if (m_ticksSinceRxPacket < kStreamIdleTicks)
         metrics->onBufferStatus(m_audioEngine->rxBufferedBytes());
+    // Level diagnostics measured on the audio threads, formatted here (audio/audiodiagnostics.h).
+    AudioDiagnostics::RxLevelReport rxLevels;
+    while (m_audioEngine->takeRxLevelReport(rxLevels))
+        AudioDiagnostics::logRxLevels(rxLevels);
+    AudioDiagnostics::TxFrameReport txFrame;
+    while (m_txPipeline->takeTxFrameReport(txFrame))
+        AudioDiagnostics::logTxFrame(txFrame);
+
     const quint32 underruns = m_audioEngine->rxUnderruns();
     const quint32 drops = m_audioEngine->rxDroppedPackets();
     metrics->onRxPlayoutCounters(underruns, drops);

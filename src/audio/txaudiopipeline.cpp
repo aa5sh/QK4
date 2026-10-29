@@ -1,6 +1,7 @@
 #include "audio/txaudiopipeline.h"
 #include "audio/audiodecimator.h"       // capture-rate decimation
 #include "audio/audiodeviceselection.h" // which device a stream belongs on
+#include "audio/audiodiagnostics.h"     // qk4.audio.tx records, formatted off this thread
 #include "audio/micrate.h"              // what the operator is told when a rate is unusable
 #include "audio/rawaudioformat.h"       // EM0/EM1 wire format
 #include "logging/logcategories.h"
@@ -465,7 +466,7 @@ void TxAudioPipeline::encodeAndSendFrame(const QByteArray &f32MonoFrame, int fra
             m_txPeakSinceKey = qMax(m_txPeakSinceKey, std::fabs(samples[i]));
 
         if (m_txSequence == 0 || m_txSequence % TX_DIAG_FRAME_INTERVAL == 0)
-            logTxFrameDiagnostic(f32MonoFrame, audioData, frameSamples, encodeMode);
+            recordTxFrameDiagnostic(f32MonoFrame, audioData, frameSamples, encodeMode);
     }
 
     QByteArray packet = Protocol::buildAudioPacket(audioData, m_txSequence++, encodeMode, frameSamples);
@@ -478,55 +479,50 @@ void TxAudioPipeline::encodeAndSendFrame(const QByteArray &f32MonoFrame, int fra
     }
 }
 
-void TxAudioPipeline::logTxFrameDiagnostic(const QByteArray &f32MonoFrame, const QByteArray &wireData, int frameSamples,
-                                           int encodeMode) const {
+void TxAudioPipeline::recordTxFrameDiagnostic(const QByteArray &f32MonoFrame, const QByteArray &wireData,
+                                              int frameSamples, int encodeMode) {
+    AudioDiagnostics::TxFrameReport *r = m_txDiagnostics.beginWrite();
+    if (!r)
+        return; // nobody is draining (no sampler yet); a diagnostic is never worth blocking for
     const float *in = reinterpret_cast<const float *>(f32MonoFrame.constData());
     const int inCount = static_cast<int>(f32MonoFrame.size() / sizeof(float));
     float framePeak = 0.0f;
     for (int i = 0; i < inCount; i++)
         framePeak = qMax(framePeak, std::fabs(in[i]));
 
-    // dBFS rather than raw counts: the TX path is float end to end now, and a level in dB is
-    // comparable across encode modes whose containers have different full scales.
-    auto dbfs = [](float v) { return v > 0.0f ? 20.0 * std::log10(static_cast<double>(v)) : -999.0; };
-
-    // The peak is measured AFTER the gain, so a quiet frame is otherwise ambiguous between a quiet
-    // room and a turned-down slider - an ambiguity that cost a bench cycle on 2026-09-19. Report
-    // both the effective gain and the slider position it came from: both setters cube the slider,
-    // so the cube root recovers exactly what the operator set.
-    //
-    // WHICH gain is named matters now that there are two. This function encodes frames from both
-    // sources, so reporting m_micGain unconditionally would have made a TCI bench log describe a
-    // control that had nothing to do with the level being measured.
     const bool fromTci = txSource() == TxSource::Tci;
-    const double gain = static_cast<double>((fromTci ? m_tciTxGain : m_micGain).load(std::memory_order_relaxed));
-    const double slider = std::cbrt(gain) * 100.0;
-    qCDebug(lcAudioTx,
-            "TX frame: EM%d seq=%u frameSamples=%d peak=%.1f dBFS peak-since-key=%.1f dBFS "
-            "(%s slider %.0f%% -> gain %.4f) wire-payload=%d",
-            encodeMode, static_cast<unsigned>(m_txSequence), frameSamples, dbfs(framePeak), dbfs(m_txPeakSinceKey),
-            fromTci ? "TCI TX" : "mic", slider, gain, static_cast<int>(wireData.size()));
-
-    if (encodeMode != 0)
-        return;
-
-    // WHY: report the EM0 payload against the format's known full scale. AUD-003 survived
-    // because nothing QK4 can hear tells a wrong container apart from a dead mic - the bytes
-    // are only wrong at the radio. A number here makes a future format mistake obvious in a
-    // bench log instead of an opinion about how the monitor sounded.
-    const unsigned char *bytes = reinterpret_cast<const unsigned char *>(wireData.constData());
-    const int words = static_cast<int>(wireData.size() / 4);
-    qint64 wirePeak = 0;
-    for (int i = 0; i < words; i++) {
-        quint32 raw = static_cast<quint32>(bytes[i * 4]);
-        raw |= static_cast<quint32>(bytes[i * 4 + 1]) << 8;
-        raw |= static_cast<quint32>(bytes[i * 4 + 2]) << 16;
-        raw |= static_cast<quint32>(bytes[i * 4 + 3]) << 24;
-        wirePeak = qMax(wirePeak, qAbs(static_cast<qint64>(static_cast<qint32>(raw))));
+    r->encodeMode = encodeMode;
+    r->sequence = m_txSequence;
+    r->frameSamples = frameSamples;
+    r->framePeak = framePeak;
+    r->peakSinceKey = m_txPeakSinceKey;
+    r->fromTci = fromTci;
+    r->gain = (fromTci ? m_tciTxGain : m_micGain).load(std::memory_order_relaxed);
+    r->wirePayloadBytes = static_cast<int>(wireData.size());
+    r->em0WirePeak = -1;
+    if (encodeMode == 0) {
+        const unsigned char *bytes = reinterpret_cast<const unsigned char *>(wireData.constData());
+        const int words = static_cast<int>(wireData.size() / 4);
+        qint64 wirePeak = 0;
+        for (int i = 0; i < words; i++) {
+            quint32 raw = static_cast<quint32>(bytes[i * 4]);
+            raw |= static_cast<quint32>(bytes[i * 4 + 1]) << 8;
+            raw |= static_cast<quint32>(bytes[i * 4 + 2]) << 16;
+            raw |= static_cast<quint32>(bytes[i * 4 + 3]) << 24;
+            wirePeak = qMax(wirePeak, qAbs(static_cast<qint64>(static_cast<qint32>(raw))));
+        }
+        r->em0WirePeak = wirePeak;
     }
-    const double fullScale = static_cast<double>(RawAudioFormat::EM0_FULL_SCALE);
-    qCDebug(lcAudioTx, "  EM0 wire peak=%lld S32LE = %.4f of the %.0f full scale", static_cast<long long>(wirePeak),
-            static_cast<double>(wirePeak) / fullScale, fullScale);
+    m_txDiagnostics.commitWrite();
+}
+
+bool TxAudioPipeline::takeTxFrameReport(AudioDiagnostics::TxFrameReport &out) {
+    const AudioDiagnostics::TxFrameReport *r = m_txDiagnostics.front();
+    if (!r)
+        return false;
+    out = *r;
+    m_txDiagnostics.pop();
+    return true;
 }
 
 void TxAudioPipeline::setEncodeMode(int mode) {
@@ -560,8 +556,6 @@ void TxAudioPipeline::setMicGain(float gain) {
     // e.g., 40% slider → 0.064x gain, 70% → 0.343x, 100% → 1.0x (unity)
     float cubic = gain * gain * gain;
     m_micGain.store(qBound(0.0f, cubic, 1.0f), std::memory_order_relaxed);
-    // Recorded so a bench log shows slider moves between transmissions, not only during them.
-    qCDebug(lcAudioTx, "mic slider %.0f%% -> gain %.4f", static_cast<double>(gain) * 100.0, static_cast<double>(cubic));
 }
 
 void TxAudioPipeline::setTciTxGain(float gain) {
@@ -569,8 +563,6 @@ void TxAudioPipeline::setTciTxGain(float gain) {
     // position means the same thing on both, even though the useful range differs by source.
     const float cubic = gain * gain * gain;
     m_tciTxGain.store(qBound(0.0f, cubic, 1.0f), std::memory_order_relaxed);
-    qCDebug(lcAudioTx, "TCI TX slider %.0f%% -> gain %.4f", static_cast<double>(gain) * 100.0,
-            static_cast<double>(cubic));
 }
 
 void TxAudioPipeline::setFrameSamples(int samples) {

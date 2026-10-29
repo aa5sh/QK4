@@ -432,16 +432,29 @@ void AudioEngine::applyMixAndVolume(float *samples, int sampleCount) {
 }
 
 void AudioEngine::reportRxLevels(float mainVol, float subVol, float boost) {
-    auto dbfs = [](double v) { return v > 0.0 ? 20.0 * std::log10(v) : -999.0; };
-    const double n = static_cast<double>(m_rxStats.frames);
-    qCDebug(lcAudioRx,
-            "RX 1s: main peak %.1f rms %.1f dBFS | sub peak %.1f rms %.1f dBFS | out peak %.1f dBFS over-FS %d | "
-            "sliders main %.2f sub %.2f boost %+.0f dB (%s)",
-            dbfs(m_rxStats.peakMain), dbfs(std::sqrt(m_rxStats.sumSqMain / n)), dbfs(m_rxStats.peakSub),
-            dbfs(std::sqrt(m_rxStats.sumSqSub / n)), dbfs(m_rxStats.peakOut), m_rxStats.clipped,
-            static_cast<double>(mainVol), static_cast<double>(subVol), dbfs(boost),
-            boost > 1.0f ? "soft-limited" : "clamped");
+    if (AudioDiagnostics::RxLevelReport *r = m_rxDiagnostics.beginWrite()) {
+        const double n = static_cast<double>(m_rxStats.frames);
+        r->peakMain = m_rxStats.peakMain;
+        r->rmsMain = static_cast<float>(std::sqrt(m_rxStats.sumSqMain / n));
+        r->peakSub = m_rxStats.peakSub;
+        r->rmsSub = static_cast<float>(std::sqrt(m_rxStats.sumSqSub / n));
+        r->peakOut = m_rxStats.peakOut;
+        r->clipped = m_rxStats.clipped;
+        r->mainSlider = mainVol;
+        r->subSlider = subVol;
+        r->boost = boost;
+        m_rxDiagnostics.commitWrite();
+    }
     m_rxStats = RxLevelStats{};
+}
+
+bool AudioEngine::takeRxLevelReport(AudioDiagnostics::RxLevelReport &out) {
+    const AudioDiagnostics::RxLevelReport *r = m_rxDiagnostics.front();
+    if (!r)
+        return false;
+    out = *r;
+    m_rxDiagnostics.pop();
+    return true;
 }
 
 void AudioEngine::setMainVolume(float volume) {
