@@ -1,4 +1,5 @@
 #include "dxclustercontroller.h"
+#include "logging/logcategories.h"
 
 #include <QDebug>
 #include <QMetaObject>
@@ -76,7 +77,7 @@ DxClusterInstance &DxClusterController::ensureInstance(int index) {
             spot.clusterIndex = indexOf(client);
             if (spot.clusterIndex < 0)
                 return; // queued from a cluster that has since been removed
-            qCDebug(netDxCluster) << "Spot received:" << spot.spottedCall << spot.frequencyHz << spot.mode;
+            qCDebug(lcDxCluster) << "Spot received:" << spot.spottedCall << spot.frequencyHz << spot.mode;
             // Deduplicate: same callsign within 500 Hz replaces older entry
             for (int i = 0; i < m_spots.size(); ++i) {
                 if (m_spots[i].spottedCall == spot.spottedCall &&
@@ -137,7 +138,7 @@ void DxClusterController::destroyInstance(int index) {
 }
 
 void DxClusterController::connectCluster(int index, const QString &host, quint16 port, const QString &callsign) {
-    qCDebug(netDxCluster) << "connectCluster index:" << index << host << port << callsign;
+    qCDebug(lcDxCluster) << "connectCluster index:" << index << host << port << callsign;
     auto &inst = ensureInstance(index);
     QMetaObject::invokeMethod(inst.client, "connectToHost", Qt::QueuedConnection, Q_ARG(QString, host),
                               Q_ARG(quint16, port), Q_ARG(QString, callsign));

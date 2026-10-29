@@ -15,7 +15,6 @@ RX and TX audio pipeline. Owned by `controllers/audiocontroller.cpp`.
 - `rxoutputstage.h` — header-only, Qt-free. The last stage of RX playback: the 0 to +12 dB boost above the MAIN/SUB sliders (Options → Audio Output) and the soft limiter used when it is above 0 dB. Tested in `tests/test_rxoutputstage.cpp`.
 - `sidetonegenerator.{cpp,h}` — Real-time CW sidetone synthesis at 48kHz on its own audio sink. Already places its edges with `SidetoneScheduler`; phase 2 of `docs/cw-keyer-port-plan.md` moves it into a mixer stage in the RX output.
 - `sidetonescheduler.{cpp,h}` — Sample-accurate sidetone edge placement, ported from K4-Companion (GPL-3.0): the keyer schedules "key down at T", the output callback places it on an exact frame against the block's play-out time. Delay fixed at the first edge (lead + block), never ratcheted by non-audio lateness, eased 1 ms/s in silence.
-- `audiologging.h` — declares the audio logging categories: `qk4.audio` (`qk4Audio`), `qk4.audio.tx` (`qk4AudioTx`, TX wire-format diagnostic) and `qk4.audio.rx` (`qk4AudioRx`, RX playback level). The TX and RX ones are off by default because they scan every sample on the audio thread. Definitions live in `controllers/audiocontroller.cpp`.
 
 ## Threading
 

@@ -1,6 +1,6 @@
 #include "sidetonegenerator.h"
 #include "audio/audiodeviceselection.h"
-#include "audio/audiologging.h"
+#include "logging/logcategories.h"
 #include "audio/sidetonescheduler.h"
 #include <QAudioFormat>
 #include <QMediaDevices>
@@ -9,11 +9,6 @@
 #include <cmath>
 #include <cstring>
 #include <numeric>
-
-// Sidetone timing, one line per tone onset: how far ahead the block was filled (lead), what was
-// queued ahead of it, and the keying-to-hearing delay the scheduler is holding. Off by default.
-//     QT_LOGGING_RULES="qk4.audio.sidetone.debug=true"
-Q_LOGGING_CATEGORY(qk4Sidetone, "qk4.audio.sidetone", QtInfoMsg)
 
 namespace {
 constexpr double kPi = 3.14159265358979323846; // not M_PI: MSVC hides it behind _USE_MATH_DEFINES
@@ -33,7 +28,7 @@ SidetoneGenerator::SidetoneGenerator(SidetoneScheduler &scheduler, CwKeying::Clo
 SidetoneGenerator::~SidetoneGenerator() {
     // Audio sink should already be cleaned up by stop() on the correct thread.
     if (m_audioSink) {
-        qCWarning(qk4Audio) << "SidetoneGenerator: audio sink not cleaned up by stop() — destroying from wrong thread";
+        qCWarning(lcAudio) << "SidetoneGenerator: audio sink not cleaned up by stop() — destroying from wrong thread";
         m_streamActive = false;
         delete m_audioSink;
         m_audioSink = nullptr;
@@ -90,7 +85,7 @@ void SidetoneGenerator::initAudio() {
     m_format = format;
     m_rate = format.sampleRate();
     if (m_rate <= 0 || format.bytesPerFrame() <= 0) {
-        qCWarning(qk4Audio) << "SidetoneGenerator: unusable output format" << format;
+        qCWarning(lcAudio) << "SidetoneGenerator: unusable output format" << format;
         return;
     }
     m_blockFrames = std::max(1, static_cast<int>(std::lround(m_rate * kBlockSeconds)));
@@ -111,7 +106,7 @@ void SidetoneGenerator::initAudio() {
     m_scheduler.clear();
     m_pushDevice = m_audioSink->start();
     if (!m_pushDevice || m_audioSink->error() != QAudio::NoError) {
-        qCWarning(qk4Audio) << "SidetoneGenerator: Failed to start audio sink:" << m_audioSink->error();
+        qCWarning(lcAudio) << "SidetoneGenerator: Failed to start audio sink:" << m_audioSink->error();
         m_streamActive.store(false, std::memory_order_release);
         m_pushDevice = nullptr;
     } else {
@@ -124,9 +119,9 @@ void SidetoneGenerator::initAudio() {
         }
         m_pumpTimer->start();
         pump();
-        qCInfo(qk4Audio) << "SidetoneGenerator: sidetone on" << device.description() << format << "buffer"
-                         << m_audioSink->bufferSize()
-                         << "bytes =" << format.durationForBytes(m_audioSink->bufferSize()) / 1000.0 << "ms";
+        qCInfo(lcAudio) << "SidetoneGenerator: sidetone on" << device.description() << format << "buffer"
+                        << m_audioSink->bufferSize()
+                        << "bytes =" << format.durationForBytes(m_audioSink->bufferSize()) / 1000.0 << "ms";
     }
 }
 
@@ -169,7 +164,7 @@ void SidetoneGenerator::onSystemDefaultOutputChanged() {
         m_selectedOutputDeviceId.toStdString(), m_activeOutputDeviceId.toStdString(),
         QMediaDevices::defaultAudioOutput().id().toStdString(), pinnedPresent, m_audioSink != nullptr);
 
-    qCDebug(qk4Audio, "SidetoneGenerator: output device list changed (selection=\"%s\", active=\"%s\") -> %s",
+    qCDebug(lcAudio, "SidetoneGenerator: output device list changed (selection=\"%s\", active=\"%s\") -> %s",
             m_selectedOutputDeviceId.isEmpty() ? "system default" : qUtf8Printable(m_selectedOutputDeviceId),
             qUtf8Printable(m_activeOutputDeviceId), decision.reason);
 
@@ -223,7 +218,7 @@ void SidetoneGenerator::renderBlock(float *out, int frames, double dacTime, doub
         if (!edge)
             break;
         if (edge->down && !m_keyed)
-            qCDebug(qk4Sidetone).nospace()
+            qCDebug(lcAudioSidetone).nospace()
                 << "tone on: delay " << m_scheduler.delay() * 1000 << " ms, lag " << m_scheduler.lag() * 1000
                 << " ms, block lead " << (dacTime - now) * 1000 << " ms, queued " << m_lastQueued * 1000
                 << " ms, frame " << edge->offset << "/" << frames;
@@ -304,10 +299,10 @@ void SidetoneGenerator::pump() {
             const double cap = m_audioSink->bufferSize() / bytesPerSecond - blockSeconds;
             if (m_targetQueue + blockSeconds <= cap + 1e-9) {
                 m_targetQueue += blockSeconds;
-                qCInfo(qk4Audio).nospace()
+                qCInfo(lcAudio).nospace()
                     << "SidetoneGenerator: output ran dry, now keeping " << m_targetQueue * 1000 << " ms queued";
             } else {
-                qCDebug(qk4Sidetone) << "output ran dry at the sink's capacity";
+                qCDebug(lcAudioSidetone) << "output ran dry at the sink's capacity";
             }
         }
         const double now = m_clock.now();
@@ -319,7 +314,7 @@ void SidetoneGenerator::pump() {
         convert(m_scratch.data(), m_blockFrames, m_bytes.data());
         const qint64 written = m_pushDevice->write(m_bytes.constData(), blockBytes);
         if (written < blockBytes) {
-            qCDebug(qk4Sidetone) << "short write" << written << "of" << blockBytes;
+            qCDebug(lcAudioSidetone) << "short write" << written << "of" << blockBytes;
             return;
         }
         m_framesWritten += m_blockFrames;

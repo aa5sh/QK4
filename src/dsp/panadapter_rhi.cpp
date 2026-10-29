@@ -1,4 +1,5 @@
 #include "panadapter_rhi.h"
+#include "logging/logcategories.h"
 #include "dsp/bandplanstrip.h"
 #include "dsp/spectrumscale.h"
 #include "dsp/waterfallgeometry.h"
@@ -19,17 +20,6 @@
 #include <cmath>
 #include <cstring>
 #include <utility>
-
-Q_LOGGING_CATEGORY(qk4Dsp, "qk4.dsp", QtInfoMsg)
-
-// Waterfall diagnostics: tier-boundary crossings and render geometry. Enable with
-//     QT_LOGGING_RULES="qk4.pan.diag.debug=true"
-//
-// WHY the explicit QtWarningMsg: Q_LOGGING_CATEGORY defaults severityLevel to QtDebugMsg, so a
-// bare declaration would print this for every user on every span change. The other categories in
-// this project omit the level and describe themselves as off by default, which is not what Qt
-// does.
-Q_LOGGING_CATEGORY(qk4PanDiag, "qk4.pan.diag", QtWarningMsg)
 
 namespace {
 
@@ -548,7 +538,7 @@ void PanadapterRhiWidget::initialize(QRhiCommandBuffer *cb) {
 
     m_rhi = rhi();
     if (!m_rhi) {
-        qCWarning(qk4Dsp) << "QRhi is NULL - GPU backend failed to initialize";
+        qCWarning(lcSpectrumRender) << "QRhi is NULL - GPU backend failed to initialize";
         return;
     }
 
@@ -943,13 +933,13 @@ void PanadapterRhiWidget::render(QRhiCommandBuffer *cb) {
 
     // One stored row per device pixel of waterfall height, so a row is never stretched across
     // several pixels and blended with its neighbours. Clamped to what is actually stored: past
-    // that the old stretching returns, which the qk4.pan.diag geometry line reports as pxPerRow
+    // that the old stretching returns, which the qk4.spectrum.diag geometry line reports as pxPerRow
     // climbing above 1.
     m_visibleRows = WaterfallGeometry::visibleRowsFor(waterfallHeight, m_waterfallHistory, MIN_VISIBLE_ROWS);
 
     // Logged here rather than earlier in the frame: the geometry line reports pxPerRow, which is
     // only meaningful once the visible row count for this frame has been chosen.
-    if (qk4PanDiag().isDebugEnabled())
+    if (lcSpectrumDiag().isDebugEnabled())
         logRenderGeometry(outputSize);
 
     // Show the newest m_visibleRows rows, ending one short of the row being written.
@@ -1227,9 +1217,9 @@ void PanadapterRhiWidget::updateSpectrum(const QByteArray &payload, int binsOffs
         static quint64 dropped = 0;
         ++dropped;
         if ((dropped & (dropped - 1)) == 0)
-            qCWarning(qk4Dsp) << "Dropped PAN frame:" << binCount << "bins at offset" << binsOffset << "in a"
-                              << payload.size() << "byte payload, texture width" << m_textureWidth << "(" << dropped
-                              << "dropped so far)";
+            qCWarning(lcSpectrumRender) << "Dropped PAN frame:" << binCount << "bins at offset" << binsOffset << "in a"
+                                        << payload.size() << "byte payload, texture width" << m_textureWidth << "("
+                                        << dropped << "dropped so far)";
         return;
     }
 
@@ -1251,7 +1241,7 @@ void PanadapterRhiWidget::updateSpectrum(const QByteArray &payload, int binsOffs
 
     // Reset tier EMA on tier transition to avoid cross-tier blending
     if (sampleRate != m_lastTierSampleRate) {
-        if (qk4PanDiag().isDebugEnabled())
+        if (lcSpectrumDiag().isDebugEnabled())
             logTierCrossing(m_lastTierSampleRate, sampleRate, tierSpanHz);
 
         // WHY the waterfall is discarded here: stored rows hold raw bins whose width is the tier
@@ -1316,7 +1306,7 @@ void PanadapterRhiWidget::updateSpectrum(const QByteArray &payload, int binsOffs
     // once RhiUtils::K4_DBM_OFFSET is applied. Comparing the two is a free check that the offset is
     // right — a systematic gap means every dBm and S-unit on the scale is off by that much. Logged
     // only when the disagreement changes, so it stays quiet while the calibration holds.
-    if (qk4PanDiag().isDebugEnabled() && !m_rawSpectrum.isEmpty()) {
+    if (lcSpectrumDiag().isDebugEnabled() && !m_rawSpectrum.isEmpty()) {
         // Raw bins, not the smoothed curve: the EMA's fast-attack/slow-decay asymmetry biases the
         // result upward and would be read as a calibration error. The median is the meaningful
         // comparison — with signals sparse across the span, most bins are noise, whereas the single
@@ -1350,7 +1340,7 @@ void PanadapterRhiWidget::updateSpectrum(const QByteArray &payload, int binsOffs
             m_calibLogged = true;
             m_lastLoggedCalibDelta = m_calibDelta;
             qCDebug(
-                qk4PanDiag, "%s",
+                lcSpectrumDiag, "%s",
                 qPrintable(QString::asprintf("CALIB       radio floor %.1f dBm  raw min %.1f  raw median %.1f  "
                                              "smoothed offset %+.1f dB  (K4_DBM_OFFSET %.0f)",
                                              m_noiseFloor, minDbm, medianDbm, m_calibDelta, RhiUtils::K4_DBM_OFFSET)));
@@ -1420,12 +1410,13 @@ void PanadapterRhiWidget::logTierCrossing(qint32 oldSampleRate, qint32 newSample
     const float spanRatioAfter = newTierSpanHz > 0 ? qMin(1.0f, static_cast<float>(m_spanHz) / newTierSpanHz) : 0.0f;
     const float rescaleFactor = oldTierSpanHz > 0.0f ? static_cast<float>(newTierSpanHz) / oldTierSpanHz : 0.0f;
 
-    qCDebug(qk4PanDiag).nospace() << "TIER CROSS  sampleRate " << oldSampleRate << "->" << newSampleRate
-                                  << " kHz  tierSpan " << static_cast<qint32>(oldTierSpanHz) << "->" << newTierSpanHz
-                                  << " Hz  rescaleFactor " << rescaleFactor << "x  span " << m_spanHz
-                                  << " Hz  spanRatio " << spanRatioBefore << "->" << spanRatioAfter << "  writeRow "
-                                  << m_waterfallWriteRow << "  staleRows " << staleRows << "/" << m_waterfallHistory
-                                  << "  (EMA reset this frame: trace may flash independently)";
+    qCDebug(lcSpectrumDiag).nospace() << "TIER CROSS  sampleRate " << oldSampleRate << "->" << newSampleRate
+                                      << " kHz  tierSpan " << static_cast<qint32>(oldTierSpanHz) << "->"
+                                      << newTierSpanHz << " Hz  rescaleFactor " << rescaleFactor << "x  span "
+                                      << m_spanHz << " Hz  spanRatio " << spanRatioBefore << "->" << spanRatioAfter
+                                      << "  writeRow " << m_waterfallWriteRow << "  staleRows " << staleRows << "/"
+                                      << m_waterfallHistory
+                                      << "  (EMA reset this frame: trace may flash independently)";
 }
 
 void PanadapterRhiWidget::logRenderGeometry(const QSize &outputSize) {
@@ -1466,7 +1457,7 @@ void PanadapterRhiWidget::logRenderGeometry(const QSize &outputSize) {
     // column limit is wrapped differently by different clang-format 18 builds, so CI's apt binary
     // rejected what the Homebrew one accepted. One asprintf has no wrapping decision to disagree
     // about, and reads better besides.
-    qCDebug(qk4PanDiag, "%s",
+    qCDebug(lcSpectrumDiag, "%s",
             qPrintable(QString::asprintf("GEOMETRY    output %dx%d px  dpr %g  spectrumRatio %g  "
                                          "waterfall %.1f px  rows %d/%d visible/stored  "
                                          "pxPerRow %.4f (%s)  visibleBins %.0f  pxPerBin %.2f",

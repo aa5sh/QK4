@@ -8,8 +8,6 @@
 #include <QString>
 #include <QTcpSocket>
 
-Q_DECLARE_LOGGING_CATEGORY(netDxCluster)
-
 /**
  * @brief Parsed representation of a single DX cluster spot (spotter, spotted, frequency, mode,
  *        comment, UTC time). Consumed by DxSpotOverlay for panadapter rendering.

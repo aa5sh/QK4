@@ -1,4 +1,5 @@
 #include "menucontroller.h"
+#include "logging/logcategories.h"
 
 #include "connectioncontroller.h"
 #include "models/menumodel.h"
@@ -8,8 +9,6 @@
 #include <QLoggingCategory>
 #include <QPoint>
 #include <QWidget>
-
-Q_LOGGING_CATEGORY(qk4Menu, "qk4.menu", QtInfoMsg)
 
 MenuController::MenuController(ConnectionController *connection, SpectrumController *spectrum, QWidget *parentWidget,
                                QObject *parent)
@@ -97,7 +96,7 @@ void MenuController::onMenuValueChangeRequested(int menuId, const QString &actio
         m_menuModel->updateValue(menuId, newValue);
 
         if (m_connection->isConnected()) {
-            qCDebug(qk4Menu) << "Display FPS change:" << QString("#FPS%1;").arg(newValue);
+            qCDebug(lcUiMenu) << "Display FPS change:" << QString("#FPS%1;").arg(newValue);
             m_connection->sendCAT(QString("#FPS%1;").arg(newValue));
         }
 
@@ -108,7 +107,7 @@ void MenuController::onMenuValueChangeRequested(int menuId, const QString &actio
     // Real K4 menu items — ME command.
     // action: "+" = increment, "-" = decrement, "/" = toggle
     const QString cmd = QString("ME%1.%2;").arg(menuId, 4, 10, QChar('0')).arg(action);
-    qCDebug(qk4Menu) << "Menu value change:" << cmd;
+    qCDebug(lcUiMenu) << "Menu value change:" << cmd;
 
     // Optimistic local update.
     MenuItem *item = m_menuModel->getMenuItem(menuId);
@@ -135,7 +134,7 @@ void MenuController::onMenuModelValueChanged(int menuId, int newValue) {
     // Spectrum Amplitude Units (dBm vs S-UNITS).
     if (item && item->name == "Spectrum Amplitude Units") {
         const bool useSUnits = (newValue == 1);
-        qCDebug(qk4Menu) << "Spectrum amplitude units changed:" << (useSUnits ? "S-UNITS" : "dBm");
+        qCDebug(lcUiMenu) << "Spectrum amplitude units changed:" << (useSUnits ? "S-UNITS" : "dBm");
         m_spectrum->setAmplitudeUnits(useSUnits);
     }
 
@@ -143,7 +142,7 @@ void MenuController::onMenuModelValueChanged(int menuId, int newValue) {
     if (menuId == m_mouseQsyMenuId) {
         m_mouseQsyMode = newValue;
         m_spectrum->setMouseQsyMode(newValue);
-        qCDebug(qk4Menu) << "Mouse L/R Button QSY changed to:" << m_mouseQsyMode;
+        qCDebug(lcUiMenu) << "Mouse L/R Button QSY changed to:" << m_mouseQsyMode;
     }
 
     // "FSK Mark-Tone" — forward the tone value to panadapters.
@@ -151,7 +150,7 @@ void MenuController::onMenuModelValueChanged(int menuId, int newValue) {
         const auto *mi = m_menuModel->getMenuItem(menuId);
         if (mi && newValue >= 0 && newValue < mi->options.size()) {
             const int toneHz = mi->options[newValue].toInt();
-            qCDebug(qk4Menu) << "FSK Mark-Tone changed to:" << toneHz << "Hz";
+            qCDebug(lcUiMenu) << "FSK Mark-Tone changed to:" << toneHz << "Hz";
             m_spectrum->setFskMarkTone(toneHz);
         }
     }
@@ -164,20 +163,20 @@ void MenuController::onMenuItemAdded(int menuId) {
 
     if (item->name == "Spectrum Amplitude Units") {
         const bool useSUnits = (item->currentValue == 1);
-        qCDebug(qk4Menu) << "Initial spectrum amplitude units:" << (useSUnits ? "S-UNITS" : "dBm");
+        qCDebug(lcUiMenu) << "Initial spectrum amplitude units:" << (useSUnits ? "S-UNITS" : "dBm");
         m_spectrum->setAmplitudeUnits(useSUnits);
     }
     if (item->name == "Mouse L/R Button QSY") {
         m_mouseQsyMenuId = item->id;
         m_mouseQsyMode = item->currentValue;
         m_spectrum->setMouseQsyMode(m_mouseQsyMode);
-        qCDebug(qk4Menu) << "Mouse L/R Button QSY: menuId=" << m_mouseQsyMenuId << "mode=" << m_mouseQsyMode;
+        qCDebug(lcUiMenu) << "Mouse L/R Button QSY: menuId=" << m_mouseQsyMenuId << "mode=" << m_mouseQsyMode;
     }
     if (item->name == "FSK Mark-Tone") {
         m_fskMarkToneMenuId = item->id;
         if (item->currentValue >= 0 && item->currentValue < item->options.size()) {
             const int toneHz = item->options[item->currentValue].toInt();
-            qCDebug(qk4Menu) << "FSK Mark-Tone: menuId=" << m_fskMarkToneMenuId << "tone=" << toneHz << "Hz";
+            qCDebug(lcUiMenu) << "FSK Mark-Tone: menuId=" << m_fskMarkToneMenuId << "tone=" << toneHz << "Hz";
             m_spectrum->setFskMarkTone(toneHz);
         }
     }

@@ -1,4 +1,5 @@
 #include "spectrumcontroller.h"
+#include "logging/logcategories.h"
 #include "connectioncontroller.h"
 #include "dsp/panadapter_rhi.h"
 #include "dsp/spectrumgeometry.h"
@@ -19,8 +20,6 @@
 #include <QPushButton>
 #include <QResizeEvent>
 #include <limits>
-
-Q_LOGGING_CATEGORY(qk4Spectrum, "qk4.spectrum", QtInfoMsg)
 
 // ============== SpectrumController Implementation ==============
 
@@ -434,8 +433,8 @@ void SpectrumController::wirePan(bool vfoB) {
 
     // Debug: diagnose QRhiWidget issues
     connect(pad, &QRhiWidget::renderFailed, this, [vfoB]() {
-        qCCritical(qk4Spectrum) << (vfoB ? "PanadapterB" : "PanadapterA")
-                                << "renderFailed() — QRhi could not be obtained";
+        qCCritical(lcSpectrum) << (vfoB ? "PanadapterB" : "PanadapterA")
+                               << "renderFailed() — QRhi could not be obtained";
     });
 }
 
@@ -778,8 +777,8 @@ void SpectrumController::updateSpotOverlay(bool vfoB) {
         ui.spotOverlay->setFrequencyRange(center, span);
         ui.spotOverlay->setSpots(spots);
         if (!spots.isEmpty())
-            qCDebug(qk4Spectrum) << "Overlay" << (vfoB ? "B:" : "A:") << spots.size() << "spots in range" << startFreq
-                                 << "-" << endFreq << "overlay size:" << ui.spotOverlay->size();
+            qCDebug(lcSpectrum) << "Overlay" << (vfoB ? "B:" : "A:") << spots.size() << "spots in range" << startFreq
+                                << "-" << endFreq << "overlay size:" << ui.spotOverlay->size();
     } else {
         // WHY: still propagate clears when freq/span aren't valid yet (e.g., K4 not streaming).
         // Otherwise stale labels from a prior layout remain on screen after spots are cleared.

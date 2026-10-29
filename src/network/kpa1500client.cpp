@@ -1,8 +1,7 @@
 #include "kpa1500client.h"
+#include "logging/logcategories.h"
 #include "kpa1500antennas.h"
 #include <QLoggingCategory>
-
-Q_LOGGING_CATEGORY(netKpa, "net.kpa", QtInfoMsg)
 
 // KPA1500 band number to label (same numbering as K4 BN command)
 static QString bandNumberToLabel(const QString &bn) {
@@ -147,13 +146,13 @@ void KPA1500Client::onSocketConnected() {
     // 40 ms Nagle/delayed-ACK windows. KeepAlive handles NAT timeout on long-running sessions.
     m_socket->setSocketOption(QAbstractSocket::LowDelayOption, 1);
     m_socket->setSocketOption(QAbstractSocket::KeepAliveOption, 1);
-    qCDebug(netKpa) << "KPA1500Client: Connected to" << m_host << ":" << m_port;
+    qCDebug(lcKpa1500) << "KPA1500Client: Connected to" << m_host << ":" << m_port;
     setState(Connected);
     emit connected();
 }
 
 void KPA1500Client::onSocketDisconnected() {
-    qCDebug(netKpa) << "KPA1500Client: Disconnected";
+    qCDebug(lcKpa1500) << "KPA1500Client: Disconnected";
     stopPolling();
     resetCachedState();
     setState(Disconnected);
@@ -168,7 +167,7 @@ void KPA1500Client::onReadyRead() {
     QByteArray data = m_socket->readAll();
     m_receiveBuffer.append(QString::fromLatin1(data));
     if (m_receiveBuffer.size() > kMaxBufferSize) {
-        qCWarning(netKpa) << "Buffer overflow (" << m_receiveBuffer.size() << "bytes) — disconnecting";
+        qCWarning(lcKpa1500) << "Buffer overflow (" << m_receiveBuffer.size() << "bytes) — disconnecting";
         m_receiveBuffer.clear();
         disconnectFromHost();
         return;
@@ -181,7 +180,7 @@ void KPA1500Client::onReadyRead() {
 void KPA1500Client::onSocketError(QAbstractSocket::SocketError error) {
     Q_UNUSED(error)
     QString errorString = m_socket->errorString();
-    qCWarning(netKpa) << "KPA1500Client: Socket error:" << errorString;
+    qCWarning(lcKpa1500) << "KPA1500Client: Socket error:" << errorString;
     emit errorOccurred(errorString);
 
     stopPolling();

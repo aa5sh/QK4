@@ -1,16 +1,11 @@
 #include <QtTest/QtTest>
+#include "logging/logcategories.h"
 #include <QLoggingCategory>
 #include <cmath>
 
 #include "audio/opusdecoder.h"
 #include "audio/opusencoder.h"
 #include "audio/rawaudioformat.h"
-
-// opusdecoder.cpp logs through qk4Audio, whose definition lives in controllers/audiocontroller.cpp.
-// Linking that file would drag AudioEngine, RadioSettings and the controller layer into a decode
-// test, so the category is defined here instead. (That the audio module's logging category is
-// defined in the controllers module is a wart worth fixing on its own.)
-Q_LOGGING_CATEGORY(qk4Audio, "qk4.audio")
 
 // RX audio normalisation for EM0..EM3 — the gate on the 2026-09-19 calibration.
 //

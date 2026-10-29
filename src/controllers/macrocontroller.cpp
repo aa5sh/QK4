@@ -1,4 +1,5 @@
 #include "macrocontroller.h"
+#include "logging/logcategories.h"
 
 #include "connectioncontroller.h"
 #include "controllers/popupmanager.h"
@@ -9,8 +10,6 @@
 #include <QMessageBox>
 #include <QString>
 
-Q_LOGGING_CATEGORY(qk4Macro, "qk4.macro", QtInfoMsg)
-
 MacroController::MacroController(ConnectionController *connection, PopupManager *popupManager, QWidget *dialogParent,
                                  QObject *parent)
     : QObject(parent), m_connection(connection), m_popupManager(popupManager), m_dialogParent(dialogParent) {
@@ -20,10 +19,10 @@ MacroController::MacroController(ConnectionController *connection, PopupManager 
 void MacroController::executeMacro(const QString &functionId) {
     const MacroEntry macro = RadioSettings::instance()->macro(functionId);
     if (macro.command.isEmpty()) {
-        qCDebug(qk4Macro) << "No macro configured for" << functionId;
+        qCDebug(lcUiMacro) << "No macro configured for" << functionId;
         return;
     }
-    qCDebug(qk4Macro) << "Executing macro" << functionId << ":" << macro.command;
+    qCDebug(lcUiMacro) << "Executing macro" << functionId << ":" << macro.command;
     if (!m_connection->isConnected())
         return;
 
@@ -43,13 +42,13 @@ void MacroController::executeMacro(const QString &functionId) {
 }
 
 void MacroController::onFunctionTriggered(const QString &functionId) {
-    qCDebug(qk4Macro) << "Fn function triggered:" << functionId;
+    qCDebug(lcUiMacro) << "Fn function triggered:" << functionId;
 
     if (functionId == MacroIds::ScrnCap) {
         // SS0; tells the K4 to write a screenshot to its internal SD card.
         if (m_connection->isConnected()) {
             m_connection->sendCAT("SS0;");
-            qCDebug(qk4Macro) << "Screenshot captured (SS0;)";
+            qCDebug(lcUiMacro) << "Screenshot captured (SS0;)";
         }
     } else if (functionId == MacroIds::Macros) {
         emit macroDialogRequested();

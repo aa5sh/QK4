@@ -1,4 +1,5 @@
 #include "minipan_rhi.h"
+#include "logging/logcategories.h"
 #include "panadapter_constants.h"
 #include "dashgeometry.h"
 #include "rhi_utils.h"
@@ -10,8 +11,6 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-
-Q_LOGGING_CATEGORY(dspMiniPan, "dsp.minipan", QtInfoMsg)
 
 MiniPanRhiWidget::MiniPanRhiWidget(QWidget *parent) : QRhiWidget(parent) {
     setFixedHeight(K4Styles::Dimensions::VfoPanelHeight);
@@ -48,7 +47,7 @@ void MiniPanRhiWidget::initialize(QRhiCommandBuffer *cb) {
 
     m_rhi = rhi();
     if (!m_rhi) {
-        qCWarning(dspMiniPan) << "MiniPan: QRhi is NULL - Metal backend failed";
+        qCWarning(lcSpectrumMiniPan) << "MiniPan: QRhi is NULL - Metal backend failed";
         return;
     }
 

@@ -1,4 +1,5 @@
 #include "tcpclient.h"
+#include "logging/logcategories.h"
 #include <QDateTime>
 #include <QHostInfo>
 #include <QLoggingCategory>
@@ -7,9 +8,6 @@
 #include <QSslPreSharedKeyAuthenticator>
 #include <QSslSocket>
 #include <QTime>
-
-Q_LOGGING_CATEGORY(catTx, "CAT.TX", QtInfoMsg)
-Q_LOGGING_CATEGORY(netTcp, "net.tcp", QtInfoMsg)
 
 // ConnectFailure::Phase mirrors ConnectionState rather than reusing it, so connect_failure.h - and
 // the test that links it alone - stays clear of QSslSocket. These keep the two from drifting.
@@ -57,14 +55,14 @@ TcpClient::TcpClient(QObject *parent)
         if (m_state.load(std::memory_order_acquire) == Authenticating && !m_authResponseReceived) {
             m_authResponseReceived = true;
             m_authTimer->stop();
-            qCDebug(netTcp) << "Authentication successful, received packet type:" << type;
+            qCDebug(lcLinkTcp) << "Authentication successful, received packet type:" << type;
             setState(Connected);
             emit authenticated();
             startPingTimer();
 
             // Send startup macro BEFORE RDY so the state dump reflects the macro changes
             if (!m_startupMacro.isEmpty()) {
-                qCDebug(netTcp) << "Sending startup macro (pre-RDY):" << m_startupMacro;
+                qCDebug(lcLinkTcp) << "Sending startup macro (pre-RDY):" << m_startupMacro;
                 sendCAT(m_startupMacro);
                 m_startupMacro.clear();
             }
@@ -78,10 +76,10 @@ TcpClient::TcpClient(QObject *parent)
             sendCAT(K4Protocol::Commands::ENABLE_K4_MODE);     // Enable advanced K4 protocol mode
             sendCAT(K4Protocol::Commands::ENABLE_LONG_ERRORS); // Request long format error messages
             // Set audio encode mode (0=RAW S32LE (24-bit), 1=RAW S16LE, 2/3=Opus (same bitstream, int vs float decode))
-            qCDebug(netTcp) << "Sending:" << QString("EM%1;").arg(m_encodeMode);
+            qCDebug(lcLinkTcp) << "Sending:" << QString("EM%1;").arg(m_encodeMode);
             sendCAT(QString("EM%1;").arg(m_encodeMode));
             // Set streaming audio latency (0-7, higher values for high-latency connections)
-            qCDebug(netTcp) << "Sending:" << QString("SL%1;").arg(m_streamingLatency);
+            qCDebug(lcLinkTcp) << "Sending:" << QString("SL%1;").arg(m_streamingLatency);
             sendCAT(QString("SL%1;").arg(m_streamingLatency));
         }
     });
@@ -99,13 +97,13 @@ TcpClient::~TcpClient() {
 
 void TcpClient::connectToHost(const QString &host, quint16 port, const QString &password, bool useTls,
                               const QString &identity, int encodeMode, int streamingLatency) {
-    qCDebug(netTcp) << "connectToHost called, state=" << m_state.load(std::memory_order_acquire)
-                    << "socket=" << m_socket->state();
+    qCDebug(lcLinkTcp) << "connectToHost called, state=" << m_state.load(std::memory_order_acquire)
+                       << "socket=" << m_socket->state();
     if (m_state.load(std::memory_order_acquire) != Disconnected) {
-        qCDebug(netTcp) << "Not disconnected, calling disconnectFromHost first";
+        qCDebug(lcLinkTcp) << "Not disconnected, calling disconnectFromHost first";
         disconnectFromHost();
-        qCDebug(netTcp) << "After disconnect: state=" << m_state.load(std::memory_order_acquire)
-                        << "socket=" << m_socket->state();
+        qCDebug(lcLinkTcp) << "After disconnect: state=" << m_state.load(std::memory_order_acquire)
+                           << "socket=" << m_socket->state();
     }
 
     m_host = host;
@@ -126,7 +124,7 @@ void TcpClient::connectToHost(const QString &host, quint16 port, const QString &
     // K4, K4D, and K4Z radios only listen on IPv4, so prefer IPv4 results.
     // The context-object overload of lookupHost() cancels if `this` is destroyed.
     if (m_host.endsWith(QStringLiteral(".local"), Qt::CaseInsensitive)) {
-        qCDebug(netTcp) << "Resolving mDNS hostname:" << m_host;
+        qCDebug(lcLinkTcp) << "Resolving mDNS hostname:" << m_host;
         QHostInfo::lookupHost(m_host, this, [this, attempt = m_attemptId, name = m_host](const QHostInfo &info) {
             // WHY the attempt id and not just the state: switching radios while this lookup is in
             // flight starts a new attempt that is ALSO Connecting. Without the id, this answer for
@@ -135,7 +133,7 @@ void TcpClient::connectToHost(const QString &host, quint16 port, const QString &
                 return;
 
             if (info.error() != QHostInfo::NoError || info.addresses().isEmpty()) {
-                qCWarning(netTcp) << "mDNS resolution failed for" << name << ":" << info.errorString();
+                qCWarning(lcLinkTcp) << "mDNS resolution failed for" << name << ":" << info.errorString();
                 emit errorOccurred(QString("Could not resolve %1: %2").arg(name, info.errorString()));
                 setState(Disconnected);
                 return;
@@ -151,7 +149,7 @@ void TcpClient::connectToHost(const QString &host, quint16 port, const QString &
             if (resolved.isEmpty()) {
                 resolved = info.addresses().first().toString();
             }
-            qCDebug(netTcp) << "Resolved" << name << "to" << resolved;
+            qCDebug(lcLinkTcp) << "Resolved" << name << "to" << resolved;
             m_host = resolved;
             attemptConnection();
         });
@@ -162,9 +160,9 @@ void TcpClient::connectToHost(const QString &host, quint16 port, const QString &
 }
 
 void TcpClient::attemptConnection() {
-    qCDebug(netTcp) << "attemptConnection host=" << m_host << "port=" << m_port << "tls=" << m_useTls
-                    << "socketState=" << m_socket->state()
-                    << "thread=" << reinterpret_cast<quintptr>(QThread::currentThread());
+    qCDebug(lcLinkTcp) << "attemptConnection host=" << m_host << "port=" << m_port << "tls=" << m_useTls
+                       << "socketState=" << m_socket->state()
+                       << "thread=" << reinterpret_cast<quintptr>(QThread::currentThread());
 
     // WHY here, which every attempt and every retry passes through: a session that ended mid-packet
     // leaves its header in the parser, and the new session's first bytes - the auth reply - would be
@@ -175,10 +173,10 @@ void TcpClient::attemptConnection() {
     if (m_useTls) {
         // Log OpenSSL version Qt is using (first attempt only)
         if (m_retryCount == 0) {
-            qCDebug(netTcp) << "=== SSL Library Info ===";
-            qCDebug(netTcp) << "  Build version:" << QSslSocket::sslLibraryBuildVersionString();
-            qCDebug(netTcp) << "  Runtime version:" << QSslSocket::sslLibraryVersionString();
-            qCDebug(netTcp) << "  Supports SSL:" << QSslSocket::supportsSsl();
+            qCDebug(lcLinkTcp) << "=== SSL Library Info ===";
+            qCDebug(lcLinkTcp) << "  Build version:" << QSslSocket::sslLibraryBuildVersionString();
+            qCDebug(lcLinkTcp) << "  Runtime version:" << QSslSocket::sslLibraryVersionString();
+            qCDebug(lcLinkTcp) << "  Supports SSL:" << QSslSocket::supportsSsl();
         }
 
         // Configure TLS for PSK authentication - require TLS 1.2 minimum
@@ -189,12 +187,12 @@ void TcpClient::attemptConnection() {
         // Filter to only TLS 1.2+ PSK ciphers
         QList<QSslCipher> tls12PskCiphers;
         if (m_retryCount == 0) {
-            qCDebug(netTcp) << "=== Available PSK Ciphers ===";
+            qCDebug(lcLinkTcp) << "=== Available PSK Ciphers ===";
         }
         for (const QSslCipher &cipher : QSslConfiguration::supportedCiphers()) {
             if (cipher.name().contains("PSK")) {
                 if (m_retryCount == 0) {
-                    qCDebug(netTcp) << "  " << cipher.name() << "(" << cipher.protocolString() << ")";
+                    qCDebug(lcLinkTcp) << "  " << cipher.name() << "(" << cipher.protocolString() << ")";
                 }
                 // Only include TLS 1.2+ ciphers
                 if (cipher.protocol() == QSsl::TlsV1_2 || cipher.protocol() == QSsl::TlsV1_3) {
@@ -203,9 +201,9 @@ void TcpClient::attemptConnection() {
             }
         }
         if (m_retryCount == 0) {
-            qCDebug(netTcp) << "=== Offering" << tls12PskCiphers.size() << "TLS 1.2+ PSK ciphers ===";
+            qCDebug(lcLinkTcp) << "=== Offering" << tls12PskCiphers.size() << "TLS 1.2+ PSK ciphers ===";
             for (const QSslCipher &cipher : tls12PskCiphers) {
-                qCDebug(netTcp) << "  " << cipher.name();
+                qCDebug(lcLinkTcp) << "  " << cipher.name();
             }
         }
         if (tls12PskCiphers.isEmpty()) {
@@ -214,7 +212,7 @@ void TcpClient::attemptConnection() {
             // from a wrong PSK or a firewall drop — which is what made the Windows packaging
             // regression (missing qopensslbackend.dll) so expensive to diagnose from the field.
             const QString backend = QSslSocket::activeBackend();
-            qCWarning(netTcp) << "No TLS-PSK ciphers available; active backend =" << backend;
+            qCWarning(lcLinkTcp) << "No TLS-PSK ciphers available; active backend =" << backend;
             emit errorOccurred(QString("TLS unavailable: the active TLS backend (%1) has no PSK "
                                        "support. Reinstall QK4, or connect on the unencrypted port.")
                                    .arg(backend));
@@ -225,10 +223,10 @@ void TcpClient::attemptConnection() {
 
         m_socket->setSslConfiguration(sslConfig);
 
-        qCDebug(netTcp) << "Connecting with TLS/PSK to" << m_host << ":" << m_port;
+        qCDebug(lcLinkTcp) << "Connecting with TLS/PSK to" << m_host << ":" << m_port;
         m_socket->connectToHostEncrypted(m_host, m_port);
     } else {
-        qCDebug(netTcp) << "Connecting (unencrypted) to" << m_host << ":" << m_port;
+        qCDebug(lcLinkTcp) << "Connecting (unencrypted) to" << m_host << ":" << m_port;
         m_socket->connectToHost(m_host, m_port);
     }
 
@@ -236,8 +234,8 @@ void TcpClient::attemptConnection() {
 }
 
 void TcpClient::disconnectFromHost() {
-    qCDebug(netTcp) << "disconnectFromHost called, state=" << m_state.load(std::memory_order_acquire)
-                    << "socket=" << m_socket->state();
+    qCDebug(lcLinkTcp) << "disconnectFromHost called, state=" << m_state.load(std::memory_order_acquire)
+                       << "socket=" << m_socket->state();
     m_connectTimer->stop();
     m_retryTimer->stop();
     stopPingTimer();
@@ -265,7 +263,7 @@ TcpClient::ConnectionState TcpClient::connectionState() const {
 
 void TcpClient::sendCAT(const QString &command) {
     if (QThread::currentThread() != thread()) {
-        qCDebug(catTx) << "cross-thread marshal:" << command;
+        qCDebug(lcCatTx) << "cross-thread marshal:" << command;
         QMetaObject::invokeMethod(this, "sendCAT", Qt::QueuedConnection, Q_ARG(QString, command));
         return;
     }
@@ -273,15 +271,15 @@ void TcpClient::sendCAT(const QString &command) {
         QByteArray packet = Protocol::buildCATPacket(command);
         m_socket->write(packet);
         m_socket->flush();
-        qCDebug(catTx) << "sent:" << command << "(" << packet.size() << "bytes)";
+        qCDebug(lcCatTx) << "sent:" << command << "(" << packet.size() << "bytes)";
         // Mirror the KPOD+ "TX@" trace format for KZ commands so HaliKey-keyer emits can be
         // correlated 1:1 against cw.keyer traces and KPOD+ EP02 KZ@ traces.
         if (command.startsWith(QLatin1String("KZ"))) {
-            qCDebug(catTx).noquote() << "TX@" << QTime::currentTime().toString(QStringLiteral("HH:mm:ss.zzz")) << "["
-                                     << command << "]";
+            qCDebug(lcCatTx).noquote() << "TX@" << QTime::currentTime().toString(QStringLiteral("HH:mm:ss.zzz")) << "["
+                                       << command << "]";
         }
     } else {
-        qCWarning(catTx) << "DROPPED (state=" << m_state.load(std::memory_order_acquire) << "):" << command;
+        qCWarning(lcCatTx) << "DROPPED (state=" << m_state.load(std::memory_order_acquire) << "):" << command;
     }
 }
 
@@ -295,7 +293,7 @@ void TcpClient::sendCATBytes(const QByteArray &raw) {
         // device-emit → wire-write latency. Same HH:mm:ss.zzz format so a simple diff
         // between matching "KZ@" and "TX@" lines tells you how long each batch took to
         // forward across the Qt event-queue + I/O thread + TLS encrypt + kernel send.
-        qCDebug(catTx).noquote() << "TX@" << QTime::currentTime().toString("HH:mm:ss.zzz") << "[" << cmd << "]";
+        qCDebug(lcCatTx).noquote() << "TX@" << QTime::currentTime().toString("HH:mm:ss.zzz") << "[" << cmd << "]";
         sendCAT(cmd);
     }
 }
@@ -314,7 +312,7 @@ void TcpClient::setState(ConnectionState state) {
     const ConnectionState prev = m_state.load(std::memory_order_acquire);
     if (prev != state) {
         static const char *names[] = {"Disconnected", "Connecting", "Authenticating", "Connected"};
-        qCDebug(netTcp) << "State:" << names[prev] << "->" << names[state];
+        qCDebug(lcLinkTcp) << "State:" << names[prev] << "->" << names[state];
         m_state.store(state, std::memory_order_release);
         m_connected.store(state == Connected, std::memory_order_relaxed);
         emit stateChanged(state);
@@ -338,12 +336,12 @@ void TcpClient::onSocketConnected() {
     if (m_useTls) {
         // TLS connection: TCP connected, now waiting for TLS handshake to complete
         // The encrypted() signal will fire when TLS is fully established
-        qCDebug(netTcp) << "TCP connected, starting TLS handshake...";
+        qCDebug(lcLinkTcp) << "TCP connected, starting TLS handshake...";
         // Don't change state yet - wait for encrypted() signal
     } else {
         // Non-TLS: TCP connected — stop connect timer, start auth phase
         m_connectTimer->stop();
-        qCDebug(netTcp) << "Socket connected, sending authentication...";
+        qCDebug(lcLinkTcp) << "Socket connected, sending authentication...";
         setState(Authenticating);
         sendAuthentication();
         m_authTimer->start(K4Protocol::AUTH_TIMEOUT_MS);
@@ -354,11 +352,11 @@ void TcpClient::onSocketEncrypted() {
     m_connectTimer->stop();
     // TLS handshake completed successfully
     QSslCipher negotiated = m_socket->sessionCipher();
-    qCDebug(netTcp) << "=== TLS/PSK Connection Established ===";
-    qCDebug(netTcp) << "  Negotiated cipher:" << negotiated.name();
-    qCDebug(netTcp) << "  Protocol:" << negotiated.protocolString();
-    qCDebug(netTcp) << "  Key exchange:" << negotiated.keyExchangeMethod();
-    qCDebug(netTcp) << "  Encryption:" << negotiated.encryptionMethod();
+    qCDebug(lcLinkTcp) << "=== TLS/PSK Connection Established ===";
+    qCDebug(lcLinkTcp) << "  Negotiated cipher:" << negotiated.name();
+    qCDebug(lcLinkTcp) << "  Protocol:" << negotiated.protocolString();
+    qCDebug(lcLinkTcp) << "  Key exchange:" << negotiated.keyExchangeMethod();
+    qCDebug(lcLinkTcp) << "  Encryption:" << negotiated.encryptionMethod();
     setState(Authenticating);
     // Start auth timeout - waiting for first packet to confirm connection works
     m_authTimer->start(K4Protocol::AUTH_TIMEOUT_MS);
@@ -375,8 +373,8 @@ void TcpClient::reportFailure(ConnectFailure::Event event, ConnectFailure::Phase
 }
 
 void TcpClient::onSocketDisconnected() {
-    qCDebug(netTcp) << "Socket disconnected (was state=" << m_state.load(std::memory_order_acquire)
-                    << "authReceived=" << m_authResponseReceived << ")";
+    qCDebug(lcLinkTcp) << "Socket disconnected (was state=" << m_state.load(std::memory_order_acquire)
+                       << "authReceived=" << m_authResponseReceived << ")";
     stopPingTimer();
     m_authTimer->stop();
     m_protocol->reset(); // nothing after this belongs to the session that just ended
@@ -406,8 +404,8 @@ void TcpClient::onSocketError(QAbstractSocket::SocketError error) {
 
     QString errorMsg = m_socket->errorString();
     const ConnectionState stateNow = m_state.load(std::memory_order_acquire);
-    qCDebug(netTcp) << "Socket error:" << error << errorMsg << "state=" << stateNow << "socket=" << m_socket->state()
-                    << "retry=" << m_retryCount;
+    qCDebug(lcLinkTcp) << "Socket error:" << error << errorMsg << "state=" << stateNow << "socket=" << m_socket->state()
+                       << "retry=" << m_retryCount;
 
     // On local subnets, macOS returns EHOSTUNREACH immediately when the ARP cache
     // is cold (no MAC address entry for the destination IP). This happens consistently
@@ -421,7 +419,7 @@ void TcpClient::onSocketError(QAbstractSocket::SocketError error) {
         (error == QAbstractSocket::NetworkError && stateNow == Connecting && m_retryCount < kArpMaxRetries);
     if (arpTransient) {
         m_retryCount++;
-        qCDebug(netTcp) << "ARP-cold retry" << m_retryCount << "in" << kArpRetryIntervalMs << "ms";
+        qCDebug(lcLinkTcp) << "ARP-cold retry" << m_retryCount << "in" << kArpRetryIntervalMs << "ms";
         m_socket->abort();
         m_retryTimer->start(kArpRetryIntervalMs);
         return;
@@ -432,8 +430,8 @@ void TcpClient::onSocketError(QAbstractSocket::SocketError error) {
     // and whether the radio had ever answered. Verified against the radio: a wrong password on 9204
     // makes the K4 send its ServerHello and then drop TCP with no TLS alert, so the socket error is
     // indistinguishable from a host that went away.
-    qCWarning(netTcp) << "Connect attempt failed: phase=" << stateNow << "socketError=" << error << "port=" << m_port
-                      << "tls=" << m_useTls << "everAnswered=" << m_authResponseReceived << "detail=" << errorMsg;
+    qCWarning(lcLinkTcp) << "Connect attempt failed: phase=" << stateNow << "socketError=" << error << "port=" << m_port
+                         << "tls=" << m_useTls << "everAnswered=" << m_authResponseReceived << "detail=" << errorMsg;
 
     reportFailure(ConnectFailure::Event::SocketError, static_cast<ConnectFailure::Phase>(stateNow), errorMsg);
     setState(Disconnected);
@@ -442,25 +440,25 @@ void TcpClient::onSocketError(QAbstractSocket::SocketError error) {
 void TcpClient::onSslErrors(const QList<QSslError> &errors) {
     // Log SSL errors but continue - PSK doesn't use certificates so some errors are expected
     for (const QSslError &error : errors) {
-        qCDebug(netTcp) << "SSL error (ignored for PSK):" << error.errorString();
+        qCDebug(lcLinkTcp) << "SSL error (ignored for PSK):" << error.errorString();
     }
     // Ignore all SSL errors for PSK connections (no certificate verification)
     m_socket->ignoreSslErrors();
 }
 
 void TcpClient::onPreSharedKeyAuthenticationRequired(QSslPreSharedKeyAuthenticator *authenticator) {
-    qCDebug(netTcp) << "PSK authentication requested, identity hint:" << authenticator->identityHint();
+    qCDebug(lcLinkTcp) << "PSK authentication requested, identity hint:" << authenticator->identityHint();
 
     // Set the identity (empty or user-specified) and the pre-shared key (password field)
     authenticator->setIdentity(m_identity.toUtf8());
     authenticator->setPreSharedKey(m_password.toUtf8());
 
-    qCDebug(netTcp) << "PSK credentials provided, identity:" << (m_identity.isEmpty() ? "(empty)" : m_identity);
+    qCDebug(lcLinkTcp) << "PSK credentials provided, identity:" << (m_identity.isEmpty() ? "(empty)" : m_identity);
 }
 
 void TcpClient::onConnectTimeout() {
     if (m_state.load(std::memory_order_acquire) == Connecting) {
-        qCDebug(netTcp) << "Connection timeout - failed to establish" << (m_useTls ? "TLS" : "TCP") << "connection";
+        qCDebug(lcLinkTcp) << "Connection timeout - failed to establish" << (m_useTls ? "TLS" : "TCP") << "connection";
         // Verified: with nothing at the address, the socket reports neither connected() nor an
         // error - it simply stays in ConnectingState. This timer is the only thing that speaks.
         reportFailure(ConnectFailure::Event::ConnectTimeout, ConnectFailure::Phase::Connecting);
@@ -474,8 +472,8 @@ void TcpClient::onAuthTimeout() {
         // Distinct from the closed-socket case above: something is there and holding the connection
         // open without answering. Still not attributable to the password - the K4 has no way to
         // tell us it refused one - so the message names the port as well.
-        qCWarning(netTcp) << "Connect attempt failed: phase=Authenticating, socket still up, no data"
-                          << "port=" << m_port << "tls=" << m_useTls;
+        qCWarning(lcLinkTcp) << "Connect attempt failed: phase=Authenticating, socket still up, no data"
+                             << "port=" << m_port << "tls=" << m_useTls;
         reportFailure(ConnectFailure::Event::AuthTimeout, ConnectFailure::Phase::Authenticating);
         disconnectFromHost();
     }
@@ -499,7 +497,7 @@ void TcpClient::onCatResponse(const QString &response) {
 void TcpClient::sendAuthentication() {
     // Build SHA-384 hash of password as hex string
     QByteArray authData = Protocol::buildAuthData(m_password);
-    qCDebug(netTcp) << "Sending auth hash (" << authData.size() << "bytes)";
+    qCDebug(lcLinkTcp) << "Sending auth hash (" << authData.size() << "bytes)";
 
     // Send raw auth data (not wrapped in K4 packet - just the hex string)
     m_socket->write(authData);

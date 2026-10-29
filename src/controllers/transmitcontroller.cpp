@@ -1,4 +1,5 @@
 #include "transmitcontroller.h"
+#include "logging/logcategories.h"
 
 #include "audiocontroller.h"
 #include "connectioncontroller.h"
@@ -6,8 +7,6 @@
 #include "network/catframes.h"
 
 #include <QLoggingCategory>
-
-Q_LOGGING_CATEGORY(txOwner, "tx.owner", QtInfoMsg)
 
 // TransmitOwner::AudioSource is declared without including audiocontroller.h, so the arbiter — and
 // the test that links it alone — stays clear of the controller layer. These keep the two from
@@ -65,7 +64,7 @@ bool TransmitController::engage(Owner who, Route how) {
     // drops a PTT-on when disconnected: the arbiter would otherwise believe it held a transmitter
     // that was never keyed, and the indicator would light for it (APP-005).
     if (!m_connection->isConnected()) {
-        qCDebug(txOwner) << "engage refused:" << ownerName(who) << "- not connected";
+        qCDebug(lcTxOwner) << "engage refused:" << ownerName(who) << "- not connected";
         return false;
     }
 
@@ -73,7 +72,7 @@ bool TransmitController::engage(Owner who, Route how) {
     const bool was = m_state.transmitting();
     const TransmitOwner::Effects e = TransmitOwner::engage(m_state, who, how);
     if (e.refused) {
-        qCInfo(txOwner) << "engage refused:" << ownerName(who) << "- held by" << ownerName(previous);
+        qCInfo(lcTxOwner) << "engage refused:" << ownerName(who) << "- held by" << ownerName(previous);
         return false;
     }
     apply(e, previous, was);
@@ -85,8 +84,8 @@ void TransmitController::release(Owner who) {
     const bool was = m_state.transmitting();
     const TransmitOwner::Effects e = TransmitOwner::release(m_state, who);
     if (e.ignored && previous != Owner::None)
-        qCDebug(txOwner) << "release ignored:" << ownerName(who) << "does not hold it -" << ownerName(previous)
-                         << "does";
+        qCDebug(lcTxOwner) << "release ignored:" << ownerName(who) << "does not hold it -" << ownerName(previous)
+                           << "does";
     apply(e, previous, was);
 }
 
@@ -133,7 +132,7 @@ void TransmitController::apply(const TransmitOwner::Effects &e, Owner previous, 
         m_audio->setTxSourceAfterPtt(static_cast<AudioController::TxSource>(e.source));
 
     if (m_state.owner != previous) {
-        qCDebug(txOwner) << "transmitter:" << ownerName(previous) << "->" << ownerName(m_state.owner);
+        qCDebug(lcTxOwner) << "transmitter:" << ownerName(previous) << "->" << ownerName(m_state.owner);
         emit ownerChanged(previous, m_state.owner);
     }
     if (e.transmitting != wasTransmitting)

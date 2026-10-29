@@ -1,10 +1,9 @@
 #include "connectioncontroller.h"
+#include "logging/logcategories.h"
 #include "network/networkmetrics.h"
 #include "network/protocol.h"
 #include "utils/macroids.h"
 #include <QLoggingCategory>
-
-Q_LOGGING_CATEGORY(qk4Connection, "qk4.connection", QtInfoMsg)
 
 ConnectionController::ConnectionController(QObject *parent) : QObject(parent), m_tcpClient(new TcpClient(nullptr)) {
     // Move TcpClient (+ Protocol, socket, timers as children) to dedicated I/O thread
@@ -46,8 +45,8 @@ ConnectionController::~ConnectionController() {
 }
 
 void ConnectionController::connectToRadio(const RadioEntry &radio) {
-    qCDebug(qk4Connection) << "connectToRadio: isConnected=" << m_tcpClient->isConnected()
-                           << "connectionState=" << m_tcpClient->connectionState();
+    qCDebug(lcLink) << "connectToRadio: isConnected=" << m_tcpClient->isConnected()
+                    << "connectionState=" << m_tcpClient->connectionState();
     if (m_tcpClient->isConnected()) {
         QMetaObject::invokeMethod(m_tcpClient, "disconnectFromHost", Qt::QueuedConnection);
     }
@@ -69,9 +68,9 @@ void ConnectionController::connectToRadio(const RadioEntry &radio) {
     // next one and run although the operator has since removed or changed it.
     QMetaObject::invokeMethod(m_tcpClient, "setStartupMacro", Qt::QueuedConnection, Q_ARG(QString, macroToSend));
 
-    qCDebug(qk4Connection) << "Connecting to" << radio.host << ":" << radio.port
-                           << (radio.useTls ? "(TLS/PSK)" : "(unencrypted)") << "encodeMode:" << radio.encodeMode
-                           << "streamingLatency:" << radio.streamingLatency;
+    qCDebug(lcLink) << "Connecting to" << radio.host << ":" << radio.port
+                    << (radio.useTls ? "(TLS/PSK)" : "(unencrypted)") << "encodeMode:" << radio.encodeMode
+                    << "streamingLatency:" << radio.streamingLatency;
     QMetaObject::invokeMethod(m_tcpClient, "connectToHost", Qt::QueuedConnection, Q_ARG(QString, radio.host),
                               Q_ARG(quint16, radio.port), Q_ARG(QString, radio.password), Q_ARG(bool, radio.useTls),
                               Q_ARG(QString, radio.identity), Q_ARG(int, radio.encodeMode),

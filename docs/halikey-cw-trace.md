@@ -9,18 +9,18 @@ is in `docs/cw-keyer-port-plan.md`.
 
 | Category | Source | Lines you'll see |
 |---|---|---|
-| `hw.halikey` | `src/hardware/halikeyv14worker.cpp` | `HaliKeyV14Worker: dit down after 312 ms` per line change; on Windows also `raw pins CTS:.. DCD:.. DSR:..` per modem-line transition |
-| `hw.midi` | `src/hardware/halikeymidiworker.cpp` | `HaliKeyMidiWorker: note 20 down`, `MoMIDI detected, version N`, port open and presence-poll lines |
-| `CAT.TX` | `src/network/tcpclient.cpp` | `TX@HH:mm:ss.zzz [ KZD0060; ]`, `[ KZU0060; ]` for KZ-prefixed CAT only. Every command, KZ or not, also logs `sent: "…"`, so the monitor mute shows as `sent: "ML0000;"` / `sent: "ML0nnn;"`, never as a `TX@` line |
+| `qk4.cw.halikey` | `src/hardware/halikeyv14worker.cpp` | `HaliKeyV14Worker: dit down after 312 ms` per line change; on Windows also `raw pins CTS:.. DCD:.. DSR:..` per modem-line transition |
+| `qk4.cw.midi` | `src/hardware/halikeymidiworker.cpp` | `HaliKeyMidiWorker: note 20 down`, `MoMIDI detected, version N`, port open and presence-poll lines |
+| `qk4.cat.tx` | `src/network/tcpclient.cpp` | `TX@HH:mm:ss.zzz [ KZD0060; ]`, `[ KZU0060; ]` for KZ-prefixed CAT only. Every command, KZ or not, also logs `sent: "…"`, so the monitor mute shows as `sent: "ML0000;"` / `sent: "ML0nnn;"`, never as a `TX@` line |
 | `qk4.audio.sidetone` | `src/audio/sidetonegenerator.cpp` | `tone on: delay … ms, lag … ms, block lead … ms, queued … ms, frame …/…` per tone onset |
-| `cw.keyer` | `src/controllers/cwcontroller.cpp` | the KPOD+ keyer gate only |
+| `qk4.cw.keyer` | `src/controllers/cwcontroller.cpp` | the KPOD+ keyer gate only |
 
-`PaddleKeyer` itself logs nothing: what it decided is exactly what `CAT.TX` shows it sent.
+`PaddleKeyer` itself logs nothing: what it decided is exactly what `qk4.cat.tx` shows it sent.
 
 MIDI notes are logged by raw number, before paddle reversal: with `KP` reversed (R), note 20 is the
 dah lever.
 
-The KPOD+ path logs `KZ@` (`hw.kpodplus`) for each EP02 batch and the same `TX@` line when it is
+The KPOD+ path logs `KZ@` (`qk4.kpod.plus`) for each EP02 batch and the same `TX@` line when it is
 forwarded, so a KPOD+ session can be A/B'd against a HaliKey session.
 
 ## Enabling the trace
@@ -28,26 +28,25 @@ forwarded, so a KPOD+ session can be A/B'd against a HaliKey session.
 macOS / Linux:
 
 ```bash
-QT_LOGGING_RULES="hw.halikey.debug=true;hw.midi.debug=true;CAT.TX.debug=true;qk4.audio.sidetone.debug=true" \
+QT_LOGGING_RULES="qk4.cw.halikey.debug=true;qk4.cw.midi.debug=true;qk4.cat.tx.debug=true;qk4.audio.sidetone.debug=true" \
   build/QK4.app/Contents/MacOS/QK4 2>&1 | tee /tmp/qk4-cw-trace.log
 ```
 
 Windows (PowerShell):
 
 ```powershell
-$env:QT_LOGGING_RULES = "hw.halikey.debug=true;hw.midi.debug=true;CAT.TX.debug=true;qk4.audio.sidetone.debug=true"
+$env:QT_LOGGING_RULES = "qk4.cw.halikey.debug=true;qk4.cw.midi.debug=true;qk4.cat.tx.debug=true;qk4.audio.sidetone.debug=true"
 $env:QT_FORCE_STDERR_LOGGING = "1"
 $env:QT_MESSAGE_PATTERN = "%{time process} %{category}: %{message}"
 .\build\Release\QK4.exe 2> qk4-cw-trace.log
 ```
 
-Use the category names exactly as written: `CAT.TX`, not `cat.tx`.
+Category strings are case-sensitive and all lower case (`qk4.cat.tx`). The names before 2026-10-29
+(`CAT.TX`, `hw.halikey`, …) are listed in `src/logging/README.md`.
 
 **Debug output is off by default.** Every QK4 category is declared with `QtInfoMsg` as its default
-severity (`Q_LOGGING_CATEGORY(name, "string", QtInfoMsg)`), so `qCDebug` lines are skipped, arguments
-and all, until a rule turns them on. That is what the `QT_LOGGING_RULES` in the examples above do.
-Category names are being moved to one `qk4.<area>.<detail>` scheme; check `src/logging/` for the
-current names if one of the names above no longer matches.
+severity, so `qCDebug` lines are skipped, arguments and all, until a rule turns them on. That is
+what the `QT_LOGGING_RULES` in the examples above do.
 
 > **Windows logging gotcha.** Qt's default handler writes to stderr only if it thinks a console is
 > attached. Redirected to a file, `GetConsoleMode` fails and Qt routes everything to
@@ -81,7 +80,7 @@ KP weight.
 ## Diagnosing
 
 - **Wrong element on the wire** (an extra dit, a missing dah): the `KZU` lengths tell you which
-  elements were sent. Line them up against the paddle edges in `hw.halikey`/`hw.midi`. The keyer's
+  elements were sent. Line them up against the paddle edges in `qk4.cw.halikey`/`qk4.cw.midi`. The keyer's
   decision rules — and the recorded runs that pin them — are in `tests/test_paddlekeyersweeps.cpp`;
   reproduce the edge sequence there before changing the keyer.
 - **Right on the wire, wrong on the air:** the K4's reproduction, not QK4. Check KZL is the value

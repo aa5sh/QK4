@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "logging/logcategories.h"
 
 #include <QTimer>
 #include "utils/radioutils.h"
@@ -65,8 +66,6 @@
 #include <QScreen>
 #include <QShortcut>
 #include <QStyle>
-
-Q_LOGGING_CATEGORY(qk4Main, "qk4.main", QtInfoMsg)
 
 // ============== MainWindow Implementation ==============
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new RadioState(this)) {
@@ -1075,7 +1074,7 @@ void MainWindow::setupVfoSection(QWidget *parent) {
         // WHY: the K4 refuses the Sub mini-pan while Sub RX is off
         // (ER105 "Operation requires SUB RX to be ON"), whatever band VFO B is on.
         if (!m_radioState->subReceiverEnabled()) {
-            qCDebug(qk4Main) << "Mini-Pan B blocked: SUB RX is off";
+            qCDebug(lcUi) << "Mini-Pan B blocked: SUB RX is off";
             return;
         }
         // The VFO view itself follows miniPanBEnabledChanged (SpectrumController).
@@ -1217,7 +1216,7 @@ void MainWindow::onHardwareError(const QString &error) {
 }
 
 void MainWindow::onRadioReady() {
-    qCDebug(qk4Main) << "Successfully authenticated with K4 radio";
+    qCDebug(lcUi) << "Successfully authenticated with K4 radio";
 
     // WHY we send SL here and also call parseCATCommand optimistically:
     // The K4 does NOT echo `SL` (streaming latency) responses — it silently applies the new tier

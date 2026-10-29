@@ -1,6 +1,7 @@
 // K4Discovery - Network discovery for Elecraft K4 radios
 
 #include "k4discovery.h"
+#include "logging/logcategories.h"
 #include <QNetworkDatagram>
 #include <QLoggingCategory>
 #ifdef Q_OS_WIN
@@ -8,8 +9,6 @@
 #else
 #include <sys/socket.h>
 #endif
-
-Q_LOGGING_CATEGORY(k4discovery, "K4Discovery", QtInfoMsg)
 
 const char *K4Discovery::DISCOVERY_MESSAGE = "findk4";
 const char *K4Discovery::K4_RESPONSE_PREFIX = "k4";
@@ -31,11 +30,11 @@ K4Discovery::~K4Discovery() {
 
 void K4Discovery::startDiscovery() {
     if (m_discoveryActive) {
-        qCWarning(k4discovery) << "Discovery already in progress";
+        qCWarning(lcLinkDiscovery) << "Discovery already in progress";
         return;
     }
 
-    qCInfo(k4discovery) << "Starting K4 radio discovery...";
+    qCInfo(lcLinkDiscovery) << "Starting K4 radio discovery...";
     m_discoveredRadios.clear();
     m_discoveryActive = true;
 
@@ -61,14 +60,14 @@ void K4Discovery::startDiscovery() {
     }
 
     if (interfaceCount == 0) {
-        qCWarning(k4discovery) << "No active network interfaces found";
+        qCWarning(lcLinkDiscovery) << "No active network interfaces found";
         emit error("No active network interfaces found");
         m_discoveryActive = false;
         emit discoveryFinished(0);
         return;
     }
 
-    qCInfo(k4discovery) << "Sent discovery messages on" << interfaceCount << "network interface(s)";
+    qCInfo(lcLinkDiscovery) << "Sent discovery messages on" << interfaceCount << "network interface(s)";
     m_timeoutTimer->start();
 }
 
@@ -88,16 +87,16 @@ void K4Discovery::sendDiscoveryMessage(const QNetworkInterface &netInterface) {
         if (address.protocol() != QAbstractSocket::IPv4Protocol)
             continue;
 
-        qCDebug(k4discovery) << "Sending discovery via interface" << netInterface.humanReadableName() << "("
-                             << address.toString() << ")";
+        qCDebug(lcLinkDiscovery) << "Sending discovery via interface" << netInterface.humanReadableName() << "("
+                                 << address.toString() << ")";
 
         // --- Step 1: Send socket bound to this interface ---
         QUdpSocket sendSocket;
         int broadcastEnable = 1;
 
         if (!sendSocket.bind(address, 0, QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint)) {
-            qCWarning(k4discovery) << "Failed to bind to interface" << netInterface.humanReadableName() << "("
-                                   << address.toString() << "):" << sendSocket.errorString();
+            qCWarning(lcLinkDiscovery) << "Failed to bind to interface" << netInterface.humanReadableName() << "("
+                                       << address.toString() << "):" << sendSocket.errorString();
             continue;
         }
 
@@ -109,14 +108,14 @@ void K4Discovery::sendDiscoveryMessage(const QNetworkInterface &netInterface) {
         qint64 bytesSent = sendSocket.writeDatagram(message, QHostAddress::Broadcast, UDP_PORT);
 
         if (bytesSent == -1) {
-            qCWarning(k4discovery) << "Failed to send on interface" << netInterface.humanReadableName() << ":"
-                                   << sendSocket.errorString();
+            qCWarning(lcLinkDiscovery) << "Failed to send on interface" << netInterface.humanReadableName() << ":"
+                                       << sendSocket.errorString();
             sendSocket.close();
             continue;
         }
 
-        qCDebug(k4discovery) << "Sent" << bytesSent << "bytes from" << address.toString() << ":" << localPort
-                             << "to 255.255.255.255:" << UDP_PORT << "via" << netInterface.humanReadableName();
+        qCDebug(lcLinkDiscovery) << "Sent" << bytesSent << "bytes from" << address.toString() << ":" << localPort
+                                 << "to 255.255.255.255:" << UDP_PORT << "via" << netInterface.humanReadableName();
 
         // Close send socket — we only needed it to get the packet out on this interface
         sendSocket.close();
@@ -125,8 +124,8 @@ void K4Discovery::sendDiscoveryMessage(const QNetworkInterface &netInterface) {
         QUdpSocket *recvSocket = new QUdpSocket(this);
         if (!recvSocket->bind(QHostAddress::AnyIPv4, localPort,
                               QUdpSocket::ShareAddress | QUdpSocket::ReuseAddressHint)) {
-            qCWarning(k4discovery) << "Failed to bind receive socket on port" << localPort << ":"
-                                   << recvSocket->errorString();
+            qCWarning(lcLinkDiscovery) << "Failed to bind receive socket on port" << localPort << ":"
+                                       << recvSocket->errorString();
             recvSocket->deleteLater();
             continue;
         }
@@ -134,7 +133,7 @@ void K4Discovery::sendDiscoveryMessage(const QNetworkInterface &netInterface) {
         connect(recvSocket, &QUdpSocket::readyRead, this, &K4Discovery::onReadyRead);
         m_sockets.append(recvSocket);
 
-        qCDebug(k4discovery) << "Listening for responses on 0.0.0.0:" << localPort;
+        qCDebug(lcLinkDiscovery) << "Listening for responses on 0.0.0.0:" << localPort;
     }
 }
 
@@ -147,8 +146,8 @@ void K4Discovery::onReadyRead() {
         QNetworkDatagram datagram = socket->receiveDatagram();
         QByteArray data = datagram.data();
 
-        qCDebug(k4discovery) << "Received" << data.size() << "bytes from" << datagram.senderAddress().toString() << ":"
-                             << datagram.senderPort() << "- data:" << QString::fromUtf8(data);
+        qCDebug(lcLinkDiscovery) << "Received" << data.size() << "bytes from" << datagram.senderAddress().toString()
+                                 << ":" << datagram.senderPort() << "- data:" << QString::fromUtf8(data);
 
         K4RadioInfo radioInfo;
         if (parseK4Response(data, radioInfo)) {
@@ -162,8 +161,8 @@ void K4Discovery::onReadyRead() {
 
             if (!isDuplicate) {
                 m_discoveredRadios.append(radioInfo);
-                qCInfo(k4discovery) << "Found K4 serial" << radioInfo.serialNumber << "at" << radioInfo.ipAddress << "("
-                                    << radioInfo.hostname() << ")";
+                qCInfo(lcLinkDiscovery) << "Found K4 serial" << radioInfo.serialNumber << "at" << radioInfo.ipAddress
+                                        << "(" << radioInfo.hostname() << ")";
                 emit radioFound(radioInfo);
             }
         }
@@ -171,7 +170,7 @@ void K4Discovery::onReadyRead() {
 }
 
 void K4Discovery::onDiscoveryTimeout() {
-    qCInfo(k4discovery) << "Discovery timeout - found" << m_discoveredRadios.count() << "K4 radio(s)";
+    qCInfo(lcLinkDiscovery) << "Discovery timeout - found" << m_discoveredRadios.count() << "K4 radio(s)";
 
     for (QUdpSocket *socket : m_sockets) {
         socket->close();
@@ -191,7 +190,7 @@ bool K4Discovery::parseK4Response(const QByteArray &data, K4RadioInfo &radioInfo
     QStringList parts = response.split(':');
 
     if (parts.count() != 4) {
-        qCWarning(k4discovery) << "Invalid K4 response format:" << response;
+        qCWarning(lcLinkDiscovery) << "Invalid K4 response format:" << response;
         return false;
     }
 

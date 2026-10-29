@@ -1,12 +1,11 @@
 #include "protocol.h"
+#include "logging/logcategories.h"
 #include <QCryptographicHash>
 #include <QtEndian>
 #include <QLoggingCategory>
 
 #include <algorithm>
 #include <cstring>
-
-Q_LOGGING_CATEGORY(catRx, "CAT.RX", QtInfoMsg)
 
 Protocol::Protocol(QObject *parent) : QObject(parent) {}
 
@@ -15,7 +14,7 @@ void Protocol::parse(const QByteArray &data) {
 
     // Prevent unbounded buffer growth from malformed data
     if (m_buffer.size() > K4Protocol::MAX_BUFFER_SIZE) {
-        qCWarning(catRx) << "Protocol buffer overflow (" << m_buffer.size() << "bytes), clearing";
+        qCWarning(lcCatRx) << "Protocol buffer overflow (" << m_buffer.size() << "bytes), clearing";
         reset();
         return;
     }
@@ -59,7 +58,7 @@ void Protocol::parse(const QByteArray &data) {
         // Verify end marker
         if (std::memcmp(packet + totalPacketSize - 4, K4Protocol::END_MARKER.constData(), 4) != 0) {
             // Invalid packet, skip past the start marker and try again
-            qCWarning(catRx) << "Invalid K4 packet: bad end marker";
+            qCWarning(lcCatRx) << "Invalid K4 packet: bad end marker";
             m_readOffset += 4;
             continue;
         }
@@ -90,7 +89,7 @@ void Protocol::processPacket(const QByteArray &payload) {
         // CAT response: [0x00][0x00][0x00][ASCII data]
         if (payload.size() > 3) {
             QString response = QString::fromLatin1(payload.mid(3));
-            qCDebug(catRx) << response;
+            qCDebug(lcCatRx) << response;
             emit catResponseReceived(response);
         }
         break;
@@ -133,7 +132,7 @@ void Protocol::processPacket(const QByteArray &payload) {
         break;
     }
     default:
-        qCDebug(catRx) << "Unknown K4 packet type:" << type;
+        qCDebug(lcCatRx) << "Unknown K4 packet type:" << type;
         break;
     }
 }

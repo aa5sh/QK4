@@ -13,6 +13,12 @@ if(QK4_TESTS_SANITIZE AND NOT MSVC)
     add_link_options(-fsanitize=address -fsanitize=undefined)
 endif()
 
+# Every logging category is defined in src/logging/logcategories.cpp. Linked into every test below
+# (see the aggregate loop at the end), so a test that compiles a logging source needs nothing extra.
+add_library(qk4_logging STATIC ${CMAKE_SOURCE_DIR}/src/logging/logcategories.cpp)
+target_include_directories(qk4_logging PUBLIC ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(qk4_logging PUBLIC Qt6::Core)
+
 # RadioState CAT command parser tests
 add_executable(test_radiostate test_radiostate.cpp
     ${CMAKE_SOURCE_DIR}/src/models/radiostate.cpp
@@ -677,6 +683,13 @@ target_include_directories(test_halikeyportscan PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_halikeyportscan Qt6::Core Qt6::Test)
 add_test(NAME HaliKeyPortScanTests COMMAND test_halikeyportscan)
 
+# Logging categories: the qk4.* scheme, debug off by default, defined only in src/logging/.
+add_executable(test_logcategories test_logcategories.cpp)
+target_include_directories(test_logcategories PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_compile_definitions(test_logcategories PRIVATE QK4_SOURCE_DIR="${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(test_logcategories Qt6::Core Qt6::Test)
+add_test(NAME LogCategoriesTests COMMAND test_logcategories)
+
 # Aggregate target: `cmake --build <dir> --target qk4_tests` builds every
 # test_* executable defined above. CI uses this so adding `add_executable(test_foo)`
 # automatically gets the new test built — no parallel maintenance of an explicit
@@ -688,6 +701,7 @@ set(_qk4_test_targets "")
 foreach(_t IN LISTS _qk4_dir_targets)
     if(_t MATCHES "^test_")
         list(APPEND _qk4_test_targets ${_t})
+        target_link_libraries(${_t} qk4_logging)
     endif()
 endforeach()
 add_custom_target(qk4_tests DEPENDS ${_qk4_test_targets})

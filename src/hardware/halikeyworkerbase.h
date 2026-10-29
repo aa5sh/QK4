@@ -9,9 +9,6 @@
 #include <memory>
 #include <mutex>
 
-// Shared logging category for HaliKey device + workers. Definition in halikeydevice.cpp.
-Q_DECLARE_LOGGING_CATEGORY(hwHalikey)
-
 /**
  * @brief Base class for HaliKey paddle-input workers, which live on `HalikeyDevice::m_workerThread`.
  *

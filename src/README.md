@@ -10,6 +10,7 @@ QK4 source tree. Qt 6 C++ desktop app for remote control of an Elecraft K4 ham r
 | `controllers/` | One controller per I/O owner or UI slice: signal wiring + CAT dispatch. `ls src/controllers/*.h \| wc -l` gives the count. See `docs/controllers.md` for the symptom → controller map. |
 | `dsp/` | GPU-accelerated spectrum + waterfall (Qt RHI). Shader pipelines. |
 | `hardware/` | USB / serial / MIDI device wrappers (KPOD, KPOD+, HaliKey variants, iambic keyer). |
+| `logging/` | Logging: every category (`qk4.*`), and later the log file, rules and paths. Qt Core only. |
 | `models/` | `RadioState` façade + plain-struct subsystems (`ls src/models/radiostate/*.h`), `MenuModel`, `TransmitOwner`. |
 | `network/` | TCP/TLS/PSK transport, K4 binary protocol, CAT server, TCI 2.0 server over WebSocket, DX cluster, KPA1500 client, K4 discovery by UDP broadcast. |
 | `settings/` | `RadioSettings`: `QSettings`-backed persistence for radio profiles, DX clusters, audio, CAT/TCI, hardware and interface-scale preferences. |

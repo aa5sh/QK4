@@ -1,4 +1,5 @@
 #include "kpodplususbworker.h"
+#include "logging/logcategories.h"
 #include <QLoggingCategory>
 #include <QString>
 #include <QThread>
@@ -13,8 +14,6 @@
 // configure time on POSIX; this compile-time gate covers Windows where
 // pkg-config is unavailable.
 static_assert(LIBUSB_API_VERSION >= 0x01000105, "libusb >= 1.0.21 required");
-
-Q_LOGGING_CATEGORY(hwKpodPlus, "hw.kpodplus", QtInfoMsg)
 
 // =============================================================================
 // Pure helpers
@@ -159,7 +158,7 @@ KpodPlusUsbWorker::~KpodPlusUsbWorker() {
 void KpodPlusUsbWorker::start() {
     const int rc = libusb_init(&m_ctx);
     if (rc != LIBUSB_SUCCESS) {
-        qCWarning(hwKpodPlus) << "libusb_init failed:" << libusb_error_name(rc);
+        qCWarning(lcKpodPlus) << "libusb_init failed:" << libusb_error_name(rc);
         m_ctx = nullptr;
         return;
     }
@@ -333,7 +332,7 @@ bool KpodPlusUsbWorker::openHandle() {
     }
     if (!target) {
         libusb_free_device_list(devList, 1);
-        qCWarning(hwKpodPlus) << "openHandle: device not found at bus" << m_info.busNumber << "addr"
+        qCWarning(lcKpodPlus) << "openHandle: device not found at bus" << m_info.busNumber << "addr"
                               << m_info.deviceAddress;
         return false;
     }
@@ -341,7 +340,7 @@ bool KpodPlusUsbWorker::openHandle() {
     int rc = libusb_open(target, &m_handle);
     libusb_free_device_list(devList, 1);
     if (rc != LIBUSB_SUCCESS) {
-        qCWarning(hwKpodPlus) << "libusb_open failed:" << libusb_error_name(rc);
+        qCWarning(lcKpodPlus) << "libusb_open failed:" << libusb_error_name(rc);
         m_handle = nullptr;
         return false;
     }
@@ -353,7 +352,7 @@ bool KpodPlusUsbWorker::openHandle() {
 #endif
     rc = libusb_claim_interface(m_handle, 0);
     if (rc != LIBUSB_SUCCESS) {
-        qCWarning(hwKpodPlus) << "claim_interface failed:" << libusb_error_name(rc);
+        qCWarning(lcKpodPlus) << "claim_interface failed:" << libusb_error_name(rc);
         libusb_close(m_handle);
         m_handle = nullptr;
         return false;
@@ -440,7 +439,7 @@ void KpodPlusUsbWorker::discardBufferedKeying() {
         // Warning, not debug. This is the operator's sending being thrown away, and if it happens
         // when they did not expect it that is worth finding in a log without knowing to enable a
         // category first.
-        qCWarning(hwKpodPlus) << "KPOD+ discarded" << frames << "buffered keyer frame(s)," << bytes
+        qCWarning(lcKpodPlus) << "KPOD+ discarded" << frames << "buffered keyer frame(s)," << bytes
                               << "bytes, queued by the device while QK4 had it closed. They are not sent.";
     }
 }
@@ -486,7 +485,7 @@ bool KpodPlusUsbWorker::sendEp01Out(const unsigned char data[8]) {
     int transferred = 0;
     const int rc = libusb_interrupt_transfer(m_handle, 0x01, const_cast<unsigned char *>(data), 8, &transferred, 50);
     if (rc != LIBUSB_SUCCESS && rc != LIBUSB_ERROR_TIMEOUT) {
-        qCWarning(hwKpodPlus) << "EP01 OUT failed:" << libusb_error_name(rc);
+        qCWarning(lcKpodPlus) << "EP01 OUT failed:" << libusb_error_name(rc);
         if (rc == LIBUSB_ERROR_NO_DEVICE || rc == LIBUSB_ERROR_IO)
             handleLostDevice(QString::fromLatin1(libusb_error_name(rc)));
         return false;
@@ -504,7 +503,7 @@ bool KpodPlusUsbWorker::readEp01In(unsigned char buffer[8], int timeoutMs) {
     if (rc == LIBUSB_ERROR_TIMEOUT)
         return false;
     if (rc == LIBUSB_ERROR_NO_DEVICE || rc == LIBUSB_ERROR_IO) {
-        qCWarning(hwKpodPlus) << "EP01 IN failed:" << libusb_error_name(rc);
+        qCWarning(lcKpodPlus) << "EP01 IN failed:" << libusb_error_name(rc);
         handleLostDevice(QString::fromLatin1(libusb_error_name(rc)));
     }
     return false;
@@ -518,7 +517,7 @@ void KpodPlusUsbWorker::handleLostDevice(QString reason) {
     // closeDevice.
     if (!m_devicePresent && !m_handle)
         return;
-    qCWarning(hwKpodPlus) << "Device lost:" << reason;
+    qCWarning(lcKpodPlus) << "Device lost:" << reason;
     m_devicePresent = false;
     // Reset cached info so the page header clears immediately. The presence
     // timer re-fills it on its next tick if the device recovers.
@@ -596,7 +595,7 @@ bool KpodPlusUsbWorker::sendConfigCommand(const unsigned char cmd[8]) {
     int transferred = 0;
     int rc = libusb_interrupt_transfer(m_handle, 0x01, const_cast<unsigned char *>(cmd), 8, &transferred, 100);
     if (rc != LIBUSB_SUCCESS) {
-        qCWarning(hwKpodPlus) << "config EP01 OUT failed:" << libusb_error_name(rc);
+        qCWarning(lcKpodPlus) << "config EP01 OUT failed:" << libusb_error_name(rc);
         if (rc == LIBUSB_ERROR_NO_DEVICE || rc == LIBUSB_ERROR_IO)
             handleLostDevice(QString::fromLatin1(libusb_error_name(rc)));
         return false;
@@ -618,14 +617,14 @@ bool KpodPlusUsbWorker::sendConfigCommand(const unsigned char cmd[8]) {
         if (rc == LIBUSB_SUCCESS)
             return true;
         if (rc == LIBUSB_ERROR_NO_DEVICE || rc == LIBUSB_ERROR_IO) {
-            qCWarning(hwKpodPlus) << "config EP01 IN failed (hard):" << libusb_error_name(rc);
+            qCWarning(lcKpodPlus) << "config EP01 IN failed (hard):" << libusb_error_name(rc);
             handleLostDevice(QString::fromLatin1(libusb_error_name(rc)));
             return false;
         }
         // Timeout — retry. Anything else (BUSY, INTERRUPTED, …) also retries; the bounded
         // attempt count caps the worst-case time.
     }
-    qCWarning(hwKpodPlus) << "config EP01 IN drain failed after 3 attempts; next poll may "
+    qCWarning(lcKpodPlus) << "config EP01 IN drain failed after 3 attempts; next poll may "
                              "return a stale frame until the FIFO catches up";
     return false;
 }
@@ -720,14 +719,14 @@ void KpodPlusEp02Worker::run() {
             QByteArray data(reinterpret_cast<const char *>(buffer), transferred);
             // Diagnostic: timestamp each KZ batch so on-air vs wire-out timing can be compared
             // when investigating "rhythm wrong at the K4" reports. Enable with
-            // QT_LOGGING_RULES="hw.kpodplus.debug=true". The device always sends fixed 32-byte
+            // QT_LOGGING_RULES="qk4.kpod.plus.debug=true". The device always sends fixed 32-byte
             // transfers zero-padded after the KZ string (docs/KPodKeyerInterface.pdf
             // §"Endpoint 2 IN"), so transferred==32 is expected every read and is NOT a signal
             // of buffer pressure. The real "FIFO backing up" signature would be the trimmed
             // PAYLOAD length approaching 32 bytes; flag at >=24 to catch trouble early.
             const QByteArray trimmed = KpodPlusUsbWorker::trimEp02Buffer(data);
             const char *fillTag = (trimmed.size() >= 24) ? " [PAYLOAD-NEAR-FULL!]" : "";
-            qCDebug(hwKpodPlus).noquote() << "KZ@" << QTime::currentTime().toString("HH:mm:ss.zzz") << "[" << trimmed
+            qCDebug(lcKpodPlus).noquote() << "KZ@" << QTime::currentTime().toString("HH:mm:ss.zzz") << "[" << trimmed
                                           << "] (payload=" << trimmed.size() << "B)" << fillTag;
             emit keyerDataReceived(data);
         } else if (rc == LIBUSB_ERROR_TIMEOUT) {
@@ -743,7 +742,7 @@ void KpodPlusEp02Worker::run() {
             // a real USB stack issue if one ever happens. OVERFLOW specifically means
             // the device tried to send more than 32 bytes in a single transfer and
             // the host truncated — i.e. the smoking gun for "we dropped a KZ batch."
-            qCWarning(hwKpodPlus) << "KZ EP02 unexpected rc:" << libusb_error_name(rc) << "transferred=" << transferred;
+            qCWarning(lcKpodPlus) << "KZ EP02 unexpected rc:" << libusb_error_name(rc) << "transferred=" << transferred;
 
             // USB-008. Back off before retrying. This branch used to fall straight back into the
             // loop, so a persistent non-transient error (PIPE, OVERFLOW, INTERRUPTED) spun this

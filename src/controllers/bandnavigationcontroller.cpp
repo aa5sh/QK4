@@ -1,4 +1,5 @@
 #include "bandnavigationcontroller.h"
+#include "logging/logcategories.h"
 
 #include "connectioncontroller.h"
 #include "controllers/popupmanager.h"
@@ -7,8 +8,6 @@
 #include <QChar>
 #include <QLoggingCategory>
 #include <QString>
-
-Q_LOGGING_CATEGORY(qk4BandNav, "qk4.bandnav", QtInfoMsg)
 
 BandNavigationController::BandNavigationController(RadioState *radioState, ConnectionController *connection,
                                                    PopupManager *popupManager, QObject *parent)
@@ -54,13 +53,13 @@ void BandNavigationController::setCurrentBand(int bandNum, bool forVfoB) {
 }
 
 void BandNavigationController::onBandSelected(const QString &bandName) {
-    qCDebug(qk4BandNav) << "Band selected:" << bandName;
+    qCDebug(lcUiBandNav) << "Band selected:" << bandName;
 
     const int newBandNum = m_popupManager->bandNumberForName(bandName);
 
     // GEN and MEM are special pseudo-bands — no BN command is sent.
     if (newBandNum < 0) {
-        qCDebug(qk4BandNav) << "Special mode selected (GEN/MEM) — no BN command";
+        qCDebug(lcUiBandNav) << "Special mode selected (GEN/MEM) — no BN command";
         return;
     }
 
@@ -74,11 +73,11 @@ void BandNavigationController::onBandSelected(const QString &bandName) {
     if (newBandNum == currentBand) {
         // Tap on the already-selected band → K4 band-stack step.
         const QString bandStackCmd = bSetEnabled ? "BN$^;" : "BN^;";
-        qCDebug(qk4BandNav) << "Same band — invoking band stack with" << bandStackCmd;
+        qCDebug(lcUiBandNav) << "Same band — invoking band stack with" << bandStackCmd;
         m_connection->sendCAT(bandStackCmd);
     } else {
         const QString cmd = QString("%1%2;").arg(cmdPrefix).arg(newBandNum, 2, 10, QChar('0'));
-        qCDebug(qk4BandNav) << "Changing band:" << cmd;
+        qCDebug(lcUiBandNav) << "Changing band:" << cmd;
         m_connection->sendCAT(cmd);
     }
     // Request a fresh echo so our cached current-band state updates.

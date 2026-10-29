@@ -1,11 +1,10 @@
 #include "halikeydevice.h"
+#include "logging/logcategories.h"
 #include "halikeymidiworker.h"
 #include "halikeyv14worker.h"
 #include "halikeyworkerbase.h"
 #include <QDebug>
 #include <RtMidi.h>
-
-Q_LOGGING_CATEGORY(hwHalikey, "hw.halikey", QtInfoMsg)
 
 HalikeyDevice::HalikeyDevice(int deviceType, QObject *parent)
     : QObject(parent), m_midiSink(std::make_shared<HaliKeyMidiSink>()), m_deviceType(deviceType) {}
@@ -49,7 +48,7 @@ bool HalikeyDevice::openPort(const QString &portName) {
         emit connected();
     });
     connect(m_worker, &HaliKeyWorkerBase::errorOccurred, this, [this](const QString &error) {
-        qCWarning(hwHalikey) << "HalikeyDevice: Worker error -" << error;
+        qCWarning(lcCwHalikey) << "HalikeyDevice: Worker error -" << error;
         closePort();
         emit connectionError(error);
     });
@@ -80,7 +79,7 @@ void HalikeyDevice::closePort() {
         } else {
             // WHY not deleted: destroying a running QThread aborts the process. Detach it so this
             // device's destruction cannot take it down, and free it if it ever finishes.
-            qCWarning(hwHalikey) << "HalikeyDevice: worker thread did not stop within 2 s; detaching it";
+            qCWarning(lcCwHalikey) << "HalikeyDevice: worker thread did not stop within 2 s; detaching it";
             m_workerThread->setParent(nullptr);
             connect(m_workerThread, &QThread::finished, m_workerThread, &QObject::deleteLater);
         }
@@ -147,7 +146,8 @@ QStringList HalikeyDevice::availableMidiDevices() {
             }
         }
     } catch (RtMidiError &error) {
-        qCWarning(hwHalikey) << "HalikeyDevice: MIDI enumeration failed:" << QString::fromStdString(error.getMessage());
+        qCWarning(lcCwHalikey) << "HalikeyDevice: MIDI enumeration failed:"
+                               << QString::fromStdString(error.getMessage());
     }
     return devices;
 }

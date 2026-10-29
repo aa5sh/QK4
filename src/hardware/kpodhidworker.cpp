@@ -1,4 +1,5 @@
 #include "kpodhidworker.h"
+#include "logging/logcategories.h"
 #include <QLoggingCategory>
 #include <QString>
 #include <QThread>
@@ -9,10 +10,8 @@
 #include "kpodudevworker.h"
 #endif
 
-Q_LOGGING_CATEGORY(hwKpod, "hw.kpod", QtInfoMsg)
-
 static void kpodLog(const QString &msg) {
-    qCDebug(hwKpod) << "KPOD:" << msg;
+    qCDebug(lcKpod) << "KPOD:" << msg;
 }
 
 // =============================================================================
@@ -108,7 +107,7 @@ void KpodHidWorker::start() {
     // and matches KpodPlusUsbWorker's libusb_init-on-worker pattern — keeps hidapi off
     // main entirely.
     if (hid_init() != 0) {
-        qCWarning(hwKpod) << "hid_init failed";
+        qCWarning(lcKpod) << "hid_init failed";
         return;
     }
     m_hidInitialized = true;
@@ -164,7 +163,7 @@ void KpodHidWorker::shutdown() {
         m_udevThread->quit();
         if (!m_udevThread->wait(2000)) {
             // WHY detached: it is a child of this worker, and destroying a running QThread aborts.
-            qCWarning(hwKpod) << "KPOD: udev thread did not stop within 2 s; detaching it";
+            qCWarning(lcKpod) << "KPOD: udev thread did not stop within 2 s; detaching it";
             m_udevThread->setParent(nullptr);
             m_udevThread = nullptr;
             m_udevWorker = nullptr;
@@ -186,12 +185,12 @@ bool KpodHidWorker::openHandle() {
     if (m_hidDevice)
         return true;
     if (m_info.devicePath.isEmpty()) {
-        qCWarning(hwKpod) << "openHandle: no device path";
+        qCWarning(lcKpod) << "openHandle: no device path";
         return false;
     }
     m_hidDevice = hid_open_path(m_info.devicePath.toUtf8().constData());
     if (!m_hidDevice) {
-        qCWarning(hwKpod) << "openHandle: hid_open_path failed";
+        qCWarning(lcKpod) << "openHandle: hid_open_path failed";
         return false;
     }
     hid_set_nonblocking(m_hidDevice, 1);
@@ -316,7 +315,7 @@ void KpodHidWorker::handleLostDevice(const char *reason) {
     if (!m_devicePresent && !m_hidDevice) {
         return;
     }
-    qCWarning(hwKpod) << "KPOD lost:" << reason;
+    qCWarning(lcKpod) << "KPOD lost:" << reason;
     m_devicePresent = false;
     if (m_pollTimer && m_pollTimer->isActive())
         m_pollTimer->stop();

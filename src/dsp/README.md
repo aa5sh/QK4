@@ -62,7 +62,7 @@ REF, the waterfall share, the window size and the font size all change the step 
 with no extra wiring. The tick sits after each label, and DX spot labels keep out of the column
 (`PanadapterRhiWidget::amplitudeAxisWidthPx()`, measured from the label font).
 
-With `qk4.pan.diag` enabled a `CALIB` line compares the radio's reported noise floor against our own
+With `qk4.spectrum.diag` enabled a `CALIB` line compares the radio's reported noise floor against our own
 minimum bin. A persistent gap means `K4_DBM_OFFSET` is wrong and every value on the scale is off by
 that amount.
 

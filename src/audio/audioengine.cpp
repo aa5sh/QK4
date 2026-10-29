@@ -2,7 +2,7 @@
 #include "audio/audiodecimator.h"       // capture-rate decimation
 #include "audio/micrate.h"              // what the operator is told when a rate is unusable
 #include "audio/audiodeviceselection.h" // which device a stream belongs on
-#include "audio/audiologging.h"
+#include "logging/logcategories.h"
 #include "audio/opusencoder.h"
 #include "audio/rawaudioformat.h" // EM0/EM1 wire format
 #include "audio/rxoutputstage.h"  // RX boost + soft limiter
@@ -208,7 +208,7 @@ bool AudioEngine::setupAudioOutput() {
     }
 
     if (outputDevice.isNull()) {
-        qCWarning(qk4Audio) << "AudioEngine: No audio output device available";
+        qCWarning(lcAudio) << "AudioEngine: No audio output device available";
         return false;
     }
 
@@ -221,7 +221,7 @@ bool AudioEngine::setupAudioOutput() {
         // One formatted string rather than a chain: Homebrew's clang-format 18 and CI's apt
         // clang-format-18 disagree about where to wrap a chain that reaches the 120-column limit,
         // so a chain here passes locally and fails CI. See CLAUDE.md -> Lint.
-        qCWarning(qk4Audio,
+        qCWarning(lcAudio,
                   "AudioEngine: output device %s does not support %d Hz %d ch float - NO RX AUDIO from it. "
                   "Choose a different output device in Options.",
                   qUtf8Printable(outputDevice.description()), m_outputFormat.sampleRate(),
@@ -235,7 +235,7 @@ bool AudioEngine::setupAudioOutput() {
     // Bluetooth device, so a sink held open on a headset can keep the OS from completing the
     // profile switch its own microphone needs.
     const QAudioFormat outPreferred = outputDevice.preferredFormat();
-    qCDebug(qk4Audio, "AudioEngine: output device \"%s\" prefers %d Hz %d ch; we request %d Hz %d ch Float",
+    qCDebug(lcAudio, "AudioEngine: output device \"%s\" prefers %d Hz %d ch; we request %d Hz %d ch Float",
             qUtf8Printable(outputDevice.description()), outPreferred.sampleRate(), outPreferred.channelCount(),
             m_outputFormat.sampleRate(), m_outputFormat.channelCount());
 
@@ -245,7 +245,7 @@ bool AudioEngine::setupAudioOutput() {
 
     m_audioSinkDevice = m_audioSink->start();
     if (!m_audioSinkDevice) {
-        qCWarning(qk4Audio) << "AudioEngine: Failed to start audio output";
+        qCWarning(lcAudio) << "AudioEngine: Failed to start audio output";
         delete m_audioSink;
         m_audioSink = nullptr;
         return false;
@@ -285,7 +285,7 @@ bool AudioEngine::setupAudioInput() {
     }
 
     if (inputDevice.isNull()) {
-        qCWarning(qk4Audio) << "AudioEngine: No audio input device available";
+        qCWarning(lcAudio) << "AudioEngine: No audio input device available";
         reportMicUnavailable(MicRate::noMicrophone());
         return false;
     }
@@ -313,7 +313,7 @@ bool AudioEngine::setupAudioInput() {
     // 48 kHz and 24 kHz deliberately do not change.
     if (!AudioDecimator::isSupportedRate(format.sampleRate())) {
         if (!m_micResampler.configure(format.sampleRate(), AudioDecimator::OUTPUT_RATE)) {
-            qCWarning(qk4Audio,
+            qCWarning(lcAudio,
                       "AudioEngine: input device \"%s\" reported %d Hz, which cannot be resampled to "
                       "%d Hz - NO TX AUDIO from it. Choose a different microphone in Options.",
                       qUtf8Printable(inputDevice.description()), format.sampleRate(), AudioDecimator::OUTPUT_RATE);
@@ -322,13 +322,13 @@ bool AudioEngine::setupAudioInput() {
             reportMicUnavailable(MicRate::problem(format.sampleRate()));
             return false;
         }
-        qCInfo(qk4Audio, "AudioEngine: input device \"%s\" runs at %d Hz; resampling %d/%d to %d Hz",
+        qCInfo(lcAudio, "AudioEngine: input device \"%s\" runs at %d Hz; resampling %d/%d to %d Hz",
                qUtf8Printable(inputDevice.description()), format.sampleRate(), m_micResampler.interpolation(),
                m_micResampler.decimation(), AudioDecimator::OUTPUT_RATE);
     }
 
     if (!inputDevice.isFormatSupported(format)) {
-        qCWarning(qk4Audio,
+        qCWarning(lcAudio,
                   "AudioEngine: input device \"%s\" refused %d Hz %d ch float - NO TX AUDIO from it. "
                   "It reports %d..%d Hz. Choose a different microphone in Options.",
                   qUtf8Printable(inputDevice.description()), format.sampleRate(), format.channelCount(),
@@ -347,7 +347,7 @@ bool AudioEngine::setupAudioInput() {
         (m_micDecimationFactor > 0)
             ? QStringLiteral("%1:1").arg(m_micDecimationFactor)
             : QStringLiteral("resampled %1/%2").arg(m_micResampler.interpolation()).arg(m_micResampler.decimation());
-    qCDebug(qk4Audio, "AudioEngine: mic device \"%s\" prefers %d Hz %d ch; capturing at %d Hz mono Float, %s to %d",
+    qCDebug(lcAudio, "AudioEngine: mic device \"%s\" prefers %d Hz %d ch; capturing at %d Hz mono Float, %s to %d",
             qUtf8Printable(inputDevice.description()), preferred.sampleRate(), preferred.channelCount(),
             m_micSampleRate, qUtf8Printable(conversion), AudioDecimator::OUTPUT_RATE);
 
@@ -511,7 +511,7 @@ void AudioEngine::applyMixAndVolume(QByteArray &packet) {
         balRightGain = qBound(0.0f, (50.0f + balOffset) / 50.0f, 1.0f);
     }
 
-    const bool measure = qk4AudioRx().isDebugEnabled();
+    const bool measure = lcAudioRx().isDebugEnabled();
     auto measureIn = [&](float mainSample, float subSample) {
         m_rxStats.sumSqMain += static_cast<double>(mainSample) * mainSample;
         m_rxStats.sumSqSub += static_cast<double>(subSample) * subSample;
@@ -572,7 +572,7 @@ void AudioEngine::applyMixAndVolume(QByteArray &packet) {
 void AudioEngine::reportRxLevels(float mainVol, float subVol, float boost) {
     auto dbfs = [](double v) { return v > 0.0 ? 20.0 * std::log10(v) : -999.0; };
     const double n = static_cast<double>(m_rxStats.frames);
-    qCDebug(qk4AudioRx,
+    qCDebug(lcAudioRx,
             "RX 1s: main peak %.1f rms %.1f dBFS | sub peak %.1f rms %.1f dBFS | out peak %.1f dBFS over-FS %d | "
             "sliders main %.2f sub %.2f boost %+.0f dB (%s)",
             dbfs(m_rxStats.peakMain), dbfs(std::sqrt(m_rxStats.sumSqMain / n)), dbfs(m_rxStats.peakSub),
@@ -592,14 +592,14 @@ void AudioEngine::openMic() {
     // permission dialog during connection (which would deadlock; see ctor comment).
     if (!m_audioSource) {
         if (!setupAudioInput()) {
-            qCWarning(qk4Audio) << "AudioEngine: Failed to setup audio input";
+            qCWarning(lcAudio) << "AudioEngine: Failed to setup audio input";
             return;
         }
     }
 
     m_audioSourceDevice = m_audioSource->start();
     if (!m_audioSourceDevice) {
-        qCWarning(qk4Audio, "AudioEngine: failed to start microphone device (QAudioSource error %d) - NO TX AUDIO",
+        qCWarning(lcAudio, "AudioEngine: failed to start microphone device (QAudioSource error %d) - NO TX AUDIO",
                   static_cast<int>(m_audioSource->error()));
         QString name;
         for (const QAudioDevice &device : QMediaDevices::audioInputs()) {
@@ -616,7 +616,7 @@ void AudioEngine::openMic() {
     // quietly converting", and the frame-level qk4.audio.tx peaks then say whether any audio is
     // actually arriving.
     const QAudioFormat actual = m_audioSource->format();
-    qCDebug(qk4Audio, "AudioEngine: mic started at %d Hz %d ch, buffer %lld bytes", actual.sampleRate(),
+    qCDebug(lcAudio, "AudioEngine: mic started at %d Hz %d ch, buffer %lld bytes", actual.sampleRate(),
             actual.channelCount(), static_cast<long long>(m_audioSource->bufferSize()));
 
     m_micEnabled.store(true, std::memory_order_relaxed);
@@ -739,7 +739,7 @@ void AudioEngine::onMicDataReady() {
                 emit micUnavailable(MicRate::micDeliveringNothing());
 
                 const QAudioFormat actual = m_audioSource ? m_audioSource->format() : QAudioFormat();
-                qCWarning(qk4Audio,
+                qCWarning(lcAudio,
                           "AudioEngine: microphone has delivered NO audio for %lld ms while transmitting - "
                           "the device opened but is producing nothing, so nothing is going on the air. "
                           "Device \"%s\" running at %d Hz %d ch, QAudioSource state %d error %d. "
@@ -857,7 +857,7 @@ void AudioEngine::encodeAndSendFrame(const QByteArray &f32MonoFrame, int frameSa
     // mic. This records what actually left the machine. The per-sample scan is why the
     // category is off by default and why every frame after a transmission's first is
     // throttled; on the RT audio thread this is not free.
-    if (qk4AudioTx().isDebugEnabled()) {
+    if (lcAudioTx().isDebugEnabled()) {
         // Scan every frame so the running peak is a true maximum, but only emit on the throttle.
         for (int i = 0; i < sampleCount; i++)
             m_txPeakSinceKey = qMax(m_txPeakSinceKey, std::fabs(samples[i]));
@@ -893,7 +893,7 @@ void AudioEngine::logTxFrameDiagnostic(const QByteArray &f32MonoFrame, const QBy
     const bool fromTci = txSource() == TxSource::Tci;
     const double gain = static_cast<double>((fromTci ? m_tciTxGain : m_micGain).load(std::memory_order_relaxed));
     const double slider = std::cbrt(gain) * 100.0;
-    qCDebug(qk4AudioTx,
+    qCDebug(lcAudioTx,
             "TX frame: EM%d seq=%u frameSamples=%d peak=%.1f dBFS peak-since-key=%.1f dBFS "
             "(%s slider %.0f%% -> gain %.4f) wire-payload=%d",
             encodeMode, static_cast<unsigned>(m_txSequence), frameSamples, dbfs(framePeak), dbfs(m_txPeakSinceKey),
@@ -917,7 +917,7 @@ void AudioEngine::logTxFrameDiagnostic(const QByteArray &f32MonoFrame, const QBy
         wirePeak = qMax(wirePeak, qAbs(static_cast<qint64>(static_cast<qint32>(raw))));
     }
     const double fullScale = static_cast<double>(RawAudioFormat::EM0_FULL_SCALE);
-    qCDebug(qk4AudioTx, "  EM0 wire peak=%lld S32LE = %.4f of the %.0f full scale", static_cast<long long>(wirePeak),
+    qCDebug(lcAudioTx, "  EM0 wire peak=%lld S32LE = %.4f of the %.0f full scale", static_cast<long long>(wirePeak),
             static_cast<double>(wirePeak) / fullScale, fullScale);
 }
 
@@ -980,8 +980,7 @@ void AudioEngine::setMicGain(float gain) {
     float cubic = gain * gain * gain;
     m_micGain.store(qBound(0.0f, cubic, 1.0f), std::memory_order_relaxed);
     // Recorded so a bench log shows slider moves between transmissions, not only during them.
-    qCDebug(qk4AudioTx, "mic slider %.0f%% -> gain %.4f", static_cast<double>(gain) * 100.0,
-            static_cast<double>(cubic));
+    qCDebug(lcAudioTx, "mic slider %.0f%% -> gain %.4f", static_cast<double>(gain) * 100.0, static_cast<double>(cubic));
 }
 
 void AudioEngine::setTciTxGain(float gain) {
@@ -989,7 +988,7 @@ void AudioEngine::setTciTxGain(float gain) {
     // position means the same thing on both, even though the useful range differs by source.
     const float cubic = gain * gain * gain;
     m_tciTxGain.store(qBound(0.0f, cubic, 1.0f), std::memory_order_relaxed);
-    qCDebug(qk4AudioTx, "TCI TX slider %.0f%% -> gain %.4f", static_cast<double>(gain) * 100.0,
+    qCDebug(lcAudioTx, "TCI TX slider %.0f%% -> gain %.4f", static_cast<double>(gain) * 100.0,
             static_cast<double>(cubic));
 }
 
@@ -1069,7 +1068,7 @@ void AudioEngine::onSystemDefaultInputChanged() {
 
     // WHY logged either way: a handler that never runs and a handler that runs and declines to act
     // are indistinguishable from outside, which cost a bench session on 2026-09-19.
-    qCDebug(qk4Audio, "AudioEngine: input device list changed (selection=\"%s\", active=\"%s\") -> %s",
+    qCDebug(lcAudio, "AudioEngine: input device list changed (selection=\"%s\", active=\"%s\") -> %s",
             m_selectedMicDeviceId.isEmpty() ? "system default" : qUtf8Printable(m_selectedMicDeviceId),
             qUtf8Printable(m_activeMicDeviceId), decision.reason);
 
@@ -1104,7 +1103,7 @@ void AudioEngine::onSystemDefaultOutputChanged() {
         m_selectedOutputDeviceId.toStdString(), m_activeOutputDeviceId.toStdString(),
         QMediaDevices::defaultAudioOutput().id().toStdString(), pinnedPresent, m_audioSink != nullptr);
 
-    qCDebug(qk4Audio, "AudioEngine: output device list changed (selection=\"%s\", active=\"%s\") -> %s",
+    qCDebug(lcAudio, "AudioEngine: output device list changed (selection=\"%s\", active=\"%s\") -> %s",
             m_selectedOutputDeviceId.isEmpty() ? "system default" : qUtf8Printable(m_selectedOutputDeviceId),
             qUtf8Printable(m_activeOutputDeviceId), decision.reason);
 

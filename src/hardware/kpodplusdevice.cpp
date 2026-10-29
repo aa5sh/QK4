@@ -1,12 +1,8 @@
 #include "kpodplusdevice.h"
+#include "logging/logcategories.h"
 #include "kpodplususbworker.h"
 #include <QLoggingCategory>
 #include <QThread>
-
-// Defined in kpodplususbworker.cpp, which owns the KZ traffic tracing. Shared so a bench log
-// enabled with hw.kpodplus.debug=true carries the device's LIFECYCLE alongside its keying, rather
-// than only the keying — the gap that made a hotplug test uncorroborable on 2026-09-18.
-Q_DECLARE_LOGGING_CATEGORY(hwKpodPlus)
 
 KpodPlusDevice::KpodPlusDevice(QObject *parent) : QObject(parent) {
     // --- EP02 reader thread (HighPriority) -----------------------------------
@@ -37,17 +33,17 @@ KpodPlusDevice::KpodPlusDevice(QObject *parent) : QObject(parent) {
     // Cache + re-emit worker signals.
     connect(m_usbWorker, &KpodPlusUsbWorker::deviceInfoReady, this, [this](KpodPlusDeviceInfo info) {
         m_info = info;
-        qCInfo(hwKpodPlus) << "KPOD+ detected:" << m_info.detected << "- this is the point the CW gate keys off";
+        qCInfo(lcKpodPlus) << "KPOD+ detected:" << m_info.detected << "- this is the point the CW gate keys off";
         emit deviceInfoReady();
     });
     connect(m_usbWorker, &KpodPlusUsbWorker::deviceArrived, this, [this]() {
         m_polling = true;
-        qCInfo(hwKpodPlus) << "KPOD+ arrived - polling, and it now owns CW keying";
+        qCInfo(lcKpodPlus) << "KPOD+ arrived - polling, and it now owns CW keying";
         emit deviceConnected();
     });
     connect(m_usbWorker, &KpodPlusUsbWorker::deviceRemoved, this, [this]() {
         m_polling = false;
-        qCInfo(hwKpodPlus) << "KPOD+ removed - CW keying returns to QK4's own keyer";
+        qCInfo(lcKpodPlus) << "KPOD+ removed - CW keying returns to QK4's own keyer";
         emit deviceDisconnected();
     });
     connect(m_usbWorker, &KpodPlusUsbWorker::encoderRotated, this, &KpodPlusDevice::encoderRotated);
@@ -112,7 +108,7 @@ KpodPlusDevice::~KpodPlusDevice() {
             continue;
         thread->quit();
         if (!thread->wait(2000)) {
-            qCWarning(hwKpodPlus) << "KPOD+:" << thread->objectName() << "thread did not stop within 2 s; detaching it";
+            qCWarning(lcKpodPlus) << "KPOD+:" << thread->objectName() << "thread did not stop within 2 s; detaching it";
             thread->setParent(nullptr);
             connect(thread, &QThread::finished, thread, &QObject::deleteLater);
         }
@@ -138,14 +134,14 @@ KpodPlusDevice::RockerPosition KpodPlusDevice::rockerPosition() const {
 bool KpodPlusDevice::startPolling() {
     if (m_polling)
         return true;
-    qCDebug(hwKpodPlus) << "KPOD+ startPolling requested (detected=" << m_info.detected << ")";
+    qCDebug(lcKpodPlus) << "KPOD+ startPolling requested (detected=" << m_info.detected << ")";
     QMetaObject::invokeMethod(m_usbWorker, "openDevice", Qt::QueuedConnection);
     // Result is asynchronous; isPolling() becomes true on deviceArrived.
     return m_info.detected;
 }
 
 void KpodPlusDevice::stopPolling() {
-    qCDebug(hwKpodPlus) << "KPOD+ stopPolling requested";
+    qCDebug(lcKpodPlus) << "KPOD+ stopPolling requested";
     QMetaObject::invokeMethod(m_usbWorker, "closeDevice", Qt::QueuedConnection);
 }
 

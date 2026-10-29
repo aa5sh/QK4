@@ -1,4 +1,5 @@
 #include "network/websocketserver.h"
+#include "logging/logcategories.h"
 
 #include <QHostAddress>
 #include <QLoggingCategory>
@@ -6,8 +7,7 @@
 #include <QTcpSocket>
 
 // Transport-level events only - liveness probes and backpressure. What a client actually said
-// belongs to net.tci, which sits above this.
-Q_LOGGING_CATEGORY(netWs, "net.ws", QtInfoMsg)
+// belongs to qk4.tci, which sits above this.
 
 namespace {
 
@@ -282,8 +282,8 @@ void WebSocketServer::onLivenessTick() {
             // MAX_HANDSHAKE_BYTES bounds how much a peer may send before upgrading; this bounds
             // how long. Not a WebSocket peer yet, so there is no close frame to send.
             if (it->accepted.isValid() && it->accepted.elapsed() > m_handshakeTimeoutMs) {
-                qCWarning(netWs) << "connection" << id << "did not complete the handshake in" << it->accepted.elapsed()
-                                 << "ms - dropping it";
+                qCWarning(lcTciWs) << "connection" << id << "did not complete the handshake in"
+                                   << it->accepted.elapsed() << "ms - dropping it";
                 dropSession(id, WebSocketFrame::CloseProtocolError, QStringLiteral("handshake timeout"),
                             CloseMode::Abort);
             }
@@ -293,8 +293,8 @@ void WebSocketServer::onLivenessTick() {
             continue;
         }
         if (it->lastInbound.elapsed() > m_silenceTimeoutMs) {
-            qCWarning(netWs) << "client" << id << "has not answered in" << it->lastInbound.elapsed()
-                             << "ms - dropping it as dead";
+            qCWarning(lcTciWs) << "client" << id << "has not answered in" << it->lastInbound.elapsed()
+                               << "ms - dropping it as dead";
             // Whatever it was holding is released by the clientDisconnected this raises. For the
             // TCI server that is the transmitter; see TciServer::onClientDisconnected.
             // Abort: a peer that answers nothing is not reading either, so a graceful close would
@@ -395,8 +395,8 @@ bool WebSocketServer::writeFrame(int clientId, const QByteArray &frame, bool she
     const SendDecision decision = decideSend(queued, sheddable);
 
     if (decision == SendDecision::DropSession) {
-        qCWarning(netWs) << "client" << clientId << "has" << queued
-                         << "bytes unread and is not draining - dropping the session";
+        qCWarning(lcTciWs) << "client" << clientId << "has" << queued
+                           << "bytes unread and is not draining - dropping the session";
         // Abort: the peer is by definition not reading, so the close frame would sit behind the
         // megabyte already queued and a graceful close would never finish.
         dropSession(clientId, WebSocketFrame::ClosePolicyViolation, QStringLiteral("send queue overflow"),
@@ -408,8 +408,8 @@ bool WebSocketServer::writeFrame(int clientId, const QByteArray &frame, bool she
         ++it->droppedAudioFrames;
         if (!it->reportedShedding) {
             it->reportedShedding = true;
-            qCInfo(netWs) << "client" << clientId << "is not keeping up (" << queued
-                          << "bytes queued) - dropping audio frames until it does";
+            qCInfo(lcTciWs) << "client" << clientId << "is not keeping up (" << queued
+                            << "bytes queued) - dropping audio frames until it does";
         }
         return false;
     }
@@ -417,8 +417,8 @@ bool WebSocketServer::writeFrame(int clientId, const QByteArray &frame, bool she
     // Recovered: say so once, so a log shows the episode ending as well as starting.
     if (it->reportedShedding && queued <= SEND_QUEUE_AUDIO_DROP_BYTES) {
         it->reportedShedding = false;
-        qCInfo(netWs) << "client" << clientId << "caught up after dropping" << it->droppedAudioFrames
-                      << "audio frame(s)";
+        qCInfo(lcTciWs) << "client" << clientId << "caught up after dropping" << it->droppedAudioFrames
+                        << "audio frame(s)";
     }
 
     socket->write(frame); // write() can re-enter; nothing above is held across it

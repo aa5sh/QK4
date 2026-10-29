@@ -1,4 +1,5 @@
 #include "cwcontroller.h"
+#include "logging/logcategories.h"
 
 #include <QLoggingCategory>
 
@@ -11,8 +12,6 @@
 #include "models/radiostate.h"
 #include "network/tcpclient.h"
 #include "settings/radiosettings.h"
-
-Q_LOGGING_CATEGORY(cwKeyer, "cw.keyer", QtInfoMsg)
 
 CwController::CwController(RadioState *radioState, ConnectionController *connection, PaddleKeyer *keyer,
                            FunctionLink *link, SidetoneGenerator *sidetone, HalikeyDevice *halikey,
@@ -219,9 +218,9 @@ void CwController::stopKeying() {
 
 void CwController::setKpodPlusGate(bool active) {
     // The single most useful line in a CW bench log: it says who is generating the elements.
-    qCInfo(cwKeyer) << "KPOD+ keyer gate"
-                    << (active ? "UP - the KPOD+ owns CW; QK4's keyer keys nothing"
-                               : "DOWN - QK4's own keyer owns CW again");
+    qCInfo(lcCwKeyer) << "KPOD+ keyer gate"
+                      << (active ? "UP - the KPOD+ owns CW; QK4's keyer keys nothing"
+                                 : "DOWN - QK4's own keyer owns CW again");
     m_kpodPlusGate = active;
     updateInhibit();
 }

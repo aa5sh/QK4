@@ -1,10 +1,9 @@
 #include "halikeymidiworker.h"
+#include "logging/logcategories.h"
 #include "halikey_midi_ports.h"
 #include <RtMidi.h>
 #include <QLoggingCategory>
 #include <QTimer>
-
-Q_LOGGING_CATEGORY(hwMidi, "hw.midi", QtInfoMsg)
 
 namespace {
 // How often to check the port is still enumerated, and how many consecutive misses count as gone.
@@ -39,7 +38,7 @@ void HaliKeyMidiWorker::prepareShutdown() {
     // the null rather than a dangling object.
     QMutexLocker lock(&m_midiMutex);
     m_midiIn.reset();
-    qCDebug(hwMidi) << "HaliKeyMidiWorker: MIDI port closed during shutdown";
+    qCDebug(lcCwMidi) << "HaliKeyMidiWorker: MIDI port closed during shutdown";
 }
 
 void HaliKeyMidiWorker::checkPortPresence() {
@@ -62,8 +61,8 @@ void HaliKeyMidiWorker::checkPortPresence() {
         } catch (RtMidiError &error) {
             // Enumeration itself failed — treat as a miss rather than a removal, and let the
             // repeat count decide. Throwing out of a Qt slot would terminate.
-            qCWarning(hwMidi) << "HaliKeyMidiWorker: port enumeration failed:"
-                              << QString::fromStdString(error.getMessage());
+            qCWarning(lcCwMidi) << "HaliKeyMidiWorker: port enumeration failed:"
+                                << QString::fromStdString(error.getMessage());
             names.clear();
         }
     }
@@ -74,7 +73,8 @@ void HaliKeyMidiWorker::checkPortPresence() {
     }
 
     if (++m_missedPolls < kMissesBeforeGone) {
-        qCDebug(hwMidi) << "HaliKeyMidiWorker: port" << m_portName << "missing from enumeration, miss" << m_missedPolls;
+        qCDebug(lcCwMidi) << "HaliKeyMidiWorker: port" << m_portName << "missing from enumeration, miss"
+                          << m_missedPolls;
         return;
     }
 
@@ -90,7 +90,7 @@ void HaliKeyMidiWorker::checkPortPresence() {
     // and CwController releases the keyer's paddles on that.
     m_presenceTimer->stop();
     const QString message = QString("MIDI device '%1' removed").arg(m_portName);
-    qCWarning(hwMidi) << "HaliKeyMidiWorker:" << message;
+    qCWarning(lcCwMidi) << "HaliKeyMidiWorker:" << message;
     emit errorOccurred(message);
 }
 
@@ -113,12 +113,13 @@ void HaliKeyMidiWorker::start() {
     // Find the MIDI port matching our device name. The same matcher the presence poll uses, so
     // "the port we opened" and "the port that disappeared" can never be decided differently.
     unsigned int portCount = midiIn->getPortCount();
-    qCDebug(hwMidi) << "HaliKeyMidiWorker: searching for device" << m_portName << "among" << portCount << "MIDI ports";
+    qCDebug(lcCwMidi) << "HaliKeyMidiWorker: searching for device" << m_portName << "among" << portCount
+                      << "MIDI ports";
     QStringList portNames;
     portNames.reserve(static_cast<int>(portCount));
     for (unsigned int i = 0; i < portCount; i++) {
         portNames << QString::fromStdString(midiIn->getPortName(i));
-        qCDebug(hwMidi) << "HaliKeyMidiWorker: MIDI port" << i << ":" << portNames.last();
+        qCDebug(lcCwMidi) << "HaliKeyMidiWorker: MIDI port" << i << ":" << portNames.last();
     }
     const int foundPort = HalikeyMidiPorts::findPort(portNames, m_portName);
 
@@ -159,7 +160,7 @@ void HaliKeyMidiWorker::start() {
     m_presenceTimer->setInterval(kPresencePollMs);
     connect(m_presenceTimer, &QTimer::timeout, this, &HaliKeyMidiWorker::checkPortPresence);
     m_presenceTimer->start();
-    qCDebug(hwMidi) << "HaliKeyMidiWorker: opened MIDI port" << foundPort << "for device" << m_portName;
+    qCDebug(lcCwMidi) << "HaliKeyMidiWorker: opened MIDI port" << foundPort << "for device" << m_portName;
     emit portOpened();
 }
 
@@ -174,7 +175,7 @@ void HaliKeyMidiWorker::midiCallback(double deltaTime, std::vector<unsigned char
     const int velocity = (*message)[2];
     const int kind = status & 0xF0;
     if (status == 0xB0 && !self->m_momidiDetected.exchange(true, std::memory_order_relaxed))
-        qCDebug(hwMidi) << "HaliKeyMidiWorker: MoMIDI detected, version" << velocity;
+        qCDebug(lcCwMidi) << "HaliKeyMidiWorker: MoMIDI detected, version" << velocity;
     if (kind == 0x90 || kind == 0x80) {
         // WHY normalise the channel: QK4 has always taken notes on any channel; the keyer
         // matches 0x90/0x80 exactly.
@@ -197,10 +198,10 @@ void HaliKeyMidiWorker::logNote(int note, bool down) {
     const char *edge = down ? "down" : "up";
     switch (note) {
     case NOTE_LEFT_PADDLE:
-        qCDebug(hwMidi) << "HaliKeyMidiWorker: note 20" << edge;
+        qCDebug(lcCwMidi) << "HaliKeyMidiWorker: note 20" << edge;
         break;
     case NOTE_RIGHT_PADDLE:
-        qCDebug(hwMidi) << "HaliKeyMidiWorker: note 21" << edge;
+        qCDebug(lcCwMidi) << "HaliKeyMidiWorker: note 21" << edge;
         break;
     case NOTE_PTT:
         // WHY name note 31 rather than let it fall to "unhandled": the firmware still sends it, and
@@ -209,11 +210,11 @@ void HaliKeyMidiWorker::logNote(int note, bool down) {
         // footswitch may be wired inline with the paddles, which on V1.4 is indistinguishable from
         // the dit lever because both drive CTS. If it comes back it will be behind an explicit
         // "alternate wiring" setting, off by default.
-        qCDebug(hwMidi) << "HaliKeyMidiWorker: note 31 (ptt)" << edge << "- ignored, footswitch PTT is withdrawn";
+        qCDebug(lcCwMidi) << "HaliKeyMidiWorker: note 31 (ptt)" << edge << "- ignored, footswitch PTT is withdrawn";
         break;
     default:
         // A firmware using other note numbers than 20/21/31 shows up in the trace, not silently.
-        qCDebug(hwMidi) << "HaliKeyMidiWorker: unhandled note" << note << edge;
+        qCDebug(lcCwMidi) << "HaliKeyMidiWorker: unhandled note" << note << edge;
         break;
     }
 }

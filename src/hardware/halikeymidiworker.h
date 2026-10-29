@@ -33,7 +33,7 @@ public slots:
 
 private:
     static void midiCallback(double deltaTime, std::vector<unsigned char> *message, void *userData);
-    static void logNote(int note, bool down); // hw.midi diagnostics, on RtMidi's thread
+    static void logNote(int note, bool down); // qk4.cw.midi diagnostics, on RtMidi's thread
 
     // Has the port we opened disappeared from the enumeration? Runs on the worker thread.
     void checkPortPresence();

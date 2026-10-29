@@ -1,4 +1,5 @@
 #include "network/tciserver.h"
+#include "logging/logcategories.h"
 
 #include "network/tciserver_internal.h"
 
@@ -10,8 +11,6 @@
 
 #include "network/tciaudioframe.h"
 #include "network/websocketserver.h"
-
-Q_LOGGING_CATEGORY(netTci, "net.tci", QtInfoMsg)
 
 using namespace TciServerInternal;
 
@@ -145,7 +144,7 @@ void TciServer::releaseLocalPtt() {
     if (m_pttOwner == -1) {
         return; // nobody was holding it; also the base case that stops a client unkey recursing
     }
-    qCInfo(netTci) << "local unkey - releasing PTT held by client" << m_pttOwner;
+    qCInfo(lcTci) << "local unkey - releasing PTT held by client" << m_pttOwner;
     stopChrono();
     m_pttOwner = -1;
     m_snapshot.transmitting = false;
@@ -165,7 +164,7 @@ void TciServer::onClientConnected(int clientId, const QString &peerEndpoint) {
     info.lastMessageTime = QDateTime::currentDateTimeUtc();
     m_clients.insert(clientId, info);
 
-    qCInfo(netTci) << "client" << clientId << "connected from" << peerEndpoint << "- sending init burst";
+    qCInfo(lcTci) << "client" << clientId << "connected from" << peerEndpoint << "- sending init burst";
 
     // One command per frame, matching what the reference server puts on the wire.
     const QStringList burst = initBurst();
@@ -235,7 +234,7 @@ void TciServer::onTextMessageReceived(int clientId, const QString &text) {
             m_audioClients.insert(clientId);
             // Echo the request back, as the reference server does; WSJT-X waits for it.
             sendTo(clientId, message(name, QString::number(receiver)));
-            qCInfo(netTci) << "client" << clientId << "requested audio on receiver" << receiver;
+            qCInfo(lcTci) << "client" << clientId << "requested audio on receiver" << receiver;
             if (first) {
                 emit audioStartRequested(receiver);
             }
@@ -288,8 +287,8 @@ void TciServer::onTextMessageReceived(int clientId, const QString &text) {
             updateSensorTimer();
             // Echo, as before - the client waits for it.
             sendTo(clientId, message(name, command.args));
-            qCInfo(netTci) << "client" << clientId << (isRx ? "RX" : "TX") << "sensors" << (wanted ? "on" : "off")
-                           << "every" << m_sensorIntervalMs << "ms";
+            qCInfo(lcTci) << "client" << clientId << (isRx ? "RX" : "TX") << "sensors" << (wanted ? "on" : "off")
+                          << "every" << m_sensorIntervalMs << "ms";
         } else if (name == QLatin1String("vfo") || name == QLatin1String("dds")) {
             // vfo:<trx>,<channel>,<hz> sets; vfo:<trx>,<channel> reads. dds is an alias for the
             // receive VFO and carries no channel.
@@ -436,15 +435,15 @@ void TciServer::onTextMessageReceived(int clientId, const QString &text) {
             if (segments.isEmpty()) {
                 // Say so. A macro that carries nothing keyable used to be dropped in silence, which
                 // gives an operator hearing no CW nothing anywhere to look at.
-                qCInfo(netTci) << "client" << clientId << "sent cw_macros with nothing keyable in it:" << command.args;
+                qCInfo(lcTci) << "client" << clientId << "sent cw_macros with nothing keyable in it:" << command.args;
                 continue;
             }
-            qCInfo(netTci) << "client" << clientId << "CW:" << text << "in" << segments.size() << "speed segment(s)";
+            qCInfo(lcTci) << "client" << clientId << "CW:" << text << "in" << segments.size() << "speed segment(s)";
             emit cwMacroRequested(segments);
             // No echo. The spec defines no confirmation for CW_MACROS, and the radio's own keying
             // is the acknowledgement.
         } else if (name == QLatin1String("cw_macros_stop")) {
-            qCInfo(netTci) << "client" << clientId << "asked to stop CW";
+            qCInfo(lcTci) << "client" << clientId << "asked to stop CW";
             emit cwAbortRequested();
         } else if (name == QLatin1String("split_enable")) {
             int receiver = MAIN_RECEIVER;
@@ -475,11 +474,11 @@ void TciServer::onTextMessageReceived(int clientId, const QString &text) {
             // supposed to reveal.
             if (!m_reportedUnhandled.contains(name)) {
                 m_reportedUnhandled.insert(name);
-                qCInfo(netTci) << "client" << clientId << "sent" << name << "with args" << command.args
-                               << "- NOT PROCESSED (no QK4 implementation); further occurrences at debug level";
+                qCInfo(lcTci) << "client" << clientId << "sent" << name << "with args" << command.args
+                              << "- NOT PROCESSED (no QK4 implementation); further occurrences at debug level";
             } else {
-                qCDebug(netTci) << "client" << clientId << "sent" << name << "with args" << command.args
-                                << "- not processed";
+                qCDebug(lcTci) << "client" << clientId << "sent" << name << "with args" << command.args
+                               << "- not processed";
             }
         }
     }
@@ -599,7 +598,7 @@ void TciServer::setPtt(int clientId, bool active) {
         }
         m_pttOwner = clientId;
         m_snapshot.transmitting = true;
-        qCInfo(netTci) << "PTT ON from client" << clientId;
+        qCInfo(lcTci) << "PTT ON from client" << clientId;
         // BROADCAST, not a reply to the asker. The protocol makes the server a synchroniser: a
         // state change reaches every client, so a second program (a logger showing an ON
         // indicator, an amplifier controller) sees the transmitter key even though someone else
@@ -625,7 +624,7 @@ void TciServer::setPtt(int clientId, bool active) {
         return;
     }
 
-    qCInfo(netTci) << "PTT OFF from client" << clientId;
+    qCInfo(lcTci) << "PTT OFF from client" << clientId;
     stopChrono();
     m_pttOwner = -1;
     m_snapshot.transmitting = false;
@@ -638,8 +637,8 @@ void TciServer::startChrono(int clientId) {
     m_chronoClient = clientId;
     m_chronoAccumNs = 0;
     m_chronoClock.start();
-    qCInfo(netTci) << "TX_CHRONO started for client" << clientId << "- period" << (double(kChronoPeriodNs) / 1.0e6)
-                   << "ms, poll" << kChronoPollMs << "ms";
+    qCInfo(lcTci) << "TX_CHRONO started for client" << clientId << "- period" << (double(kChronoPeriodNs) / 1.0e6)
+                  << "ms, poll" << kChronoPollMs << "ms";
     m_chronoTimer->start();
     // Prime it: the client sends nothing at all until the first request arrives.
     m_socketServer->sendBinary(clientId, TciAudioFrame::encodeTxChrono(MAIN_RECEIVER, kAudioSampleRate));
@@ -647,7 +646,7 @@ void TciServer::startChrono(int clientId) {
 
 void TciServer::stopChrono() {
     if (m_chronoTimer->isActive()) {
-        qCInfo(netTci) << "TX_CHRONO stopped after" << m_chronoSent << "requests," << m_txBlocks << "blocks received";
+        qCInfo(lcTci) << "TX_CHRONO stopped after" << m_chronoSent << "requests," << m_txBlocks << "blocks received";
     }
     m_chronoTimer->stop();
     m_chronoClient = -1;
@@ -691,7 +690,7 @@ void TciServer::onBinaryMessageReceived(int clientId, const QByteArray &payload)
     }
     std::vector<float> mono;
     if (!TciAudioFrame::decodeTxAudioToMono(payload, &mono, nullptr, &m_txLayout) || mono.empty()) {
-        qCDebug(netTci) << "TX audio: dropped an undecodable binary frame of" << payload.size() << "bytes";
+        qCDebug(lcTci) << "TX audio: dropped an undecodable binary frame of" << payload.size() << "bytes";
         return;
     }
 
@@ -700,8 +699,8 @@ void TciServer::onBinaryMessageReceived(int clientId, const QByteArray &payload)
         for (float v : mono) {
             peak = std::max(peak, std::fabs(v));
         }
-        qCInfo(netTci) << "TX audio:" << m_txBlocks << "blocks from client" << clientId << "," << mono.size()
-                       << "samples, peak" << peak << "- chrono sent" << m_chronoSent;
+        qCInfo(lcTci) << "TX audio:" << m_txBlocks << "blocks from client" << clientId << "," << mono.size()
+                      << "samples, peak" << peak << "- chrono sent" << m_chronoSent;
     }
 
     emit txAudioReceived(
@@ -730,7 +729,7 @@ void TciServer::sendRxAudio(const std::vector<float> &interleavedStereo, int sam
         for (float v : interleavedStereo) {
             peak = std::max(peak, std::fabs(v));
         }
-        qCInfo(netTci) << "RX audio:" << m_rxBlocks << "blocks sent to" << m_audioClients.size() << "client(s),"
-                       << interleavedStereo.size() / 2 << "frames at" << sampleRate << "Hz, peak" << peak;
+        qCInfo(lcTci) << "RX audio:" << m_rxBlocks << "blocks sent to" << m_audioClients.size() << "client(s),"
+                      << interleavedStereo.size() / 2 << "frames at" << sampleRate << "Hz, peak" << peak;
     }
 }

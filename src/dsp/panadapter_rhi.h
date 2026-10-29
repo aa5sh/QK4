@@ -124,7 +124,7 @@ private:
     static void decompressBins(const QByteArray &bins, QVector<float> &out);
     void updateWaterfallData();
 
-    // Diagnostics — no rendering effect. Gated on the qk4.pan.diag category being debug-enabled.
+    // Diagnostics — no rendering effect. Gated on the qk4.spectrum.diag category being debug-enabled.
     void logTierCrossing(qint32 oldSampleRate, qint32 newSampleRate, qint32 newTierSpanHz);
     void logRenderGeometry(const QSize &outputSize);
 

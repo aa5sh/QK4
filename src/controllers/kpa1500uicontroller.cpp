@@ -1,4 +1,5 @@
 #include "kpa1500uicontroller.h"
+#include "logging/logcategories.h"
 
 #include "controllers/statusbarcontroller.h"
 #include "network/kpa1500client.h"
@@ -9,8 +10,6 @@
 
 #include <QLoggingCategory>
 #include <QString>
-
-Q_LOGGING_CATEGORY(qk4Kpa, "qk4.kpa1500", QtInfoMsg)
 
 KPA1500UiController::KPA1500UiController(StatusBarController *statusBar, RightSidePanel *rightSidePanel,
                                          QObject *parent)
@@ -107,14 +106,14 @@ void KPA1500UiController::disconnectFromHost() {
 }
 
 void KPA1500UiController::onConnected() {
-    qCDebug(qk4Kpa) << "KPA1500: Connected to amplifier";
+    qCDebug(lcKpa1500Ui) << "KPA1500: Connected to amplifier";
     const int pollInterval = RadioSettings::instance()->kpa1500PollInterval();
     m_client->startPolling(pollInterval);
     updateStatus();
 }
 
 void KPA1500UiController::onDisconnected() {
-    qCDebug(qk4Kpa) << "KPA1500: Disconnected from amplifier";
+    qCDebug(lcKpa1500Ui) << "KPA1500: Disconnected from amplifier";
     updateStatus();
 }
 

@@ -1,4 +1,5 @@
 #include "kpodudevworker.h"
+#include "logging/logcategories.h"
 
 #include <QtGlobal>
 
@@ -13,8 +14,6 @@
 #include <poll.h>
 #include <unistd.h>
 
-Q_LOGGING_CATEGORY(hwKpodUdev, "hw.kpod.udev", QtInfoMsg)
-
 // WHY: hidapi's hid_enumerate() on Linux calls libusb_get_device_list() and opens each
 // candidate device to read descriptor strings. Polling that every 2 s for hotplug detection
 // dominated idle CPU on Linux laptops with several USB devices (~23 % observed). udev's
@@ -27,7 +26,7 @@ KpodUdevWorker::KpodUdevWorker(quint16 vendorId, quint16 productId, QObject *par
     // WHY here, not in start(): stop() writes to the pipe from another thread, so the descriptors
     // must exist before the worker thread does and never change afterwards.
     if (::pipe2(m_wakePipe, O_CLOEXEC | O_NONBLOCK) < 0) {
-        qCWarning(hwKpodUdev) << "pipe2 failed:" << ::strerror(errno);
+        qCWarning(lcKpodUdev) << "pipe2 failed:" << ::strerror(errno);
         m_wakePipe[0] = m_wakePipe[1] = -1;
     }
 }
@@ -54,26 +53,26 @@ void KpodUdevWorker::start() {
 
     udev *udev = udev_new();
     if (!udev) {
-        qCWarning(hwKpodUdev) << "udev_new failed";
+        qCWarning(lcKpodUdev) << "udev_new failed";
         return;
     }
 
     udev_monitor *monitor = udev_monitor_new_from_netlink(udev, "udev");
     if (!monitor) {
-        qCWarning(hwKpodUdev) << "udev_monitor_new_from_netlink failed";
+        qCWarning(lcKpodUdev) << "udev_monitor_new_from_netlink failed";
         udev_unref(udev);
         return;
     }
 
     if (udev_monitor_filter_add_match_subsystem_devtype(monitor, "usb", "usb_device") < 0) {
-        qCWarning(hwKpodUdev) << "udev_monitor_filter_add_match_subsystem_devtype failed";
+        qCWarning(lcKpodUdev) << "udev_monitor_filter_add_match_subsystem_devtype failed";
         udev_monitor_unref(monitor);
         udev_unref(udev);
         return;
     }
 
     if (udev_monitor_enable_receiving(monitor) < 0) {
-        qCWarning(hwKpodUdev) << "udev_monitor_enable_receiving failed";
+        qCWarning(lcKpodUdev) << "udev_monitor_enable_receiving failed";
         udev_monitor_unref(monitor);
         udev_unref(udev);
         return;
@@ -81,7 +80,7 @@ void KpodUdevWorker::start() {
 
     int monitorFd = udev_monitor_get_fd(monitor);
     if (monitorFd < 0) {
-        qCWarning(hwKpodUdev) << "udev_monitor_get_fd returned" << monitorFd;
+        qCWarning(lcKpodUdev) << "udev_monitor_get_fd returned" << monitorFd;
         udev_monitor_unref(monitor);
         udev_unref(udev);
         return;
@@ -100,7 +99,7 @@ void KpodUdevWorker::start() {
         if (rc < 0) {
             if (errno == EINTR)
                 continue;
-            qCWarning(hwKpodUdev) << "poll failed:" << ::strerror(errno);
+            qCWarning(lcKpodUdev) << "poll failed:" << ::strerror(errno);
             break;
         }
 

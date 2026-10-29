@@ -1,4 +1,5 @@
 #include "modepopupcontroller.h"
+#include "logging/logcategories.h"
 
 #include "connectioncontroller.h"
 #include "models/radiostate.h"
@@ -7,8 +8,6 @@
 #include <QLoggingCategory>
 #include <QRegularExpression>
 #include <QWidget>
-
-Q_LOGGING_CATEGORY(qk4ModePopup, "qk4.modepopup", QtInfoMsg)
 
 ModePopupController::ModePopupController(RadioState *radioState, ConnectionController *connection,
                                          QWidget *parentWidget, QObject *parent)
@@ -27,7 +26,7 @@ ModePopupController::ModePopupController(RadioState *radioState, ConnectionContr
         if (match.hasMatch()) {
             const bool isSubRx = !match.captured(1).isEmpty(); // DT$ = VFO B
             const int subMode = match.captured(2).toInt();
-            qCDebug(qk4ModePopup) << "Optimistic DT update: isSubRx=" << isSubRx << "subMode=" << subMode;
+            qCDebug(lcUiModePopup) << "Optimistic DT update: isSubRx=" << isSubRx << "subMode=" << subMode;
             if (isSubRx)
                 m_radioState->setDataSubModeB(subMode);
             else

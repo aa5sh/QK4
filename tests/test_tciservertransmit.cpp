@@ -368,7 +368,7 @@ private slots:
         // queue until the server drops it - synchronously, inside the reply. Whether the drop lands
         // in the PTT broadcast or mid-frame, nothing may key the radio after it: the last request
         // the transmitter sees must be an unkey.
-        QLoggingCategory::setFilterRules(QStringLiteral("net.tci.info=false\nnet.ws.info=false"));
+        QLoggingCategory::setFilterRules(QStringLiteral("qk4.tci.info=false\nqk4.tci.ws.info=false"));
         TciServer server;
         QVERIFY(server.start(0));
         QSignalSpy ptt(&server, &TciServer::pttRequested);

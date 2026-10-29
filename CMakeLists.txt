@@ -172,6 +172,7 @@ set(SOURCES
     src/dsp/waterfallgeometry.cpp
     src/settings/radiosettings.cpp
     src/settings/interfacescale.cpp
+    src/logging/logcategories.cpp
     src/models/radiostate.cpp
     src/models/radiostate/antennastate.cpp
     src/models/radiostate/audioeffectsstate.cpp
@@ -321,6 +322,7 @@ set(HEADERS
     src/dsp/minipan_rhi.h
     src/settings/radiosettings.h
     src/settings/interfacescale.h
+    src/logging/logcategories.h
     src/models/radiostate.h
     src/models/radiostate/antennastate.h
     src/models/radiostate/datacontrolstate.h

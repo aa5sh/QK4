@@ -1,4 +1,5 @@
 #include "halikeyv14worker.h"
+#include "logging/logcategories.h"
 #include "halikeyworkerbase.h"
 #include "hardware/keyerruntime.h"
 #include "hardware/seriallinepoller.h"
@@ -42,7 +43,7 @@ bool HaliKeyV14Worker::openNativePort() {
     if (m_handle == INVALID_HANDLE_VALUE) {
         m_handle = nullptr;
         QString error = "Failed to open port " + m_portName;
-        qCWarning(hwHalikey) << "HaliKeyV14Worker:" << error;
+        qCWarning(lcCwHalikey) << "HaliKeyV14Worker:" << error;
         emit errorOccurred(error);
         return false;
     }
@@ -52,7 +53,7 @@ bool HaliKeyV14Worker::openNativePort() {
     dcb.DCBlength = sizeof(DCB);
     if (!GetCommState(m_handle, &dcb)) {
         QString error = "Failed to get port state for " + m_portName;
-        qCWarning(hwHalikey) << "HaliKeyV14Worker:" << error;
+        qCWarning(lcCwHalikey) << "HaliKeyV14Worker:" << error;
         closeNativePort();
         emit errorOccurred(error);
         return false;
@@ -65,7 +66,7 @@ bool HaliKeyV14Worker::openNativePort() {
     dcb.fRtsControl = RTS_CONTROL_ENABLE;
     if (!SetCommState(m_handle, &dcb)) {
         QString error = "Failed to configure port " + m_portName;
-        qCWarning(hwHalikey) << "HaliKeyV14Worker:" << error;
+        qCWarning(lcCwHalikey) << "HaliKeyV14Worker:" << error;
         closeNativePort();
         emit errorOccurred(error);
         return false;
@@ -96,7 +97,7 @@ bool HaliKeyV14Worker::openNativePort() {
     m_fd = ::open(devPath.constData(), O_RDONLY | O_NOCTTY | O_NONBLOCK);
     if (m_fd < 0) {
         QString error = QString("Failed to open port %1: %2").arg(m_portName, QString::fromLocal8Bit(strerror(errno)));
-        qCWarning(hwHalikey) << "HaliKeyV14Worker:" << error;
+        qCWarning(lcCwHalikey) << "HaliKeyV14Worker:" << error;
         emit errorOccurred(error);
         return false;
     }
@@ -105,7 +106,7 @@ bool HaliKeyV14Worker::openNativePort() {
     struct termios tio = {};
     if (tcgetattr(m_fd, &tio) < 0) {
         QString error = QString("Failed to get port attributes for %1").arg(m_portName);
-        qCWarning(hwHalikey) << "HaliKeyV14Worker:" << error;
+        qCWarning(lcCwHalikey) << "HaliKeyV14Worker:" << error;
         closeNativePort();
         emit errorOccurred(error);
         return false;
@@ -158,10 +159,10 @@ bool HaliKeyV14Worker::readPinState(bool &ditState, bool &dahState) {
     // Diagnostic: log each raw modem-line transition so we can see whether DCD and DSR
     // (which together form the dah lever via `dcd || dsr`) actually rise/fall as a pair.
     // A lingering DSR after DCD drops would latch dahState true → stuck dah. Chatty by
-    // design; gated behind hw.halikey.debug. Compares against last-logged raw bits.
+    // design; gated behind qk4.cw.halikey.debug. Compares against last-logged raw bits.
     if (cts != m_lastRawCts || dsr != m_lastRawDsr || dcd != m_lastRawDcd) {
-        qCDebug(hwHalikey) << "HaliKeyV14Worker: raw pins  CTS:" << cts << " DCD:" << dcd << " DSR:" << dsr
-                           << " => dah(dcd||dsr):" << (dcd || dsr);
+        qCDebug(lcCwHalikey) << "HaliKeyV14Worker: raw pins  CTS:" << cts << " DCD:" << dcd << " DSR:" << dsr
+                             << " => dah(dcd||dsr):" << (dcd || dsr);
         m_lastRawCts = cts;
         m_lastRawDsr = dsr;
         m_lastRawDcd = dcd;
@@ -213,7 +214,7 @@ void HaliKeyV14Worker::monitorLoop() {
 #else
         const QString error = QString("HaliKey monitor error: %1").arg(QString::fromLocal8Bit(strerror(errno)));
 #endif
-        qCWarning(hwHalikey) << "HaliKeyV14Worker:" << error;
+        qCWarning(lcCwHalikey) << "HaliKeyV14Worker:" << error;
         emit errorOccurred(error);
     };
 
@@ -267,8 +268,8 @@ void HaliKeyV14Worker::monitorLoop() {
         }
         for (const auto &change : poller.poll(read, clock.now())) {
             const bool dah = change.signal != Signal::CTS;
-            qCDebug(hwHalikey) << "HaliKeyV14Worker:" << (dah ? "dah" : "dit") << (change.asserted ? "down" : "up")
-                               << "after" << change.deltaTime * 1000 << "ms";
+            qCDebug(lcCwHalikey) << "HaliKeyV14Worker:" << (dah ? "dah" : "dit") << (change.asserted ? "down" : "up")
+                                 << "after" << change.deltaTime * 1000 << "ms";
             emit paddleChanged(dah, change.asserted, change.deltaTime);
         }
     }

@@ -5,6 +5,7 @@
 // subsystem decomposition unchanged and must continue to. The regression
 // gate is tests/test_catserver.cpp, pinned in CI.
 #include "catserver.h"
+#include "logging/logcategories.h"
 #include "catframes.h"
 #include "catpushbroadcaster.h"
 #include "models/radiostate.h"
@@ -12,8 +13,6 @@
 
 #include <QLoggingCategory>
 #include <QTimer>
-
-Q_LOGGING_CATEGORY(netCat, "net.cat", QtInfoMsg)
 
 CatServer::CatServer(RadioState *state, QObject *parent)
     : QObject(parent), m_server(new QTcpServer(this)), m_radioState(state) {
@@ -39,7 +38,7 @@ bool CatServer::start(quint16 port) {
     }
 
     m_port = m_server->serverPort(); // use actual port (may differ from requested if 0)
-    qCInfo(netCat) << "CAT server listening on port" << m_port;
+    qCInfo(lcCatServer) << "CAT server listening on port" << m_port;
     emit started(m_port);
     return true;
 }
@@ -88,8 +87,8 @@ void CatServer::onNewConnection() {
 
             // Protect against unbounded buffer growth from misbehaving clients
             if (buffer.size() > K4Protocol::MAX_BUFFER_SIZE) {
-                qCWarning(netCat) << "CAT client buffer overflow from" << client->peerAddress().toString()
-                                  << "- disconnecting";
+                qCWarning(lcCatServer) << "CAT client buffer overflow from" << client->peerAddress().toString()
+                                       << "- disconnecting";
                 client->disconnectFromHost();
                 return;
             }
@@ -102,13 +101,13 @@ void CatServer::onNewConnection() {
                 offset = idx + 1;
 
                 if (!command.isEmpty()) {
-                    qCDebug(netCat) << "RX <-" << client->peerPort() << command;
+                    qCDebug(lcCatServer) << "RX <-" << client->peerPort() << command;
                     QByteArray response = handleCommand(command, client);
                     if (!response.isEmpty()) {
-                        qCDebug(netCat) << "TX ->" << client->peerPort() << response;
+                        qCDebug(lcCatServer) << "TX ->" << client->peerPort() << response;
                         client->write(response);
                     } else {
-                        qCDebug(netCat) << "   (no response)" << client->peerPort() << command;
+                        qCDebug(lcCatServer) << "   (no response)" << client->peerPort() << command;
                     }
                 }
             }
@@ -120,7 +119,7 @@ void CatServer::onNewConnection() {
 
         connect(client, &QTcpSocket::disconnected, this, [this, client]() {
             QString address = QString("%1:%2").arg(client->peerAddress().toString()).arg(client->peerPort());
-            qCInfo(netCat) << "CAT client disconnected:" << address;
+            qCInfo(lcCatServer) << "CAT client disconnected:" << address;
             // A client that crashes or is killed mid-transmission never sends RX;. Without this
             // the mic gate stayed open and the K4 kept transmitting until the operator pressed
             // Escape.
@@ -133,7 +132,7 @@ void CatServer::onNewConnection() {
         });
 
         QString address = QString("%1:%2").arg(client->peerAddress().toString()).arg(client->peerPort());
-        qCInfo(netCat) << "CAT client connected:" << address;
+        qCInfo(lcCatServer) << "CAT client connected:" << address;
         emit clientConnected(address);
     }
 }
@@ -149,11 +148,12 @@ void CatServer::askRadio(const QString &key, QTcpSocket *client) {
     QTimer::singleShot(kRadioQueryTimeoutMs, this, [this, key, generation]() {
         auto it = m_pendingRadioQueries.find(key);
         if (it != m_pendingRadioQueries.end() && it->generation == generation) {
-            qCDebug(netCat) << "   radio did not answer" << key << "- dropping" << it->waiters.size() << "waiter(s)";
+            qCDebug(lcCatServer) << "   radio did not answer" << key << "- dropping" << it->waiters.size()
+                                 << "waiter(s)";
             m_pendingRadioQueries.erase(it);
         }
     });
-    qCDebug(netCat) << "   asking the radio:" << key;
+    qCDebug(lcCatServer) << "   asking the radio:" << key;
     emit radioQueryRequested(key + ';');
 }
 
@@ -174,7 +174,7 @@ void CatServer::onRadioResponse(const QString &response) {
             const QByteArray reply = (frame + ';').toUtf8();
             for (const QPointer<QTcpSocket> &client : std::as_const(it->waiters)) {
                 if (client && m_clients.contains(client)) {
-                    qCDebug(netCat) << "TX ->" << client->peerPort() << reply << "(from the radio)";
+                    qCDebug(lcCatServer) << "TX ->" << client->peerPort() << reply << "(from the radio)";
                     client->write(reply);
                 }
             }
@@ -187,7 +187,7 @@ void CatServer::releasePttIfOwner(QTcpSocket *client) {
     if (!client || m_pttOwner != client) {
         return;
     }
-    qCInfo(netCat) << "CAT client that asserted PTT is gone - releasing";
+    qCInfo(lcCatServer) << "CAT client that asserted PTT is gone - releasing";
     m_pttOwner = nullptr;
     emit pttRequested(false);
 }
@@ -420,9 +420,9 @@ QByteArray CatServer::handleCommand(const QString &cmd, QTcpSocket *client) {
         int level = args.toInt(&ok);
         if (ok && (level == 0 || level == 1 || level == 2 || level == 4)) {
             m_broadcaster->setClientAiMode(client, level);
-            qCDebug(netCat) << "   AI mode set to" << level << "for client" << client->peerPort();
+            qCDebug(lcCatServer) << "   AI mode set to" << level << "for client" << client->peerPort();
         } else {
-            qCDebug(netCat) << "   AI SET rejected (invalid level):" << cmd;
+            qCDebug(lcCatServer) << "   AI SET rejected (invalid level):" << cmd;
         }
         return QByteArray();
     }
@@ -432,14 +432,14 @@ QByteArray CatServer::handleCommand(const QString &cmd, QTcpSocket *client) {
     // "TX;" asserts transmit; "TX/;" toggles based on the radio's current TX state.
     if (prefix == "TX") {
         const bool on = (args == "/") ? !m_radioState->isTransmitting() : true;
-        qCDebug(netCat) << "   PTT request:" << (on ? "ON" : "OFF");
+        qCDebug(lcCatServer) << "   PTT request:" << (on ? "ON" : "OFF");
         // Remember who keyed so the transmission can be ended if that client vanishes.
         m_pttOwner = on ? client : nullptr;
         emit pttRequested(on);
         return QByteArray();
     }
     if (prefix == "RX") {
-        qCDebug(netCat) << "   PTT request: OFF";
+        qCDebug(lcCatServer) << "   PTT request: OFF";
         m_pttOwner = nullptr;
         emit pttRequested(false);
         return QByteArray();
@@ -447,7 +447,7 @@ QByteArray CatServer::handleCommand(const QString &cmd, QTcpSocket *client) {
 
     // SET commands (have args) - forward to real K4
     // Commands like FA14074000;, MD1;, etc.
-    qCDebug(netCat) << "   forwarding SET to K4:" << cmd;
+    qCDebug(lcCatServer) << "   forwarding SET to K4:" << cmd;
     emit catCommandReceived(cmd);
 
     // Most SET commands echo the new value

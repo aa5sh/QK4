@@ -1,4 +1,5 @@
 #include "textdecodecontroller.h"
+#include "logging/logcategories.h"
 
 #include "connectioncontroller.h"
 #include "models/radiostate.h"
@@ -6,8 +7,6 @@
 
 #include <QLoggingCategory>
 #include <QWidget>
-
-Q_LOGGING_CATEGORY(qk4TextDecode, "qk4.textdecode", QtInfoMsg)
 
 namespace {
 
@@ -202,6 +201,6 @@ void TextDecodeController::sendTextDecodeCmd(TextDecodeWindow *window, bool isMa
     }
     QString cmdPrefix = isMainRx ? "TD" : "TD$";
     QString cmd = QString("%1%2%3%4;").arg(cmdPrefix).arg(mode).arg(threshold).arg(window->maxLines());
-    qCDebug(qk4TextDecode) << "sending" << cmd;
+    qCDebug(lcUiTextDecode) << "sending" << cmd;
     m_connection->sendCAT(cmd);
 }

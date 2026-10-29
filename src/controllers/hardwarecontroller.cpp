@@ -1,4 +1,5 @@
 #include "hardwarecontroller.h"
+#include "logging/logcategories.h"
 #include "audio/sidetonegenerator.h"
 #include "audio/sidetonescheduler.h"
 #include "connectioncontroller.h"
@@ -11,8 +12,6 @@
 #include "settings/radiosettings.h"
 #include "utils/radioutils.h"
 #include <QLoggingCategory>
-
-Q_LOGGING_CATEGORY(qk4Hardware, "qk4.hardware", QtInfoMsg)
 
 namespace {
 // The K4 reports no stuck-key timeout; push this fixed default to the KPOD+.
@@ -285,7 +284,7 @@ void HardwareController::shutdownDevices() {
     if (m_keyerThread) {
         m_paddleKeyer->close();
         if (!m_keyerThread->wait(2000))
-            qCWarning(qk4Hardware) << "keyer thread did not stop within 2 s";
+            qCWarning(lcHardware) << "keyer thread did not stop within 2 s";
         m_keyerLink->setSender(nullptr);
     }
     m_keyerThread = nullptr; // child of this; Qt deletes it, but never join it twice
@@ -384,5 +383,5 @@ void HardwareController::onKpodPollError(const QString &error) {
     // Deliberately a log line and not a notification: this arrives from a polling loop and can
     // repeat at the poll rate, so a popup per occurrence would bury the screen. The user-visible
     // signal for "the device is gone" is the deviceDisconnected notification, which fires once.
-    qCWarning(qk4Hardware) << "KPOD/KPOD+ poll error:" << error;
+    qCWarning(lcHardware) << "KPOD/KPOD+ poll error:" << error;
 }
