@@ -956,5 +956,5 @@ void PaddleKeyer::delayedUnmuteSidetoneMonitor(double delay) {
     const unsigned long long token = ++m_monitorToken;
     // WHY posted: the timer fires on the main thread, and ML is sent only from the keyer thread. A
     // burst that starts before the keyer reaches this request moves the token on and voids it.
-    m_unmuteTimer.start(delay, [this, token] { pushEvent({Event::RestoreMonitor, m_clock.now(), 0.0, token}); });
+    m_unmuteTimer.start(delay, [this, token] { pushRequest({Event::RestoreMonitor, m_clock.now(), 0.0, token}); });
 }
