@@ -48,7 +48,8 @@ AudioController::AudioController(ConnectionController *connController, RadioStat
 
     // RX audio path: Protocol → decode → enqueue (runs entirely on I/O thread)
     // m_opusDecoder is only called from this lambda → single-threaded on I/O thread
-    // m_audioEngine->enqueueAudio() is mutex-protected → safe from any thread
+    // m_audioEngine->enqueueAudio() is the producer side of a single-producer ring: this lambda,
+    // on the I/O thread, is its only caller.
     auto *protocol = m_connectionController->tcpClient()->protocol();
     m_rxDecodeConnection = connect(protocol, &Protocol::audioDataReady, protocol, [this](const QByteArray &payload) {
         QByteArray pcmData = m_opusDecoder->decodeK4Packet(payload);

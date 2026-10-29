@@ -5,6 +5,7 @@ RX and TX audio pipeline. Owned by `controllers/audiocontroller.cpp`.
 ## Files
 
 - `audioengine.{cpp,h}` — `QAudioSink` + `QAudioSource` with a jitter buffer. A 5 ms `Qt::PreciseTimer` feed writes whole packets into a sink sized to one SL-tier packet plus a 30 ms device margin; playback starts after one packet (`PREBUFFER_PACKETS = 1`, 20–120 ms of audio depending on SL). Counts sink underruns and dropped packets. Handles volume, balance, mix routing, and owns the `OpusEncoder` used for TX.
+- `spscring.h` — header-only, Qt-free. Fixed-capacity lock-free ring for one producer and one consumer, slots filled and read in place. Carries decoded RX packets from the I/O thread to the audio thread with no lock or allocation. Tested, including under ThreadSanitizer, in `tests/test_spscring.cpp`.
 - `rxplayout.h` — header-only, Qt-free. RX sink size per SL tier (packet + 30 ms: 50/70/90/150 ms) and the jitter policy (trim the queue when queue + sink passes 5 packets, capped at 300 ms but at least 3 packets, back to 2 packets). Replaced a fixed 500 ms sink, in which a network burst sat out of the policy's reach and played up to half a second late. Tested, with a simulated network and device, in `tests/test_rxplayout.cpp`.
 - `opusdecoder.{cpp,h}` — Opus decode wrapper. K4 sends 12kHz stereo (left=Main, right=Sub). All four encode modes normalise by one rule, `native × K4_GAIN_BOOST / full_scale`; the per-mode scales were measured 2026-09-19, not tuned by ear. See `docs/k4-protocol-quirks.md` §11.
 - `opusencoder.{cpp,h}` — Opus encode wrapper for TX. 12kHz mono; frame size reconfigured per K4 SL tier. `encodeFloat()` is what the TX path uses — Opus takes float natively, so the Opus modes never quantise.
@@ -27,7 +28,7 @@ RX and TX audio pipeline. Owned by `controllers/audiocontroller.cpp`.
 
 ## RX path
 
-K4 → Protocol (I/O thread) → OpusDecoder (I/O thread) → `AudioEngine::enqueueAudio` (mutex-protected) → feed timer (audio thread) → QAudioSink → speakers.
+K4 → Protocol (I/O thread) → OpusDecoder (I/O thread) → `AudioEngine::enqueueAudio` (copies into a lock-free SPSC ring slot) → feed timer (audio thread: jitter policy, mix in place, write) → QAudioSink → speakers. No mutex on the path; MX routing is one packed atomic.
 
 ## TX path
 

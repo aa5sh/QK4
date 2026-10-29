@@ -62,7 +62,6 @@ AudioEngine::AudioEngine(QObject *parent)
     // the worst case, which is the whole input buffer.
     m_micBuffer.reserve(2 * 1440 * static_cast<int>(sizeof(float)));
     m_resampleBuf12k.reserve(INPUT_BUFFER_SIZE);
-    m_feedBatch.reserve(4);
 
     // WHY setupAudioInput() is deferred until the first openMic() call:
     // Qt's mic-permission callback on macOS runs on the main-thread runloop. During connection
@@ -134,13 +133,7 @@ void AudioEngine::stop() {
     if (m_feedTimer) {
         m_feedTimer->stop();
     }
-    {
-        QMutexLocker lock(&m_queueMutex);
-        m_audioQueue.clear();
-        m_queueBytes = 0;
-        m_prebuffering = true;
-    }
-    m_writeBuffer.clear();
+    flushQueue();
 
     // Stop mic polling timer
     if (m_micPollTimer) {
@@ -419,30 +412,48 @@ bool AudioEngine::setupAudioInput() {
     return true;
 }
 
-void AudioEngine::enqueueAudio(const QByteArray &pcmData) {
-    if (pcmData.isEmpty())
-        return;
+bool AudioEngine::enqueueAudio(const QByteArray &pcmData) {
+    return enqueueAudio(reinterpret_cast<const float *>(pcmData.constData()),
+                        static_cast<int>(pcmData.size() / sizeof(float)));
+}
 
-    QMutexLocker lock(&m_queueMutex);
-
-    // Absolute backstop only: never let the queue exceed 1s of audio regardless of packet size. The
-    // jitter policy proper runs in feedAudioDevice, where the sink's fill is known.
-    const int pktBytes = pcmData.size();
-    while (m_queueBytes + pktBytes > MAX_QUEUE_BYTES && !m_audioQueue.isEmpty()) {
-        m_queueBytes -= m_audioQueue.dequeue().size();
+bool AudioEngine::enqueueAudio(const float *samples, int floats) {
+    // I/O thread. Copy into the next free slot and publish it; nothing else. The jitter policy runs
+    // on the consumer, in feedAudioDevice, where the sink's fill is known.
+    floats -= floats % 2; // whole stereo frames
+    if (floats <= 0)
+        return true;
+    RxPacket *slot = m_rxRing.beginWrite();
+    if (!slot || floats > RxPacket::MAX_FLOATS) {
+        // Full: the audio thread is not consuming (no sink, or stalled). Dropping the newest keeps
+        // this thread wait-free, and whatever is queued is far older than the jitter target anyway.
         m_rxDroppedPackets.fetch_add(1, std::memory_order_relaxed);
+        return false;
     }
+    std::copy(samples, samples + floats, slot->samples.begin());
+    slot->floats = floats;
+    m_rxRing.commitWrite();
+    return true;
+}
 
-    m_audioQueue.enqueue(pcmData);
-    m_queueBytes += pktBytes;
+void AudioEngine::popRxHead() {
+    m_rxRing.pop();
+    m_rxHeadOffset = 0;
+    m_rxHeadMixed = false;
+}
+
+int AudioEngine::rxQueuedBytes() {
+    int floats = -m_rxHeadOffset;
+    for (std::size_t i = 0; const RxPacket *p = m_rxRing.peek(i); ++i)
+        floats += p->floats;
+    return floats * static_cast<int>(sizeof(float));
 }
 
 void AudioEngine::flushQueue() {
-    QMutexLocker lock(&m_queueMutex);
-    m_audioQueue.clear();
-    m_queueBytes = 0;
+    // Audio thread: the ring is drained from the consumer side only.
+    while (m_rxRing.front())
+        popRxHead();
     m_prebuffering = true;
-    m_writeBuffer.clear();
 }
 
 void AudioEngine::feedAudioDevice() {
@@ -453,81 +464,57 @@ void AudioEngine::feedAudioDevice() {
     int bytesFree = static_cast<int>(m_audioSink->bytesFree());
     int sinkFill = qMax(0, sinkSize - bytesFree);
 
-    // Drain any leftover of a packet that was written in part
-    if (!m_writeBuffer.isEmpty()) {
-        const int toWrite = RxPlayout::bytesToWrite(m_writeBuffer.size(), bytesFree, sinkFill);
-        if (toWrite > 0) {
-            const qint64 written = m_audioSinkDevice->write(m_writeBuffer.constData(), toWrite);
-            if (written > 0) {
-                m_writeBuffer.remove(0, static_cast<int>(written));
-                bytesFree -= static_cast<int>(written);
-                sinkFill += static_cast<int>(written);
-            }
-        }
-        if (!m_writeBuffer.isEmpty())
-            return; // Still have leftover — don't pull more from queue yet
+    if (m_rxRing.empty())
+        return;
+
+    // Wait for at least one packet before starting playback
+    if (m_prebuffering) {
+        if (m_rxRing.size() < static_cast<std::size_t>(PREBUFFER_PACKETS))
+            return;
+        m_prebuffering = false;
     }
 
-    // Drain queue under a short lock, then write outside the lock. m_feedBatch
-    // is a member to avoid constructing a fresh QList on every tick.
-    m_feedBatch.clear();
-    int bufferedBytes;
-    {
-        QMutexLocker lock(&m_queueMutex);
-
-        if (m_audioQueue.isEmpty())
-            return;
-
-        // Wait for at least one packet before starting playback
-        if (m_prebuffering) {
-            if (m_audioQueue.size() < PREBUFFER_PACKETS)
-                return;
-            m_prebuffering = false;
-        }
-
-        // Self-correcting jitter buffer, run here on the consumer where the sink's fill is known. If
-        // a stall (output-device rebuild, network burst, I/O thread busy) left more audio buffered
-        // than the high-water mark, drop the OLDEST (most delayed) packets back to the target. The
-        // marks are in packets of the current SL tier (audio/rxplayout.h) and count the sink too,
-        // so they bound real latency. One small forward skip; the newest audio keeps playing.
-        const int pktBytes = m_audioQueue.head().size();
-        if (RxPlayout::overHighWater(m_queueBytes, sinkFill, 0, pktBytes)) {
+    // Self-correcting jitter buffer, run here on the consumer where the sink's fill is known. If a
+    // stall (output-device rebuild, network burst, I/O thread busy) left more audio buffered than
+    // the high-water mark, drop the OLDEST (most delayed) packets back to the target. The marks are
+    // in packets of the current SL tier (audio/rxplayout.h) and count the sink too, so they bound
+    // real latency. One small forward skip; the newest audio keeps playing. A packet already partly
+    // in the sink is left alone - it is playing.
+    int queued = rxQueuedBytes();
+    if (m_rxHeadOffset == 0) {
+        const int pktBytes = m_rxRing.front()->floats * static_cast<int>(sizeof(float));
+        if (RxPlayout::overHighWater(queued, sinkFill, 0, pktBytes)) {
             const int target = RxPlayout::targetBytes(pktBytes);
-            while (m_queueBytes + sinkFill > target && m_audioQueue.size() > 1) {
-                m_queueBytes -= m_audioQueue.dequeue().size();
+            while (queued + sinkFill > target && m_rxRing.size() > 1) {
+                queued -= m_rxRing.front()->floats * static_cast<int>(sizeof(float));
+                popRxHead();
                 m_rxDroppedPackets.fetch_add(1, std::memory_order_relaxed);
             }
         }
-
-        bufferedBytes = m_queueBytes + sinkFill;
-
-        // Move packets that fit. A packet larger than the room left is written in part only when the
-        // sink is about to starve (RxPlayout::bytesToWrite); the rest waits in m_writeBuffer.
-        while (!m_audioQueue.isEmpty()) {
-            const int headSize = m_audioQueue.head().size();
-            const int toWrite = RxPlayout::bytesToWrite(headSize, bytesFree, sinkFill);
-            if (toWrite <= 0)
-                break;
-            QByteArray pkt = m_audioQueue.dequeue();
-            m_queueBytes -= headSize;
-            bytesFree -= toWrite;
-            sinkFill += toWrite;
-            m_feedBatch.append(std::move(pkt));
-            if (toWrite < headSize)
-                break;
-        }
     }
 
-    emit bufferStatus(bufferedBytes);
+    emit bufferStatus(queued + sinkFill);
 
-    // Apply mix/volume and write to audio sink without holding the lock
-    for (QByteArray &packet : m_feedBatch) {
-        applyMixAndVolume(packet);
-        const qint64 written = qMax<qint64>(0, m_audioSinkDevice->write(packet.constData(), packet.size()));
-        if (written < packet.size()) {
-            // Partial or failed write — save remainder for next feed cycle
-            m_writeBuffer.append(packet.constData() + written, packet.size() - static_cast<int>(written));
+    // Write whole packets while they fit; a packet larger than the room left goes in part only when
+    // the sink is about to starve (RxPlayout::bytesToWrite), and the rest waits at the ring's front.
+    while (RxPacket *head = m_rxRing.front()) {
+        if (!m_rxHeadMixed) {
+            applyMixAndVolume(head->samples.data(), head->floats / 2);
+            m_rxHeadMixed = true;
         }
+        const int remainingBytes = (head->floats - m_rxHeadOffset) * static_cast<int>(sizeof(float));
+        const int toWrite = RxPlayout::bytesToWrite(remainingBytes, bytesFree, sinkFill);
+        if (toWrite <= 0)
+            break;
+        const char *from = reinterpret_cast<const char *>(head->samples.data() + m_rxHeadOffset);
+        const int written = static_cast<int>(qMax<qint64>(0, m_audioSinkDevice->write(from, toWrite)));
+        bytesFree -= written;
+        sinkFill += written;
+        if (written < remainingBytes) {
+            m_rxHeadOffset += written / static_cast<int>(sizeof(float));
+            break;
+        }
+        popRxHead();
     }
 }
 
@@ -547,11 +534,7 @@ static inline float mixChannel(float mainSample, float subSample, AudioEngine::M
     return 0.0f;
 }
 
-void AudioEngine::applyMixAndVolume(QByteArray &packet) {
-    float *samples = reinterpret_cast<float *>(packet.data());
-    int totalFloats = packet.size() / sizeof(float);
-    int sampleCount = totalFloats / 2;
-
+void AudioEngine::applyMixAndVolume(float *samples, int sampleCount) {
     // Load atomic/guarded values once per packet (not per sample)
     // The boost multiplies the sliders, so a saved slider position means what it always did.
     const float boost = m_rxBoostGain.load(std::memory_order_relaxed);
@@ -566,12 +549,9 @@ void AudioEngine::applyMixAndVolume(QByteArray &packet) {
     const int balMode = m_balanceMode.load(std::memory_order_relaxed);
     const int balOffset = m_balanceOffset.load(std::memory_order_relaxed);
 
-    MixSource mixL, mixR;
-    {
-        QMutexLocker lock(&m_mixMutex);
-        mixL = m_mixLeft;
-        mixR = m_mixRight;
-    }
+    const int mix = m_mix.load(std::memory_order_relaxed);
+    const MixSource mixL = static_cast<MixSource>(mix & 0xff);
+    const MixSource mixR = static_cast<MixSource>((mix >> 8) & 0xff);
 
     // Pre-compute BL balance gains (BAL mode only, applied after MX routing)
     float balLeftGain = 1.0f, balRightGain = 1.0f;
@@ -1030,9 +1010,8 @@ void AudioEngine::setSubMuted(bool muted) {
 }
 
 void AudioEngine::setAudioMix(int left, int right) {
-    QMutexLocker lock(&m_mixMutex);
-    m_mixLeft = static_cast<MixSource>(qBound(0, left, 3));
-    m_mixRight = static_cast<MixSource>(qBound(0, right, 3));
+    m_mix.store(packMix(static_cast<MixSource>(qBound(0, left, 3)), static_cast<MixSource>(qBound(0, right, 3))),
+                std::memory_order_relaxed);
 }
 
 void AudioEngine::setBalanceMode(int mode) {

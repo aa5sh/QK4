@@ -369,6 +369,12 @@ target_include_directories(test_rxplayout PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_rxplayout Qt6::Core Qt6::Network Qt6::Test)
 add_test(NAME RxPlayoutTests COMMAND test_rxplayout)
 
+# Lock-free SPSC ring carrying RX audio from the I/O thread to the audio thread. Run under TSan too.
+add_executable(test_spscring test_spscring.cpp)
+target_include_directories(test_spscring PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_spscring Qt6::Core Qt6::Test)
+add_test(NAME SpscRingTests COMMAND test_spscring)
+
 # NetworkMetrics sparkline history + jitter tests
 add_executable(test_networkmetrics test_networkmetrics.cpp
     ${CMAKE_SOURCE_DIR}/src/network/networkmetrics.cpp

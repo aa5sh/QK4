@@ -9,11 +9,11 @@
 #include <QIODevice>
 #include <QMediaDevices>
 #include <QTimer>
-#include <QQueue>
-#include <QMutex>
+#include <array>
 #include <atomic>
 
 #include "audio/audioresampler.h"
+#include "audio/spscring.h"
 
 class OpusEncoder;
 
@@ -30,8 +30,9 @@ class OpusEncoder;
  *      framed to the SL-tier sample count, emitted via `microphoneFrame` for the
  *      Opus encoder.
  *
- * Thread-safety: all public setters mutate @c std::atomic members or take
- * @c m_queueMutex / @c m_mixMutex; no other cross-thread contract.
+ * Thread-safety: all public setters mutate @c std::atomic members. RX audio crosses from the
+ * I/O thread on a lock-free single-producer/single-consumer ring (audio/spscring.h): exactly one
+ * thread may call enqueueAudio(). No mutex is taken on the RX path.
  */
 class AudioEngine : public QObject {
     Q_OBJECT
@@ -44,7 +45,11 @@ public:
 
     Q_INVOKABLE bool start();
     Q_INVOKABLE void stop();
-    void enqueueAudio(const QByteArray &pcmData);
+    // RX audio in, 12 kHz stereo Float32 interleaved [main, sub, ...]. Copied into a preallocated
+    // ring slot: no allocation, no lock. SINGLE PRODUCER - only the I/O thread may call these.
+    // Returns false when the packet was dropped (ring full: the audio thread is not consuming).
+    bool enqueueAudio(const float *samples, int floats);
+    bool enqueueAudio(const QByteArray &pcmData);
     Q_INVOKABLE void flushQueue();
 
     // Mic device lifecycle is decoupled from per-PTT send-gating: the QAudioSource is opened
@@ -254,8 +259,8 @@ private:
     // is what a level measurement actually needs. Audio-thread only, like m_txSequence.
     float m_txPeakSinceKey = 0.0f;
 
-    // Apply MX routing + volume + balance to a raw [main, sub] interleaved packet
-    void applyMixAndVolume(QByteArray &packet);
+    // Apply MX routing + volume + balance in place to raw [main, sub] interleaved frames
+    void applyMixAndVolume(float *samples, int frames);
 
     // qk4.audio.rx accumulator, reported and reset once a second of audio. Audio-thread only.
     struct RxLevelStats {
@@ -303,10 +308,11 @@ private:
     // SUB RX mute state (true = sub muted, sub channel is silent)
     std::atomic<bool> m_subMuted{true}; // Starts muted (SUB RX is off at startup)
 
-    // Audio mix routing (MX command) - default A.B (main left, sub right)
-    MixSource m_mixLeft = MixA;
-    MixSource m_mixRight = MixB;
-    QMutex m_mixMutex; // Protects m_mixLeft and m_mixRight (always set together)
+    // Audio mix routing (MX command) - default A.B (main left, sub right). Both sides packed in one
+    // atomic, left in the low byte, so the audio thread can never read a left from one MX command
+    // and a right from the next - the reason this used to be a mutex.
+    static constexpr int packMix(MixSource left, MixSource right) { return int(left) | (int(right) << 8); }
+    std::atomic<int> m_mix{packMix(MixA, MixB)};
 
     // Balance mode (0=NOR: independent volume, 1=BAL: L/R balance)
     std::atomic<int> m_balanceMode{0};
@@ -317,9 +323,6 @@ private:
     // Default 25% slider -> 0.015625x, set so an injected signal keeps the K4's ALC at or below 5.
     // See kTciTxGainDefault. Same number as m_micGain's default by coincidence, not by derivation.
     std::atomic<float> m_tciTxGain{0.015625f};
-
-    // Audio throughput: 12kHz × 2ch × sizeof(float) = 96,000 bytes/sec = 96 bytes/ms
-    static constexpr int BYTES_PER_MS = 96;
 
     // RX packet length in ms for the current SL tier. Sizes the sink. Audio thread only.
     int m_rxPacketMs = 20;
@@ -361,20 +364,30 @@ private:
     // Timer for polling microphone data (more reliable than readyRead signal)
     QTimer *m_micPollTimer;
 
-    // Jitter buffer for RX audio playback
-    QQueue<QByteArray> m_audioQueue;
-    int m_queueBytes = 0; // Total decoded bytes in m_audioQueue (tracked for time-based thresholds)
-    QMutex m_queueMutex;  // Protects m_audioQueue, m_queueBytes, m_prebuffering
-    QTimer *m_feedTimer;
+    // Jitter buffer for RX audio playback: one decoded K4 packet per slot, filled in place by the
+    // I/O thread and mixed and written in place by the audio thread.
+    //
+    // WHY 64 slots: the ring is the backstop the 1 s queue cap used to be. 64 packets is 1.28 s at
+    // SL0's 20 ms and more at every other tier; the jitter policy trims far below that, so the
+    // ring only fills when the audio thread has stopped consuming, and then the producer drops.
+    struct RxPacket {
+        static constexpr int MAX_FLOATS = 1440 * 2; // 120 ms (SL6-7) of 12 kHz stereo
+        int floats = 0;
+        std::array<float, MAX_FLOATS> samples;
+    };
+    SpscRing<RxPacket, 64> m_rxRing;
+    // Consumer state, audio thread only. A packet written to the sink in part stays at the ring's
+    // front with m_rxHeadOffset floats already written; m_rxHeadMixed says its mix is applied.
+    int m_rxHeadOffset = 0;
+    bool m_rxHeadMixed = false;
+    // Set by flushQueue() on the audio thread. The ring is drained on the consumer side only.
     bool m_prebuffering = true;
+    QTimer *m_feedTimer;
 
-    // Write staging buffer: holds processed PCM that couldn't be written in one feed cycle
-    // Audio-thread-only (no mutex needed) — safety net for partial QIODevice::write()
-    QByteArray m_writeBuffer;
-
-    // Reused per feedAudioDevice() cycle. Hoisted from a per-call stack QList
-    // so the 100 Hz feed timer doesn't construct a fresh list each tick.
-    QList<QByteArray> m_feedBatch;
+    // Bytes of audio queued in the ring that are not yet in the sink. Audio thread only.
+    int rxQueuedBytes();
+    // Release the ring's front slot and reset the partial-write state.
+    void popRxHead();
 
     // Jitter buffer constants (adapt to any SL level automatically).
     // WHY PREBUFFER_PACKETS = 1: SL-tier packets already encode the jitter runway (SL7 carries
@@ -382,7 +395,6 @@ private:
     // without improving tolerance — the runway is already inside the single packet. See
     // `memory/k4-streaming-latency.md` for the verified SL0–7 frame-bundling map.
     static constexpr int PREBUFFER_PACKETS = 1;
-    static constexpr int MAX_QUEUE_BYTES = 1000 * BYTES_PER_MS; // 96,000 bytes (1s cap)
 };
 
 #endif // AUDIOENGINE_H
