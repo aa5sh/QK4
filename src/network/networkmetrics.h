@@ -39,6 +39,11 @@ public:
     double rttJitter() const { return m_rttJitter; }
     double bufferMs() const { return m_bufferBytes / kDecodedBytesPerMs; }
 
+    // RX playout trouble since this connection began: sink underruns (audible gaps) and packets the
+    // jitter policy dropped to claw latency back.
+    quint32 rxUnderruns() const { return m_rxUnderruns - m_rxUnderrunsBase; }
+    quint32 rxDroppedPackets() const { return m_rxDropped - m_rxDroppedBase; }
+
     // 10-second rolling history for the live sparkline popup. Read on the main thread only.
     const std::deque<TimedSample> &rttHistory() const { return m_rttHistory; }
     const std::deque<TimedSample> &jitterHistory() const { return m_jitterHistory; }
@@ -50,6 +55,9 @@ public slots:
     void onLatencyChanged(int ms);
     void onAudioSequence();
     void onBufferStatus(int queueBytes);
+    // Cumulative counters from AudioEngine, sampled on the main thread. The first sample after a
+    // (re)connect becomes the baseline, so the getters count from the connection's start.
+    void onRxPlayoutCounters(quint32 underruns, quint32 droppedPackets);
     void onConnectionStateChanged(bool connected);
 
 signals:
@@ -87,6 +95,13 @@ private:
 
     // Audio buffer depth (latest snapshot).
     int m_bufferBytes = 0;
+
+    // RX playout counters, cumulative as AudioEngine reports them, and the connection's baseline.
+    quint32 m_rxUnderruns = 0;
+    quint32 m_rxDropped = 0;
+    quint32 m_rxUnderrunsBase = 0;
+    quint32 m_rxDroppedBase = 0;
+    bool m_rxCountersBaselined = false;
 
     // Audio activity tracking
     bool m_audioActive = false;    // Received packets this interval

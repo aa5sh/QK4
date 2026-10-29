@@ -69,6 +69,16 @@ void NetworkMetrics::onBufferStatus(int queueBytes) {
     pushHistory(m_bufferHistory, static_cast<float>(bufferMs()));
 }
 
+void NetworkMetrics::onRxPlayoutCounters(quint32 underruns, quint32 droppedPackets) {
+    m_rxUnderruns = underruns;
+    m_rxDropped = droppedPackets;
+    if (!m_rxCountersBaselined) {
+        m_rxUnderrunsBase = underruns;
+        m_rxDroppedBase = droppedPackets;
+        m_rxCountersBaselined = true;
+    }
+}
+
 void NetworkMetrics::onConnectionStateChanged(bool connected) {
     m_connected = connected;
     if (connected) {
@@ -84,6 +94,9 @@ void NetworkMetrics::onConnectionStateChanged(bool connected) {
         m_audioActive = false;
         m_audioWasActive = false;
         m_stalePingCount = 0;
+        m_rxCountersBaselined = false;
+        m_rxUnderrunsBase = m_rxUnderruns;
+        m_rxDroppedBase = m_rxDropped;
         m_tier = Green;
         emit healthTierChanged(m_tier);
     } else {

@@ -22,8 +22,10 @@ class OpusEncoder;
  *
  * Lives on @c AudioController::m_audioThread (see `controllers/audiocontroller.cpp`).
  * RX:  decoded 12 kHz stereo Float32 PCM is enqueued from the IO thread via
- *      `enqueueAudio()`, consumed by `feedAudioDevice()` on a 10 ms timer, with MX
- *      routing + volume + balance applied per packet.
+ *      `enqueueAudio()`, consumed by `feedAudioDevice()` on a 5 ms PreciseTimer, with MX
+ *      routing + volume + balance applied per packet. The sink buffer is sized from the SL
+ *      tier's packet length (audio/rxplayout.h), so a backlog stays in the queue where the
+ *      jitter policy can trim it.
  * TX:  48 kHz mono Float32 captured on a 10 ms poll, resampled 4:1 to 12 kHz,
  *      framed to the SL-tier sample count, emitted via `microphoneFrame` for the
  *      Opus encoder.
@@ -83,6 +85,16 @@ public:
 
     // TX frame size (dynamic, matches SL tier)
     void setFrameSamples(int samples); // 240, 480, 720, or 1440
+
+    // RX packet length for the current SL tier, as samples per channel (240/480/720/1440). Resizes
+    // the sink buffer to match (audio/rxplayout.h), which needs a sink rebuild: Qt ignores
+    // setBufferSize() after start(). Audio thread; call queued.
+    Q_INVOKABLE void setRxPacketFrameSamples(int samples);
+
+    // RX playout counters, readable from any thread. Underruns are counted only while receiving,
+    // not while the K4 has stopped sending because we are transmitting.
+    quint32 rxUnderruns() const { return m_rxUnderruns.load(std::memory_order_relaxed); }
+    quint32 rxDroppedPackets() const { return m_rxDroppedPackets.load(std::memory_order_relaxed); }
     int frameSamples() const { return m_frameSamples.load(std::memory_order_relaxed); }
 
     // TX encode mode (0=RAW S32LE (24-bit), 1=RAW S16LE, 2/3=Opus (same bitstream, int vs float decode)). See
@@ -144,7 +156,8 @@ signals:
     // encode pipeline here from AudioController (main thread) so a busy GUI
     // event loop can no longer stall voice TX packet emission.
     void txPacketReady(const QByteArray &packet);
-    void bufferStatus(int queueBytes);
+    // Total RX audio buffered (queue + sink), in bytes of decoded audio.
+    void bufferStatus(int bufferedBytes);
 
     // The microphone could not be opened, with the reason as a sentence for the operator. The
     // operator has to act - a different device, or a different rate.
@@ -159,6 +172,7 @@ signals:
 private slots:
     void onMicDataReady();
     void feedAudioDevice();
+    void onSinkStateChanged(QtAudio::State state);
     // WHY: when the user leaves a device set to "System Default" (empty id), follow
     // the OS default live instead of caching it for the whole session. QMediaDevices
     // fires these when devices or the system default change; we rebuild the sink/
@@ -171,6 +185,9 @@ private:
     // Tear down and rebuild the output sink for the current device, and put the feed timer in
     // the matching state. Every path that changes the output device goes through this.
     void rebuildOutput();
+    // Stop and delete the sink without the synchronous drain QAudioSink::stop() does on Linux and
+    // Darwin.
+    void destroySink();
     bool setupAudioInput();
 
     // Shared tail of both TX sources: take 12 kHz Float32, apply `gain`, buffer as S16, and emit
@@ -304,10 +321,13 @@ private:
     // Audio throughput: 12kHz × 2ch × sizeof(float) = 96,000 bytes/sec = 96 bytes/ms
     static constexpr int BYTES_PER_MS = 96;
 
-    // Audio buffer sizes
-    // QAudioSink buffer: 500ms — large enough for 4+ max-size packets (SL7 = 11,520 bytes = 120ms)
-    // Ensures bytesFree() always exceeds one max packet, preventing partial writes and data loss
-    static constexpr int OUTPUT_BUFFER_SIZE = 500 * BYTES_PER_MS; // 48,000 bytes
+    // RX packet length in ms for the current SL tier. Sizes the sink. Audio thread only.
+    int m_rxPacketMs = 20;
+    // Device-error rebuilds since the last good start; bounds a device that fails every time.
+    int m_sinkErrorRebuilds = 0;
+    std::atomic<quint32> m_rxUnderruns{0};
+    std::atomic<quint32> m_rxDroppedPackets{0};
+
     // Input: 48kHz * 4 bytes/sample * 0.1 sec = 19200 bytes
     static constexpr int INPUT_BUFFER_SIZE = 19200;
 
@@ -363,7 +383,6 @@ private:
     // `memory/k4-streaming-latency.md` for the verified SL0–7 frame-bundling map.
     static constexpr int PREBUFFER_PACKETS = 1;
     static constexpr int MAX_QUEUE_BYTES = 1000 * BYTES_PER_MS; // 96,000 bytes (1s cap)
-    static constexpr int FEED_INTERVAL_MS = 10;
 };
 
 #endif // AUDIOENGINE_H

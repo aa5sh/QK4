@@ -363,6 +363,12 @@ target_link_libraries(test_menuoverlay Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Test
 add_test(NAME MenuOverlayTests COMMAND test_menuoverlay)
 set_tests_properties(MenuOverlayTests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
+# RX playout: sink size per SL tier and the jitter policy, with a simulated network and device.
+add_executable(test_rxplayout test_rxplayout.cpp ${CMAKE_SOURCE_DIR}/src/utils/radioutils.cpp)
+target_include_directories(test_rxplayout PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_rxplayout Qt6::Core Qt6::Network Qt6::Test)
+add_test(NAME RxPlayoutTests COMMAND test_rxplayout)
+
 # NetworkMetrics sparkline history + jitter tests
 add_executable(test_networkmetrics test_networkmetrics.cpp
     ${CMAKE_SOURCE_DIR}/src/network/networkmetrics.cpp

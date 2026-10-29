@@ -4,7 +4,8 @@ RX and TX audio pipeline. Owned by `controllers/audiocontroller.cpp`.
 
 ## Files
 
-- `audioengine.{cpp,h}` — `QAudioSink` + `QAudioSource` with a jitter buffer. A 10 ms feed timer writes as many bytes as the sink has free; playback starts after one SL-tier packet (`PREBUFFER_PACKETS = 1`, 20–120 ms of audio depending on SL). Handles volume, balance, mix routing, and owns the `OpusEncoder` used for TX.
+- `audioengine.{cpp,h}` — `QAudioSink` + `QAudioSource` with a jitter buffer. A 5 ms `Qt::PreciseTimer` feed writes whole packets into a sink sized to one SL-tier packet plus a 30 ms device margin; playback starts after one packet (`PREBUFFER_PACKETS = 1`, 20–120 ms of audio depending on SL). Counts sink underruns and dropped packets. Handles volume, balance, mix routing, and owns the `OpusEncoder` used for TX.
+- `rxplayout.h` — header-only, Qt-free. RX sink size per SL tier (packet + 30 ms: 50/70/90/150 ms) and the jitter policy (trim the queue when queue + sink passes 5 packets, capped at 300 ms but at least 3 packets, back to 2 packets). Replaced a fixed 500 ms sink, in which a network burst sat out of the policy's reach and played up to half a second late. Tested, with a simulated network and device, in `tests/test_rxplayout.cpp`.
 - `opusdecoder.{cpp,h}` — Opus decode wrapper. K4 sends 12kHz stereo (left=Main, right=Sub). All four encode modes normalise by one rule, `native × K4_GAIN_BOOST / full_scale`; the per-mode scales were measured 2026-09-19, not tuned by ear. See `docs/k4-protocol-quirks.md` §11.
 - `opusencoder.{cpp,h}` — Opus encode wrapper for TX. 12kHz mono; frame size reconfigured per K4 SL tier. `encodeFloat()` is what the TX path uses — Opus takes float natively, so the Opus modes never quantise.
 - `rawaudioformat.h` — header-only, Qt-free. Builds the EM0 (S32LE, 24-bit) and EM1 (S16LE) TX wire payloads from a captured **Float32** mono frame. Holds `EM0_FULL_SCALE` (2^23 — EM0 is 24-bit in a 32-bit container), which `OpusDecoder::NORMALIZE_K4_RAW` is derived from so the two directions of EM0 cannot drift apart. See the WHY block for AUD-003 and the 2026-09-19 calibration.
@@ -18,7 +19,7 @@ RX and TX audio pipeline. Owned by `controllers/audiocontroller.cpp`.
 
 ## Threading
 
-- `AudioEngine` lives on `AudioController::m_audioThread` (`moveToThread` right after construction). Its feed and mic-poll timers are its children, so they move with it. Both are 10 ms default (`Qt::CoarseTimer`) timers; the feed writes by bytes free, not by tick count, so a late tick does not drop audio.
+- `AudioEngine` lives on `AudioController::m_audioThread` (`moveToThread` right after construction). Its feed and mic-poll timers are its children, so they move with it. The feed is a 5 ms `Qt::PreciseTimer` (the small sink depends on it); the mic poll is a 10 ms default timer. The feed writes by bytes free, not by tick count, so a late tick does not drop audio.
 - `OpusDecoder` is created on the main thread and keeps main-thread affinity, but it is only called from the lambda on `Protocol::audioDataReady`, whose context object is `Protocol`. That lambda runs on the I/O thread, so decoding is single-threaded on the I/O thread.
 - `OpusEncoder` is created by `AudioEngine`'s constructor with no parent, so it keeps main-thread affinity when `AudioEngine` moves. `AudioEngine` calls it directly on the audio thread. No signals are involved.
 - Both Opus wrappers are `QObject`s with no signals or slots, used off their affinity thread. Qt does not guarantee that calling a `QObject`'s functions from another thread works (Qt docs, "Threads and QObjects" → QObject Reentrancy). This is a known gap in the code, not a pattern to copy.

@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QThread>
+#include <QTimer>
 
 #include <memory>
 #include <mutex>
@@ -121,6 +122,9 @@ signals:
 
 private slots:
     void onStreamingLatencyChanged(int tier);
+    // Main thread, on m_metricsTimer: reads the audio thread's counters and hands them to
+    // NetworkMetrics. Sampling replaces events pushed from the audio thread.
+    void sampleAudioMetrics();
 
 private:
     ConnectionController *m_connectionController;
@@ -129,6 +133,12 @@ private:
     AudioEngine *m_audioEngine;
     QThread *m_audioThread = nullptr;
     OpusDecoder *m_opusDecoder;
+
+    QTimer *m_metricsTimer = nullptr;
+    // Counter values at the last RX playout log line, and ticks since it.
+    quint32 m_loggedUnderruns = 0;
+    quint32 m_loggedDrops = 0;
+    int m_ticksSinceRxLog = 0;
     // The RX decode handler. Its context is Protocol, not this, so Qt never drops it when this
     // object is destroyed; the destructor has to.
     QMetaObject::Connection m_rxDecodeConnection;

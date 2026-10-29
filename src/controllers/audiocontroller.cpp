@@ -11,6 +11,13 @@
 #include "settings/radiosettings.h"
 #include "utils/radioutils.h"
 
+namespace {
+// 20 Hz: often enough for the buffer sparkline, a tenth of the events the audio thread used to post.
+constexpr int kMetricsSampleMs = 50;
+// One RX playout line at most this often, and only when something happened.
+constexpr int kRxLogEveryTicks = 2000 / kMetricsSampleMs;
+} // namespace
+
 AudioController::AudioController(ConnectionController *connController, RadioState *radioState, QObject *parent)
     : QObject(parent), m_connectionController(connController), m_radioState(radioState),
       m_audioEngine(new AudioEngine(nullptr)), m_opusDecoder(new OpusDecoder(nullptr)) {
@@ -65,6 +72,12 @@ AudioController::AudioController(ConnectionController *connController, RadioStat
             &NetworkMetrics::onAudioSequence);
     connect(m_audioEngine, &AudioEngine::bufferStatus, m_connectionController->networkMetrics(),
             &NetworkMetrics::onBufferStatus);
+
+    // Playout counters → network health metrics, sampled here on the main thread.
+    m_metricsTimer = new QTimer(this);
+    m_metricsTimer->setInterval(kMetricsSampleMs);
+    connect(m_metricsTimer, &QTimer::timeout, this, &AudioController::sampleAudioMetrics);
+    m_metricsTimer->start();
 
     // TX audio path (PR 12): encode + packetize run on the audio thread; the
     // resulting wire-ready packet goes straight to TcpClient::sendRaw, which
@@ -122,6 +135,10 @@ void AudioController::startAudio(float mainVolume, float subVolume, float micGai
     // Must NOT use BlockingQueuedConnection — setupAudioInput() (now deferred to
     // first mic use) can trigger macOS permission dialogs that need the main thread
     // runloop, which would deadlock if the main thread were blocked here.
+    // The RX sink is sized from the SL tier, so the tier goes ahead of start() in the same queue.
+    const int sl = m_connectionController->currentRadio().streamingLatency;
+    const int frameSamples = RadioUtils::slTierToFrameSamples(sl);
+    QMetaObject::invokeMethod(m_audioEngine, "setRxPacketFrameSamples", Qt::QueuedConnection, Q_ARG(int, frameSamples));
     QMetaObject::invokeMethod(m_audioEngine, "start", Qt::QueuedConnection);
 
     // Volume setters are atomic — safe as direct calls from any thread
@@ -130,8 +147,7 @@ void AudioController::startAudio(float mainVolume, float subVolume, float micGai
     m_audioEngine->setMicGain(micGain);
 
     // Set initial TX frame size from radio profile's SL tier
-    const int sl = m_connectionController->currentRadio().streamingLatency;
-    m_audioEngine->setFrameSamples(RadioUtils::slTierToFrameSamples(sl));
+    m_audioEngine->setFrameSamples(frameSamples);
 
     // Set encode mode from radio profile (audio thread reads this atomic on
     // every captured frame to pick the wire format).
@@ -292,5 +308,27 @@ void AudioController::setTciTxGain(float gain) {
 }
 
 void AudioController::onStreamingLatencyChanged(int tier) {
-    m_audioEngine->setFrameSamples(RadioUtils::slTierToFrameSamples(tier));
+    const int frameSamples = RadioUtils::slTierToFrameSamples(tier);
+    m_audioEngine->setFrameSamples(frameSamples);
+    // The RX sink is resized too: the tier sets how much audio each received packet carries.
+    QMetaObject::invokeMethod(m_audioEngine, "setRxPacketFrameSamples", Qt::QueuedConnection, Q_ARG(int, frameSamples));
+}
+
+void AudioController::sampleAudioMetrics() {
+    if (!m_audioEngine)
+        return;
+    const quint32 underruns = m_audioEngine->rxUnderruns();
+    const quint32 drops = m_audioEngine->rxDroppedPackets();
+    m_connectionController->networkMetrics()->onRxPlayoutCounters(underruns, drops);
+
+    // Formatted here, on the main thread, never on the audio thread (CONVENTIONS.md Rule 16).
+    if (++m_ticksSinceRxLog < kRxLogEveryTicks)
+        return;
+    m_ticksSinceRxLog = 0;
+    if (underruns != m_loggedUnderruns || drops != m_loggedDrops) {
+        qCInfo(lcAudioRx, "RX playout: %u underrun(s), %u packet(s) dropped to cut latency in the last %d s",
+               underruns - m_loggedUnderruns, drops - m_loggedDrops, kRxLogEveryTicks * kMetricsSampleMs / 1000);
+        m_loggedUnderruns = underruns;
+        m_loggedDrops = drops;
+    }
 }

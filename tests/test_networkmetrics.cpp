@@ -12,6 +12,7 @@ private slots:
     void historySizeCapped();
     void historyClearedOnReconnect();
     void jitterStdDevUnchanged();
+    void rxPlayoutCountersCountFromConnect();
 };
 
 void TestNetworkMetrics::historyAppendsOnLatency() {
@@ -58,6 +59,18 @@ void TestNetworkMetrics::jitterStdDevUnchanged() {
     QCOMPARE(m.rttAvg(), 20.0);
     const double expected = std::sqrt(200.0 / 3.0); // population stddev of {10,20,30}
     QVERIFY(std::abs(m.rttJitter() - expected) < 1e-6);
+}
+
+void TestNetworkMetrics::rxPlayoutCountersCountFromConnect() {
+    NetworkMetrics m;
+    m.onRxPlayoutCounters(7, 3); // left over from an earlier connection: the engine's are cumulative
+    m.onConnectionStateChanged(true);
+    QCOMPARE(m.rxUnderruns(), 0u);
+    QCOMPARE(m.rxDroppedPackets(), 0u);
+    m.onRxPlayoutCounters(7, 3); // first sample after connect is the baseline
+    m.onRxPlayoutCounters(9, 4);
+    QCOMPARE(m.rxUnderruns(), 2u);
+    QCOMPARE(m.rxDroppedPackets(), 1u);
 }
 
 QTEST_MAIN(TestNetworkMetrics)

@@ -6,8 +6,8 @@
 #include "audio/opusencoder.h"
 #include "audio/rawaudioformat.h" // EM0/EM1 wire format
 #include "audio/rxoutputstage.h"  // RX boost + soft limiter
+#include "audio/rxplayout.h"      // RX sink size and jitter policy
 #include "network/protocol.h"     // buildAudioPacket
-#include "utils/radioutils.h"     // RX jitter-buffer watermarks
 #include <QMediaDevices>
 #include <QAudioDevice>
 #include <QDebug>
@@ -42,8 +42,12 @@ AudioEngine::AudioEngine(QObject *parent)
     m_micPollTimer->setInterval(10); // Poll every 10ms for low latency
     connect(m_micPollTimer, &QTimer::timeout, this, &AudioEngine::onMicDataReady);
 
+    // WHY PreciseTimer: the sink now holds one packet plus a 30 ms margin instead of 500 ms, and the
+    // margin assumes the feed looks every 5 ms. A CoarseTimer may be off by 5% of its interval and
+    // coalesced with others; a PreciseTimer "will try to keep millisecond accuracy" (QTimer docs).
     m_feedTimer = new QTimer(this);
-    m_feedTimer->setInterval(FEED_INTERVAL_MS);
+    m_feedTimer->setTimerType(Qt::PreciseTimer);
+    m_feedTimer->setInterval(RxPlayout::FEED_INTERVAL_MS);
     connect(m_feedTimer, &QTimer::timeout, this, &AudioEngine::feedAudioDevice);
 
     // Pre-size hot-path buffers so the per-poll / per-frame paths reuse capacity.
@@ -111,12 +115,7 @@ void AudioEngine::rebuildOutput() {
     if (m_feedTimer) {
         m_feedTimer->stop();
     }
-    if (m_audioSink) {
-        m_audioSink->stop();
-        delete m_audioSink;
-        m_audioSink = nullptr;
-        m_audioSinkDevice = nullptr;
-    }
+    destroySink();
 
     // Called during construction too, before the engine is meant to be producing anything.
     if (!m_outputRunning) {
@@ -170,12 +169,7 @@ void AudioEngine::stop() {
     m_txSource.store(static_cast<int>(TxSource::Microphone), std::memory_order_release);
     closeMic();
 
-    if (m_audioSink) {
-        m_audioSink->stop();
-        delete m_audioSink;
-        m_audioSink = nullptr;
-        m_audioSinkDevice = nullptr;
-    }
+    destroySink();
 
     if (m_audioSource) {
         m_audioSource->stop();
@@ -186,6 +180,61 @@ void AudioEngine::stop() {
 
     m_micBuffer.clear();
     m_micReadOffset = 0;
+}
+
+void AudioEngine::destroySink() {
+    if (!m_audioSink)
+        return;
+    // Disconnected first: stop() emits stateChanged, and a StoppedState we caused is not a device
+    // error to recover from.
+    m_audioSink->disconnect(this);
+    // WHY reset() before stop(): "On Linux, and Darwin, [stop()] synchronously drains the underlying
+    // audio buffer" (QAudioSink docs). Draining audio we are about to throw away only stalls this
+    // thread; reset() discards it at once.
+    m_audioSink->reset();
+    m_audioSink->stop();
+    delete m_audioSink;
+    m_audioSink = nullptr;
+    m_audioSinkDevice = nullptr;
+}
+
+void AudioEngine::setRxPacketFrameSamples(int samples) {
+    const int packetMs = RxPlayout::packetMsForFrameSamples(samples);
+    if (packetMs == m_rxPacketMs)
+        return;
+    m_rxPacketMs = packetMs;
+    // The sink has to be rebuilt to take a new size - Qt ignores setBufferSize() after start(). The
+    // queue is flushed with it; an SL change is an operator action, and the gap is one packet.
+    if (m_outputRunning)
+        rebuildOutput();
+}
+
+void AudioEngine::onSinkStateChanged(QtAudio::State state) {
+    if (!m_audioSink)
+        return;
+    const QtAudio::Error error = m_audioSink->error();
+    if (state == QtAudio::IdleState && error == QtAudio::UnderrunError) {
+        // In push mode the sink goes Idle when it runs dry and back to Active by itself on the next
+        // write, so there is nothing to restart - only to count. Not counted while transmitting:
+        // the K4 stops sending RX then, and the sink running dry is expected.
+        if (!m_pttActive.load(std::memory_order_relaxed))
+            m_rxUnderruns.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
+    if (state == QtAudio::ActiveState) {
+        m_sinkErrorRebuilds = 0;
+        return;
+    }
+    if (state == QtAudio::StoppedState && error != QtAudio::NoError && m_outputRunning) {
+        // Any error other than an underrun stops the sink: the device went away or failed. Rebuild
+        // it, on the next turn of the loop rather than inside the sink's own signal. Bounded, so a
+        // device that fails every time does not spin; the next device-list change retries anyway.
+        constexpr int kMaxErrorRebuilds = 3;
+        qCWarning(lcAudio, "AudioEngine: output stopped with error %d%s", static_cast<int>(error),
+                  m_sinkErrorRebuilds < kMaxErrorRebuilds ? " - rebuilding it" : " - giving up until devices change");
+        if (m_sinkErrorRebuilds++ < kMaxErrorRebuilds)
+            QMetaObject::invokeMethod(this, &AudioEngine::rebuildOutput, Qt::QueuedConnection);
+    }
 }
 
 bool AudioEngine::setupAudioOutput() {
@@ -241,7 +290,8 @@ bool AudioEngine::setupAudioOutput() {
 
     m_activeOutputDeviceId = outputDevice.id();
     m_audioSink = new QAudioSink(outputDevice, m_outputFormat, this);
-    m_audioSink->setBufferSize(OUTPUT_BUFFER_SIZE);
+    const int requested = RxPlayout::sinkBufferBytes(m_rxPacketMs);
+    m_audioSink->setBufferSize(requested);
 
     m_audioSinkDevice = m_audioSink->start();
     if (!m_audioSinkDevice) {
@@ -250,6 +300,16 @@ bool AudioEngine::setupAudioOutput() {
         m_audioSink = nullptr;
         return false;
     }
+    // Connected after start(): its own Idle-on-start transition carries no error and is not news.
+    connect(m_audioSink, &QAudioSink::stateChanged, this, &AudioEngine::onSinkStateChanged);
+
+    // What the backend actually granted. Qt: "It should not be assumed that the buffer size set is
+    // the actual buffer size used". Larger means more latency than designed; smaller is handled by
+    // the partial-write path in feedAudioDevice. Either way it belongs in a bench log.
+    qCInfo(lcAudio, "AudioEngine: RX sink buffer %lld bytes (%lld ms) for %d ms packets; requested %d ms",
+           static_cast<long long>(m_audioSink->bufferSize()),
+           static_cast<long long>(m_audioSink->bufferSize() / RxPlayout::BYTES_PER_MS), m_rxPacketMs,
+           requested / RxPlayout::BYTES_PER_MS);
 
     // Always 1.0: QK4's volume is applied per sample in applyMixAndVolume (the MAIN/SUB sliders).
     // The K4's AG is the radio's own speaker and does not reach this stream.
@@ -365,23 +425,12 @@ void AudioEngine::enqueueAudio(const QByteArray &pcmData) {
 
     QMutexLocker lock(&m_queueMutex);
 
-    // Self-correcting jitter buffer: if a stall (PTT mic init, output-device rebuild, network
-    // burst) ratcheted the queue up past the high-water mark, drop the OLDEST (most-delayed) audio
-    // back to the target depth so latency recovers instead of staying permanently high. Watermarks
-    // scale with the current packet size (one decoded K4 SL-bundle) so the buffer is proportional
-    // to the chosen SL tier — see RadioUtils::jitter*Bytes. One small forward skip; newest audio is
-    // kept playing.
+    // Absolute backstop only: never let the queue exceed 1s of audio regardless of packet size. The
+    // jitter policy proper runs in feedAudioDevice, where the sink's fill is known.
     const int pktBytes = pcmData.size();
-    if (m_queueBytes + pktBytes > RadioUtils::jitterHighWaterBytes(pktBytes)) {
-        const int target = RadioUtils::jitterTargetBytes(pktBytes);
-        while (m_queueBytes > target && !m_audioQueue.isEmpty()) {
-            m_queueBytes -= m_audioQueue.dequeue().size();
-        }
-    }
-
-    // Absolute backstop: never let the queue exceed 1s of audio regardless of packet size.
     while (m_queueBytes + pktBytes > MAX_QUEUE_BYTES && !m_audioQueue.isEmpty()) {
         m_queueBytes -= m_audioQueue.dequeue().size();
+        m_rxDroppedPackets.fetch_add(1, std::memory_order_relaxed);
     }
 
     m_audioQueue.enqueue(pcmData);
@@ -400,26 +449,29 @@ void AudioEngine::feedAudioDevice() {
     if (!m_audioSinkDevice)
         return;
 
-    // Drain any leftover write buffer from a previous partial write
+    const int sinkSize = static_cast<int>(m_audioSink->bufferSize());
+    int bytesFree = static_cast<int>(m_audioSink->bytesFree());
+    int sinkFill = qMax(0, sinkSize - bytesFree);
+
+    // Drain any leftover of a packet that was written in part
     if (!m_writeBuffer.isEmpty()) {
-        int bytesFree = m_audioSink->bytesFree();
-        if (bytesFree > 0) {
-            qint64 toWrite = qMin(static_cast<qint64>(m_writeBuffer.size()), static_cast<qint64>(bytesFree));
-            qint64 written = m_audioSinkDevice->write(m_writeBuffer.constData(), toWrite);
-            if (written > 0)
+        const int toWrite = RxPlayout::bytesToWrite(m_writeBuffer.size(), bytesFree, sinkFill);
+        if (toWrite > 0) {
+            const qint64 written = m_audioSinkDevice->write(m_writeBuffer.constData(), toWrite);
+            if (written > 0) {
                 m_writeBuffer.remove(0, static_cast<int>(written));
+                bytesFree -= static_cast<int>(written);
+                sinkFill += static_cast<int>(written);
+            }
         }
         if (!m_writeBuffer.isEmpty())
             return; // Still have leftover — don't pull more from queue yet
     }
 
-    // Query sink capacity (audio-thread-only, no mutex needed)
-    int bytesFree = m_audioSink->bytesFree();
-
     // Drain queue under a short lock, then write outside the lock. m_feedBatch
-    // is a member to avoid constructing a fresh QList on every 10 ms tick.
+    // is a member to avoid constructing a fresh QList on every tick.
     m_feedBatch.clear();
-    int preDrainQueueBytes;
+    int bufferedBytes;
     {
         QMutexLocker lock(&m_queueMutex);
 
@@ -433,23 +485,40 @@ void AudioEngine::feedAudioDevice() {
             m_prebuffering = false;
         }
 
-        // Snapshot queue depth BEFORE draining (steady-state depth)
-        preDrainQueueBytes = m_queueBytes;
+        // Self-correcting jitter buffer, run here on the consumer where the sink's fill is known. If
+        // a stall (output-device rebuild, network burst, I/O thread busy) left more audio buffered
+        // than the high-water mark, drop the OLDEST (most delayed) packets back to the target. The
+        // marks are in packets of the current SL tier (audio/rxplayout.h) and count the sink too,
+        // so they bound real latency. One small forward skip; the newest audio keeps playing.
+        const int pktBytes = m_audioQueue.head().size();
+        if (RxPlayout::overHighWater(m_queueBytes, sinkFill, 0, pktBytes)) {
+            const int target = RxPlayout::targetBytes(pktBytes);
+            while (m_queueBytes + sinkFill > target && m_audioQueue.size() > 1) {
+                m_queueBytes -= m_audioQueue.dequeue().size();
+                m_rxDroppedPackets.fetch_add(1, std::memory_order_relaxed);
+            }
+        }
 
-        // Drain packets that fit in the sink's free space
+        bufferedBytes = m_queueBytes + sinkFill;
+
+        // Move packets that fit. A packet larger than the room left is written in part only when the
+        // sink is about to starve (RxPlayout::bytesToWrite); the rest waits in m_writeBuffer.
         while (!m_audioQueue.isEmpty()) {
-            int headSize = m_audioQueue.head().size();
-            if (bytesFree < headSize)
+            const int headSize = m_audioQueue.head().size();
+            const int toWrite = RxPlayout::bytesToWrite(headSize, bytesFree, sinkFill);
+            if (toWrite <= 0)
                 break;
-
             QByteArray pkt = m_audioQueue.dequeue();
-            m_queueBytes -= pkt.size();
-            bytesFree -= headSize;
+            m_queueBytes -= headSize;
+            bytesFree -= toWrite;
+            sinkFill += toWrite;
             m_feedBatch.append(std::move(pkt));
+            if (toWrite < headSize)
+                break;
         }
     }
 
-    emit bufferStatus(preDrainQueueBytes);
+    emit bufferStatus(bufferedBytes);
 
     // Apply mix/volume and write to audio sink without holding the lock
     for (QByteArray &packet : m_feedBatch) {
