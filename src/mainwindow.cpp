@@ -47,6 +47,7 @@
 #include "settings/radiosettings.h"
 #include <QVBoxLayout>
 #include <QInputDialog>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QAction>
 #include <QCoreApplication>
@@ -603,15 +604,20 @@ void MainWindow::setupUi() {
                                                     m_connectionController->networkMetrics(), centralWidget, this);
     mainLayout->addWidget(m_statusBarController->widget());
 
-    // Middle section: Side Panel + Main Content (L-shaped)
+    // Middle section: the left panel runs the full height, down beside the bottom menu bar; the
+    // content and right panel sit above the bar.
+    // WHY: the bar used to span the whole width with an empty left margin the panel's width, so the
+    // panel's bottom-anchored status group (clock, power, supply, icons, version) stopped short of
+    // the window's bottom edge above an empty strip. Spanning both rows lets it reach the edge
+    // without moving anything else.
     auto *middleWidget = new QWidget(centralWidget);
-    auto *middleLayout = new QHBoxLayout(middleWidget);
+    auto *middleLayout = new QGridLayout(middleWidget);
     middleLayout->setContentsMargins(0, 0, 0, 0);
     middleLayout->setSpacing(0);
 
-    // Side Control Panel (left)
+    // Side Control Panel (left), rows 0-1
     m_sideControlPanel = new SideControlPanel(middleWidget);
-    middleLayout->addWidget(m_sideControlPanel);
+    middleLayout->addWidget(m_sideControlPanel, 0, 0, 2, 1);
 
     // Main content (VFO + Spectrum)
     auto *contentWidget = new QWidget(middleWidget);
@@ -628,11 +634,13 @@ void MainWindow::setupUi() {
     m_spectrumController->setupSpectrumUI(contentWidget, m_vfoA, m_vfoB);
     contentLayout->addWidget(m_spectrumController->spectrumContainer(), 1);
 
-    middleLayout->addWidget(contentWidget, 1);
+    middleLayout->addWidget(contentWidget, 0, 1);
+    middleLayout->setColumnStretch(1, 1);
+    middleLayout->setRowStretch(0, 1);
 
     // Right Side Panel (mirrors left panel dimensions)
     m_rightSidePanel = new RightSidePanel(middleWidget);
-    middleLayout->addWidget(m_rightSidePanel);
+    middleLayout->addWidget(m_rightSidePanel, 0, 2);
 
     mainLayout->addWidget(middleWidget, 1);
 
@@ -649,10 +657,10 @@ void MainWindow::setupUi() {
     // SideControlDisplayController. RIT/XIT redraw on BSET toggle lives in
     // RitXitController.
 
-    // Bottom Menu Bar
-    m_bottomMenuBar = new BottomMenuBar(centralWidget);
+    // Bottom Menu Bar, row 1 beside the left panel, under the content and right panel
+    m_bottomMenuBar = new BottomMenuBar(middleWidget);
     m_popupManager->setBottomMenuBar(m_bottomMenuBar);
-    mainLayout->addWidget(m_bottomMenuBar);
+    middleLayout->addWidget(m_bottomMenuBar, 1, 1, 1, 2);
 
     // Connect side control panel icon buttons
     connect(m_sideControlPanel, &SideControlPanel::connectClicked, this, &MainWindow::showRadioManager);
