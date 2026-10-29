@@ -13,6 +13,7 @@
 #include "utils/radioutils.h"
 
 #include <QDateTime>
+#include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QTimer>
@@ -86,9 +87,19 @@ StatusBarController::StatusBarController(RadioState *radioState, ConnectionContr
 
     // Date/Time
     m_dateTimeLabel = new QLabel("--/-- --:--:-- Z", m_container);
-    m_dateTimeLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                       .arg(K4Styles::Colors::TextSecondary)
-                                       .arg(K4Styles::Dimensions::FontSizeReadout));
+    m_dateTimeLabel->setStyleSheet(QString("color: %1;").arg(K4Styles::Colors::TextSecondary));
+    m_dateTimeLabel->setFont(K4Styles::Fonts::dataFont(K4Styles::Dimensions::FontSizeReadout, QFont::Normal));
+    // WHY a fixed size wide enough for any date and time: a QLabel whose size can change asks its
+    // parent to re-lay out on every setText(). With proportional digits the clock's width changed
+    // most seconds, shifting every status-bar field to its right and repainting that whole strip
+    // once a second while idle (#92). Fixed in both directions, setText() repaints only the label.
+    const QFontMetrics clockMetrics(m_dateTimeLabel->font());
+    int clockWidth = 0;
+    for (QChar digit = u'0'; digit <= u'9'; digit = QChar(digit.unicode() + 1)) {
+        const QString widest = QString("%1%1-%1%1 / %1%1:%1%1:%1%1 Z").arg(digit);
+        clockWidth = qMax(clockWidth, clockMetrics.horizontalAdvance(widest));
+    }
+    m_dateTimeLabel->setFixedSize(clockWidth, clockMetrics.height());
     layout->addWidget(m_dateTimeLabel);
 
     layout->addStretch();
