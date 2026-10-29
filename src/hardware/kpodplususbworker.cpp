@@ -4,6 +4,7 @@
 #include <QString>
 #include <QThread>
 #include <QTimer>
+#include "utils/rtscheduling.h"
 #include <cstring>
 #include <libusb-1.0/libusb.h>
 
@@ -672,6 +673,7 @@ void KpodPlusEp02Worker::requestStop() {
 }
 
 void KpodPlusEp02Worker::run() {
+    RtScheduling::promoteCurrentThread(RtScheduling::Class::RealTime, "KpodPlusEP02");
     unsigned char buffer[32];
 
     // WHY a longer timeout than the legacy 10 ms: the device's EP02 FIFO is
@@ -740,7 +742,7 @@ void KpodPlusEp02Worker::run() {
 
             // USB-008. Back off before retrying. This branch used to fall straight back into the
             // loop, so a persistent non-transient error (PIPE, OVERFLOW, INTERRUPTED) spun this
-            // thread at 100 % — and it runs at HighPriority precisely because CW timing depends on
+            // thread at 100 % — and it runs real-time precisely because CW timing depends on
             // it, so the starvation lands on the keyer and the sidetone. A short sleep costs
             // nothing on the transient case, which is the common one.
             //

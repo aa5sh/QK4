@@ -15,7 +15,7 @@
 class SidetoneScheduler;
 
 /**
- * @brief Local CW sidetone output for the HaliKey keyer. Lives on its own HighPriority thread
+ * @brief Local CW sidetone output for the HaliKey keyer. Lives on its own real-time thread
  *        (HardwareController's m_sidetoneThread).
  *
  * A push-mode QAudioSink topped up on a 1 ms timer, one 4 ms block at a time, only while less than

@@ -2,6 +2,7 @@
 #include "audio/audiodeviceselection.h"
 #include "logging/logcategories.h"
 #include "audio/sidetonescheduler.h"
+#include "utils/rtscheduling.h"
 #include <QAudioFormat>
 #include <QMediaDevices>
 #include <QTimer>
@@ -139,6 +140,7 @@ void SidetoneGenerator::closeAudio() {
 }
 
 void SidetoneGenerator::start() {
+    RtScheduling::promoteCurrentThread(RtScheduling::Class::RealTime, "Sidetone");
     initAudio();
 }
 

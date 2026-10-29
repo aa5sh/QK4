@@ -22,7 +22,7 @@ class ConnectionController;
 
 /**
  * @brief Owns hardware-side workers: KPOD USB knob (main thread), HaliKey CW paddle
- *        (HalikeyDevice — holds its own worker thread), PaddleKeyer (HighPriority keyer thread)
+ *        (HalikeyDevice — holds its own worker thread), PaddleKeyer (real-time keyer thread)
  *        with its sidetone scheduler and clock, SidetoneGenerator (sidetone thread). Translates
  *        KPOD button presses → macroRequested for MainWindow dispatch.
  *
@@ -78,6 +78,9 @@ private:
     /// "HaliKey V1.4" or "HaliKey MIDI", matching the Options dropdown, so a notification and the
     /// settings page can never disagree about what the operator's device is called.
     QString halikeyName() const;
+    // Logs, once each, the scheduling class the real-time CW threads asked for and got. They
+    // cannot log it themselves (CONVENTIONS Rule 16).
+    void reportThreadScheduling();
 
     /// Apply one lifecycle event to a device and carry out what the policy decides.
     ///

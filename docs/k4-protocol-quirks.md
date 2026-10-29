@@ -146,9 +146,8 @@ Undocumented contest behaviour (confirmed by N6TV): inside an element-form strin
 `KZ-.-. --.-  -.;`, one blank is a 3-dit letter space and **two blanks are a 6-dit word space** —
 tighter than the ITU 7-dit default.
 
-QK4's HaliKey keyer (`PaddleKeyer`) sends `KZD`/`KZU`. It runs on its own thread, started with
-`QThread::HighPriority`. Qt ignores that priority on systems without thread-priority support, Linux
-among them (Qt 6.8 `QThread::start()`), so on Linux and the Pi the keyer thread gets no boost. The element
+QK4's HaliKey keyer (`PaddleKeyer`) sends `KZD`/`KZU`. It runs on its own real-time thread (see
+`src/utils/README.md` → `rtscheduling`). The element
 forms `KZ.`/`KZ-`/`KZ `/`KZP` reach the K4 only from a KPOD+, whose EP02 strings are forwarded
 untouched. See `src/hardware/README.md` for the keying chain.
 

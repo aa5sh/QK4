@@ -26,7 +26,7 @@ struct KpodPlusDeviceInfo {
 
 // Thin Qt façade over the libusb worker. All libusb work happens on
 // KpodPlusUsbWorker (its own thread) and EP02 reads happen on
-// KpodPlusEp02Worker (HighPriority thread). The façade lives on the main
+// KpodPlusEp02Worker (real-time thread). The façade lives on the main
 // thread; every setter is dispatched via QueuedConnection so the main thread
 // never touches libusb.
 class KpodPlusDevice : public QObject {

@@ -3,6 +3,7 @@
 #include "halikeyworkerbase.h"
 #include "hardware/keyerruntime.h"
 #include "hardware/seriallinepoller.h"
+#include "utils/rtscheduling.h"
 #include <QDebug>
 #include <cstring>
 
@@ -31,6 +32,9 @@ void HaliKeyV14Worker::start() {
     if (stopRequested() || !openNativePort()) {
         return;
     }
+    // Promoted here, not when the thread starts: the same thread runs the MIDI worker's presence
+    // poll, which needs nothing of the sort.
+    RtScheduling::promoteCurrentThread(RtScheduling::Class::RealTime, "HaliKey");
     emit portOpened();
     monitorLoop();
 }

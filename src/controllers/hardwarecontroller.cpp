@@ -12,7 +12,9 @@
 #include "models/radiostate.h"
 #include "settings/radiosettings.h"
 #include "utils/radioutils.h"
+#include "utils/rtscheduling.h"
 #include <QLoggingCategory>
+#include <QTimer>
 
 namespace {
 // The K4 reports no stuck-key timeout; push this fixed default to the KPOD+.
@@ -134,10 +136,9 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     m_sidetoneThread->setObjectName("Sidetone");
     Logging::markRealtimeOnStart(m_sidetoneThread);
     m_sidetoneGenerator->moveToThread(m_sidetoneThread);
-    // WHY HighPriority: sidetone shares the real-time CW perception path with the keyer
-    // thread (also HighPriority); at default priority the OS could preempt the per-element
-    // synthesis + sink write under load, adding audible onset jitter.
-    m_sidetoneThread->start(QThread::HighPriority);
+    // Promoted to real-time by SidetoneGenerator::start() on the thread itself: sidetone shares the
+    // CW perception path with the keyer, and a preempted block write is audible onset jitter.
+    m_sidetoneThread->start();
     QMetaObject::invokeMethod(m_sidetoneGenerator, "start", Qt::QueuedConnection);
 
     // Set sidetone to same output device as AudioEngine
@@ -165,20 +166,25 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     // Sidetone CW frequency + keyer-speed wiring lives on CwController.
 
     // =========================================================================
-    // Paddle keyer (HighPriority thread for CW element timing).
+    // Paddle keyer (real-time thread for CW element timing).
     // Constructed + thread-managed here; all CW wiring is on CwController.
     // =========================================================================
     m_paddleKeyer = std::make_unique<PaddleKeyer>(*m_keyerClock, *m_keyerLink, *m_sidetoneScheduler, *m_unmuteTimer);
     // Nothing is keyed until CwController lifts this: the radio must be ready, in CW, and the
     // KPOD+ not owning CW.
     m_paddleKeyer->setInhibited(true);
-    m_keyerThread = QThread::create([keyer = m_paddleKeyer.get()]() { keyer->run(); });
+    m_keyerThread = QThread::create([keyer = m_paddleKeyer.get()]() {
+        RtScheduling::promoteCurrentThread(RtScheduling::Class::RealTime, "Keyer");
+        keyer->run();
+    });
     m_keyerThread->setParent(this);
     m_keyerThread->setObjectName("Keyer");
     Logging::markRealtimeOnStart(m_keyerThread);
-    // WHY HighPriority: every element boundary is a sleep on this thread; a preempted wake is a late
-    // decision (the keyer learns and subtracts a steady overrun, not a random one).
-    m_keyerThread->start(QThread::HighPriority);
+    // WHY real-time, set by the thread itself: every element boundary is a sleep on this thread,
+    // and a preempted wake is a late decision (the keyer learns and subtracts a steady overrun, not
+    // a random one). QThread::HighPriority is a no-op on Linux and weaker than this elsewhere, and
+    // on macOS the scheduling parameters it sets would opt the thread out of QoS.
+    m_keyerThread->start();
 
     // All CW wiring — keyer configuration from RadioState and settings, HaliKey lines and MIDI →
     // keyer, the keyer's link to the K4, inhibit on mode/connection/KPOD+ — lives on CwController
@@ -204,6 +210,11 @@ HardwareController::HardwareController(RadioState *radioState, ConnectionControl
     // calls closePort(), which emits disconnected(), and then emits connectionError - so wiring
     // both would pop two notifications for one event. disconnected() also fires on a deliberate
     // close (changing the port, or quitting), which deserves no notification at all.
+    // The keyer, sidetone and EP02 threads promote themselves as they start, the HaliKey poller when
+    // its port opens; report each once it has had time to.
+    QTimer::singleShot(2000, this, &HardwareController::reportThreadScheduling);
+    connect(m_halikeyDevice, &HalikeyDevice::connected, this, &HardwareController::reportThreadScheduling);
+
     connect(m_halikeyDevice, &HalikeyDevice::connectionError, this, [this](const QString &error) {
         emit hardwareError(QStringLiteral("%1: %2 — paddle keying has stopped.").arg(halikeyName(), error));
     });
@@ -265,6 +276,21 @@ QString HardwareController::halikeyName() const {
     // notification and the settings page cannot disagree about what the device is called.
     return RadioSettings::instance()->halikeyDeviceType() == 1 ? QStringLiteral("HaliKey MIDI")
                                                                : QStringLiteral("HaliKey V1.4");
+}
+
+void HardwareController::reportThreadScheduling() {
+    for (const RtScheduling::Report &report : RtScheduling::takeUnreported()) {
+        const RtScheduling::Result &r = report.result;
+        if (r.error != 0)
+            qCInfo(lcHardware).nospace() << report.thread << " thread: asked for "
+                                         << RtScheduling::className(r.requested) << ", got "
+                                         << RtScheduling::outcomeName(r.outcome) << " - " << r.mechanism
+                                         << " (OS error " << r.error << ")";
+        else
+            qCInfo(lcHardware).nospace() << report.thread << " thread: asked for "
+                                         << RtScheduling::className(r.requested) << ", got "
+                                         << RtScheduling::outcomeName(r.outcome) << " - " << r.mechanism;
+    }
 }
 
 void HardwareController::shutdownDevices() {

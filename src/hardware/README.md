@@ -24,13 +24,14 @@ USB / serial / MIDI device wrappers. Owned by `controllers/hardwarecontroller.cp
 
 ## Threading
 
-- `PaddleKeyer::run()` on `HardwareController::m_keyerThread` (HighPriority, a `QThread::create` with no event loop: the keyer blocks on its own event queue and sleeps to its deadlines).
-- `SidetoneGenerator` on `HardwareController::m_sidetoneThread` (HighPriority); a 1 ms timer there pushes one 4 ms block at a time, keeping the sink's queue at the shortest level the device sustains (starts at 8 ms, rises a block per dry-out).
+- `PaddleKeyer::run()` on `HardwareController::m_keyerThread` (promoted to real-time by `RtScheduling::promoteCurrentThread` (see `src/utils/README.md`); a `QThread::create` with no event loop: the keyer blocks on its own event queue and sleeps to its deadlines).
+- `SidetoneGenerator` on `HardwareController::m_sidetoneThread` (promoted to real-time by `RtScheduling::promoteCurrentThread` (see `src/utils/README.md`)); a 1 ms timer there pushes one 4 ms block at a time, keeping the sink's queue at the shortest level the device sustains (starts at 8 ms, rises a block per dry-out).
 - MIDI paddle edges reach the keyer on RtMidi's own thread; V1.4 edges on the HaliKey worker thread.
-- `HalikeyDevice` has its own `m_workerThread` ("HaliKey" in log lines) for the V1.4 and MIDI workers. It is started with no priority, so it inherits the starting thread's priority (`QThread::InheritPriority`), although it runs the V1.4 1 ms poll.
+- `HalikeyDevice` has its own `m_workerThread` ("HaliKey" in log lines) for the V1.4 and MIDI workers. The V1.4 worker promotes the thread to real-time once its port is open, before the 1 ms poll starts; the MIDI worker's thread (presence poll only) is left at normal priority. RtMidi's own callback thread is not ours and is not promoted.
+- Each real-time thread promotes itself, because only the calling thread can be given a QoS class on macOS or join MMCSS on Windows; `QThread::HighPriority` is not used (a no-op on Linux, and on macOS its scheduling parameters opt the thread out of QoS). The outcome cannot be logged by the thread (CONVENTIONS Rule 16); `HardwareController::reportThreadScheduling()` logs it at info under `qk4.hardware` two seconds after startup and when the HaliKey opens, e.g. `Keyer thread: asked for real-time, got real-time - Mach time-constraint policy (1 ms period, 0.2 ms computation)`.
 - `HaliKeyPortScan` runs each port scan on a short-lived `QThread::create` thread and delivers the list queued to the caller's thread.
 - `KpodDevice` owns `m_hidThread`; all hidapi I/O is on it. On Linux `KpodHidWorker` starts a second thread for the udev hotplug poll.
-- `KpodPlusDevice` owns `m_usbThread` (EP01 + config) and `m_ep02Thread` (keyer reader, HighPriority).
+- `KpodPlusDevice` owns `m_usbThread` (EP01 + config) and `m_ep02Thread` (keyer reader, real-time, promoted in `KpodPlusEp02Worker::run()`).
 
 **Neither device polls on the main thread.** Both used to, and the READMEs and header comments said so
 long after they stopped (USB-011); if a comment here claims main-thread USB I/O, it is stale, not a

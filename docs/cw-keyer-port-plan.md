@@ -90,10 +90,10 @@ Items 1 and 2 fix what goes on air. Items 3 to 6 fix the feel and the monitoring
   I/O thread with a queued `invokeMethod`; a QTimer for the monitor restore.
 
 **Replaced** (HaliKey only)
-- `IambicKeyer` → `PaddleKeyer`, on the existing "Keyer" thread, started with
-  `QThread::HighPriority`. `run()` blocks on its event queue (a `std::condition_variable`), so the
-  thread has no Qt event loop. Qt ignores the priority on systems without thread-priority support,
-  Linux among them (Qt 6.8 `QThread::start()`), so on Linux and the Pi the keyer gets no boost.
+- `IambicKeyer` → `PaddleKeyer`, on the existing "Keyer" thread, which
+  promotes itself to real-time (`RtScheduling`, since 2026-10-29; before that it was started with
+  `QThread::HighPriority`, which Qt ignores on Linux). `run()` blocks on its event queue, so the
+  thread has no Qt event loop.
 - `SidetoneGenerator` → `SidetoneScheduler` plus a mixer stage in `AudioEngine`'s output. *Only
   the scheduler half is done. `SidetoneGenerator` stays as the output until phase 2.*
 - `HalikeyDevice` / `halikey_edge.h`: edge dedupe moves into the keyer (MIDI up-without-down) and
@@ -144,8 +144,7 @@ Items 1 and 2 fix what goes on air. Items 3 to 6 fix the feel and the monitoring
 ## Sidetone
 
 What runs now (phase 1). `SidetoneScheduler` decides when each tone edge plays.
-`SidetoneGenerator` renders it on its own `QAudioSink`, on the "Sidetone" thread (started with
-`QThread::HighPriority`; the same Linux caveat applies). Its `pump()` runs on a 1 ms
+`SidetoneGenerator` renders it on its own `QAudioSink`, on the "Sidetone" thread (which promotes itself to real-time with `RtScheduling`). Its `pump()` runs on a 1 ms
 `Qt::PreciseTimer` and pushes 4 ms blocks into an adaptive queue. The queue starts at 8 ms and grows
 one block each time the device runs dry. It reports play-out time back to the scheduler through
 `streamTime()`. Volume comes from `RadioSettings::sidetoneVolume()`, not from the K4's `ML`.

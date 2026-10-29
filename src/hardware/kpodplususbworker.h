@@ -141,7 +141,7 @@ private:
 };
 
 // Reads EP02 IN with a blocking sync interrupt transfer. Lives on its own
-// HighPriority thread so KZ stream timing is not affected by the GUI or the
+// real-time thread so KZ stream timing is not affected by the GUI or the
 // EP01 worker. Hands each trimmed batch to the keyer link (TcpClient's KZ
 // egress) on this thread: no Qt event, no allocation, and the main thread is
 // never on the hot path.

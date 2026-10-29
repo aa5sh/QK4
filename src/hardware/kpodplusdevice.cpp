@@ -6,7 +6,7 @@
 #include <QThread>
 
 KpodPlusDevice::KpodPlusDevice(QObject *parent) : QObject(parent) {
-    // --- EP02 reader thread (HighPriority) -----------------------------------
+    // --- EP02 reader thread (promotes itself to real-time in run()) -----------
     m_ep02Thread = new QThread(this);
     m_ep02Thread->setObjectName("KpodPlusEP02");
     Logging::markRealtimeOnStart(m_ep02Thread);
@@ -14,7 +14,7 @@ KpodPlusDevice::KpodPlusDevice(QObject *parent) : QObject(parent) {
     m_ep02Worker->moveToThread(m_ep02Thread);
     connect(m_ep02Thread, &QThread::started, m_ep02Worker, &KpodPlusEp02Worker::run);
     connect(m_ep02Thread, &QThread::finished, m_ep02Worker, &QObject::deleteLater);
-    m_ep02Thread->start(QThread::HighPriority);
+    m_ep02Thread->start();
 
     // --- USB worker thread (default priority) --------------------------------
     m_usbThread = new QThread(this);

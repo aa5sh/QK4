@@ -457,6 +457,10 @@ per-edge, per-packet or per-frame `qCDebug`/`qCInfo` on these threads, even behi
 - To observe a real-time thread, record into a preallocated buffer or lock-free queue and format it
   on another thread.
 
+- A real-time thread promotes itself first thing with `RtScheduling::promoteCurrentThread(RtScheduling::Class::RealTime, "Name")`
+  (`src/utils/rtscheduling.h`), never with `QThread::HighPriority`, and must block between
+  wake-ups, never spin: under `SCHED_FIFO` or the Mach time-constraint policy a spinning thread
+  starves its core.
 - A thread that must never block on logging is marked with `Logging::markRealtimeOnStart(thread)`
   (connected before any `started()` connection that enters a loop); the handler then only
   try-locks its queue and drops and counts instead of waiting.

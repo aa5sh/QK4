@@ -156,6 +156,7 @@ set(SOURCES
     src/controllers/transmitcontroller.cpp
     src/network/tcpclient.cpp
     src/network/kzegress.cpp
+    src/utils/rtscheduling.cpp
     src/network/protocol.cpp
     src/network/networkmetrics.cpp
     src/network/kpa1500client.cpp
@@ -329,6 +330,7 @@ set(HEADERS
     src/network/tcpclient.h
     src/network/kzegress.h
     src/utils/latencyhistogram.h
+    src/utils/rtscheduling.h
     src/network/protocol.h
     src/network/networkmetrics.h
     src/network/kpa1500client.h
@@ -542,6 +544,8 @@ if(APPLE)
 elseif(WIN32)
     target_compile_definitions(${PROJECT_NAME} PRIVATE __WINDOWS_MM__)
     target_link_libraries(${PROJECT_NAME} PRIVATE winmm)
+    # MMCSS (AvSetMmThreadCharacteristicsW) for the real-time CW threads, utils/rtscheduling.cpp
+    target_link_libraries(${PROJECT_NAME} PRIVATE avrt)
 else()
     target_compile_definitions(${PROJECT_NAME} PRIVATE __LINUX_ALSA__)
     target_link_libraries(${PROJECT_NAME} PRIVATE asound)

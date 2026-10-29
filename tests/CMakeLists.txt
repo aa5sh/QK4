@@ -398,6 +398,16 @@ target_include_directories(test_kzegress PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_kzegress Qt6::Core Qt6::Test)
 add_test(NAME KzEgressTests COMMAND test_kzegress)
 
+# Real-time scheduling: every OS's fallback chain through fake OS calls, the report table, and
+# the real promotion on the runner (which usually has no real-time rights and must fall back).
+add_executable(test_rtscheduling test_rtscheduling.cpp ${CMAKE_SOURCE_DIR}/src/utils/rtscheduling.cpp)
+target_include_directories(test_rtscheduling PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_rtscheduling Qt6::Core Qt6::Test)
+if(WIN32)
+    target_link_libraries(test_rtscheduling avrt)
+endif()
+add_test(NAME RtSchedulingTests COMMAND test_rtscheduling)
+
 # CW by CAT: the TCI macro grammar (speed markers, prosign brackets, escaped separators) and the
 # KY/KS commands it becomes. One target because the interesting cases are at the seam, where TCI
 # and the K4 use the same characters for different things.
@@ -525,6 +535,7 @@ add_test(NAME SidetoneSchedulerTests COMMAND test_sidetonescheduler)
 # KPOD+ USB worker — pure-logic tests (command builders, EP02 trim, response decoder)
 add_executable(test_kpodplususbworker test_kpodplususbworker.cpp
     ${CMAKE_SOURCE_DIR}/src/hardware/kpodplususbworker.cpp
+    ${CMAKE_SOURCE_DIR}/src/utils/rtscheduling.cpp
     ${CMAKE_SOURCE_DIR}/src/hardware/kpodplusdevice.cpp
 )
 target_include_directories(test_kpodplususbworker PRIVATE
@@ -532,6 +543,9 @@ target_include_directories(test_kpodplususbworker PRIVATE
     ${LIBUSB_INCLUDE_DIRS}
 )
 target_link_libraries(test_kpodplususbworker Qt6::Core Qt6::Test ${LIBUSB_LIBRARIES})
+if(WIN32)
+    target_link_libraries(test_kpodplususbworker avrt) # utils/rtscheduling.cpp
+endif()
 add_test(NAME KpodPlusUsbWorkerTests COMMAND test_kpodplususbworker)
 
 # Connect-failure classification — pure logic, no socket or Qt::Network linkage needed.
