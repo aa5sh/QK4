@@ -161,6 +161,7 @@ for wf in "${WORKFLOWS[@]}"; do
     ' "${wf}")"
     [ -n "${steps}" ] || continue
 
+    pinned=0
     while IFS= read -r entry; do
         line="${entry%%:*}"
         value="${entry#*:}"
@@ -173,9 +174,10 @@ for wf in "${WORKFLOWS[@]}"; do
         if [ "${value}" != '${{ env.QT_VERSION }}' ]; then
             drift "${wf}:${line}: install-qt-action version is '${value}', expected '\${{ env.QT_VERSION }}'"
         fi
+        pinned=1
     done <<<"${steps}"
 
-    if ! grep -q '\.github/qt-version' "${wf}"; then
+    if [ "${pinned}" -eq 1 ] && ! grep -q '\.github/qt-version' "${wf}"; then
         drift "${wf}: installs Qt but never reads ${VERSION_FILE} into QT_VERSION"
     fi
 done
