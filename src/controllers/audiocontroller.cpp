@@ -481,6 +481,9 @@ void AudioController::sampleAudioMetrics() {
     AudioDiagnostics::RxLevelReport rxLevels;
     while (m_audioEngine->takeRxLevelReport(rxLevels))
         AudioDiagnostics::logRxLevels(rxLevels);
+    AudioDiagnostics::RxPlayoutReport rxPlayout;
+    while (m_audioEngine->takeRxPlayoutReport(rxPlayout))
+        AudioDiagnostics::logRxPlayout(rxPlayout);
     AudioDiagnostics::TxFrameReport txFrame;
     while (m_txPipeline->takeTxFrameReport(txFrame))
         AudioDiagnostics::logTxFrame(txFrame);

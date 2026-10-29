@@ -6,7 +6,20 @@
 #include <QMediaDevices>
 #include <QAudioDevice>
 #include <QDebug>
+#include <chrono>
 #include <cmath>
+
+namespace {
+// Written to the sink when the jitter buffer grows (all-bits-zero is 0.0f). Static, so the audio
+// thread never allocates for it.
+constexpr int kSilenceChunkBytes = 4096;
+alignas(float) constexpr char kSilence[kSilenceChunkBytes] = {};
+
+std::int64_t steadyNowUs() {
+    return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+}
+} // namespace
 
 AudioEngine::AudioEngine(QObject *parent) : QObject(parent), m_audioSink(nullptr), m_audioSinkDevice(nullptr) {
 
@@ -65,7 +78,7 @@ void AudioEngine::rebuildOutput() {
         return;
     }
 
-    if (setupAudioOutput()) { // also flushes the queue + re-arms prebuffering
+    if (setupAudioOutput()) { // also flushes the queue + resets the jitter buffer
         m_feedTimer->start();
     }
 }
@@ -215,11 +228,11 @@ bool AudioEngine::setupAudioOutput() {
     // The K4's AG is the radio's own speaker and does not reach this stream.
     m_audioSink->setVolume(1.0f);
 
-    // WHY: every sink (re)build must re-arm prebuffering and drop any backlog. setupAudioOutput()
+    // WHY: every sink (re)build must restart the jitter buffer and drop any backlog. setupAudioOutput()
     // is called from start() AND the mid-stream rebuild paths (onSystemDefaultOutputChanged,
     // setOutputDevice); without this, a rebuild inherits the queue that piled up while the sink was
     // down (e.g. on the PTT-edge device churn) and that latency becomes permanent. Single source of
-    // truth here so no caller can forget. (flushQueue resets m_queueBytes + m_prebuffering.)
+    // truth here so no caller can forget. (flushQueue empties the ring and resets the jitter buffer.)
     flushQueue();
 
     return true;
@@ -251,66 +264,88 @@ bool AudioEngine::enqueueAudio(const float *samples, int floats) {
 
 void AudioEngine::popRxHead() {
     m_rxRing.pop();
+    if (m_rxSeen > 0)
+        --m_rxSeen;
     m_rxHeadOffset = 0;
     m_rxHeadMixed = false;
-}
-
-int AudioEngine::rxQueuedBytes() {
-    int floats = -m_rxHeadOffset;
-    for (std::size_t i = 0; const RxPacket *p = m_rxRing.peek(i); ++i)
-        floats += p->floats;
-    return floats * static_cast<int>(sizeof(float));
 }
 
 void AudioEngine::flushQueue() {
     // Audio thread: the ring is drained from the consumer side only.
     while (m_rxRing.front())
         popRxHead();
-    m_prebuffering = true;
+    m_rxSeen = 0;
+    m_jitter.reset();
 }
 
 void AudioEngine::feedAudioDevice() {
     if (!m_audioSinkDevice)
         return;
 
+    // The jitter buffer (audio/rxplayout.h) is driven in a fixed order, the same order the
+    // simulation in tests/test_rxplayout.cpp drives it: sink first, then each new packet, then the
+    // decision, then the corrections, then the writes.
+    const std::int64_t nowUs = steadyNowUs();
     const int sinkSize = static_cast<int>(m_audioSink->bufferSize());
     int bytesFree = static_cast<int>(m_audioSink->bytesFree());
     int sinkFill = qMax(0, sinkSize - bytesFree);
+    m_jitter.observeSink(sinkFill, nowUs);
 
-    if (m_rxRing.empty())
-        return;
+    int queued = 0;
+    if (!m_rxRing.empty()) {
+        // Every packet the feed has not seen before, in order, with everything ahead of it.
+        int through = sinkFill - m_rxHeadOffset * static_cast<int>(sizeof(float));
+        for (std::size_t i = 0; const RxPacket *p = m_rxRing.peek(i); ++i) {
+            const int bytes = p->floats * static_cast<int>(sizeof(float));
+            through += bytes;
+            if (i >= m_rxSeen)
+                m_jitter.observePacket(bytes, through, nowUs);
+        }
+        m_rxSeen = m_rxRing.size();
+        queued = through - sinkFill;
 
-    // Wait for at least one packet before starting playback
-    if (m_prebuffering) {
-        if (m_rxRing.size() < static_cast<std::size_t>(PREBUFFER_PACKETS))
-            return;
-        m_prebuffering = false;
-    }
-
-    // Self-correcting jitter buffer, run here on the consumer where the sink's fill is known. If a
-    // stall (output-device rebuild, network burst, I/O thread busy) left more audio buffered than
-    // the high-water mark, drop the OLDEST (most delayed) packets back to the target. The marks are
-    // in packets of the current SL tier (audio/rxplayout.h) and count the sink too, so they bound
-    // real latency. One small forward skip; the newest audio keeps playing. A packet already partly
-    // in the sink is left alone - it is playing.
-    int queued = rxQueuedBytes();
-    if (m_rxHeadOffset == 0) {
         const int pktBytes = m_rxRing.front()->floats * static_cast<int>(sizeof(float));
-        if (RxPlayout::overHighWater(queued, sinkFill, 0, pktBytes)) {
-            const int target = RxPlayout::targetBytes(pktBytes);
-            while (queued + sinkFill > target && m_rxRing.size() > 1) {
-                queued -= m_rxRing.front()->floats * static_cast<int>(sizeof(float));
+        m_jitter.decide(queued + sinkFill, pktBytes, nowUs);
+
+        // Shrink or backlog trim: skip from the head of the queue, never from the sink (it plays).
+        // Whole packets go as drops; a part of one moves the head's offset, like a partial write.
+        int skip = m_jitter.takeSkip(queued);
+        while (skip > 0) {
+            const RxPacket *head = m_rxRing.front();
+            const int remaining = (head->floats - m_rxHeadOffset) * static_cast<int>(sizeof(float));
+            if (skip >= remaining) {
+                skip -= remaining;
+                queued -= remaining;
                 popRxHead();
                 m_rxDroppedPackets.fetch_add(1, std::memory_order_relaxed);
+                continue;
             }
+            m_rxHeadOffset += skip / static_cast<int>(sizeof(float));
+            queued -= skip;
+            skip = 0;
         }
+    }
+
+    // Grow: silence ahead of the next packet. Packets wait until all of it is in.
+    while (m_jitter.pendingSilenceBytes() > 0 && bytesFree >= RxPlayout::FRAME_BYTES) {
+        int n = qMin(qMin(m_jitter.pendingSilenceBytes(), bytesFree), kSilenceChunkBytes);
+        n -= n % RxPlayout::FRAME_BYTES;
+        const int written = static_cast<int>(qMax<qint64>(0, m_audioSinkDevice->write(kSilence, n)));
+        if (written <= 0)
+            break;
+        m_jitter.silenceWritten(written);
+        bytesFree -= written;
+        sinkFill += written;
     }
 
     m_rxBufferedBytes.store(queued + sinkFill, std::memory_order_relaxed);
 
     // Write whole packets while they fit; a packet larger than the room left goes in part only when
     // the sink is about to starve (RxPlayout::bytesToWrite), and the rest waits at the ring's front.
-    while (RxPacket *head = m_rxRing.front()) {
+    while (m_jitter.pendingSilenceBytes() == 0) {
+        RxPacket *head = m_rxRing.front();
+        if (!head)
+            break;
         if (!m_rxHeadMixed) {
             applyMixAndVolume(head->samples.data(), head->floats / 2);
             m_rxHeadMixed = true;
@@ -329,6 +364,39 @@ void AudioEngine::feedAudioDevice() {
         }
         popRxHead();
     }
+    m_jitter.noteWritten(sinkFill);
+
+    if (lcAudioRx().isDebugEnabled() &&
+        ++m_playoutReportTicks >= 1000 / RxPlayout::FEED_INTERVAL_MS) { // once a second of ticks
+        m_playoutReportTicks = 0;
+        reportRxPlayout(queued + sinkFill);
+    }
+}
+
+void AudioEngine::reportRxPlayout(int bufferedBytes) {
+    if (AudioDiagnostics::RxPlayoutReport *r = m_playoutDiagnostics.beginWrite()) {
+        r->jitterMs = m_jitter.jitterMs();
+        r->targetMs = m_jitter.targetBytes() / RxPlayout::BYTES_PER_MS;
+        r->devicePeriodMs = m_jitter.devicePeriodBytes() / RxPlayout::BYTES_PER_MS;
+        r->devicePeriodMeasured = m_jitter.devicePeriodMeasured();
+        r->bufferedMs = bufferedBytes / RxPlayout::BYTES_PER_MS;
+        r->packetMs = m_rxPacketMs;
+        r->silenceInserts = m_jitter.silenceInserts();
+        r->shrinkSkips = m_jitter.shrinkSkips();
+        r->backlogTrims = m_jitter.backlogTrims();
+        r->stalls = m_jitter.stalls();
+        r->inStall = m_jitter.inStall();
+        m_playoutDiagnostics.commitWrite();
+    }
+}
+
+bool AudioEngine::takeRxPlayoutReport(AudioDiagnostics::RxPlayoutReport &out) {
+    const AudioDiagnostics::RxPlayoutReport *r = m_playoutDiagnostics.front();
+    if (!r)
+        return false;
+    out = *r;
+    m_playoutDiagnostics.pop();
+    return true;
 }
 
 // Compute one output channel's mix from main/sub sources

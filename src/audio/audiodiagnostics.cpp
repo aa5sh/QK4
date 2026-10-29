@@ -20,6 +20,14 @@ void logRxLevels(const RxLevelReport &r) {
             r.boost > 1.0f ? "soft-limited" : "clamped");
 }
 
+void logRxPlayout(const RxPlayoutReport &r) {
+    qCDebug(lcAudioRx,
+            "RX playout: jitter %d ms -> target %d ms over %d ms packets | device period %d ms%s | buffered %d ms | "
+            "since reset: %d silence inserts, %d shrink skips, %d backlog trims, %d stalls%s",
+            r.jitterMs, r.targetMs, r.packetMs, r.devicePeriodMs, r.devicePeriodMeasured ? "" : " (assumed)",
+            r.bufferedMs, r.silenceInserts, r.shrinkSkips, r.backlogTrims, r.stalls, r.inStall ? " | IN STALL" : "");
+}
+
 void logTxFrame(const TxFrameReport &r) {
     // dBFS rather than raw counts: the TX path is float end to end, and a level in dB is comparable
     // across encode modes whose containers have different full scales.

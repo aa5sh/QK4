@@ -11,6 +11,7 @@
 #include <atomic>
 
 #include "audio/audiodiagnostics.h"
+#include "audio/rxplayout.h"
 #include "audio/spscring.h"
 
 /**
@@ -20,8 +21,8 @@
  * RX:  decoded 12 kHz stereo Float32 PCM is enqueued from the IO thread via
  *      `enqueueAudio()`, consumed by `feedAudioDevice()` on a 5 ms PreciseTimer, with MX
  *      routing + volume + balance applied per packet. The sink buffer is sized from the SL
- *      tier's packet length (audio/rxplayout.h), so a backlog stays in the queue where the
- *      jitter policy can trim it.
+ *      tier's packet length, and how much audio is held is set by RxPlayout::JitterBuffer from
+ *      the jitter it measures (audio/rxplayout.h).
  * TX lives in TxAudioPipeline on its own thread, so opening a microphone never stalls this one.
  *
  * Thread-safety: all public setters mutate @c std::atomic members. RX audio crosses from the
@@ -81,6 +82,7 @@ public:
     // Consumer side of the qk4.audio.rx diagnostics: ONE thread only (AudioController's main-thread
     // sampler). False when there is nothing to report.
     bool takeRxLevelReport(AudioDiagnostics::RxLevelReport &out);
+    bool takeRxPlayoutReport(AudioDiagnostics::RxPlayoutReport &out);
 
     // Transmitting: the K4 stops sending RX audio, so the sink running dry is expected and not
     // counted as an underrun. Atomic, safe from any thread.
@@ -188,21 +190,19 @@ private:
     // front with m_rxHeadOffset floats already written; m_rxHeadMixed says its mix is applied.
     int m_rxHeadOffset = 0;
     bool m_rxHeadMixed = false;
-    // Set by flushQueue() on the audio thread. The ring is drained on the consumer side only.
-    bool m_prebuffering = true;
+    // How much RX audio to hold and when to correct it (audio/rxplayout.h). Audio thread only; reset
+    // by flushQueue(), so every sink rebuild, SL change, stop and start begins a fresh estimate.
+    RxPlayout::JitterBuffer m_jitter;
+    // Ring packets, counted from the front, that m_jitter has already observed.
+    std::size_t m_rxSeen = 0;
+    // qk4.audio.rx playout record, one per second of feed ticks while that category is enabled.
+    int m_playoutReportTicks = 0;
+    void reportRxPlayout(int bufferedBytes);
+    SpscRing<AudioDiagnostics::RxPlayoutReport, 8> m_playoutDiagnostics;
     QTimer *m_feedTimer;
 
-    // Bytes of audio queued in the ring that are not yet in the sink. Audio thread only.
-    int rxQueuedBytes();
     // Release the ring's front slot and reset the partial-write state.
     void popRxHead();
-
-    // Jitter buffer constants (adapt to any SL level automatically).
-    // WHY PREBUFFER_PACKETS = 1: SL-tier packets already encode the jitter runway (SL7 carries
-    // ~120 ms of audio per packet). Waiting for a second packet would double the startup latency
-    // without improving tolerance — the runway is already inside the single packet. See
-    // `memory/k4-streaming-latency.md` for the verified SL0–7 frame-bundling map.
-    static constexpr int PREBUFFER_PACKETS = 1;
 };
 
 #endif // AUDIOENGINE_H

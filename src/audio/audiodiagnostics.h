@@ -26,6 +26,22 @@ struct RxLevelReport {
     float boost = 1.0f;
 };
 
+// qk4.audio.rx: the jitter buffer's state, once a second (audio/rxplayout.h, JitterBuffer). Counts
+// are since the last reset (connect, SL change, device change).
+struct RxPlayoutReport {
+    int jitterMs = 0;       // measured arrival spread over the last 10 s
+    int targetMs = 0;       // delay held for an on-time packet: jitter + slack
+    int devicePeriodMs = 0; // largest OS pull seen; the prior until one is seen
+    bool devicePeriodMeasured = false;
+    int bufferedMs = 0; // queue + sink at the report
+    int packetMs = 0;
+    int silenceInserts = 0; // grow corrections, the start included
+    int shrinkSkips = 0;
+    int backlogTrims = 0;
+    int stalls = 0;
+    bool inStall = false;
+};
+
 // qk4.audio.tx: one encoded TX frame (the first of a transmission, then every Nth).
 struct TxFrameReport {
     int encodeMode = 0;
@@ -41,6 +57,7 @@ struct TxFrameReport {
 
 // Main thread (any non-real-time thread). Write the report to its category at debug.
 void logRxLevels(const RxLevelReport &r);
+void logRxPlayout(const RxPlayoutReport &r);
 void logTxFrame(const TxFrameReport &r);
 
 } // namespace AudioDiagnostics
