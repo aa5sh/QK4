@@ -3,12 +3,10 @@
 
 #include <QObject>
 #include <QThread>
-#include <atomic>
 #include "network/tcpclient.h"
 #include "settings/radiosettings.h"
 
 class NetworkMetrics;
-class RadioState;
 
 /**
  * @brief Owns the IO thread + TcpClient + NetworkMetrics. Exposes connection lifecycle and a
@@ -22,7 +20,7 @@ class ConnectionController : public QObject {
     Q_OBJECT
 
 public:
-    explicit ConnectionController(RadioState *radioState, QObject *parent = nullptr);
+    explicit ConnectionController(QObject *parent = nullptr);
     ~ConnectionController();
 
     // Connection lifecycle
@@ -68,7 +66,6 @@ private:
     TcpClient *m_tcpClient;
     QThread *m_ioThread = nullptr;
     NetworkMetrics *m_networkMetrics;
-    RadioState *m_radioState; // not owned
     RadioEntry m_currentRadio;
 };
 

@@ -215,9 +215,6 @@ public:
     QString antennaName(int index) const {
         return m_antennaState.antennaNames.value(index, QString("ANT%1").arg(index));
     }
-    QString txAntennaName() const { return antennaName(m_antennaState.selectedAntenna); }
-    QString rxAntennaMainName() const { return antennaName(m_antennaState.receiveAntenna); }
-    QString rxAntennaSubName() const { return antennaName(m_antennaState.receiveAntennaSub); }
 
     // RIT/XIT — backed by m_frequencyVfoState.
     bool ritEnabled() const { return m_frequencyVfoState.ritEnabled; }
@@ -495,7 +492,7 @@ public:
     // models/radiostate/textdecodestate.h).
     int textDecodeMode() const { return m_textDecodeState.textDecodeMode; }           // 0=off, 2-4=CW WPM
     int textDecodeThreshold() const { return m_textDecodeState.textDecodeThreshold; } // 0=AUTO, 1-9
-    int textDecodeLines() const { return m_textDecodeState.textDecodeLines; }         // 1-10 lines
+    int textDecodeLines() const { return m_textDecodeState.textDecodeLines; }         // 1-9 lines
 
     // Text Decode (TD$$ command) - Sub RX
     int textDecodeModeB() const { return m_textDecodeState.textDecodeModeB; }
@@ -531,10 +528,10 @@ public:
     static QString modeToString(Mode mode);
     static QString dataSubModeToString(int subMode); // 0=DATA, 1=AFSK, 2=FSK, 3=PSK
 
-    // Introspection for tests. parseCATCommand() iterates m_commandHandlers in
-    // registration order and first-match-wins, so the registration order must be
-    // "shadow-safe": if prefix X is a proper prefix of prefix Y, Y must be
-    // registered before X. See tests/test_radiostate_registry.cpp.
+    // Introspection for tests. parseCATCommand() takes the first matching prefix, and
+    // registerCommandHandlers() sorts the table longest-first, so `MD$` is always tried
+    // before `MD` whatever order the handlers were appended in. The registry test
+    // checks that invariant. See tests/test_radiostate_registry.cpp.
     QStringList registeredCommandPrefixes() const;
 
 signals:
@@ -804,15 +801,9 @@ private:
     void handleMDSub(const QString &cmd); // Mode VFO B (MD$)
 
     // Bandwidth/Filter commands
-    void handleBW(const QString &cmd);    // Bandwidth VFO A
-    void handleBWSub(const QString &cmd); // Bandwidth VFO B (BW$)
-    void handleIS(const QString &cmd);    // IF Shift VFO A
-    void handleISSub(const QString &cmd); // IF Shift VFO B (IS$)
-    void handleCW(const QString &cmd);    // CW pitch
-    // FP/FP$, BW/BW$, IS/IS$ — handled inline via handleIntPair in registerCommandHandlers()
+    void handleCW(const QString &cmd); // CW pitch
 
     // Gain/Level commands
-    // RG/RG$, SQ/SQ$ — handled inline via handleIntPair in registerCommandHandlers()
     void handleMG(const QString &cmd); // Mic Gain
     void handleCP(const QString &cmd); // Compression
     void handleML(const QString &cmd); // Monitor Level
@@ -843,9 +834,8 @@ private:
     void handleRASub(const QString &cmd);  // Attenuator Sub (RA$)
     void handleGT(const QString &cmd);     // AGC Speed Main
     void handleGTSub(const QString &cmd);  // AGC Speed Sub (GT$)
-    // NA/NA$, NM/NM$ — NA handled inline via handleBoolPair; NM stays (complex)
-    void handleNM(const QString &cmd);    // Manual Notch Main
-    void handleNMSub(const QString &cmd); // Manual Notch Sub (NM$)
+    void handleNM(const QString &cmd);     // Manual Notch Main
+    void handleNMSub(const QString &cmd);  // Manual Notch Sub (NM$)
 
     // Balance and audio mix commands
     void handleBL(const QString &cmd); // Audio Balance (BL)
@@ -858,8 +848,6 @@ private:
 
     // VFO control commands
     void handleLN(const QString &cmd); // VFO Link
-    // LK/LK$ — handled inline via handleBoolPair
-    // VT/VT$ — handled inline via handleIntPair
 
     // VOX commands
     void handleVX(const QString &cmd); // VOX enable
@@ -883,8 +871,7 @@ private:
     void handleBS(const QString &cmd); // B SET
 
     // Antenna commands
-    void handleAN(const QString &cmd); // TX Antenna
-    // AR/AR$ — handled inline via handleIntPair
+    void handleAN(const QString &cmd);  // TX Antenna
     void handleAT(const QString &cmd);  // ATU Mode
     void handleACN(const QString &cmd); // Antenna Names
     void handleACM(const QString &cmd); // Main RX Antenna Config
@@ -895,8 +882,6 @@ private:
     void handleRT(const QString &cmd); // RIT
     void handleXT(const QString &cmd); // XIT
     void handleRO(const QString &cmd); // RIT/XIT Offset
-    // RO$ — handled inline via lambda (same structure but different signal)
-    // RT$ — handled inline via handleBoolPair
 
     // Text decode commands
     void handleTD(const QString &cmd);    // Text Decode Main

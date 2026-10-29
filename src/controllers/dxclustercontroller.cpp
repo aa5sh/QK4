@@ -117,12 +117,21 @@ void DxClusterController::destroyInstance(int index) {
     if (!m_instances.contains(index))
         return;
     auto &inst = m_instances[index];
+    bool threadJoined = true;
     if (inst.thread) {
         QMetaObject::invokeMethod(inst.client, "disconnectFromHost", Qt::BlockingQueuedConnection);
         inst.thread->quit();
-        inst.thread->wait(2000);
+        threadJoined = inst.thread->wait(2000);
     }
     delete inst.client;
+    if (inst.thread) {
+        // WHY: deleting a QThread that is still running aborts the process; one that missed the
+        // join deletes itself once its event loop does exit.
+        if (threadJoined)
+            delete inst.thread;
+        else
+            connect(inst.thread, &QThread::finished, inst.thread, &QObject::deleteLater);
+    }
     m_instances.remove(index);
     if (m_instances.isEmpty())
         m_agingTimer->stop();

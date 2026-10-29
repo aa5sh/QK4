@@ -2,7 +2,6 @@
 
 #include "models/radiostate.h"
 
-#include <QDateTime>
 #include <QtGlobal>
 
 void DataControlState::reset() {
@@ -13,10 +12,10 @@ void DataControlState::reset() {
     tuningStep = -1;
     tuningStepB = -1;
     streamingLatency = -1;
-    dataSubModeOptimisticTime = 0;
-    dataSubModeBOptimisticTime = 0;
-    dataRateOptimisticTime = 0;
-    dataRateBOptimisticTime = 0;
+    dataSubModeEchoHold = QDeadlineTimer();
+    dataSubModeBEchoHold = QDeadlineTimer();
+    dataRateEchoHold = QDeadlineTimer();
+    dataRateBEchoHold = QDeadlineTimer();
 }
 
 namespace DataControlHandlers {
@@ -28,9 +27,8 @@ void handleDT(DataControlState &state, RadioState &owner, const QString &cmd) {
     const int subMode = cmd.mid(2).toInt(&ok);
     if (!ok || subMode < 0 || subMode > 3)
         return;
-    const qint64 now = QDateTime::currentMSecsSinceEpoch();
-    // 500 ms cooldown — ignore echoed DT while recent optimistic SET still in flight.
-    if (now - state.dataSubModeOptimisticTime < 500)
+    // Ignore an echoed DT while a recent optimistic SET is still in flight.
+    if (!state.dataSubModeEchoHold.hasExpired())
         return;
     if (subMode != state.dataSubMode) {
         state.dataSubMode = subMode;
@@ -45,8 +43,7 @@ void handleDTSub(DataControlState &state, RadioState &owner, const QString &cmd)
     const int subMode = cmd.mid(3).toInt(&ok);
     if (!ok || subMode < 0 || subMode > 3)
         return;
-    const qint64 now = QDateTime::currentMSecsSinceEpoch();
-    if (now - state.dataSubModeBOptimisticTime < 500)
+    if (!state.dataSubModeBEchoHold.hasExpired())
         return;
     if (subMode != state.dataSubModeB) {
         state.dataSubModeB = subMode;
@@ -61,8 +58,7 @@ void handleDR(DataControlState &state, RadioState &owner, const QString &cmd) {
     const int rate = cmd.mid(2).toInt(&ok);
     if (!ok || rate < 0 || rate > 1)
         return;
-    const qint64 now = QDateTime::currentMSecsSinceEpoch();
-    if (now - state.dataRateOptimisticTime < 500)
+    if (!state.dataRateEchoHold.hasExpired())
         return;
     if (rate != state.dataRate) {
         state.dataRate = rate;
@@ -77,8 +73,7 @@ void handleDRSub(DataControlState &state, RadioState &owner, const QString &cmd)
     const int rate = cmd.mid(3).toInt(&ok);
     if (!ok || rate < 0 || rate > 1)
         return;
-    const qint64 now = QDateTime::currentMSecsSinceEpoch();
-    if (now - state.dataRateBOptimisticTime < 500)
+    if (!state.dataRateBEchoHold.hasExpired())
         return;
     if (rate != state.dataRateB) {
         state.dataRateB = rate;
@@ -133,7 +128,7 @@ void setDataSubMode(DataControlState &state, RadioState &owner, int subMode) {
     subMode = qBound(0, subMode, 3);
     if (state.dataSubMode != subMode) {
         state.dataSubMode = subMode;
-        state.dataSubModeOptimisticTime = QDateTime::currentMSecsSinceEpoch();
+        state.dataSubModeEchoHold.setRemainingTime(DataControlState::EchoHoldMs);
         emit owner.dataSubModeChanged(subMode);
     }
 }
@@ -142,7 +137,7 @@ void setDataSubModeB(DataControlState &state, RadioState &owner, int subMode) {
     subMode = qBound(0, subMode, 3);
     if (state.dataSubModeB != subMode) {
         state.dataSubModeB = subMode;
-        state.dataSubModeBOptimisticTime = QDateTime::currentMSecsSinceEpoch();
+        state.dataSubModeBEchoHold.setRemainingTime(DataControlState::EchoHoldMs);
         emit owner.dataSubModeBChanged(subMode);
     }
 }
@@ -151,7 +146,7 @@ void setDataRate(DataControlState &state, RadioState &owner, int rate) {
     rate = qBound(0, rate, 1);
     if (state.dataRate != rate) {
         state.dataRate = rate;
-        state.dataRateOptimisticTime = QDateTime::currentMSecsSinceEpoch();
+        state.dataRateEchoHold.setRemainingTime(DataControlState::EchoHoldMs);
         emit owner.dataRateChanged(rate);
     }
 }
@@ -160,7 +155,7 @@ void setDataRateB(DataControlState &state, RadioState &owner, int rate) {
     rate = qBound(0, rate, 1);
     if (state.dataRateB != rate) {
         state.dataRateB = rate;
-        state.dataRateBOptimisticTime = QDateTime::currentMSecsSinceEpoch();
+        state.dataRateBEchoHold.setRemainingTime(DataControlState::EchoHoldMs);
         emit owner.dataRateBChanged(rate);
     }
 }

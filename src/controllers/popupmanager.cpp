@@ -23,6 +23,7 @@
 #include "ui/popups/ssbbwpopup.h"
 #include "ui/popups/voxpopup.h"
 #include "ui/styling/k4constants.h"
+#include "network/catframes.h"
 #include <QInputDialog>
 #include <QLineEdit>
 #include <QTimer>
@@ -30,6 +31,14 @@
 #include <QPoint>
 #include <QString>
 #include <QWidget>
+
+namespace {
+
+void setAgcButtonLabel(ButtonRowPopup *row, int agcSpeed) {
+    row->setButtonLabel(4, RadioUtils::agcLabel(agcSpeed), RadioUtils::agcActive(agcSpeed) ? "ON" : "OFF");
+}
+
+} // namespace
 
 PopupManager::PopupManager(RadioState *radioState, ConnectionController *connection, SpectrumController *spectrum,
                            VFOWidget *vfoA, VFOWidget *vfoB, QWidget *parentWidget, QObject *parent)
@@ -56,7 +65,7 @@ PopupManager::PopupManager(RadioState *radioState, ConnectionController *connect
     m_mainRxRow->setButtonLabel(1, "RX", "EQ", false);
     m_mainRxRow->setButtonLabel(2, "LINE OUT", "VFO LINK");
     m_mainRxRow->setButtonLabel(3, "AFX OFF", "OFF");
-    m_mainRxRow->setButtonLabel(4, "AGC-S", "ON");
+    setAgcButtonLabel(m_mainRxRow, RadioState::AGC_Slow);
     m_mainRxRow->setButtonLabel(5, "APF", "OFF");
     m_mainRxRow->setButtonLabel(6, "TEXT", "DECODE", false);
     connect(m_mainRxRow, &ButtonRowPopup::closed, this, [this]() {
@@ -70,7 +79,7 @@ PopupManager::PopupManager(RadioState *radioState, ConnectionController *connect
     m_subRxRow->setButtonLabel(1, "RX", "EQ", false);
     m_subRxRow->setButtonLabel(2, "LINE OUT", "VFO LINK");
     m_subRxRow->setButtonLabel(3, "AFX OFF", "OFF");
-    m_subRxRow->setButtonLabel(4, "AGC-S", "ON");
+    setAgcButtonLabel(m_subRxRow, RadioState::AGC_Slow);
     m_subRxRow->setButtonLabel(5, "APF", "OFF");
     m_subRxRow->setButtonLabel(6, "TEXT", "DECODE", false);
     connect(m_subRxRow, &ButtonRowPopup::closed, this, [this]() {
@@ -483,10 +492,6 @@ void PopupManager::wireDisplayPopup() {
 
 void PopupManager::wireEqPopups() {
     // Create RX EQ popup (Main RX - cyan theme)
-    connect(m_rxEqPopup, &RxEqPopupWidget::closed, this, [this]() {
-        // Close the MAIN RX button row popup when EQ popup closes
-    });
-
     // Debounce timer for RX EQ - sends command 100ms after last slider change
     m_rxEqDebounce->setSingleShot(true);
     m_rxEqDebounce->setInterval(100);
@@ -560,10 +565,6 @@ void PopupManager::wireEqPopups() {
     }
 
     // Create TX EQ popup (amber theme)
-    connect(m_txEqPopup, &RxEqPopupWidget::closed, this, [this]() {
-        // Close the TX button row popup when EQ popup closes
-    });
-
     // Debounce timer for TX EQ - sends command 100ms after last slider change
     m_txEqDebounce->setSingleShot(true);
     m_txEqDebounce->setInterval(100);
@@ -669,11 +670,9 @@ void PopupManager::wireLinePopups() {
     });
     // Connect RadioState to update popup when K4 sends LO response
     connect(m_radioState, &RadioState::lineOutChanged, this, [this]() {
-        if (m_lineOutPopup) {
-            m_lineOutPopup->setLeftLevel(m_radioState->lineOutLeft());
-            m_lineOutPopup->setRightLevel(m_radioState->lineOutRight());
-            m_lineOutPopup->setRightEqualsLeft(m_radioState->lineOutRightEqualsLeft());
-        }
+        m_lineOutPopup->setLeftLevel(m_radioState->lineOutLeft());
+        m_lineOutPopup->setRightLevel(m_radioState->lineOutRight());
+        m_lineOutPopup->setRightEqualsLeft(m_radioState->lineOutRightEqualsLeft());
     });
 
     // Create Line In popup (TX menu button index 3)
@@ -709,11 +708,9 @@ void PopupManager::wireLinePopups() {
     });
     // Connect RadioState to update popup when K4 sends LI response
     connect(m_radioState, &RadioState::lineInChanged, this, [this]() {
-        if (m_lineInPopup) {
-            m_lineInPopup->setSoundCardLevel(m_radioState->lineInSoundCard());
-            m_lineInPopup->setLineInJackLevel(m_radioState->lineInJack());
-            m_lineInPopup->setSource(m_radioState->lineInSource());
-        }
+        m_lineInPopup->setSoundCardLevel(m_radioState->lineInSoundCard());
+        m_lineInPopup->setLineInJackLevel(m_radioState->lineInJack());
+        m_lineInPopup->setSource(m_radioState->lineInSource());
     });
 }
 
@@ -726,11 +723,8 @@ void PopupManager::wireMicPopups() {
         m_connection->sendCAT(QString("MI%1;").arg(input));
     });
     // Connect RadioState to update popup when K4 sends MI response
-    connect(m_radioState, &RadioState::micInputChanged, this, [this](int input) {
-        if (m_micInputPopup) {
-            m_micInputPopup->setCurrentInput(input);
-        }
-    });
+    connect(m_radioState, &RadioState::micInputChanged, this,
+            [this](int input) { m_micInputPopup->setCurrentInput(input); });
 
     // Create Mic Config popup (TX menu button index 3, right-click)
     connect(m_micConfigPopup, &MicConfigPopupWidget::biasChanged, this, [this](int bias) {
@@ -765,15 +759,13 @@ void PopupManager::wireMicPopups() {
     });
     // Connect RadioState to update popup when K4 sends MS response
     connect(m_radioState, &RadioState::micSetupChanged, this, [this]() {
-        if (m_micConfigPopup) {
-            if (m_micConfigPopup->micType() == MicConfigPopupWidget::Front) {
-                m_micConfigPopup->setBias(m_radioState->micFrontBias());
-                m_micConfigPopup->setPreamp(m_radioState->micFrontPreamp());
-                m_micConfigPopup->setButtons(m_radioState->micFrontButtons());
-            } else {
-                m_micConfigPopup->setBias(m_radioState->micRearBias());
-                m_micConfigPopup->setPreamp(m_radioState->micRearPreamp());
-            }
+        if (m_micConfigPopup->micType() == MicConfigPopupWidget::Front) {
+            m_micConfigPopup->setBias(m_radioState->micFrontBias());
+            m_micConfigPopup->setPreamp(m_radioState->micFrontPreamp());
+            m_micConfigPopup->setButtons(m_radioState->micFrontButtons());
+        } else {
+            m_micConfigPopup->setBias(m_radioState->micRearBias());
+            m_micConfigPopup->setPreamp(m_radioState->micRearPreamp());
         }
     });
 }
@@ -816,7 +808,7 @@ void PopupManager::wireVoxAndSsbPopups() {
     });
     // Connect RadioState to update popup when K4 sends VG/VI/VX response
     connect(m_radioState, &RadioState::voxGainChanged, this, [this](int mode, int gain) {
-        if (m_voxPopup && m_voxPopup->popupMode() == VoxPopupWidget::VoxGain) {
+        if (m_voxPopup->popupMode() == VoxPopupWidget::VoxGain) {
             bool isDataMode = (m_radioState->mode() == RadioState::DATA || m_radioState->mode() == RadioState::DATA_R);
             if ((mode == 1 && isDataMode) || (mode == 0 && !isDataMode)) {
                 m_voxPopup->setValue(gain);
@@ -824,15 +816,12 @@ void PopupManager::wireVoxAndSsbPopups() {
         }
     });
     connect(m_radioState, &RadioState::antiVoxChanged, this, [this](int level) {
-        if (m_voxPopup && m_voxPopup->popupMode() == VoxPopupWidget::AntiVox) {
+        if (m_voxPopup->popupMode() == VoxPopupWidget::AntiVox) {
             m_voxPopup->setValue(level);
         }
     });
-    connect(m_radioState, &RadioState::voxChanged, this, [this](bool enabled) {
-        if (m_voxPopup) {
-            m_voxPopup->setVoxEnabled(m_radioState->voxForCurrentMode());
-        }
-    });
+    connect(m_radioState, &RadioState::voxChanged, this,
+            [this](bool) { m_voxPopup->setVoxEnabled(m_radioState->voxForCurrentMode()); });
 
     // Create SSB TX Bandwidth popup (TX menu button index 5)
     connect(m_ssbBwPopup, &SsbBwPopupWidget::bandwidthChanged, this, [this](int bw) {
@@ -842,29 +831,19 @@ void PopupManager::wireVoxAndSsbPopups() {
         int essbMode = m_radioState->essbEnabled() ? 1 : 0;
         m_radioState->setSsbTxBw(bw);
         m_connection->sendCAT(QString("ES%1%2;").arg(essbMode).arg(bw, 2, 10, QChar('0')));
-        // Update button label with new bandwidth (optimistic)
-        if (m_txRow) {
-            QString bwStr = QString("%1k").arg(bw / 10.0, 0, 'f', 1);
-            m_txRow->setButtonLabel(5, "SSB BW", bwStr, false);
-        }
+        m_txRow->setButtonLabel(5, "SSB BW", RadioUtils::txBandwidthLabel(bw), false);
     });
     // Connect RadioState to update popup and ESSB button when K4 sends ES response
-    // SSB: 24-28 (2.4-2.8 kHz), ESSB: 30-45 (3.0-4.5 kHz)
     connect(m_radioState, &RadioState::essbChanged, this, [this](bool enabled, int bw) {
-        if (m_ssbBwPopup) {
-            m_ssbBwPopup->setEssbEnabled(enabled);
-            if (bw >= 24 && bw <= 45) {
-                m_ssbBwPopup->setBandwidth(bw);
-            }
-        }
+        const bool bwKnown = bw >= AudioEffectsState::SsbTxBwMin && bw <= AudioEffectsState::EssbTxBwMax;
+        m_ssbBwPopup->setEssbEnabled(enabled);
+        if (bwKnown)
+            m_ssbBwPopup->setBandwidth(bw);
         // Update TX popup button labels (only in non-CW modes — CW uses paddle/weight buttons)
         auto mode = m_radioState->mode();
-        if (m_txRow && mode != RadioState::CW && mode != RadioState::CW_R) {
-            // Button 5: SSB BW with current bandwidth value (e.g., "2.8k" or "3.0k")
-            if (bw >= 24 && bw <= 45) {
-                QString bwStr = QString("%1k").arg(bw / 10.0, 0, 'f', 1);
-                m_txRow->setButtonLabel(5, "SSB BW", bwStr, false);
-            }
+        if (mode != RadioState::CW && mode != RadioState::CW_R) {
+            if (bwKnown)
+                m_txRow->setButtonLabel(5, "SSB BW", RadioUtils::txBandwidthLabel(bw), false);
             // Button 6: ESSB toggle with ON/OFF state
             m_txRow->setButtonLabel(6, "ESSB", enabled ? "ON" : "OFF", false);
         }
@@ -878,21 +857,16 @@ void PopupManager::wireKeyingWeightPopup() {
     connect(m_keyingWeightPopup, &KeyingWeightPopupWidget::weightChanged, this, [this](int weight) {
         if (!m_connection->isConnected())
             return;
-        QChar iambic = m_radioState->iambicMode().isNull() ? QChar('A') : m_radioState->iambicMode();
-        QChar paddle = m_radioState->paddleOrientation().isNull() ? QChar('N') : m_radioState->paddleOrientation();
+        m_connection->sendCAT(QString::fromLatin1(
+            CatFrames::keyerPaddle(m_radioState->iambicMode(), m_radioState->paddleOrientation(), weight)));
         m_radioState->setKeyingWeight(weight);
-        m_connection->sendCAT(QString("KP%1%2%3;").arg(iambic).arg(paddle).arg(weight, 3, 10, QChar('0')));
-        // Update button label with new weight value (optimistic)
-        if (m_txRow) {
-            QString weightStr = QString::number(weight / 100.0, 'f', 2);
-            m_txRow->setButtonLabel(6, "WEIGHT", weightStr, false);
-        }
+        m_txRow->setButtonLabel(6, "WEIGHT", QString::number(weight / 100.0, 'f', 2), false);
     });
 
     // Connect keyerPaddleChanged to update CW button labels and weight popup
     connect(m_radioState, &RadioState::keyerPaddleChanged, this, [this](QChar iambic, QChar paddle, int weight) {
         auto mode = m_radioState->mode();
-        if (m_txRow && (mode == RadioState::CW || mode == RadioState::CW_R)) {
+        if (mode == RadioState::CW || mode == RadioState::CW_R) {
             // Button 5: paddle orientation + iambic mode
             QString paddleStr = (paddle == 'R') ? "PDL REV" : "PDL NOR";
             QString iambicStr = QString("IAMB %1").arg(iambic);
@@ -904,7 +878,7 @@ void PopupManager::wireKeyingWeightPopup() {
             }
         }
         // Update weight popup if visible
-        if (m_keyingWeightPopup && m_keyingWeightPopup->isVisible() && weight >= 90 && weight <= 125) {
+        if (m_keyingWeightPopup->isVisible() && weight >= 90 && weight <= 125) {
             m_keyingWeightPopup->setWeight(weight);
         }
     });
@@ -992,7 +966,7 @@ void PopupManager::showSsbBwAbove(ButtonRowLane lane) {
     QWidget *anchor = anchorForLane(lane);
     m_ssbBwPopup->setEssbEnabled(m_radioState->essbEnabled());
     const int bw = m_radioState->ssbTxBw();
-    if (bw >= 24 && bw <= 45)
+    if (bw >= AudioEffectsState::SsbTxBwMin && bw <= AudioEffectsState::EssbTxBwMax)
         m_ssbBwPopup->setBandwidth(bw);
     if (anchor)
         m_ssbBwPopup->showAboveWidget(anchor);
@@ -1023,36 +997,15 @@ void PopupManager::wireRxRowButtonLabels() {
             alternate = "PITCH";
             break;
         }
-        if (m_mainRxRow)
-            m_mainRxRow->setButtonLabel(3, primary, alternate);
-        if (m_subRxRow)
-            m_subRxRow->setButtonLabel(3, primary, alternate);
+        m_mainRxRow->setButtonLabel(3, primary, alternate);
+        m_subRxRow->setButtonLabel(3, primary, alternate);
     });
 
     // AGC (button 4, per-VFO — Main uses GT, Sub uses GT$).
-    auto agcLabel = [](RadioState::AGCSpeed speed) -> std::pair<QString, QString> {
-        switch (speed) {
-        case RadioState::AGC_Off:
-            return {"AGC", "OFF"};
-        case RadioState::AGC_Slow:
-            return {"AGC-S", "ON"};
-        case RadioState::AGC_Fast:
-            return {"AGC-F", "ON"};
-        }
-        return {"AGC", "OFF"};
-    };
-    connect(m_radioState, &RadioState::processingChanged, this, [this, agcLabel]() {
-        if (!m_mainRxRow)
-            return;
-        const auto [primary, alternate] = agcLabel(m_radioState->agcSpeed());
-        m_mainRxRow->setButtonLabel(4, primary, alternate);
-    });
-    connect(m_radioState, &RadioState::processingChangedB, this, [this, agcLabel]() {
-        if (!m_subRxRow)
-            return;
-        const auto [primary, alternate] = agcLabel(m_radioState->agcSpeedB());
-        m_subRxRow->setButtonLabel(4, primary, alternate);
-    });
+    connect(m_radioState, &RadioState::processingChanged, this,
+            [this]() { setAgcButtonLabel(m_mainRxRow, m_radioState->agcSpeed()); });
+    connect(m_radioState, &RadioState::processingChangedB, this,
+            [this]() { setAgcButtonLabel(m_subRxRow, m_radioState->agcSpeedB()); });
 
     // APF (button 5, per-VFO). Also forwards to the VFO APF indicator —
     // same state drives both.
@@ -1063,14 +1016,12 @@ void PopupManager::wireRxRowButtonLabels() {
         return bwNames[qBound(0, width, 2)];
     };
     connect(m_radioState, &RadioState::apfChanged, this, [this, apfLabel](bool enabled, int width) {
-        if (m_mainRxRow)
-            m_mainRxRow->setButtonLabel(5, "APF", apfLabel(enabled, width));
+        m_mainRxRow->setButtonLabel(5, "APF", apfLabel(enabled, width));
         if (m_vfoA)
             m_vfoA->setApf(enabled, width);
     });
     connect(m_radioState, &RadioState::apfBChanged, this, [this, apfLabel](bool enabled, int width) {
-        if (m_subRxRow)
-            m_subRxRow->setButtonLabel(5, "APF", apfLabel(enabled, width));
+        m_subRxRow->setButtonLabel(5, "APF", apfLabel(enabled, width));
         if (m_vfoB)
             m_vfoB->setApf(enabled, width);
     });

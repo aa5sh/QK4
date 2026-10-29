@@ -42,7 +42,8 @@ public:
     int dataRate() const { return m_dataRate; }
     OperatingMode operatingMode() const { return m_operatingMode; }
 
-    // Decode state setters (for syncing from radio)
+    // Decode state setters. None of them emit: the signals report operator actions only, so applying
+    // the radio's own report can never be sent back to it.
     void setDecodeEnabled(bool enabled);
     void setWpmRange(int range);
     void setAutoThreshold(bool isAuto);

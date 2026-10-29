@@ -267,6 +267,12 @@ private slots:
         QCOMPARE(CatFrames::keyerSpeed(0), QByteArray("KS008;"));
         QCOMPARE(CatFrames::keyerSpeed(-30), QByteArray("KS008;"));
     }
+
+    void theKeyerPaddleFrameCarriesAllThreeFields() {
+        QCOMPARE(CatFrames::keyerPaddle('B', 'R', 95), QByteArray("KPBR095;"));
+        QCOMPARE(CatFrames::keyerPaddle('A', 'N', 125), QByteArray("KPAN125;"));
+        QCOMPARE(CatFrames::keyerPaddle(QChar(), QChar(), -1), QByteArray("KPAN100;"));
+    }
 };
 
 QTEST_MAIN(TestCwMacro)

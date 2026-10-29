@@ -280,7 +280,7 @@ void handleES(AudioEffectsState &state, RadioState &owner, const QString &cmd) {
 
     if (cmd.length() >= 5) {
         newBw = cmd.mid(3, 2).toInt(&ok);
-        if (!ok || newBw < 24 || newBw > 45) {
+        if (!ok || newBw < AudioEffectsState::SsbTxBwMin || newBw > AudioEffectsState::EssbTxBwMax) {
             newBw = state.ssbTxBw;
         }
     }
@@ -290,7 +290,7 @@ void handleES(AudioEffectsState &state, RadioState &owner, const QString &cmd) {
         state.essbEnabled = newEssb;
         changed = true;
     }
-    if (newBw >= 24 && newBw <= 45 && newBw != state.ssbTxBw) {
+    if (newBw >= AudioEffectsState::SsbTxBwMin && newBw <= AudioEffectsState::EssbTxBwMax && newBw != state.ssbTxBw) {
         state.ssbTxBw = newBw;
         changed = true;
     }
@@ -626,7 +626,7 @@ void setEssbEnabled(AudioEffectsState &state, RadioState &owner, bool enabled) {
 }
 
 void setSsbTxBw(AudioEffectsState &state, RadioState &owner, int bw) {
-    bw = qBound(30, bw, 45);
+    bw = qBound(AudioEffectsState::SsbTxBwMin, bw, AudioEffectsState::EssbTxBwMax);
     if (bw != state.ssbTxBw) {
         state.ssbTxBw = bw;
         emit owner.essbChanged(state.essbEnabled, state.ssbTxBw);

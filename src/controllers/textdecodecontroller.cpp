@@ -173,8 +173,10 @@ void TextDecodeController::showMainRx() {
             m_mainWindow->setDataRate(dr);
     }
     m_mainWindow->show();
-    if (!m_mainWindow->isDecodeEnabled())
+    if (!m_mainWindow->isDecodeEnabled()) {
         m_mainWindow->setDecodeEnabled(true);
+        sendTextDecodeCmd(m_mainWindow, true);
+    }
 }
 
 void TextDecodeController::showSubRx() {
@@ -186,8 +188,10 @@ void TextDecodeController::showSubRx() {
             m_subWindow->setDataRate(dr);
     }
     m_subWindow->show();
-    if (!m_subWindow->isDecodeEnabled())
+    if (!m_subWindow->isDecodeEnabled()) {
         m_subWindow->setDecodeEnabled(true);
+        sendTextDecodeCmd(m_subWindow, false);
+    }
 }
 
 void TextDecodeController::sendTextDecodeCmd(TextDecodeWindow *window, bool isMainRx) {

@@ -194,10 +194,8 @@ void VFOWidget::setSMeterValue(double value) {
         m_txMeter->setSMeter(value);
 }
 
-void VFOWidget::setAGC(const QString &mode) {
-    m_agcLabel->setText(mode);
-    // AGC is always shown, color indicates active state
-    bool active = !mode.contains("-") || mode == "AGC-F" || mode == "AGC-S" || mode == "AGC-M";
+void VFOWidget::setAGC(const QString &label, bool active) {
+    m_agcLabel->setText(label);
     m_agcLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
                                   .arg(active ? K4Styles::Colors::TextWhite : K4Styles::Colors::TextGray)
                                   .arg(K4Styles::Dimensions::FontSizeLarge));
@@ -371,7 +369,7 @@ void VFOWidget::resetToDefaults() {
     setSMeterValue(0);
     setTransmitting(false);
     setTxMeters(0, 0, 0, 1.0);
-    setAGC("AGC");
+    setAGC(QStringLiteral("AGC"), false);
     setPreamp(false, 0);
     setAtt(false, 0);
     setNB(false);

@@ -5,6 +5,8 @@
 #include <QVector>
 #include <QtGlobal>
 
+#include <optional>
+
 /**
  * @brief Shared radio utility functions and constants.
  *
@@ -67,6 +69,28 @@ int spanAfterZoom(int currentSpan, bool zoomIn);
 /// Next K4 filter preset when cycling like the front panel: 1 -> 3 -> 2 -> 1.
 /// Returns -1 for anything outside 1-3 (preset not known yet).
 int nextFilterPreset(int currentPreset);
+
+/// Filter as the K4 holds it: bandwidth and IF shift (centre), both in decahertz.
+struct FilterBwIs {
+    int bwDah;
+    int isDah;
+};
+
+/// Limits for filterAfterEdgeStep(), in decahertz. isLocked: the mode fixes IS (FSK-D, PSK-D).
+struct FilterEdgeLimits {
+    int bwMinDah;
+    int bwMaxDah;
+    int isMinDah;
+    int isMaxDah;
+    bool isLocked;
+};
+
+/// One HI or LO scroll tick (`steps` x 20 Hz) applied to a filter while the OPPOSITE edge stays put.
+/// The moved edge is recomputed from the fixed edge and the clamped bandwidth, and IS is derived from
+/// those two edges. Returns nullopt when the tick changes nothing or when honouring the IS limit would
+/// move the fixed edge or take LO below 0 Hz. With isLocked, only the bandwidth changes and IS is returned unchanged.
+std::optional<FilterBwIs> filterAfterEdgeStep(FilterBwIs current, bool adjustHi, int steps,
+                                              const FilterEdgeLimits &limits);
 
 /// Build an 8-band EQ CAT command string (e.g., "RE+00-02+04..." or "TE+00...").
 /// prefix is "RE" (RX) or "TE" (TX), bands must have exactly 8 values in [-16, +16].
@@ -132,6 +156,16 @@ QString fixedTuneSetCommand(FixedTuneMode mode);
 /// when already aligned or stepHz <= 0. Used by every tune path so dial/scroll/drag
 /// land on the same step boundary the dimmed-digit display indicates.
 qint64 snapFreqToStep(qint64 freq, int stepHz);
+
+/// GT AGC speed (RadioState::AGCSpeed: 0 off, 1 slow, 2 fast) as the K4 labels it: "AGC", "AGC-S",
+/// "AGC-F". Anything else, including the not-yet-received sentinel, reads as off.
+QString agcLabel(int agcSpeed);
+
+/// True when the GT AGC speed is slow or fast, i.e. AGC is on.
+bool agcActive(int agcSpeed);
+
+/// ES TX bandwidth (100 Hz units) as a button label, e.g. 28 -> "2.8k".
+QString txBandwidthLabel(int bwHundredsHz);
 
 /// Convert a Celsius reading to Fahrenheit, rounded to the nearest degree.
 /// Display-only: warning/critical thresholds stay in Celsius so a given physical

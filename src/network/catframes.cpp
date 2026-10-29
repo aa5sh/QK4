@@ -392,4 +392,12 @@ QByteArray ifFrame(const RadioState &state) {
     return r.toUtf8();
 }
 
+QByteArray keyerPaddle(QChar iambic, QChar paddle, int weight) {
+    return QString("KP%1%2%3;")
+        .arg(iambic.isNull() ? QChar('A') : iambic)
+        .arg(paddle.isNull() ? QChar('N') : paddle)
+        .arg(weight < 0 ? 100 : weight, 3, 10, QChar('0'))
+        .toUtf8();
+}
+
 } // namespace CatFrames

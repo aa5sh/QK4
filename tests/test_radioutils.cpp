@@ -1,6 +1,16 @@
 #include <QTest>
 #include "utils/radioutils.h"
 
+namespace {
+constexpr RadioUtils::FilterEdgeLimits kSsbLimits{5, 500, 30, 300, false};
+int loDah(RadioUtils::FilterBwIs f) {
+    return qMax(0, f.isDah - f.bwDah / 2);
+}
+int hiDah(RadioUtils::FilterBwIs f) {
+    return loDah(f) + f.bwDah;
+}
+} // namespace
+
 class TestRadioUtils : public QObject {
     Q_OBJECT
 
@@ -98,6 +108,87 @@ private slots:
         QCOMPARE(RadioUtils::nextFilterPreset(-1), -1);
         QCOMPARE(RadioUtils::nextFilterPreset(0), -1);
         QCOMPARE(RadioUtils::nextFilterPreset(4), -1);
+    }
+
+    // filterAfterEdgeStep — HI/LO scroll keeps the opposite edge fixed
+    void testEdgeStep_hiMovesHiOnly() {
+        const auto next = RadioUtils::filterAfterEdgeStep({240, 150}, true, 1, kSsbLimits);
+        QVERIFY(next);
+        QCOMPARE(next->bwDah, 242);
+        QCOMPARE(loDah(*next), 30);
+        QCOMPARE(hiDah(*next), 272);
+    }
+    void testEdgeStep_hiAtMaxBandwidthIsIgnored() {
+        // BW already at its limit: the old code still re-centred IS, dragging LO up.
+        QVERIFY(!RadioUtils::filterAfterEdgeStep({500, 270}, true, 1, kSsbLimits));
+    }
+    void testEdgeStep_loPastMaxBandwidthKeepsHiFixed() {
+        const RadioUtils::FilterBwIs current{498, 270};
+        const auto next = RadioUtils::filterAfterEdgeStep(current, false, -2, kSsbLimits);
+        QVERIFY(next);
+        QCOMPARE(next->bwDah, 500);
+        QCOMPARE(hiDah(*next), hiDah(current));
+        QCOMPARE(loDah(*next), 19);
+    }
+    void testEdgeStep_loPastMinBandwidthKeepsHiFixed() {
+        const RadioUtils::FilterBwIs current{6, 100};
+        const auto next = RadioUtils::filterAfterEdgeStep(current, false, 1, kSsbLimits);
+        QVERIFY(next);
+        QCOMPARE(next->bwDah, 5);
+        QCOMPARE(hiDah(*next), hiDah(current));
+    }
+    void testEdgeStep_isLimitWouldMoveFixedEdgeIsIgnored() {
+        const auto ok = RadioUtils::filterAfterEdgeStep({40, 35}, true, -5, kSsbLimits);
+        QVERIFY(ok);
+        QCOMPARE(ok->isDah, 30);
+        QCOMPARE(loDah(*ok), 15);
+        // One more step needs IS 29: clamping it to 30 would move LO, so the tick is dropped.
+        QVERIFY(!RadioUtils::filterAfterEdgeStep({40, 35}, true, -6, kSsbLimits));
+    }
+    void testEdgeStep_lockedShiftChangesBandwidthOnly() {
+        const auto next = RadioUtils::filterAfterEdgeStep({50, 100}, true, 1, {5, 80, 30, 300, true});
+        QVERIFY(next);
+        QCOMPARE(next->bwDah, 52);
+        QCOMPARE(next->isDah, 100);
+    }
+    void testEdgeStep_sweepFixedEdgeNeverMoves() {
+        for (int bw = 5; bw <= 500; bw += 7) {
+            for (int is = 30; is <= 300; is += 11) {
+                for (int steps : {-25, -3, -1, 1, 3, 25}) {
+                    for (bool adjustHi : {true, false}) {
+                        const RadioUtils::FilterBwIs current{bw, is};
+                        const auto next = RadioUtils::filterAfterEdgeStep(current, adjustHi, steps, kSsbLimits);
+                        if (!next)
+                            continue;
+                        QVERIFY(next->bwDah >= 5 && next->bwDah <= 500);
+                        QVERIFY(next->isDah >= 30 && next->isDah <= 300);
+                        if (adjustHi)
+                            QCOMPARE(loDah(*next), loDah(current));
+                        else
+                            QCOMPARE(hiDah(*next), hiDah(current));
+                    }
+                }
+            }
+        }
+    }
+
+    // agcLabel / agcActive
+    void testAgcLabel() {
+        QCOMPARE(RadioUtils::agcLabel(0), QString("AGC"));
+        QCOMPARE(RadioUtils::agcLabel(1), QString("AGC-S"));
+        QCOMPARE(RadioUtils::agcLabel(2), QString("AGC-F"));
+        QCOMPARE(RadioUtils::agcLabel(-1), QString("AGC"));
+    }
+    void testAgcOffIsNotActive() {
+        // The VFO indicator used to parse its own text and treated plain "AGC" (off) as active.
+        QVERIFY(!RadioUtils::agcActive(0));
+        QVERIFY(RadioUtils::agcActive(1));
+        QVERIFY(RadioUtils::agcActive(2));
+        QVERIFY(!RadioUtils::agcActive(-1));
+    }
+    void testTxBandwidthLabel() {
+        QCOMPARE(RadioUtils::txBandwidthLabel(28), QString("2.8k"));
+        QCOMPARE(RadioUtils::txBandwidthLabel(45), QString("4.5k"));
     }
 
     // buildEqCommand

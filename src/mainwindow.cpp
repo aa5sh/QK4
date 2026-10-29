@@ -241,7 +241,7 @@ MainWindow::~MainWindow() {
 
 void MainWindow::setupControllers() {
     // Connection controller owns TcpClient, I/O thread, and NetworkMetrics
-    m_connectionController = new ConnectionController(m_radioState, this);
+    m_connectionController = new ConnectionController(this);
 
     // Audio controller owns AudioEngine, Opus codecs, audio thread, and PTT state
     m_audioController = new AudioController(m_connectionController, m_radioState, this);

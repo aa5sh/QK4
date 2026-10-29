@@ -76,6 +76,47 @@ int getNextSpanDown(int currentSpan) {
     return qMax(newSpan, SPAN_MIN);
 }
 
+std::optional<FilterBwIs> filterAfterEdgeStep(FilterBwIs current, bool adjustHi, int steps,
+                                              const FilterEdgeLimits &limits) {
+    const int lo = qMax(0, current.isDah - current.bwDah / 2);
+    const int hi = lo + current.bwDah;
+    const int stepDah = steps * 2;
+
+    int newBw;
+    int newLo;
+    int newHi;
+    if (adjustHi) {
+        const int wantedHi = hi + stepDah;
+        if (wantedHi <= lo)
+            return std::nullopt;
+        newBw = qBound(limits.bwMinDah, wantedHi - lo, limits.bwMaxDah);
+        newLo = lo;
+        newHi = lo + newBw;
+    } else {
+        const int wantedLo = lo + stepDah;
+        if (wantedLo >= hi)
+            return std::nullopt;
+        newBw = qBound(limits.bwMinDah, hi - wantedLo, limits.bwMaxDah);
+        newHi = hi;
+        newLo = hi - newBw;
+        if (newLo < 0)
+            return std::nullopt;
+    }
+
+    if (limits.isLocked) {
+        if (newBw == current.bwDah)
+            return std::nullopt;
+        return FilterBwIs{newBw, current.isDah};
+    }
+
+    const int newIs = (newHi + newLo) / 2;
+    if (newIs < limits.isMinDah || newIs > limits.isMaxDah)
+        return std::nullopt;
+    if (newBw == current.bwDah && newIs == current.isDah)
+        return std::nullopt;
+    return FilterBwIs{newBw, newIs};
+}
+
 QString buildEqCommand(const QString &prefix, const QVector<int> &bands) {
     Q_ASSERT(bands.size() == 8);
     QString cmd = prefix;
@@ -155,6 +196,25 @@ QString fixedTuneSetCommand(FixedTuneMode mode) {
 qint64 snapFreqToStep(qint64 freq, int stepHz) {
     // Integer division truncates toward zero; tune frequencies are positive, so this floors.
     return (stepHz > 0) ? (freq / stepHz) * stepHz : freq;
+}
+
+QString agcLabel(int agcSpeed) {
+    switch (agcSpeed) {
+    case 1:
+        return QStringLiteral("AGC-S");
+    case 2:
+        return QStringLiteral("AGC-F");
+    default:
+        return QStringLiteral("AGC");
+    }
+}
+
+bool agcActive(int agcSpeed) {
+    return agcSpeed == 1 || agcSpeed == 2;
+}
+
+QString txBandwidthLabel(int bwHundredsHz) {
+    return QStringLiteral("%1k").arg(bwHundredsHz / 10.0, 0, 'f', 1);
 }
 
 int celsiusToFahrenheit(int celsius) {

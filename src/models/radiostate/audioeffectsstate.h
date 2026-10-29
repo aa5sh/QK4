@@ -41,7 +41,11 @@ struct AudioEffectsState {
     // VI — Anti-VOX (0-60)
     int antiVox = -1;
 
-    // ES — ESSB enable + TX bandwidth (30-45, i.e. 3.0-4.5 kHz in 100Hz units)
+    // ES — ESSB enable + TX bandwidth in 100 Hz units: SSB 24-28 (2.4-2.8 kHz), ESSB 30-45 (3.0-4.5 kHz)
+    static constexpr int SsbTxBwMin = 24;
+    static constexpr int SsbTxBwMax = 28;
+    static constexpr int EssbTxBwMin = 30;
+    static constexpr int EssbTxBwMax = 45;
     bool essbEnabled = false;
     int ssbTxBw = -1;
 

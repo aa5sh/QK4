@@ -22,7 +22,7 @@ ModePopupController::ModePopupController(RadioState *radioState, ConnectionContr
         // about a submode change issued by us. Mirror the change optimistically
         // to keep mode-label rendering in sync without waiting for a roundtrip
         // that will never come.
-        QRegularExpression dtRegex("DT(\\$?)(\\d)");
+        static const QRegularExpression dtRegex("DT(\\$?)(\\d)");
         QRegularExpressionMatch match = dtRegex.match(catCmd);
         if (match.hasMatch()) {
             const bool isSubRx = !match.captured(1).isEmpty(); // DT$ = VFO B

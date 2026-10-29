@@ -3,6 +3,7 @@
 #include "connectioncontroller.h"
 #include "models/radiostate.h"
 #include "ui/widgets/sidecontrolpanel.h"
+#include "utils/radioutils.h"
 
 #include <QChar>
 #include <QString>
@@ -211,26 +212,12 @@ void SideControlScrollController::applyFilterEdgeChange(bool adjustHi, int delta
         }
     }
 
-    // Compute displayed (clamped) HI/LO from current BW + IS
-    int loDah = qMax(0, isDah - bwDah / 2);
-    int hiDah = loDah + bwDah;
-
-    int newBwDah;
-    int newHiDah;
-    int newLoDah;
-    if (adjustHi) {
-        newHiDah = hiDah + (delta * 2);
-        if (newHiDah <= loDah)
-            return;
-        newLoDah = loDah;
-        newBwDah = qBound(bwMinDah, newHiDah - loDah, bwMaxDah);
-    } else {
-        newLoDah = loDah + (delta * 2);
-        if (newLoDah >= hiDah)
-            return;
-        newHiDah = hiDah;
-        newBwDah = qBound(bwMinDah, hiDah - newLoDah, bwMaxDah);
-    }
+    const int isMaxDah = (mode == RadioState::CW || mode == RadioState::CW_R) ? 200 : 300;
+    const auto next =
+        RadioUtils::filterAfterEdgeStep({bwDah, isDah}, adjustHi, delta, {bwMinDah, bwMaxDah, 30, isMaxDah, isLocked});
+    if (!next)
+        return;
+    const int newBwDah = next->bwDah;
 
     QString bwCmd = bSet ? "BW$" : "BW";
     m_connection->sendCAT(QString("%1%2;").arg(bwCmd).arg(newBwDah, 4, 10, QChar('0')));
@@ -242,8 +229,7 @@ void SideControlScrollController::applyFilterEdgeChange(bool adjustHi, int delta
         else
             m_radioState->setFilterBandwidth(newBwDah * 10);
     } else {
-        int newIsDah =
-            qBound(30, (newHiDah + newLoDah) / 2, (mode == RadioState::CW || mode == RadioState::CW_R) ? 200 : 300);
+        const int newIsDah = next->isDah;
         QString isPrefix = bSet ? "IS$" : "IS";
         m_connection->sendCAT(QString("%1+%2;").arg(isPrefix).arg(newIsDah, 4, 10, QChar('0')));
 

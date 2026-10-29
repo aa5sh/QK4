@@ -30,7 +30,7 @@ enum class Owner {
     Xmit,      // the side-panel XMIT button
     CatClient, // WSJT-X and friends over the native CAT server
     TciClient, // a TCI client
-    Radio      // the K4 keyed itself: front panel, footswitch at the radio, TUNE, a fault
+    Radio,     // the K4 keyed itself: front panel, footswitch at the radio, TUNE, a fault
 };
 
 enum class Route {
@@ -38,7 +38,7 @@ enum class Route {
     StreamedFromHere,    // open the audio gate and stream; NO TX; — the tunnel header keys the K4
     RadioLocal,          // TX; only; never open the gate — the K4 transmits from its own input
     CatKeyedAndStreamed, // TX; AND the gate: what XMIT does today. See the WHY below.
-    Observed             // the radio is already transmitting; reflect it and touch nothing
+    Observed,            // the radio is already transmitting; reflect it and touch nothing
 };
 
 // WHY CatKeyedAndStreamed exists rather than XMIT being classed as one of the other two: it is
@@ -51,7 +51,10 @@ enum class Route {
 // Mirrors AudioController::TxSource. Duplicated rather than included so this header — and the test
 // that links it alone — stays clear of the controller layer. transmitcontroller.cpp static_asserts
 // that the two agree, so drift is a build error rather than a silently wrong source.
-enum class AudioSource { Microphone = 0, Tci = 1 };
+enum class AudioSource {
+    Microphone = 0,
+    Tci = 1,
+};
 
 struct State {
     Owner owner = Owner::None;

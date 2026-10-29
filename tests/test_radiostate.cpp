@@ -1215,6 +1215,34 @@ private slots:
         QCOMPARE(rs.textDecodeLines(), 2);
     }
 
+    void testTextDecodeMalformedFieldsIgnored() {
+        RadioState rs;
+        rs.parseCATCommand("TD132;");
+        QSignalSpy spy(&rs, &RadioState::textDecodeChanged);
+        rs.parseCATCommand("TDx;2;"); // mode and threshold not digits, lines unchanged
+        QCOMPARE(rs.textDecodeMode(), 1);
+        QCOMPARE(rs.textDecodeThreshold(), 3);
+        QCOMPARE(spy.count(), 0);
+        rs.parseCATCommand("TD5x2;"); // mode 5 is beyond 8-90 WPM
+        QCOMPARE(rs.textDecodeMode(), 1);
+        QCOMPARE(spy.count(), 0);
+        rs.parseCATCommand("TD$x;2;");
+        QCOMPARE(rs.textDecodeModeB(), -1);
+        QCOMPARE(rs.textDecodeThresholdB(), -1);
+    }
+
+    void testTextDecodeLinesRangeMatchesWire() {
+        RadioState rs;
+        rs.parseCATCommand("TD109;");
+        QCOMPARE(rs.textDecodeLines(), 9);
+        rs.setTextDecodeLines(10);
+        QCOMPARE(rs.textDecodeLines(), TextDecodeState::LinesMax);
+        rs.setTextDecodeLinesB(10);
+        QCOMPARE(rs.textDecodeLinesB(), TextDecodeState::LinesMax);
+        rs.setTextDecodeLines(0);
+        QCOMPARE(rs.textDecodeLines(), TextDecodeState::LinesMin);
+    }
+
     void testTextDecodeNoChangeNoSignal() {
         RadioState rs;
         rs.parseCATCommand("TD132;");
@@ -2382,6 +2410,18 @@ private slots:
         rs.parseCATCommand("ES130;");
         rs.parseCATCommand("ES199;"); // BW=99, outside 24-45 → preserves 30
         QCOMPARE(rs.ssbTxBw(), 30);
+    }
+
+    void testSsbTxBwSetterKeepsSsbRange() {
+        RadioState rs;
+        rs.setSsbTxBw(AudioEffectsState::SsbTxBwMin);
+        QCOMPARE(rs.ssbTxBw(), 24);
+        rs.setSsbTxBw(26);
+        QCOMPARE(rs.ssbTxBw(), 26);
+        rs.setSsbTxBw(99);
+        QCOMPARE(rs.ssbTxBw(), AudioEffectsState::EssbTxBwMax);
+        rs.setSsbTxBw(10);
+        QCOMPARE(rs.ssbTxBw(), AudioEffectsState::SsbTxBwMin);
     }
 
     void testEssbInvalidModeRejected() {

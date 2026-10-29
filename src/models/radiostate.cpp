@@ -132,9 +132,9 @@ QString RadioState::modeToString(Mode mode) {
     case DATA_R:
         return "DATA-R";
     case Unknown:
-    default:
-        return "";
+        break;
     }
+    return "";
 }
 
 QString RadioState::modeString() const {
@@ -500,11 +500,11 @@ QStringList RadioState::registeredCommandPrefixes() const {
 }
 
 void RadioState::registerCommandHandlers() {
-    // Register handlers in order - will be sorted by prefix length (longest first)
-    // This ensures "MD$" is checked before "MD", "NB$" before "NB", etc.
+    // Append order does not matter: the table is sorted by prefix length (longest first) at the
+    // end, so "MD$" is checked before "MD", "NB$" before "NB", etc. Grouping below is for reading.
 
-    // Display commands (# prefix) - register longest first. All handlers
-    // delegate to SpectrumDisplayHandlers (see radiostate/spectrumdisplaystate.cpp).
+    // Display commands (# prefix). All handlers delegate to SpectrumDisplayHandlers
+    // (see radiostate/spectrumdisplaystate.cpp).
     auto spectrumHandler = [this](void (*fn)(SpectrumDisplayState &, RadioState &, const QString &)) {
         return [this, fn](const QString &c) { fn(m_spectrumDisplayState, *this, c); };
     };
@@ -534,7 +534,7 @@ void RadioState::registerCommandHandlers() {
     m_commandHandlers.append({"#MP", spectrumHandler(&SpectrumDisplayHandlers::handleMP)});
     m_commandHandlers.append({"#AR", spectrumHandler(&SpectrumDisplayHandlers::handleAR)});
 
-    // Multi-char commands with $ suffix (must come before their base commands)
+    // Multi-char commands with $ suffix
     m_commandHandlers.append({"SIFP", [this](const QString &c) { handleSIFP(c); }});
     m_commandHandlers.append({"SIRF", [this](const QString &c) { handleSIRF(c); }});
 

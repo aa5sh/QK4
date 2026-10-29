@@ -5,6 +5,8 @@
 #include "controllers/popupmanager.h"
 #include "controllers/textdecodecontroller.h"
 #include "models/radiostate.h"
+#include "network/catframes.h"
+#include "utils/radioutils.h"
 
 #include <QChar>
 #include <QString>
@@ -174,13 +176,8 @@ void ButtonRowDispatcher::onTxClicked(int index) {
         if (mode == RadioState::CW || mode == RadioState::CW_R) {
             const QChar curPaddle = m_radioState->paddleOrientation();
             const QChar newPaddle = (curPaddle == 'R') ? QChar('N') : QChar('R');
-            // WHY: K4's KP command requires all three fields — iambic, paddle,
-            // weight — even when we only want to change one. Re-emit current
-            // values for the other two, defaulting to A/100 if the K4 hasn't
-            // sent its KP state yet.
-            const QChar iambic = m_radioState->iambicMode().isNull() ? QChar('A') : m_radioState->iambicMode();
-            const int weight = m_radioState->keyingWeight() < 0 ? 100 : m_radioState->keyingWeight();
-            m_connection->sendCAT(QString("KP%1%2%3;").arg(iambic).arg(newPaddle).arg(weight, 3, 10, QChar('0')));
+            m_connection->sendCAT(QString::fromLatin1(
+                CatFrames::keyerPaddle(m_radioState->iambicMode(), newPaddle, m_radioState->keyingWeight())));
             m_radioState->setPaddleOrientation(newPaddle);
         } else {
             m_popupManager->showSsbBwAbove(PopupManager::ButtonRowLane::Tx);
@@ -198,19 +195,18 @@ void ButtonRowDispatcher::onTxClicked(int index) {
             // ESSB 30-45. Switching mode with an out-of-range BW would reject
             // the K4's ES command, so snap to the nearest valid default.
             if (newState) {
-                if (bw < 30 || bw > 45)
-                    bw = 30;
+                if (bw < AudioEffectsState::EssbTxBwMin || bw > AudioEffectsState::EssbTxBwMax)
+                    bw = AudioEffectsState::EssbTxBwMin;
             } else {
-                if (bw < 24 || bw > 28)
-                    bw = 28;
+                if (bw < AudioEffectsState::SsbTxBwMin || bw > AudioEffectsState::SsbTxBwMax)
+                    bw = AudioEffectsState::SsbTxBwMax;
             }
             m_connection->sendCAT(QString("ES%1%2;").arg(newState ? 1 : 0).arg(bw, 2, 10, QChar('0')));
             // Optimistic — ES SET is echoed, but also immediately re-paint labels.
             m_radioState->setEssbEnabled(newState);
             m_radioState->setSsbTxBw(bw);
             if (m_popupManager->anchorForLane(PopupManager::ButtonRowLane::Tx)) {
-                const QString bwStr = QString("%1k").arg(bw / 10.0, 0, 'f', 1);
-                m_popupManager->setTxButtonLabel(5, "SSB BW", bwStr, false);
+                m_popupManager->setTxButtonLabel(5, "SSB BW", RadioUtils::txBandwidthLabel(bw), false);
                 m_popupManager->setTxButtonLabel(6, "ESSB", newState ? "ON" : "OFF", false);
             }
         }
@@ -231,10 +227,8 @@ void ButtonRowDispatcher::onTxRightClicked(int index) {
         if (mode == RadioState::CW || mode == RadioState::CW_R) {
             const QChar curIambic = m_radioState->iambicMode();
             const QChar newIambic = (curIambic == 'B') ? QChar('A') : QChar('B');
-            const QChar paddle =
-                m_radioState->paddleOrientation().isNull() ? QChar('N') : m_radioState->paddleOrientation();
-            const int weight = m_radioState->keyingWeight() < 0 ? 100 : m_radioState->keyingWeight();
-            m_connection->sendCAT(QString("KP%1%2%3;").arg(newIambic).arg(paddle).arg(weight, 3, 10, QChar('0')));
+            m_connection->sendCAT(QString::fromLatin1(
+                CatFrames::keyerPaddle(newIambic, m_radioState->paddleOrientation(), m_radioState->keyingWeight())));
             m_radioState->setIambicMode(newIambic);
         }
     } else if (index == 3) { // MIC CFG — skips LINE IN (input==2)
@@ -273,12 +267,9 @@ void ButtonRowDispatcher::refreshTxButtonsForMode() {
     } else {
         // Voice / data mode: buttons 5/6 show SSB BW and ESSB toggle.
         const int bw = m_radioState->ssbTxBw();
-        if (bw >= 24 && bw <= 45) {
-            const QString bwStr = QString("%1k").arg(bw / 10.0, 0, 'f', 1);
-            m_popupManager->setTxButtonLabel(5, "SSB BW", bwStr, false);
-        } else {
-            m_popupManager->setTxButtonLabel(5, "SSB BW", "2.8k", false);
-        }
+        const bool known = bw >= AudioEffectsState::SsbTxBwMin && bw <= AudioEffectsState::EssbTxBwMax;
+        m_popupManager->setTxButtonLabel(
+            5, "SSB BW", RadioUtils::txBandwidthLabel(known ? bw : AudioEffectsState::SsbTxBwMax), false);
         m_popupManager->setTxButtonLabel(6, "ESSB", m_radioState->essbEnabled() ? "ON" : "OFF", false);
     }
 }

@@ -39,6 +39,9 @@ private:
     // Refresh the bar's displayed value/enabled/filter from current
     // RadioState for the currently-selected feature (no-op if hidden).
     void refreshCurrentFeature();
+    void syncBarFromState(FeatureMenuBar::Feature feature);
+    // One +/- press on the current feature: direction is +1 or -1.
+    void stepCurrentFeature(int direction);
 };
 
 #endif // FEATUREMENUCONTROLLER_H

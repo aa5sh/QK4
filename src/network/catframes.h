@@ -120,4 +120,9 @@ QByteArray txMeter(int alc, int compression, double fwdPower, double swr, bool q
 
 QByteArray ifFrame(const RadioState &state);
 
+// KP<iambic><paddle><weight>; - iambic A/B, paddle N/R, weight 090-125 (hundredths). The K4 takes all
+// three fields even when only one changes, so a field not yet reported by the radio (null QChar,
+// negative weight) is sent as its default: A, N, 100.
+QByteArray keyerPaddle(QChar iambic, QChar paddle, int weight);
+
 } // namespace CatFrames

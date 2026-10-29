@@ -1,4 +1,5 @@
 #include "ui/dialogs/textdecodewindow.h"
+#include "models/radiostate/textdecodestate.h"
 #include "settings/radiosettings.h"
 #include "ui/styling/k4styles.h"
 #include <QVBoxLayout>
@@ -247,7 +248,7 @@ void TextDecodeWindow::clearText() {
 }
 
 void TextDecodeWindow::setMaxLines(int lines) {
-    m_maxLines = qBound(1, lines, 10);
+    m_maxLines = qBound(TextDecodeState::LinesMin, lines, TextDecodeState::LinesMax);
     trimToMaxLines();
 }
 
@@ -427,12 +428,11 @@ void TextDecodeWindow::applyTextFontSize() {
                                      .arg(K4Styles::Colors::BorderNormal)
                                      .arg(K4Styles::Fonts::Data));
 
-    QTextCursor cursor = m_textDisplay->textCursor();
+    QTextCursor cursor(m_textDisplay->document());
     QTextBlockFormat blockFormat;
     blockFormat.setLineHeight(150, QTextBlockFormat::ProportionalHeight);
     cursor.select(QTextCursor::Document);
     cursor.mergeBlockFormat(blockFormat);
-    m_textDisplay->setTextCursor(cursor);
 }
 
 void TextDecodeWindow::updateButtonStates() {
@@ -488,7 +488,6 @@ void TextDecodeWindow::setDecodeEnabled(bool enabled) {
     if (m_decodeEnabled != enabled) {
         m_decodeEnabled = enabled;
         updateButtonStates();
-        emit enabledChanged(enabled);
     }
 }
 

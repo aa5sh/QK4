@@ -15,10 +15,19 @@ class RadioState;
 // both the owning state struct AND RadioState — the latter lets them emit
 // signals through the façade. See PATTERNS.md → Subsystem State.
 struct TextDecodeState {
+    // WHY: TD<mode><threshold><lines>; carries each field as one digit, so the K4 cannot express
+    // 10 lines. Parser, setters and the window all bound by these.
+    static constexpr int ModeMin = 0;
+    static constexpr int ModeMax = 4;
+    static constexpr int ThresholdMin = 0;
+    static constexpr int ThresholdMax = 9;
+    static constexpr int LinesMin = 1;
+    static constexpr int LinesMax = 9;
+
     // Text Decode (TD) — Main RX
     int textDecodeMode = -1;      // 0=off, 1=DATA/SSB on, 2=8-45WPM, 3=8-60WPM, 4=8-90WPM
     int textDecodeThreshold = -1; // 0=AUTO, 1-9 (CW only)
-    int textDecodeLines = -1;     // 1-10 lines
+    int textDecodeLines = -1;     // 1-9 lines
 
     // Text Decode (TD$$) — Sub RX
     int textDecodeModeB = -1;

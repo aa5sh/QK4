@@ -181,9 +181,11 @@ void MenuController::onMenuItemAdded(int menuId) {
     }
     if (item->name == "FSK Mark-Tone") {
         m_fskMarkToneMenuId = item->id;
-        const int toneHz = item->options[item->currentValue].toInt();
-        qCDebug(qk4Menu) << "FSK Mark-Tone: menuId=" << m_fskMarkToneMenuId << "tone=" << toneHz << "Hz";
-        m_spectrum->setFskMarkTone(toneHz);
+        if (item->currentValue >= 0 && item->currentValue < item->options.size()) {
+            const int toneHz = item->options[item->currentValue].toInt();
+            qCDebug(qk4Menu) << "FSK Mark-Tone: menuId=" << m_fskMarkToneMenuId << "tone=" << toneHz << "Hz";
+            m_spectrum->setFskMarkTone(toneHz);
+        }
     }
 }
 

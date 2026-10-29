@@ -7,16 +7,14 @@
 #include <QString>
 
 namespace {
+
 // XVTR band number range per K4 BN command (BN11..BN22 = XVTR Band 1..12).
 bool isXvtrBand(int bandNum) {
     return bandNum >= 11 && bandNum <= 22;
 }
-} // namespace
 
-namespace {
-
-// Format Main RX antenna display based on AR command value.
-// K4 AR command values (from official K4 protocol documentation):
+// Format an RX antenna display from an AR (Main) or AR$ (Sub) value. commandPrefix names the
+// command in the unknown-value fallback. K4 AR values (from official K4 protocol documentation):
 //   0 = Disconnected (all RX RF sources disconnected)
 //   1 = EXT. XVTR IN / RX ANT IN2 (external transverter jack)
 //   2 = RX USES TX ANT (follows TX antenna selection) — show resolved value
@@ -25,7 +23,7 @@ namespace {
 //   5 = ATU RX ANT1 (TX antenna 1 via ATU)
 //   6 = ATU RX ANT2 (TX antenna 2 via ATU)
 //   7 = ATU RX ANT3 (TX antenna 3 via ATU)
-QString formatMainRxAntenna(int arValue, int txAnt, RadioState *radioState) {
+QString formatRxAntenna(const char *commandPrefix, int arValue, int txAnt, RadioState *radioState) {
     switch (arValue) {
     case 0:
         return QStringLiteral("OFF");
@@ -44,32 +42,7 @@ QString formatMainRxAntenna(int arValue, int txAnt, RadioState *radioState) {
     case 7:
         return QString("3:%1").arg(radioState->antennaName(3));
     default:
-        return QString("AR%1").arg(arValue);
-    }
-}
-
-// Format Sub RX antenna display based on AR$ command value. Same semantics
-// as AR — listed here so the unknown-value fallback shows "AR$" (not "AR").
-QString formatSubRxAntenna(int arValue, int txAnt, RadioState *radioState) {
-    switch (arValue) {
-    case 0:
-        return QStringLiteral("OFF");
-    case 1:
-        return QString("RX2:%1").arg(radioState->antennaName(5));
-    case 2:
-        return QString("%1:%2").arg(txAnt).arg(radioState->antennaName(txAnt));
-    case 3:
-        return QStringLiteral("INT XVTR");
-    case 4:
-        return QString("RX1:%1").arg(radioState->antennaName(4));
-    case 5:
-        return QString("1:%1").arg(radioState->antennaName(1));
-    case 6:
-        return QString("2:%1").arg(radioState->antennaName(2));
-    case 7:
-        return QString("3:%1").arg(radioState->antennaName(3));
-    default:
-        return QString("AR$%1").arg(arValue);
+        return QString("%1%2").arg(QLatin1String(commandPrefix)).arg(arValue);
     }
 }
 
@@ -108,12 +81,12 @@ void AntennaDisplayController::onAntennaChanged(int txAnt, int rxAntMain, int rx
         m_rxAntALabel->setText(QStringLiteral("XV IN"));
     } else {
         m_txAntennaLabel->setText(QString("%1:%2").arg(txAnt).arg(m_radioState->antennaName(txAnt)));
-        m_rxAntALabel->setText(formatMainRxAntenna(rxAntMain, txAnt, m_radioState));
+        m_rxAntALabel->setText(formatRxAntenna("AR", rxAntMain, txAnt, m_radioState));
     }
     if (xvtrSub) {
         m_rxAntBLabel->setText(QStringLiteral("XV IN"));
     } else {
-        m_rxAntBLabel->setText(formatSubRxAntenna(rxAntSub, txAnt, m_radioState));
+        m_rxAntBLabel->setText(formatRxAntenna("AR$", rxAntSub, txAnt, m_radioState));
     }
 }
 
