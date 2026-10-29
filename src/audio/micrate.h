@@ -68,6 +68,21 @@ inline QString micWouldNotOpen(const QString &deviceName) {
                                   "microphone in Options > Audio Input.");
 }
 
+// The OS refused QK4 the microphone (macOS privacy settings). The operator either declined the
+// prompt or switched QK4 off later; either way only they can turn it back on, and only in the OS.
+inline QString micAccessDenied() {
+#ifdef Q_OS_MACOS
+    const QString where = QStringLiteral("System Settings > Privacy & Security > Microphone");
+#elif defined(Q_OS_WIN)
+    const QString where = QStringLiteral("Settings > Privacy & security > Microphone");
+#else
+    const QString where = QStringLiteral("your system's privacy settings");
+#endif
+    return QStringLiteral("QK4 is not allowed to use the microphone, so nothing is being transmitted. "
+                          "Allow QK4 in %1.")
+        .arg(where);
+}
+
 // Shown when the microphone is open and transmitting but delivering nothing at all.
 //
 // WHY THIS NAMES A RESTART, which is otherwise a terrible thing to tell an operator: QK4 cannot

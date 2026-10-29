@@ -481,6 +481,11 @@ if(APPLE)
         MACOSX_BUNDLE TRUE
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/resources/Info.plist.in"
     )
+    # WHY explicitly: QMicrophonePermission needs Qt's static darwin permission plugin. Qt links it
+    # from a finalizer that only qt_add_executable()/qt_finalize_target() run, and this target is a
+    # plain add_executable(). Without it checkPermission() logs "Could not find permission plugin"
+    # and the microphone - and with it PTT - is refused.
+    qt_import_plugins(${PROJECT_NAME} INCLUDE Qt6::QDarwinMicrophonePermissionPlugin)
 elseif(WIN32)
     # Configure Windows version resource file
     configure_file(

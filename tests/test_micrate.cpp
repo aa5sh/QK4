@@ -16,7 +16,22 @@ private slots:
     void aMissingRateIsRejectedWithoutPrintingZero();
     void theOtherDeadMicCausesSayWhatToDo();
     void theSilentMicMessageNamesBothCausesAndWhatToDo();
+    void aRefusedPermissionSaysWhereToAllowIt();
 };
+
+void TestMicRate::aRefusedPermissionSaysWhereToAllowIt() {
+    // Same "nothing is being transmitted" as every other dead-mic cause, and the one place the
+    // operator can undo it - which is the OS, not QK4's Options.
+    const QString m = MicRate::micAccessDenied();
+    QVERIFY2(m.contains(QStringLiteral("nothing is being transmitted")), qUtf8Printable(m));
+    QVERIFY2(m.contains(QStringLiteral("Allow QK4")), qUtf8Printable(m));
+#ifdef Q_OS_MACOS
+    QVERIFY2(m.contains(QStringLiteral("System Settings > Privacy & Security > Microphone")), qUtf8Printable(m));
+#elif defined(Q_OS_WIN)
+    QVERIFY2(m.contains(QStringLiteral("Settings > Privacy & security > Microphone")), qUtf8Printable(m));
+#endif
+    QVERIFY2(!m.contains(QStringLiteral("Audio Input")), qUtf8Printable(m));
+}
 
 void TestMicRate::theSilentMicMessageNamesBothCausesAndWhatToDo() {
     const QString m = MicRate::micDeliveringNothing();

@@ -145,6 +145,13 @@ private:
     // stop() on the worker's own thread, then the thread retired, within one deadline.
     template <typename Worker> void stopThread(QThread *&thread, Worker *worker, std::chrono::milliseconds timeout);
 
+    // Hands the OS microphone permission to the TX pipeline. With `askIfUndetermined`, also asks
+    // the OS - on the main thread, the only one Qt allows, and asynchronously, so the prompt never
+    // blocks the TX thread. Asked on the first microphone PTT, not at startup (Qt's guidance:
+    // "Request permissions in response to specific actions by the user").
+    void updateMicAccess(bool askIfUndetermined);
+    bool m_micPermissionRequestPending = false;
+
     ConnectionController *m_connectionController;
     RadioState *m_radioState;
 

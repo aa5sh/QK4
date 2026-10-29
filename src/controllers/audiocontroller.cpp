@@ -14,6 +14,8 @@
 #include "utils/radioutils.h"
 #include "utils/threadshutdown.h"
 
+#include <QCoreApplication>
+#include <QPermissions>
 #include <chrono>
 
 namespace {
@@ -54,6 +56,8 @@ AudioController::AudioController(ConnectionController *connController, RadioStat
     }
     m_txPipeline->setMicGain(RadioSettings::instance()->micGain() / 100.0f);
     m_txPipeline->setTciTxGain(RadioSettings::instance()->tciTxGain() / 100.0f);
+    // Only what the OS already knows; nothing is asked until the operator first keys the mic.
+    updateMicAccess(false);
 
     // Move AudioEngine to dedicated thread for glitch-free audio playback
     m_audioThread = new QThread(this);
@@ -254,6 +258,12 @@ void AudioController::setPttActive(bool active) {
     if (active && !m_connectionController->isConnected())
         return;
 
+    // Before the PTT is queued, so the pipeline has the answer when it decides to open the mic. A
+    // TCI transmission never opens the microphone and so never asks for it.
+    if (active && m_txPipeline->txSource() == TxAudioPipeline::TxSource::Microphone) {
+        updateMicAccess(true);
+    }
+
     // Forward to the TX pipeline (TX thread). setPttActive there gates the encode pipeline, opens
     // or closes the microphone, and resets the sequence counter and partial-frame tail. The press
     // time travels with it so the delay to the first packet is measured from here.
@@ -268,6 +278,42 @@ void AudioController::setPttActive(bool active) {
     // Emitted AFTER the early return above, so a PTT-on that was refused for being disconnected
     // does not announce a transmit that is not happening.
     emit pttActiveChanged(active);
+}
+
+void AudioController::updateMicAccess(bool askIfUndetermined) {
+    QCoreApplication *app = QCoreApplication::instance();
+    if (!app || !m_txPipeline) {
+        return;
+    }
+    // Granted on platforms where the microphone needs no authorization (QCoreApplication::
+    // requestPermission), so this gates nothing outside macOS.
+    const QMicrophonePermission microphone;
+    switch (app->checkPermission(microphone)) {
+    case Qt::PermissionStatus::Granted:
+        m_txPipeline->setMicAccess(TxAudioPipeline::MicAccess::Granted);
+        return;
+    case Qt::PermissionStatus::Denied:
+        m_txPipeline->setMicAccess(TxAudioPipeline::MicAccess::Denied);
+        return;
+    case Qt::PermissionStatus::Undetermined:
+        break;
+    }
+    m_txPipeline->setMicAccess(TxAudioPipeline::MicAccess::Undetermined);
+    if (!askIfUndetermined || m_micPermissionRequestPending || QThread::currentThread() != app->thread()) {
+        return;
+    }
+    m_micPermissionRequestPending = true;
+    // Context `this`: "If context is destroyed before the request completes, the functor will not
+    // be called." The result is never Undetermined.
+    app->requestPermission(microphone, this, [this](const QPermission &result) {
+        m_micPermissionRequestPending = false;
+        if (!m_txPipeline) {
+            return;
+        }
+        const bool granted = result.status() == Qt::PermissionStatus::Granted;
+        qCInfo(lcAudio) << "Microphone permission" << (granted ? "granted" : "denied");
+        m_txPipeline->setMicAccess(granted ? TxAudioPipeline::MicAccess::Granted : TxAudioPipeline::MicAccess::Denied);
+    });
 }
 
 void AudioController::setTxSource(TxSource source) {

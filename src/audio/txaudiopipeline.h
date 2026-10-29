@@ -41,6 +41,13 @@ class TxAudioPipeline : public QObject {
 public:
     enum class TxSource { Microphone = 0, Tci = 1 };
 
+    // Whether the OS lets QK4 record from the microphone (QMicrophonePermission).
+    enum class MicAccess {
+        Undetermined = 0, // not asked yet, or the operator is answering the OS prompt right now
+        Granted = 1,
+        Denied = 2,
+    };
+
     explicit TxAudioPipeline(QObject *parent = nullptr);
     ~TxAudioPipeline() override;
 
@@ -60,6 +67,18 @@ public:
     // selector would transmit whatever the room hears. The two sources are never mixed.
     void setTxSource(TxSource source);
     TxSource txSource() const { return static_cast<TxSource>(m_txSource.load(std::memory_order_relaxed)); }
+
+    // The microphone permission as the main thread last learned it. Atomic, safe from any thread;
+    // queues a reconcile so a transmission waiting on the answer opens the microphone once granted.
+    //
+    // WHY the microphone is never opened unless this is Granted: with the permission undetermined,
+    // starting a capture is what makes macOS ask, and the asking happened inside
+    // QAudioSource::start() on THIS thread - which then sat in openMic() for as long as the prompt
+    // was up, and took quit with it (stop() was a blocking call queued behind it). Permissions can
+    // only be requested from the main thread (QCoreApplication::requestPermission), so that is
+    // where AudioController asks; this thread only obeys the answer.
+    void setMicAccess(MicAccess access);
+    MicAccess micAccess() const { return static_cast<MicAccess>(m_micAccess.load(std::memory_order_acquire)); }
 
     // Feed 48 kHz mono Float32 from a TCI client. Ignored unless the TX source is Tci.
     //
@@ -212,6 +231,7 @@ private:
     std::atomic<int> m_encodeMode{3};     // EM3 (Opus float) default
     std::atomic<bool> m_pttActive{false}; // TX gate; read on every frame
     std::atomic<int> m_txSource{static_cast<int>(TxSource::Microphone)};
+    std::atomic<int> m_micAccess{static_cast<int>(MicAccess::Undetermined)};
 
     // Frame buffering: 12 kHz Float32 until a whole SL-tier frame (240/480/720/1440 samples).
     std::atomic<int> m_frameSamples{240};

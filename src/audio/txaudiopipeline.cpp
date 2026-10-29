@@ -286,8 +286,26 @@ void TxAudioPipeline::setTxSource(TxSource source) {
         Qt::QueuedConnection);
 }
 
+void TxAudioPipeline::setMicAccess(MicAccess access) {
+    const int previous = m_micAccess.exchange(static_cast<int>(access), std::memory_order_acq_rel);
+    if (previous == static_cast<int>(access)) {
+        return;
+    }
+    // Queued for the same reason as setTxSource(): the microphone state is the TX thread's.
+    QMetaObject::invokeMethod(this, [this]() { reconcileMic(); }, Qt::QueuedConnection);
+}
+
 void TxAudioPipeline::reconcileMic() {
     const bool wanted = m_pttActive.load(std::memory_order_relaxed) && txSource() == TxSource::Microphone;
+    if (wanted && !m_micOpen && micAccess() != MicAccess::Granted) {
+        // Undetermined: the operator is looking at the OS prompt; the answer arrives through
+        // setMicAccess() and reconciles again. Denied: say so, because PTT now does nothing.
+        if (micAccess() == MicAccess::Denied) {
+            qCWarning(lcAudio) << "TxAudioPipeline: microphone access denied by the OS - NO TX AUDIO";
+            reportMicUnavailable(MicRate::micAccessDenied());
+        }
+        return;
+    }
     if (wanted && !m_micOpen) {
         QElapsedTimer opening;
         opening.start();
