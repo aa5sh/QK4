@@ -26,14 +26,14 @@ QPushButton *create(const QString &text, Shade shade, QWidget *parent, QSize siz
 
 int subLabelHeight(const QWidget *context) {
     QFont font = context->font();
-    font.setPixelSize(D::FontSizeSmall);
+    font.setPixelSize(D::FontSizeCaption);
     return qCeil(QFontMetricsF(font, context).height());
 }
 
 QLabel *createSubLabel(const QString &text, QWidget *parent) {
     auto *label = new QLabel(text, parent);
     label->setStyleSheet(
-        QString("color: %1; font-size: %2px;").arg(K4Styles::Colors::AccentAmber).arg(D::FontSizeSmall));
+        QString("color: %1; font-size: %2px;").arg(K4Styles::Colors::AccentAmber).arg(D::FontSizeCaption));
     label->setAlignment(Qt::AlignCenter);
     label->setFixedHeight(subLabelHeight(label));
     return label;

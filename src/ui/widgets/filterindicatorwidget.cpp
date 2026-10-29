@@ -276,7 +276,7 @@ void FilterIndicatorWidget::paintEvent(QPaintEvent *) {
 
     // FIL text below line
     QFont textFont = font();
-    textFont.setPixelSize(K4Styles::Dimensions::FontSizeButton);
+    textFont.setPixelSize(K4Styles::Dimensions::FontSizeReadout);
     textFont.setBold(true);
     painter.setFont(textFont);
     painter.setPen(m_textColor);

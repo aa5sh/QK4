@@ -78,7 +78,7 @@ void TextDecodeWindow::setupUi() {
     m_thresholdValueLabel->setAlignment(Qt::AlignCenter);
     m_thresholdValueLabel->setStyleSheet(QString("QLabel { color: %1; font-size: %2px; font-weight: bold; }")
                                              .arg(K4Styles::Colors::DarkBackground)
-                                             .arg(K4Styles::Dimensions::FontSizeNormal));
+                                             .arg(K4Styles::Dimensions::FontSizeCaption));
 
     m_thresholdPlusBtn = new QPushButton("+", titleBar);
     m_thresholdPlusBtn->setFixedSize(ControlButtonHeight, ControlButtonHeight);
@@ -112,25 +112,27 @@ void TextDecodeWindow::setupUi() {
     m_titleLabel = new QLabel(titleText, titleBar);
     m_titleLabel->setStyleSheet(QString("QLabel { color: %1; font-size: %2px; font-weight: bold; }")
                                     .arg(K4Styles::Colors::DarkBackground)
-                                    .arg(K4Styles::Dimensions::FontSizeMedium));
+                                    .arg(K4Styles::Dimensions::FontSizeCaption));
 
     // Close button - dark text to match
     m_closeBtn = new QPushButton("\u2715", titleBar); // ✕
     m_closeBtn->setFixedSize(CloseButtonSize, CloseButtonSize);
     m_closeBtn->setCursor(Qt::PointingHandCursor);
-    m_closeBtn->setStyleSheet(QString("QPushButton {"
-                                      "  background: transparent;"
-                                      "  color: %1;"
-                                      "  border: none;"
-                                      "  font-size: %2px;"
-                                      "  font-weight: bold;"
-                                      "}"
-                                      "QPushButton:hover {"
-                                      "  background: rgba(0, 0, 0, 0.2);"
-                                      "  border-radius: 4px;"
-                                      "}")
-                                  .arg(K4Styles::Colors::DarkBackground)
-                                  .arg(K4Styles::Dimensions::FontSizePopup));
+    m_closeBtn->setStyleSheet(
+        QString("QPushButton {"
+                "  background: transparent;"
+                "  color: %1;"
+                "  border: none;"
+                "  font-size: %2px;"
+                "  font-weight: bold;"
+                "}"
+                "QPushButton:hover {"
+                "  background: %3;"
+                "  border-radius: 4px;"
+                "}")
+            .arg(K4Styles::Colors::DarkBackground)
+            .arg(K4Styles::Dimensions::FontSizeHeading)
+            .arg(K4Styles::cssRgba(K4Styles::Colors::Black, K4Styles::Colors::Alpha::CloseButtonHover)));
 
     // Layout: [ON][WPM][AUTO][-][5][+][CLR][A-][A+] <stretch> TITLE [X]
     titleLayout->addWidget(m_onOffBtn);
@@ -422,7 +424,7 @@ void TextDecodeWindow::applyTextFontSize() {
                                          "  height: 0px;"
                                          "}")
                                      .arg(K4Styles::Colors::DarkBackground)
-                                     .arg(K4Styles::Colors::TextWhite)
+                                     .arg(K4Styles::Colors::TextPrimary)
                                      .arg(m_textFontSize)
                                      .arg(K4Styles::Colors::Background)
                                      .arg(K4Styles::Colors::BorderNormal)

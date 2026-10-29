@@ -59,7 +59,7 @@ QVector<float> resampleLinear(const QVector<float> &src, int dstSize) {
 
 // The amplitude-axis and frequency-scale labels: readout size, Medium weight, tabular figures.
 QFont scaleLabelFont() {
-    return K4Styles::Fonts::dataFont(K4Styles::Dimensions::FontSizeButton, QFont::Medium);
+    return K4Styles::Fonts::dataFont(K4Styles::Dimensions::FontSizeReadout, QFont::Medium);
 }
 
 // Amplitude axis geometry: margin, label, gap, tick. kHaloPx is the 1 px ring drawHaloText adds.
@@ -123,8 +123,9 @@ protected:
         // fall inside the window, already spaced far enough apart to read.
         const auto labels = SpectrumScale::labelsFor(m_minDb, m_maxDb, m_useSUnits, h, fm.lineSpacing());
 
-        const QPen tickHalo(QColor(0, 0, 0, 153), 1.0 + 2.0 * kHaloPx);
-        const QPen tickPen(Qt::white, 1.0);
+        const QPen tickHalo(K4Styles::withAlpha(K4Styles::Colors::Black, K4Styles::Colors::Alpha::Halo),
+                            1.0 + 2.0 * kHaloPx);
+        const QPen tickPen(QColor(K4Styles::Colors::TextPrimary), 1.0);
         for (const auto &label : labels) {
             const float frac = SpectrumScale::normalizedForDb(label.dbm, m_minDb, m_maxDb);
             const qreal yPos = std::round((1.0 - frac) * h);
@@ -136,7 +137,8 @@ protected:
             if (yPos < textHeight / 2.0 || yPos > h - textHeight / 2.0)
                 continue;
 
-            K4Styles::drawHaloText(painter, QPointF(kAxisLeftMargin, yPos + baselineOffset), label.text, Qt::white);
+            K4Styles::drawHaloText(painter, QPointF(kAxisLeftMargin, yPos + baselineOffset), label.text,
+                                   QColor(K4Styles::Colors::TextPrimary));
             // A tick, because labels no longer coincide with the grid: the grid is a fixed-size
             // cell pattern and these sit at physical dBm values, so the two only align by accident.
             // WHY: after the text, not before it — a tick in front of a minus sign read as "--".
@@ -234,7 +236,7 @@ protected:
             if (textX < 2 + kHaloPx || textX + textWidth > w - 2 - kHaloPx)
                 continue;
 
-            K4Styles::drawHaloText(painter, QPointF(textX, baselineY), label, Qt::white);
+            K4Styles::drawHaloText(painter, QPointF(textX, baselineY), label, QColor(K4Styles::Colors::TextPrimary));
         }
     }
 
@@ -285,8 +287,8 @@ protected:
 
         const int w = width();
         const int h = height();
-        QFont labelFont = K4Styles::Fonts::dataFont(K4Styles::Dimensions::FontSizeSmall, QFont::Bold);
-        QFont markerFont = K4Styles::Fonts::dataFont(K4Styles::Dimensions::FontSizeTiny, QFont::Bold);
+        QFont labelFont = K4Styles::Fonts::dataFont(K4Styles::Dimensions::FontSizeCaption, QFont::Bold);
+        QFont markerFont = K4Styles::Fonts::dataFont(K4Styles::Dimensions::FontSizeCaption, QFont::Bold);
         const QFontMetrics fm(labelFont);
         const QFontMetrics mfm(markerFont);
 
@@ -303,18 +305,20 @@ protected:
             const QRect rect(b.x1, 0, b.x2 - b.x1, h);
             if (b.kind == BandPlanStrip::BlockKind::Segment) {
                 QColor fill = BandPlan::modeColor(b.mode);
-                fill.setAlpha(120); // translucent so the spectrum shows through
+                fill.setAlpha(K4Styles::Colors::Alpha::BandPlanSegment); // translucent so the spectrum shows through
                 painter.fillRect(rect, fill);
             } else {
                 QColor fill(K4Styles::Colors::BandPlanOutOfBand);
-                fill.setAlpha(200);
+                fill.setAlpha(K4Styles::Colors::Alpha::BandPlanOutOfBand);
                 painter.fillRect(rect, fill);
-                painter.fillRect(rect, QBrush(QColor(255, 255, 255, 40), Qt::BDiagPattern));
+                painter.fillRect(
+                    rect, QBrush(K4Styles::withAlpha(K4Styles::Colors::White, K4Styles::Colors::Alpha::BandPlanHatch),
+                                 Qt::BDiagPattern));
             }
             // WHY a divider as well as a colour change: the labels and these lines carry the
             // boundaries, so the strip still reads for a red-green colour-blind operator.
             if (i > 0) {
-                painter.setPen(QColor(255, 255, 255, 70));
+                painter.setPen(K4Styles::withAlpha(K4Styles::Colors::White, K4Styles::Colors::Alpha::BandPlanDivider));
                 painter.drawLine(b.x1, 0, b.x1, h);
             }
         }
@@ -323,13 +327,13 @@ protected:
         if (strip.tag.visible) {
             const QRect tagRect(strip.tag.x, 0, strip.tag.width, h);
             painter.fillRect(tagRect, QColor(K4Styles::Colors::BandPlanTag));
-            painter.setPen(Qt::white);
+            painter.setPen(QColor(K4Styles::Colors::TextPrimary));
             painter.drawText(tagRect, Qt::AlignCenter, m_bandName);
         }
 
         for (const BandPlanStrip::Label &label : strip.labels) {
             const bool outOfBand = strip.blocks[label.block].kind == BandPlanStrip::BlockKind::OutOfBand;
-            painter.setPen(outOfBand ? QColor(K4Styles::Colors::TextGray) : QColor(Qt::white));
+            painter.setPen(outOfBand ? QColor(K4Styles::Colors::TextSecondary) : QColor(K4Styles::Colors::TextPrimary));
             painter.drawText(QRect(label.x, 0, label.width + 2, h), Qt::AlignVCenter | Qt::AlignLeft, label.text);
         }
 
@@ -337,7 +341,8 @@ protected:
         // the label reads as a point rather than a section.
         painter.setFont(markerFont);
         for (const BandPlanStrip::Marker &m : strip.markers) {
-            painter.setPen(QPen(QColor(255, 255, 255, 220), 1));
+            painter.setPen(
+                QPen(K4Styles::withAlpha(K4Styles::Colors::White, K4Styles::Colors::Alpha::BandPlanMarker), 1));
             painter.drawLine(m.x, 0, m.x, h);
 
             QPainterPath caret;
@@ -345,10 +350,11 @@ protected:
             caret.lineTo(m.x + 3.0, 0.5);
             caret.lineTo(m.x, 4.5);
             caret.closeSubpath();
-            painter.fillPath(caret, QColor(255, 255, 255, 235));
+            painter.fillPath(caret,
+                             K4Styles::withAlpha(K4Styles::Colors::White, K4Styles::Colors::Alpha::BandPlanCaret));
 
             if (m.labelVisible) {
-                painter.setPen(Qt::white);
+                painter.setPen(QColor(K4Styles::Colors::TextPrimary));
                 painter.drawText(QRect(m.labelX, 0, m.labelWidth + 2, h), Qt::AlignVCenter | Qt::AlignLeft, m.name);
             }
         }

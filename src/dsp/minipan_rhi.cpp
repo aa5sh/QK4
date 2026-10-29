@@ -2,7 +2,7 @@
 #include "panadapter_constants.h"
 #include "dashgeometry.h"
 #include "rhi_utils.h"
-#include "ui/styling/k4constants.h"
+#include "ui/styling/k4styles.h"
 #include <QLoggingCategory>
 #include <QMouseEvent>
 #include <QResizeEvent>
@@ -349,7 +349,7 @@ void MiniPanRhiWidget::createPipelines() {
 void MiniPanRhiWidget::render(QRhiCommandBuffer *cb) {
     // Always clear to black even if not initialized (prevents white/garbage showing)
     if (!m_rhiInitialized) {
-        cb->beginPass(renderTarget(), Qt::black, {1.0f, 0}, nullptr);
+        cb->beginPass(renderTarget(), QColor(K4Styles::Colors::Black), {1.0f, 0}, nullptr);
         cb->endPass();
         return;
     }
@@ -358,7 +358,7 @@ void MiniPanRhiWidget::render(QRhiCommandBuffer *cb) {
     if (!m_pipelinesCreated) {
         createPipelines();
         if (!m_pipelinesCreated) {
-            cb->beginPass(renderTarget(), Qt::black, {1.0f, 0}, nullptr);
+            cb->beginPass(renderTarget(), QColor(K4Styles::Colors::Black), {1.0f, 0}, nullptr);
             cb->endPass();
             return;
         }
@@ -672,7 +672,7 @@ void MiniPanRhiWidget::render(QRhiCommandBuffer *cb) {
     cb->resourceUpdate(rub);
 
     // Begin render pass
-    cb->beginPass(renderTarget(), QColor::fromRgbF(0.04f, 0.04f, 0.04f, 1.0f), {1.0f, 0}, nullptr);
+    cb->beginPass(renderTarget(), QColor(K4Styles::Colors::DarkBackground), {1.0f, 0}, nullptr);
 
     // Draw waterfall (bottom portion)
     if (m_waterfallPipeline) {
@@ -878,17 +878,18 @@ void MiniPanRhiWidget::resizeEvent(QResizeEvent *event) {
 
 void MiniPanRhiWidget::createFrequencyLabels() {
     // Frequency annotations over the mini-pan waterfall, on a dark backing so they read over any
-    // waterfall colour. TextGray matches the rest of the UI's secondary text.
+    // waterfall colour.
     QString labelStyle = QString("QLabel {"
                                  "  color: %1;"
-                                 "  background-color: rgba(0, 0, 0, 160);"
+                                 "  background-color: %3;"
                                  "  padding: 1px 3px;"
                                  "  font-size: %2px;"
                                  "  font-weight: bold;"
                                  "  border-radius: 2px;"
                                  "}")
-                             .arg(K4Styles::Colors::TextGray)
-                             .arg(K4Styles::Dimensions::FontSizeLarge);
+                             .arg(K4Styles::Colors::TextSecondary)
+                             .arg(K4Styles::Dimensions::FontSizeBody)
+                             .arg(K4Styles::cssRgba(K4Styles::Colors::Black, K4Styles::Colors::Alpha::LabelScrim));
 
     // Left label (negative frequency offset)
     m_leftFreqLabel = new QLabel(this);

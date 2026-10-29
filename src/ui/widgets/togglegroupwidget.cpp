@@ -95,7 +95,7 @@ void ToggleGroupWidget::paintEvent(QPaintEvent *event) {
 
     // Draw individual button backgrounds with rounded corners and borders
     QFont labelFont = font();
-    labelFont.setPixelSize(K4Styles::Dimensions::FontSizeLarge);
+    labelFont.setPixelSize(K4Styles::Dimensions::FontSizeBody);
     labelFont.setBold(true);
 
     auto drawButton = [&](const QRect &rect, bool selected, bool enabled, const QString &text) {
@@ -108,7 +108,7 @@ void ToggleGroupWidget::paintEvent(QPaintEvent *event) {
             painter.setBrush(selGrad);
             painter.setPen(QPen(K4Styles::borderColorSelected(), 1));
             painter.drawPath(buttonPath);
-            painter.setPen(QColor(K4Styles::Colors::TextDark));
+            painter.setPen(QColor(K4Styles::Colors::TextOnLight));
         } else {
             // Unselected: subtle gradient with light border
             QLinearGradient btnGrad(rect.topLeft(), rect.bottomLeft());
@@ -117,7 +117,7 @@ void ToggleGroupWidget::paintEvent(QPaintEvent *event) {
             painter.setBrush(btnGrad);
             painter.setPen(QPen(QColor(K4Styles::Colors::BorderHover), 1));
             painter.drawPath(buttonPath);
-            painter.setPen(enabled ? Qt::white : QColor(K4Styles::Colors::InactiveGray));
+            painter.setPen(enabled ? QColor(K4Styles::Colors::TextPrimary) : QColor(K4Styles::Colors::TextDisabled));
         }
 
         painter.setFont(labelFont);

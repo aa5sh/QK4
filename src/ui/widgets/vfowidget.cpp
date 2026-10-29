@@ -87,8 +87,9 @@ void VFOWidget::setupUi() {
     featuresRow->setSpacing(4); // Comfortable spacing for all indicators
 
     // Feature indicator label style
-    const QString featureLabelStyle =
-        QString("color: %1; font-size: %2px;").arg(K4Styles::Colors::TextGray).arg(K4Styles::Dimensions::FontSizeLarge);
+    const QString featureLabelStyle = QString("color: %1; font-size: %2px;")
+                                          .arg(K4Styles::Colors::TextSecondary)
+                                          .arg(K4Styles::Dimensions::FontSizeBody);
 
     m_agcLabel = new QLabel("AGC-S", featuresContainer);
     m_agcLabel->setStyleSheet(featureLabelStyle);
@@ -197,8 +198,8 @@ void VFOWidget::setSMeterValue(double value) {
 void VFOWidget::setAGC(const QString &label, bool active) {
     m_agcLabel->setText(label);
     m_agcLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                  .arg(active ? K4Styles::Colors::TextWhite : K4Styles::Colors::TextGray)
-                                  .arg(K4Styles::Dimensions::FontSizeLarge));
+                                  .arg(active ? K4Styles::Colors::TextPrimary : K4Styles::Colors::TextSecondary)
+                                  .arg(K4Styles::Dimensions::FontSizeBody));
 }
 
 void VFOWidget::setPreamp(bool on, int level) {
@@ -209,8 +210,8 @@ void VFOWidget::setPreamp(bool on, int level) {
         m_preampLabel->setText("PRE");
     }
     m_preampLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                     .arg(on ? K4Styles::Colors::TextWhite : K4Styles::Colors::TextGray)
-                                     .arg(K4Styles::Dimensions::FontSizeLarge));
+                                     .arg(on ? K4Styles::Colors::TextPrimary : K4Styles::Colors::TextSecondary)
+                                     .arg(K4Styles::Dimensions::FontSizeBody));
 }
 
 void VFOWidget::setAtt(bool on, int level) {
@@ -221,22 +222,22 @@ void VFOWidget::setAtt(bool on, int level) {
         m_attLabel->setText("ATT");
     }
     m_attLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                  .arg(on ? K4Styles::Colors::TextWhite : K4Styles::Colors::TextGray)
-                                  .arg(K4Styles::Dimensions::FontSizeLarge));
+                                  .arg(on ? K4Styles::Colors::TextPrimary : K4Styles::Colors::TextSecondary)
+                                  .arg(K4Styles::Dimensions::FontSizeBody));
 }
 
 void VFOWidget::setNB(bool on) {
     m_nbLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                 .arg(on ? K4Styles::Colors::TextWhite : K4Styles::Colors::TextGray)
-                                 .arg(K4Styles::Dimensions::FontSizeLarge));
+                                 .arg(on ? K4Styles::Colors::TextPrimary : K4Styles::Colors::TextSecondary)
+                                 .arg(K4Styles::Dimensions::FontSizeBody));
 }
 
 void VFOWidget::setNR(bool lmsOn, bool ssnrOn) {
     const bool active = lmsOn || ssnrOn;
     m_nrLabel->setText(ssnrOn ? "NR+" : "NR");
     m_nrLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                 .arg(active ? K4Styles::Colors::TextWhite : K4Styles::Colors::TextGray)
-                                 .arg(K4Styles::Dimensions::FontSizeLarge));
+                                 .arg(active ? K4Styles::Colors::TextPrimary : K4Styles::Colors::TextSecondary)
+                                 .arg(K4Styles::Dimensions::FontSizeBody));
 }
 
 void VFOWidget::setNotch(bool autoEnabled, bool manualEnabled) {
@@ -253,8 +254,8 @@ void VFOWidget::setNotch(bool autoEnabled, bool manualEnabled) {
 
     m_ntchLabel->setText(text);
     m_ntchLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                   .arg(active ? K4Styles::Colors::TextWhite : K4Styles::Colors::TextGray)
-                                   .arg(K4Styles::Dimensions::FontSizeLarge));
+                                   .arg(active ? K4Styles::Colors::TextPrimary : K4Styles::Colors::TextSecondary)
+                                   .arg(K4Styles::Dimensions::FontSizeBody));
 }
 
 void VFOWidget::setApf(bool enabled, int bandwidth) {
@@ -265,8 +266,8 @@ void VFOWidget::setApf(bool enabled, int bandwidth) {
     }
     m_apfLabel->setText(text);
     m_apfLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                  .arg(enabled ? K4Styles::Colors::TextWhite : K4Styles::Colors::TextGray)
-                                  .arg(K4Styles::Dimensions::FontSizeLarge));
+                                  .arg(enabled ? K4Styles::Colors::TextPrimary : K4Styles::Colors::TextSecondary)
+                                  .arg(K4Styles::Dimensions::FontSizeBody));
 }
 
 void VFOWidget::updateMiniPan(const QByteArray &data) {

@@ -23,8 +23,6 @@ namespace {
 
 // WCAG 2.1 SC 1.4.11: user-interface components need 3:1 against what is next to them.
 constexpr double kMinNonTextContrast = 3.0;
-// WCAG 2.1 SC 1.4.3 (AA): text needs 4.5:1 against its background.
-constexpr double kMinTextContrast = 4.5;
 
 double luminance(const QColor &c) {
     auto channel = [](double v) { return v <= 0.03928 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4); };
@@ -105,73 +103,6 @@ private slots:
         const QRect inHost(box->mapTo(&r.host, indicator.topLeft()), indicator.size());
         QVERIFY2(visibleOutlineShare(r.image, inHost) >= 0.5,
                  "unchecked checkbox outline does not stand out from the dialog background");
-    }
-
-    // Text colours on the dark surfaces they are drawn on. TextFaded sits on Background and on the
-    // menu/macro overlay rows; TextRed carries the over-S9 meter scale on Background.
-    void textColorsMeetAaContrast_data() {
-        QTest::addColumn<QString>("text");
-        QTest::addColumn<QString>("background");
-        const QList<QPair<const char *, const char *>> texts = {
-            {"TextWhite", K4Styles::Colors::TextWhite},
-            {"TextGray", K4Styles::Colors::TextGray},
-            {"TextFaded", K4Styles::Colors::TextFaded},
-            {"TextRed", K4Styles::Colors::TextRed},
-        };
-        const QList<QPair<const char *, const char *>> backgrounds = {
-            {"Background", K4Styles::Colors::Background},
-            {"OverlayItemBg", K4Styles::Colors::OverlayItemBg},
-            {"OverlayContentBg", K4Styles::Colors::OverlayContentBg},
-        };
-        for (const auto &[textName, text] : texts) {
-            for (const auto &[bgName, bg] : backgrounds)
-                QTest::newRow(qPrintable(QString("%1 on %2").arg(textName, bgName))) << QString(text) << QString(bg);
-        }
-    }
-
-    void textColorsMeetAaContrast() {
-        QFETCH(QString, text);
-        QFETCH(QString, background);
-        const double ratio = contrast(QColor(text), QColor(background));
-        QVERIFY2(ratio >= kMinTextContrast,
-                 qPrintable(QString("%1 on %2 is %3:1, under 4.5:1").arg(text, background).arg(ratio, 0, 'f', 2)));
-    }
-
-    // TextRed exists because TxRed is too dark for small text; if the two ever converge, the
-    // over-S9 marks are back to the contrast they were fixed for.
-    void txRedIsNotATextColor() {
-        QVERIFY(contrast(QColor(K4Styles::Colors::TxRed), QColor(K4Styles::Colors::Background)) < kMinTextContrast);
-        QVERIFY(QColor(K4Styles::Colors::TextRed) != QColor(K4Styles::Colors::TxRed));
-    }
-
-    // The FontSize* constants are held to the floor by static_asserts in k4constants.h. This catches
-    // the ways around them: a literal pixel size, a literal stylesheet font-size, or setPointSize.
-    void noLiteralFontSizeBelowTheFloor() {
-        const QRegularExpression pixelLiteral(QStringLiteral("setPixelSize\\(\\s*(\\d+)\\s*\\)"));
-        const QRegularExpression cssLiteral(QStringLiteral("font-size:\\s*(\\d+)px"));
-        const QRegularExpression pointSize(QStringLiteral("\\bsetPointSizeF?\\("));
-        QStringList offenders;
-        int scanned = 0;
-        QDirIterator it(QStringLiteral(QK4_SOURCE_DIR), {"*.cpp", "*.h"}, QDir::Files, QDirIterator::Subdirectories);
-        while (it.hasNext()) {
-            const QString path = it.next();
-            QFile f(path);
-            QVERIFY(f.open(QIODevice::ReadOnly));
-            const QString text = QString::fromUtf8(f.readAll());
-            ++scanned;
-            for (const QRegularExpression *re : {&pixelLiteral, &cssLiteral}) {
-                auto matches = re->globalMatch(text);
-                while (matches.hasNext()) {
-                    const auto m = matches.next();
-                    if (m.captured(1).toInt() < K4Styles::Dimensions::FontSizeFloor)
-                        offenders << QString("%1: %2").arg(path, m.captured(0));
-                }
-            }
-            if (text.contains(pointSize) && !path.endsWith("k4styles.h"))
-                offenders << QString("%1: setPointSize").arg(path);
-        }
-        QVERIFY2(scanned > 50, "source scan found too few files - is QK4_SOURCE_DIR right?");
-        QVERIFY2(offenders.isEmpty(), qPrintable("text below the 10 px floor or in points:\n" + offenders.join('\n')));
     }
 
     // Every OS-drawn form control QK4 creates must have a fallback rule. Adding, say, a QRadioButton

@@ -23,7 +23,7 @@ Kpa1500Page::Kpa1500Page(KPA1500Client *kpa1500Client, QWidget *parent)
     statusLabel->setStyleSheet(K4Styles::Dialog::formLabel());
     statusLabel->setFixedWidth(K4Styles::Dimensions::FormLabelWidth);
     m_kpa1500StatusLabel = new QLabel("Not Connected", this);
-    m_kpa1500StatusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::ErrorRed));
+    m_kpa1500StatusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::TextRed));
     statusLayout->addWidget(statusLabel);
     statusLayout->addWidget(m_kpa1500StatusLabel);
     statusLayout->addStretch();
@@ -208,7 +208,7 @@ void Kpa1500Page::updateKpa1500Status() {
         m_kpa1500ConnectBtn->setText("Disconnect");
     } else {
         m_kpa1500StatusLabel->setText("Not Connected");
-        m_kpa1500StatusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::ErrorRed));
+        m_kpa1500StatusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::TextRed));
         if (m_kpa1500ConnectBtn)
             m_kpa1500ConnectBtn->setText("Connect");
     }

@@ -91,11 +91,11 @@ bool RitXitController::handleWheel(QWheelEvent *event) {
 
 void RitXitController::applyDisplay(bool ritEnabled, bool xitEnabled, int offset) {
     const QString activeStyle = QString("color: %1; font-size: %2px; font-weight: bold; border: none;")
-                                    .arg(K4Styles::Colors::TextWhite)
-                                    .arg(K4Styles::Dimensions::FontSizeMedium);
+                                    .arg(K4Styles::Colors::TextPrimary)
+                                    .arg(K4Styles::Dimensions::FontSizeCaption);
     const QString inactiveStyle = QString("color: %1; font-size: %2px; border: none;")
-                                      .arg(K4Styles::Colors::InactiveGray)
-                                      .arg(K4Styles::Dimensions::FontSizeMedium);
+                                      .arg(K4Styles::Colors::TextSecondary)
+                                      .arg(K4Styles::Dimensions::FontSizeCaption);
     m_ritLabel->setStyleSheet(ritEnabled ? activeStyle : inactiveStyle);
     m_xitLabel->setStyleSheet(xitEnabled ? activeStyle : inactiveStyle);
 
@@ -104,11 +104,12 @@ void RitXitController::applyDisplay(bool ritEnabled, bool xitEnabled, int offset
     const QString sign = (offset >= 0) ? "+" : "";
     m_ritXitValueLabel->setText(QString("%1%2").arg(sign).arg(offsetKHz, 0, 'f', 2));
 
-    const char *valueColor = (ritEnabled || xitEnabled) ? K4Styles::Colors::TextWhite : K4Styles::Colors::InactiveGray;
+    const char *valueColor =
+        (ritEnabled || xitEnabled) ? K4Styles::Colors::TextPrimary : K4Styles::Colors::TextSecondary;
     m_ritXitValueLabel->setStyleSheet(
         QString("color: %1; font-size: %2px; font-weight: bold; border: none; padding: 0 11px;")
             .arg(valueColor)
-            .arg(K4Styles::Dimensions::FontSizePopup));
+            .arg(K4Styles::Dimensions::FontSizeHeading));
 
     // RIT offset shifts the rendered VFO frequency; let MainWindow refresh.
     emit displayRefreshRequested();
@@ -122,12 +123,12 @@ void RitXitController::reset() {
     // WHY: disconnect-state styling preserves MainWindow's historical look
     // (Large-size bold, not Medium used by applyDisplay's inactive path).
     const QString disabledLarge = QString("color: %1; font-size: %2px; font-weight: bold;")
-                                      .arg(K4Styles::Colors::InactiveGray)
-                                      .arg(K4Styles::Dimensions::FontSizeLarge);
+                                      .arg(K4Styles::Colors::TextSecondary)
+                                      .arg(K4Styles::Dimensions::FontSizeBody);
     m_ritLabel->setStyleSheet(disabledLarge);
     m_xitLabel->setStyleSheet(disabledLarge);
     m_ritXitValueLabel->setText("+0.00");
     m_ritXitValueLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                          .arg(K4Styles::Colors::InactiveGray)
-                                          .arg(K4Styles::Dimensions::FontSizePopup));
+                                          .arg(K4Styles::Colors::TextSecondary)
+                                          .arg(K4Styles::Dimensions::FontSizeHeading));
 }

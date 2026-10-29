@@ -20,8 +20,8 @@ MenuItemWidget::MenuItemWidget(MenuItem *item, const MenuModel *model, QWidget *
     // rows render with the current XVTR Band # Select value.
     m_nameLabel = new QLabel(m_model ? m_model->resolvedName(*item) : item->name, this);
     m_nameLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                   .arg(K4Styles::Colors::TextGray)
-                                   .arg(K4Styles::Dimensions::FontSizePopup)); // Initial unselected state
+                                   .arg(K4Styles::Colors::TextSecondary)
+                                   .arg(K4Styles::Dimensions::FontSizeHeading)); // Initial unselected state
     layout->addWidget(m_nameLabel, 1);
 
     // Lock icon (for read-only items)
@@ -35,8 +35,8 @@ MenuItemWidget::MenuItemWidget(MenuItem *item, const MenuModel *model, QWidget *
     // Value label
     m_valueLabel = new QLabel(item->displayValue(), this);
     m_valueLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                    .arg(K4Styles::Colors::TextFaded)
-                                    .arg(K4Styles::Dimensions::FontSizePopup)); // Initial unselected state
+                                    .arg(K4Styles::Colors::TextSecondary)
+                                    .arg(K4Styles::Dimensions::FontSizeHeading)); // Initial unselected state
     m_valueLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     m_valueLabel->setMinimumWidth(K4Styles::Dimensions::FormLabelWidth);
     layout->addWidget(m_valueLabel);
@@ -58,27 +58,27 @@ void MenuItemWidget::updateLabelColors() {
             // EDITING MODE: name on grey, value on off-white
             m_nameLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
                                            .arg(K4Styles::Colors::SelectionLight)
-                                           .arg(K4Styles::Dimensions::FontSizePopup)); // Light text on grey
+                                           .arg(K4Styles::Dimensions::FontSizeHeading)); // Light text on grey
             m_valueLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                            .arg(K4Styles::Colors::TextDark)
-                                            .arg(K4Styles::Dimensions::FontSizePopup)); // Dark text on off-white
+                                            .arg(K4Styles::Colors::TextOnLight)
+                                            .arg(K4Styles::Dimensions::FontSizeHeading)); // Dark text on off-white
         } else {
             // BROWSE MODE: name on off-white, value on grey
             m_nameLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                           .arg(K4Styles::Colors::TextDark)
-                                           .arg(K4Styles::Dimensions::FontSizePopup)); // Dark text on off-white
+                                           .arg(K4Styles::Colors::TextOnLight)
+                                           .arg(K4Styles::Dimensions::FontSizeHeading)); // Dark text on off-white
             m_valueLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                            .arg(K4Styles::Colors::TextWhite)
-                                            .arg(K4Styles::Dimensions::FontSizePopup)); // White text on grey
+                                            .arg(K4Styles::Colors::TextPrimary)
+                                            .arg(K4Styles::Dimensions::FontSizeHeading)); // White text on grey
         }
     } else {
         // Unselected: grey text on dark background
         m_nameLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                       .arg(K4Styles::Colors::TextGray)
-                                       .arg(K4Styles::Dimensions::FontSizePopup));
+                                       .arg(K4Styles::Colors::TextSecondary)
+                                       .arg(K4Styles::Dimensions::FontSizeHeading));
         m_valueLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                        .arg(K4Styles::Colors::TextFaded)
-                                        .arg(K4Styles::Dimensions::FontSizePopup));
+                                        .arg(K4Styles::Colors::TextSecondary)
+                                        .arg(K4Styles::Dimensions::FontSizeHeading));
     }
 }
 
@@ -172,8 +172,8 @@ void MenuOverlayWidget::setupUi() {
     m_categoryLabel->setStyleSheet(QString("background-color: %1; color: %2; font-size: %3px; "
                                            "font-weight: bold; padding: 8px 15px;")
                                        .arg(K4Styles::Colors::OverlayHeaderBg)
-                                       .arg(K4Styles::Colors::InactiveGray)
-                                       .arg(K4Styles::Dimensions::FontSizeButton));
+                                       .arg(K4Styles::Colors::TextSecondary)
+                                       .arg(K4Styles::Dimensions::FontSizeReadout));
     contentLayout->addWidget(m_categoryLabel);
 
     // Scroll area for menu items
@@ -217,9 +217,9 @@ void MenuOverlayWidget::setupUi() {
                                   "border-radius: %3px; font-size: %4px; font-weight: bold; }"
                                   "QPushButton:pressed { background-color: %5; }")
                               .arg(K4Styles::Colors::OverlayNavButton)
-                              .arg(K4Styles::Colors::TextWhite)
+                              .arg(K4Styles::Colors::TextPrimary)
                               .arg(K4Styles::Dimensions::BorderRadius)
-                              .arg(K4Styles::Dimensions::FontSizeTitle)
+                              .arg(K4Styles::Dimensions::FontSizeIndicator)
                               .arg(K4Styles::Colors::OverlayNavButtonPressed);
 
     // Row 1: Up and Down buttons side by side
@@ -259,9 +259,9 @@ void MenuOverlayWidget::setupUi() {
                                      "border-radius: %3px; font-size: %4px; font-weight: bold; }"
                                      "QPushButton:pressed { background-color: %5; }")
                                  .arg(K4Styles::Colors::OverlayNavButton)
-                                 .arg(K4Styles::Colors::TextGray)
+                                 .arg(K4Styles::Colors::TextSecondaryOnRaised)
                                  .arg(K4Styles::Dimensions::BorderRadius)
-                                 .arg(K4Styles::Dimensions::FontSizeMedium) // Fits in narrow button
+                                 .arg(K4Styles::Dimensions::FontSizeCaption) // Fits in narrow button
                                  .arg(K4Styles::Colors::OverlayNavButtonPressed));
     connect(m_normBtn, &QPushButton::clicked, this, &MenuOverlayWidget::resetToDefault);
     row3->addWidget(m_normBtn);
@@ -278,11 +278,11 @@ void MenuOverlayWidget::setupUi() {
                                  .arg(K4Styles::Colors::GradientMid1)     // %2
                                  .arg(K4Styles::Colors::GradientMid2)     // %3
                                  .arg(K4Styles::Colors::GradientBottom)   // %4
-                                 .arg(K4Styles::Colors::TextWhite)        // %5
+                                 .arg(K4Styles::Colors::TextPrimary)      // %5
                                  .arg(K4Styles::Dimensions::BorderWidth)  // %6
                                  .arg(K4Styles::Colors::BorderNormal)     // %7
                                  .arg(K4Styles::Dimensions::BorderRadius) // %8
-                                 .arg(K4Styles::Dimensions::FontSizeTitle));
+                                 .arg(K4Styles::Dimensions::FontSizeIndicator));
     connect(m_backBtn, &QPushButton::clicked, this, &MenuOverlayWidget::closeOverlay);
     row3->addWidget(m_backBtn);
 
@@ -309,9 +309,9 @@ void MenuOverlayWidget::createSearchPopup() {
                                          "border-radius: 4px; padding: 6px; font-size: %4px; }"
                                          "QLineEdit:focus { border-color: %5; }")
                                      .arg(K4Styles::Colors::OverlayContentBg)
-                                     .arg(K4Styles::Colors::TextWhite)
+                                     .arg(K4Styles::Colors::TextPrimary)
                                      .arg(K4Styles::Colors::OverlayNavButton)
-                                     .arg(K4Styles::Dimensions::FontSizeMedium)
+                                     .arg(K4Styles::Dimensions::FontSizeCaption)
                                      .arg(K4Styles::Colors::VfoACyan));
     layout->addWidget(m_searchInput);
 
@@ -605,27 +605,27 @@ void MenuOverlayWidget::updateNormButton() {
     QString normBtnDisabled = QString("QPushButton { background-color: %1; color: %2; border: none; "
                                       "border-radius: %3px; font-size: %4px; font-weight: bold; }")
                                   .arg(K4Styles::Colors::OverlayNavButton)
-                                  .arg(K4Styles::Colors::TextGray)
+                                  .arg(K4Styles::Colors::TextDisabled)
                                   .arg(K4Styles::Dimensions::BorderRadius)
-                                  .arg(K4Styles::Dimensions::FontSizeMedium);
+                                  .arg(K4Styles::Dimensions::FontSizeCaption);
 
     QString normBtnDefault = QString("QPushButton { background-color: %1; color: %2; border: none; "
                                      "border-radius: %3px; font-size: %4px; font-weight: bold; }"
                                      "QPushButton:pressed { background-color: %5; }")
                                  .arg(K4Styles::Colors::OverlayNavButton)
-                                 .arg(K4Styles::Colors::TextGray)
+                                 .arg(K4Styles::Colors::TextSecondaryOnRaised)
                                  .arg(K4Styles::Dimensions::BorderRadius)
-                                 .arg(K4Styles::Dimensions::FontSizeMedium)
+                                 .arg(K4Styles::Dimensions::FontSizeCaption)
                                  .arg(K4Styles::Colors::OverlayNavButtonPressed);
 
     QString normBtnActive = QString("QPushButton { background-color: %1; color: %2; border: none; "
                                     "border-radius: %3px; font-size: %4px; font-weight: bold; }"
                                     "QPushButton:pressed { background-color: %5; }")
                                 .arg(K4Styles::Colors::SelectionLight)
-                                .arg(K4Styles::Colors::TextDark)
+                                .arg(K4Styles::Colors::TextOnLight)
                                 .arg(K4Styles::Dimensions::BorderRadius)
-                                .arg(K4Styles::Dimensions::FontSizeMedium)
-                                .arg(K4Styles::Colors::TextWhite);
+                                .arg(K4Styles::Dimensions::FontSizeCaption)
+                                .arg(K4Styles::Colors::White);
 
     MenuItem *item = selectedMenuItem();
     if (!item) {

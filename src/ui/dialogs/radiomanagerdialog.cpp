@@ -40,9 +40,9 @@ QString RadioManagerDialog::lineEditStyle(const QString &borderColor) {
                    "  min-width: 150px; "
                    "  font-size: %5px; "
                    "}")
-        .arg(K4Styles::Colors::DarkBackground, K4Styles::Colors::TextWhite, borderColor)
+        .arg(K4Styles::Colors::DarkBackground, K4Styles::Colors::TextPrimary, borderColor)
         .arg(K4Styles::Dimensions::PaddingSmall)
-        .arg(K4Styles::Dimensions::FontSizeLarge);
+        .arg(K4Styles::Dimensions::FontSizeBody);
 }
 
 void RadioManagerDialog::setupUi() {
@@ -68,7 +68,7 @@ void RadioManagerDialog::setupUi() {
     auto *serversTitle = new QLabel("Available Servers", this);
     serversTitle->setStyleSheet(QString("QLabel { color: %1; font-weight: bold; font-size: %2px; }")
                                     .arg(K4Styles::Colors::AccentAmber)
-                                    .arg(K4Styles::Dimensions::FontSizePopup));
+                                    .arg(K4Styles::Dimensions::FontSizeHeading));
     leftSection->addWidget(serversTitle);
 
     m_radioList = new QListWidget(this);
@@ -96,7 +96,7 @@ void RadioManagerDialog::setupUi() {
                 "  background-color: %5; "
                 "  color: %1; "
                 "}")
-            .arg(K4Styles::Colors::DarkBackground, K4Styles::Colors::TextWhite, K4Styles::Colors::DialogBorder)
+            .arg(K4Styles::Colors::DarkBackground, K4Styles::Colors::TextPrimary, K4Styles::Colors::DialogBorder)
             .arg(K4Styles::Dimensions::PaddingSmall)
             .arg(K4Styles::Colors::AccentAmber, K4Styles::Colors::GradientBottom));
     leftSection->addWidget(m_radioList);
@@ -109,7 +109,7 @@ void RadioManagerDialog::setupUi() {
     auto *editTitle = new QLabel("Edit Connect", this);
     editTitle->setStyleSheet(QString("QLabel { color: %1; font-weight: bold; font-size: %2px; }")
                                  .arg(K4Styles::Colors::AccentAmber)
-                                 .arg(K4Styles::Dimensions::FontSizePopup));
+                                 .arg(K4Styles::Dimensions::FontSizeHeading));
     rightSection->addWidget(editTitle);
 
     // Form fields - label on LEFT of text box
@@ -119,11 +119,11 @@ void RadioManagerDialog::setupUi() {
 
     const QString normalLineEditStyle = lineEditStyle(K4Styles::Colors::DialogBorder);
     m_hostNormalStyle = normalLineEditStyle;
-    m_hostErrorStyle = lineEditStyle(K4Styles::Colors::ErrorRed);
+    m_hostErrorStyle = lineEditStyle(K4Styles::Colors::TextRed);
 
     QString labelStyle = QString("QLabel { color: %1; font-size: %2px; }")
-                             .arg(K4Styles::Colors::TextGray)
-                             .arg(K4Styles::Dimensions::FontSizeButton);
+                             .arg(K4Styles::Colors::TextSecondary)
+                             .arg(K4Styles::Dimensions::FontSizeReadout);
 
     // Row 0: Name
     auto *nameLabel = new QLabel("Name", this);
@@ -186,10 +186,10 @@ void RadioManagerDialog::setupUi() {
                 "QCheckBox::indicator:checked { background-color: %6;"
                 "  border-color: %6; }"
                 "QCheckBox::indicator:hover { border-color: %6; }")
-            .arg(K4Styles::Colors::TextGray)
-            .arg(K4Styles::Dimensions::FontSizeButton)
+            .arg(K4Styles::Colors::TextSecondary)
+            .arg(K4Styles::Dimensions::FontSizeReadout)
             .arg(K4Styles::Dimensions::BorderRadiusLarge)
-            .arg(K4Styles::Colors::TextGray, K4Styles::Colors::DarkBackground, K4Styles::Colors::AccentAmber));
+            .arg(K4Styles::Colors::TextSecondary, K4Styles::Colors::DarkBackground, K4Styles::Colors::AccentAmber));
     formLayout->addWidget(m_tlsCheckbox, 5, 0, 1, 2);
 
     // The ONE control for this setting. The list shows WHICH radio is armed - see refreshList -
@@ -226,10 +226,10 @@ void RadioManagerDialog::setupUi() {
                 "  color: %2; "
                 "  selection-background-color: %5; "
                 "}")
-            .arg(K4Styles::Colors::DarkBackground, K4Styles::Colors::TextWhite, K4Styles::Colors::DialogBorder)
+            .arg(K4Styles::Colors::DarkBackground, K4Styles::Colors::TextPrimary, K4Styles::Colors::DialogBorder)
             .arg(K4Styles::Dimensions::PaddingSmall)
             .arg(K4Styles::Colors::AccentAmber)
-            .arg(K4Styles::Dimensions::FontSizeLarge));
+            .arg(K4Styles::Dimensions::FontSizeBody));
     // EM0 is 24-bit audio in a 32-bit container, not the "RAW 32-bit float" Elecraft's
     // documentation describes — measured 2026-09-19, see docs/k4-protocol-quirks.md. The old
     // label told the operator something untrue about the format they were selecting.
@@ -713,7 +713,7 @@ void RadioManagerDialog::addDiscoveredItem(const K4RadioInfo &radio) {
     if (isK4Z) {
         // K4Z (K4/0) is not supported by QK4 — show grayed out and unselectable
         item->setFlags(item->flags() & ~(Qt::ItemIsSelectable | Qt::ItemIsEnabled));
-        item->setForeground(QColor(K4Styles::Colors::TextGray));
+        item->setForeground(QColor(K4Styles::Colors::TextSecondary));
     }
     m_radioList->addItem(item);
 }

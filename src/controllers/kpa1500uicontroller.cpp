@@ -162,10 +162,10 @@ void KPA1500UiController::updateStatus() {
     if (connected) {
         m_statusBar->setKpa1500Status("KPA1500", QString("color: %1; font-size: %2px; font-weight: bold;")
                                                      .arg(K4Styles::Colors::StatusGreen)
-                                                     .arg(K4Styles::Dimensions::FontSizeButton));
+                                                     .arg(K4Styles::Dimensions::FontSizeReadout));
     } else {
         m_statusBar->setKpa1500Status("KPA1500", QString("color: %1; font-size: %2px;")
-                                                     .arg(K4Styles::Colors::InactiveGray)
-                                                     .arg(K4Styles::Dimensions::FontSizeButton));
+                                                     .arg(K4Styles::Colors::TextSecondary)
+                                                     .arg(K4Styles::Dimensions::FontSizeReadout));
     }
 }

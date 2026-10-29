@@ -174,7 +174,7 @@ void TxMeterWidget::paintEvent(QPaintEvent *event) {
     const int spacing = 2;
 
     QFont labelFont = font();
-    labelFont.setPixelSize(K4Styles::Dimensions::FontSizeMedium);
+    labelFont.setPixelSize(K4Styles::Dimensions::FontSizeCaption);
     labelFont.setBold(true);
     painter.setFont(labelFont);
 
@@ -253,13 +253,13 @@ void TxMeterWidget::drawMeterRow(QPainter &painter, int y, int rowHeight, const 
                                  int barWidth, int barHeight, MeterType type) {
     // Label box on the left (wider for larger font)
     QRect labelRect(2, y + 2, 36, rowHeight - 4);
-    painter.setPen(QColor(K4Styles::Colors::InactiveGray));
+    painter.setPen(QColor(K4Styles::Colors::MutedGraphic));
     painter.setBrush(QColor(K4Styles::Colors::Background));
     painter.drawRect(labelRect);
 
-    painter.setPen(QColor(K4Styles::Colors::TextWhite));
+    painter.setPen(QColor(K4Styles::Colors::TextPrimary));
     QFont labelFont = font();
-    labelFont.setPixelSize(K4Styles::Dimensions::FontSizeMedium);
+    labelFont.setPixelSize(K4Styles::Dimensions::FontSizeCaption);
     labelFont.setBold(true);
     painter.setFont(labelFont);
     painter.drawText(labelRect, Qt::AlignCenter, label);
@@ -268,7 +268,7 @@ void TxMeterWidget::drawMeterRow(QPainter &painter, int y, int rowHeight, const 
     int barY = y + 2;
     QRect trackRect(barStartX, barY, barWidth, barHeight);
     painter.fillRect(trackRect, QColor(K4Styles::Colors::Background));
-    painter.setPen(QColor(K4Styles::Colors::InactiveGray));
+    painter.setPen(QColor(K4Styles::Colors::MutedGraphic));
     painter.drawRect(trackRect);
 
     // Filled meter bar
@@ -291,7 +291,7 @@ void TxMeterWidget::drawMeterRow(QPainter &painter, int y, int rowHeight, const 
     // Draw peak indicator
     if (peakRatio > 0.01) {
         int peakX = barStartX + static_cast<int>(barWidth * peakRatio);
-        painter.setPen(QPen(QColor(K4Styles::Colors::TextWhite), 2));
+        painter.setPen(QPen(QColor(K4Styles::Colors::TextPrimary), 2));
         painter.drawLine(peakX - 1, barY, peakX - 1, barY + barHeight);
     }
 
@@ -314,13 +314,13 @@ void TxMeterWidget::drawMeterRow(QPainter &painter, int y, int rowHeight, const 
         if (textX + textW + 2.0 > leftmostDrawn)
             continue;
         // Over-S9 marks are red. TextRed, not TxRed: pure red is under 4.5:1 on the dark background.
-        painter.setPen(QColor(mark.text.startsWith('+') ? K4Styles::Colors::TextRed : K4Styles::Colors::TextGray));
+        painter.setPen(QColor(mark.text.startsWith('+') ? K4Styles::Colors::TextRed : K4Styles::Colors::TextSecondary));
         painter.drawText(QPointF(textX, baselineY), mark.text);
         leftmostDrawn = textX;
     }
 
     // Draw tick marks on the bar
-    painter.setPen(QColor(K4Styles::Colors::InactiveGray));
+    painter.setPen(QColor(K4Styles::Colors::MutedGraphic));
     for (const ScaleMark &mark : marks) {
         int x = barStartX + static_cast<int>(barWidth * mark.pos);
         painter.drawLine(x, barY, x, barY + 2);

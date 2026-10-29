@@ -51,8 +51,8 @@ KpodPage::KpodPage(KpodDevice *kpodDevice, KpodPlusDevice *kpodPlusDevice, QWidg
 
     // Table styling
     QString headerStyle = QString("color: %1; font-size: %2px; font-weight: bold; padding: 5px;")
-                              .arg(K4Styles::Colors::TextGray)
-                              .arg(K4Styles::Dimensions::FontSizeButton);
+                              .arg(K4Styles::Colors::TextSecondary)
+                              .arg(K4Styles::Dimensions::FontSizeReadout);
 
     // Create labels with property names
     QStringList properties = {"Product Name", "Manufacturer",     "Vendor ID", "Product ID",
@@ -144,8 +144,8 @@ void KpodPage::setupKeyerConfigSection(QVBoxLayout *parentLayout) {
     grid->setVerticalSpacing(K4Styles::Dimensions::PopupButtonSpacing);
 
     QString labelStyle = QString("color: %1; font-size: %2px; font-weight: bold; padding: 5px;")
-                             .arg(K4Styles::Colors::TextGray)
-                             .arg(K4Styles::Dimensions::FontSizeButton);
+                             .arg(K4Styles::Colors::TextSecondary)
+                             .arg(K4Styles::Dimensions::FontSizeReadout);
 
     auto *settings = RadioSettings::instance();
 
@@ -201,11 +201,11 @@ void KpodPage::updateKpodStatus() {
 
     // Styling
     QString valueStyle = QString("color: %1; font-size: %2px; padding: 5px;")
-                             .arg(K4Styles::Colors::TextWhite)
-                             .arg(K4Styles::Dimensions::FontSizeButton);
+                             .arg(K4Styles::Colors::TextPrimary)
+                             .arg(K4Styles::Dimensions::FontSizeReadout);
     QString notDetectedStyle = QString("color: %1; font-size: %2px; font-style: italic; padding: 5px;")
-                                   .arg(K4Styles::Colors::TextGray)
-                                   .arg(K4Styles::Dimensions::FontSizeButton);
+                                   .arg(K4Styles::Colors::TextSecondary)
+                                   .arg(K4Styles::Dimensions::FontSizeReadout);
 
     // Update status label — show which device is detected
     QString statusText;
@@ -218,7 +218,7 @@ void KpodPage::updateKpodStatus() {
     } else {
         statusText = "Not Detected";
     }
-    QString statusColor = anyDetected ? K4Styles::Colors::StatusGreen : K4Styles::Colors::ErrorRed;
+    QString statusColor = anyDetected ? K4Styles::Colors::StatusGreen : K4Styles::Colors::TextRed;
     m_kpodStatusLabel->setText(statusText);
     m_kpodStatusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(statusColor));
 

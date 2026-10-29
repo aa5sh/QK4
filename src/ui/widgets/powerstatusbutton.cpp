@@ -41,7 +41,7 @@ void PowerStatusButton::applyAppearance() {
         break;
     case State::Unknown:
     default:
-        color = QColor(K4Styles::Colors::InactiveGray);
+        color = QColor(K4Styles::Colors::MutedGraphic);
         tip = QStringLiteral("K4 power state unknown");
         break;
     }

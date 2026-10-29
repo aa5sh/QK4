@@ -524,9 +524,10 @@ void MainWindow::connectToStartupRadio() {
 void MainWindow::setupMenuBar() {
     // Standard menu bar order: File, Connect, Tools, View, Help
     // On macOS, Qt automatically creates the app menu with About/Preferences
-    menuBar()->setStyleSheet(QString("QMenuBar { background-color: %1; color: %2; }"
-                                     "QMenuBar::item:selected { background-color: #333; }")
-                                 .arg(K4Styles::Colors::DarkBackground, K4Styles::Colors::TextWhite));
+    menuBar()->setStyleSheet(
+        QString("QMenuBar { background-color: %1; color: %2; }"
+                "QMenuBar::item:selected { background-color: %3; }")
+            .arg(K4Styles::Colors::DarkBackground, K4Styles::Colors::TextPrimary, K4Styles::Colors::DialogBorder));
 
     // File menu (first, per Windows convention)
     QMenu *fileMenu = menuBar()->addMenu("&File");
@@ -866,7 +867,7 @@ void MainWindow::setupVfoSection(QWidget *parent) {
 
     // Set Mini-Pan A passband color to cyan (matching VFO A theme)
     QColor vfoAPassband(K4Styles::Colors::VfoACyan);
-    vfoAPassband.setAlpha(64);
+    vfoAPassband.setAlpha(K4Styles::Colors::Alpha::PassbandFill);
     m_vfoA->setMiniPanPassbandColor(vfoAPassband);
 
     m_vfoA->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
@@ -920,7 +921,7 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     // Supports mouse wheel to adjust RIT/XIT offset
     m_ritXitBox = new QWidget(centerWidget);
     m_ritXitBox->setObjectName("ritXitBox");
-    m_ritXitBox->setStyleSheet(QString("#ritXitBox { border: 1px solid %1; }").arg(K4Styles::Colors::InactiveGray));
+    m_ritXitBox->setStyleSheet(QString("#ritXitBox { border: 1px solid %1; }").arg(K4Styles::Colors::MutedGraphic));
     m_ritXitBox->setMaximumWidth(80);
     m_ritXitBox->setMaximumHeight(40);
     m_ritXitBox->installEventFilter(this);
@@ -934,16 +935,16 @@ void MainWindow::setupVfoSection(QWidget *parent) {
 
     m_ritLabel = new QLabel("RIT", m_ritXitBox);
     m_ritLabel->setStyleSheet(QString("color: %1; font-size: %2px; border: none;")
-                                  .arg(K4Styles::Colors::InactiveGray)
-                                  .arg(K4Styles::Dimensions::FontSizeMedium));
+                                  .arg(K4Styles::Colors::TextSecondary)
+                                  .arg(K4Styles::Dimensions::FontSizeCaption));
     m_ritLabel->setCursor(Qt::PointingHandCursor);
     m_ritLabel->installEventFilter(this);
     ritXitLabelsRow->addWidget(m_ritLabel);
 
     m_xitLabel = new QLabel("XIT", m_ritXitBox);
     m_xitLabel->setStyleSheet(QString("color: %1; font-size: %2px; border: none;")
-                                  .arg(K4Styles::Colors::InactiveGray)
-                                  .arg(K4Styles::Dimensions::FontSizeMedium));
+                                  .arg(K4Styles::Colors::TextSecondary)
+                                  .arg(K4Styles::Dimensions::FontSizeCaption));
     m_xitLabel->setCursor(Qt::PointingHandCursor);
     m_xitLabel->installEventFilter(this);
     ritXitLabelsRow->addWidget(m_xitLabel);
@@ -955,7 +956,7 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     auto *ritXitSeparator = new QFrame(m_ritXitBox);
     ritXitSeparator->setFrameShape(QFrame::HLine);
     ritXitSeparator->setFrameShadow(QFrame::Plain);
-    ritXitSeparator->setStyleSheet(QString("background-color: %1; border: none;").arg(K4Styles::Colors::InactiveGray));
+    ritXitSeparator->setStyleSheet(QString("background-color: %1; border: none;").arg(K4Styles::Colors::MutedGraphic));
     ritXitSeparator->setFixedHeight(K4Styles::Dimensions::SeparatorHeight);
     ritXitLayout->addWidget(ritXitSeparator);
 
@@ -963,8 +964,8 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     m_ritXitValueLabel->setAlignment(Qt::AlignCenter);
     m_ritXitValueLabel->setStyleSheet(
         QString("color: %1; font-size: %2px; font-weight: bold; border: none; padding: 0 11px;")
-            .arg(K4Styles::Colors::InactiveGray)
-            .arg(K4Styles::Dimensions::FontSizePopup)); // Grey until RIT/XIT is enabled
+            .arg(K4Styles::Colors::TextSecondary)
+            .arg(K4Styles::Dimensions::FontSizeHeading)); // Grey until RIT/XIT is enabled
     m_ritXitValueLabel->installEventFilter(this);
     ritXitLayout->addWidget(m_ritXitValueLabel);
 
@@ -1005,24 +1006,24 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     m_voxLabel = new QLabel("VOX", indicatorContainer);
     m_voxLabel->setAlignment(Qt::AlignCenter);
     m_voxLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                  .arg(K4Styles::Colors::TextGray)
-                                  .arg(K4Styles::Dimensions::FontSizeLarge));
+                                  .arg(K4Styles::Colors::TextSecondary)
+                                  .arg(K4Styles::Dimensions::FontSizeBody));
     indicatorLayout->addWidget(m_voxLabel);
 
     // ATU indicator (orange when AUTO, grey when off)
     m_atuLabel = new QLabel("ATU", indicatorContainer);
     m_atuLabel->setAlignment(Qt::AlignCenter);
     m_atuLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                  .arg(K4Styles::Colors::TextGray)
-                                  .arg(K4Styles::Dimensions::FontSizeLarge));
+                                  .arg(K4Styles::Colors::TextSecondary)
+                                  .arg(K4Styles::Dimensions::FontSizeBody));
     indicatorLayout->addWidget(m_atuLabel);
 
     // QSK indicator - white when on, grey when off
     m_qskLabel = new QLabel("QSK", indicatorContainer);
     m_qskLabel->setAlignment(Qt::AlignCenter);
     m_qskLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                  .arg(K4Styles::Colors::TextGray)
-                                  .arg(K4Styles::Dimensions::FontSizeLarge));
+                                  .arg(K4Styles::Colors::TextSecondary)
+                                  .arg(K4Styles::Dimensions::FontSizeBody));
     indicatorLayout->addWidget(m_qskLabel);
 
     indicatorLayout->addStretch();
@@ -1090,7 +1091,7 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     auto *msgText = new QLabel("MESSAGE", messageLabel);
     msgText->setStyleSheet(QString("color: %1; font-size: %2px;")
                                .arg(K4Styles::Colors::BorderSelected)
-                               .arg(K4Styles::Dimensions::FontSizeSmall));
+                               .arg(K4Styles::Dimensions::FontSizeCaption));
     msgText->setAlignment(Qt::AlignCenter);
     // WHY: one sub-label line tall, so MESSAGE sits on the same line as BANK / AF REC / AF PLAY.
     msgText->setFixedHeight(SidePanelButton::subLabelHeight(msgText));
@@ -1137,7 +1138,7 @@ void MainWindow::setupVfoSection(QWidget *parent) {
 
     // Set Mini-Pan B passband color to green (matching VFO B theme)
     QColor vfoBPassband(K4Styles::Colors::VfoBGreen);
-    vfoBPassband.setAlpha(64);
+    vfoBPassband.setAlpha(K4Styles::Colors::Alpha::PassbandFill);
     m_vfoB->setMiniPanPassbandColor(vfoBPassband);
 
     // Connect VFO B click to toggle mini-pan (send CAT to enable Mini-Pan streaming)
@@ -1195,8 +1196,8 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     m_rxAntALabel = new QLabel("1:ANT1", parent);
     m_rxAntALabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     m_rxAntALabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                     .arg(K4Styles::Colors::TextWhite)
-                                     .arg(K4Styles::Dimensions::FontSizeLarge));
+                                     .arg(K4Styles::Colors::TextPrimary)
+                                     .arg(K4Styles::Dimensions::FontSizeBody));
     antennaRow->addWidget(m_rxAntALabel);
 
     antennaRow->addStretch(1); // Push TX antenna to center
@@ -1206,7 +1207,7 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     m_txAntennaLabel->setAlignment(Qt::AlignCenter);
     m_txAntennaLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
                                         .arg(K4Styles::Colors::AccentAmber)
-                                        .arg(K4Styles::Dimensions::FontSizeLarge));
+                                        .arg(K4Styles::Dimensions::FontSizeBody));
     antennaRow->addWidget(m_txAntennaLabel);
 
     antennaRow->addStretch(1); // Push RX Ant B to right
@@ -1215,8 +1216,8 @@ void MainWindow::setupVfoSection(QWidget *parent) {
     m_rxAntBLabel = new QLabel("1:ANT1", parent);
     m_rxAntBLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     m_rxAntBLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                     .arg(K4Styles::Colors::TextWhite)
-                                     .arg(K4Styles::Dimensions::FontSizeLarge));
+                                     .arg(K4Styles::Colors::TextPrimary)
+                                     .arg(K4Styles::Dimensions::FontSizeBody));
     antennaRow->addWidget(m_rxAntBLabel);
 
     mainVLayout->addLayout(antennaRow);

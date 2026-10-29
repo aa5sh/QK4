@@ -24,18 +24,18 @@ IconTextLabel::IconTextLabel(QWidget *parent)
     layout->addWidget(m_iconLabel);
 
     m_prefixLabel->setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
-    m_prefixLabel->setFont(K4Styles::Fonts::paintFont(K4Styles::Dimensions::FontSizeMedium, QFont::Bold));
-    m_prefixLabel->setStyleSheet(QString("color: %1;").arg(K4Styles::Colors::TextGray));
+    m_prefixLabel->setFont(K4Styles::Fonts::paintFont(K4Styles::Dimensions::FontSizeCaption, QFont::Bold));
+    m_prefixLabel->setStyleSheet(QString("color: %1;").arg(K4Styles::Colors::TextSecondary));
     m_prefixLabel->hide();
     layout->addWidget(m_prefixLabel);
 
     m_valueLabel->setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
-    m_valueLabel->setFont(K4Styles::Fonts::dataFont(K4Styles::Dimensions::FontSizePopup));
+    m_valueLabel->setFont(K4Styles::Fonts::dataFont(K4Styles::Dimensions::FontSizeHeading));
     layout->addWidget(m_valueLabel);
 
     m_unitLabel->setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
-    m_unitLabel->setFont(K4Styles::Fonts::paintFont(K4Styles::Dimensions::FontSizeMedium, QFont::Normal));
-    m_unitLabel->setStyleSheet(QString("color: %1;").arg(K4Styles::Colors::TextGray));
+    m_unitLabel->setFont(K4Styles::Fonts::paintFont(K4Styles::Dimensions::FontSizeCaption, QFont::Normal));
+    m_unitLabel->setStyleSheet(QString("color: %1;").arg(K4Styles::Colors::TextSecondary));
     m_unitLabel->hide();
     layout->addWidget(m_unitLabel);
 
@@ -60,7 +60,7 @@ void IconTextLabel::setGlyph(K4Glyphs::Glyph glyph) {
     // honour the muted "no data" color; otherwise use the most recently set
     // glyph color so setGlyph + setGlyphColor are order-independent.
     const QColor initial =
-        m_valueLabel->text() == kEmptyPlaceholder ? QColor(K4Styles::Colors::TextFaded) : m_glyphColor;
+        m_valueLabel->text() == kEmptyPlaceholder ? QColor(K4Styles::Colors::TextSecondary) : m_glyphColor;
     renderGlyph(initial);
 }
 
@@ -115,7 +115,7 @@ void IconTextLabel::clear() {
     // so the slot reads as "no data" regardless of any semantic glyph color
     // the controller had set. The semantic color returns the next time the
     // controller calls setGlyphColor() on a real reading.
-    const QColor muted(K4Styles::Colors::TextFaded);
+    const QColor muted(K4Styles::Colors::TextSecondary);
     applyValueStyle(muted);
     renderGlyph(muted);
 }

@@ -80,15 +80,15 @@ StatusBarController::StatusBarController(RadioState *radioState, ConnectionContr
     // Elecraft K4 title
     m_titleLabel = new QLabel("Elecraft K4", m_container);
     m_titleLabel->setStyleSheet(QString("color: %1; font-weight: bold; font-size: %2px;")
-                                    .arg(K4Styles::Colors::TextWhite)
-                                    .arg(K4Styles::Dimensions::FontSizePopup));
+                                    .arg(K4Styles::Colors::TextPrimary)
+                                    .arg(K4Styles::Dimensions::FontSizeHeading));
     layout->addWidget(m_titleLabel);
 
     // Date/Time
     m_dateTimeLabel = new QLabel("--/-- --:--:-- Z", m_container);
     m_dateTimeLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                       .arg(K4Styles::Colors::TextGray)
-                                       .arg(K4Styles::Dimensions::FontSizeButton));
+                                       .arg(K4Styles::Colors::TextSecondary)
+                                       .arg(K4Styles::Dimensions::FontSizeReadout));
     layout->addWidget(m_dateTimeLabel);
 
     layout->addStretch();
@@ -131,16 +131,16 @@ StatusBarController::StatusBarController(RadioState *radioState, ConnectionContr
     // KPA1500 status (to left of K4 status)
     m_kpa1500StatusLabel = new QLabel("", m_container);
     m_kpa1500StatusLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                            .arg(K4Styles::Colors::InactiveGray)
-                                            .arg(K4Styles::Dimensions::FontSizeButton));
+                                            .arg(K4Styles::Colors::TextSecondary)
+                                            .arg(K4Styles::Dimensions::FontSizeReadout));
     m_kpa1500StatusLabel->hide(); // Hidden when not enabled
     layout->addWidget(m_kpa1500StatusLabel);
 
     // K4 connection status
     m_connectionStatusLabel = new QLabel("K4", m_container);
     m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                               .arg(K4Styles::Colors::InactiveGray)
-                                               .arg(K4Styles::Dimensions::FontSizeButton));
+                                               .arg(K4Styles::Colors::TextSecondary)
+                                               .arg(K4Styles::Dimensions::FontSizeReadout));
     layout->addWidget(m_connectionStatusLabel);
 
     // Network health signal bars
@@ -225,8 +225,8 @@ void StatusBarController::showDisconnected() {
 
     m_connectionStatusLabel->setText("K4");
     m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                               .arg(K4Styles::Colors::InactiveGray)
-                                               .arg(K4Styles::Dimensions::FontSizeButton));
+                                               .arg(K4Styles::Colors::TextSecondary)
+                                               .arg(K4Styles::Dimensions::FontSizeReadout));
     m_titleLabel->setText("Elecraft K4");
 }
 
@@ -236,7 +236,7 @@ void StatusBarController::showConnecting() {
     m_connectionStatusLabel->setText("K4");
     m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
                                                .arg(K4Styles::Colors::AccentAmber)
-                                               .arg(K4Styles::Dimensions::FontSizeButton));
+                                               .arg(K4Styles::Dimensions::FontSizeReadout));
 }
 
 void StatusBarController::showConnected() {
@@ -244,7 +244,7 @@ void StatusBarController::showConnected() {
     m_connectionStatusLabel->setText("K4");
     m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
                                                .arg(K4Styles::Colors::StatusGreen)
-                                               .arg(K4Styles::Dimensions::FontSizeButton));
+                                               .arg(K4Styles::Dimensions::FontSizeReadout));
 }
 
 void StatusBarController::showError(const QString &errorMessage) {
@@ -258,7 +258,7 @@ void StatusBarController::showError(const QString &errorMessage) {
     m_connectionStatusLabel->setText("K4");
     m_connectionStatusLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
                                                .arg(K4Styles::Colors::TxRed)
-                                               .arg(K4Styles::Dimensions::FontSizeButton));
+                                               .arg(K4Styles::Dimensions::FontSizeReadout));
 }
 
 void StatusBarController::clearReadings() {

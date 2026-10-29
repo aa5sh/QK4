@@ -186,7 +186,7 @@ void DxSpotOverlay::paintEvent(QPaintEvent *event) {
     painter.setFont(font);
 
     const QColor textColor(K4Styles::Colors::VfoACyan);
-    const QColor badgeColor(K4Styles::Colors::TextGray); // Dimmer for "+N more" badges
+    const QColor badgeColor(K4Styles::Colors::TextSecondary); // Dimmer for "+N more" badges
 
     for (const auto &label : m_labels) {
         const int textY = label.rect.y() + label.rect.height() - 2;

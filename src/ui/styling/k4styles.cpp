@@ -61,7 +61,7 @@ QString gradientButtonCss(int fontSizePx, const QString &padding, bool pressedBo
             %9
         }
     )")
-        .arg(normalGradientCss(), Colors::TextWhite, Colors::BorderNormal, paddingDecl, QString::number(fontSizePx),
+        .arg(normalGradientCss(), Colors::TextPrimary, Colors::BorderNormal, paddingDecl, QString::number(fontSizePx),
              hoverGradientCss(), Colors::BorderHover, pressedGradientCss(), pressedBorderDecl);
 }
 } // anonymous namespace
@@ -69,7 +69,7 @@ QString gradientButtonCss(int fontSizePx, const QString &padding, bool pressedBo
 namespace K4Styles {
 
 QString popupButtonNormal() {
-    return gradientButtonCss(Dimensions::PopupButtonSize, QString(), false);
+    return gradientButtonCss(Dimensions::FontSizeBody, QString(), false);
 }
 
 QString popupButtonSelected() {
@@ -89,8 +89,8 @@ QString popupButtonSelected() {
             background: %6;
         }
     )")
-        .arg(selectedGradientCss(), Colors::TextDark, Colors::BorderSelected,
-             QString::number(Dimensions::PopupButtonSize),
+        .arg(selectedGradientCss(), Colors::TextOnLight, Colors::BorderSelected,
+             QString::number(Dimensions::FontSizeBody),
              gradientCss(Colors::SelectedHoverTop, Colors::SelectedHoverMid1, Colors::SelectedHoverMid2,
                          Colors::SelectedHoverBottom),
              gradientCssReversed(Colors::SelectedTop, Colors::SelectedMid1, Colors::SelectedMid2,
@@ -107,13 +107,13 @@ QString popupValueLabel(const QString &color) {
                    "  border-radius: %4px;"
                    "}")
         .arg(color)
-        .arg(Dimensions::PopupValueSize)
+        .arg(Dimensions::FontSizeReadout)
         .arg(Dimensions::BorderWidth)
         .arg(Dimensions::BorderRadius);
 }
 
 QString menuBarButton() {
-    return gradientButtonCss(Dimensions::PopupButtonSize, QStringLiteral("6px 12px"), true);
+    return gradientButtonCss(Dimensions::FontSizeBody, QStringLiteral("6px 12px"), true);
 }
 
 QString menuBarButtonActive() {
@@ -128,12 +128,11 @@ QString menuBarButtonActive() {
             font-weight: 600;
         }
     )")
-        .arg(Colors::TextWhite, Colors::InactiveGray, Colors::BorderSelected,
-             QString::number(Dimensions::PopupButtonSize));
+        .arg(Colors::White, Colors::TextOnLight, Colors::BorderSelected, QString::number(Dimensions::FontSizeBody));
 }
 
 QString menuBarButtonSmall() {
-    return gradientButtonCss(Dimensions::PopupValueSize, QString(), true);
+    return gradientButtonCss(Dimensions::FontSizeReadout, QString(), true);
 }
 
 QString menuBarButtonPttPressed() {
@@ -148,7 +147,18 @@ QString menuBarButtonPttPressed() {
             font-weight: 600;
         }
     )")
-        .arg(Colors::TxRed, Colors::TextWhite, QString::number(Dimensions::PopupButtonSize));
+        .arg(Colors::TxRed, Colors::TextPrimary, QString::number(Dimensions::FontSizeBody));
+}
+
+QColor withAlpha(const char *color, int alpha) {
+    QColor c(color);
+    c.setAlpha(alpha);
+    return c;
+}
+
+QString cssRgba(const char *color, int alpha) {
+    const QColor c(color);
+    return QString("rgba(%1, %2, %3, %4)").arg(c.red()).arg(c.green()).arg(c.blue()).arg(alpha);
 }
 
 void drawDropShadow(QPainter &painter, const QRect &contentRect, int cornerRadius) {
@@ -158,17 +168,14 @@ void drawDropShadow(QPainter &painter, const QRect &contentRect, int cornerRadiu
         int alpha = 12 + (Dimensions::ShadowLayers - i) * 3;
         QRect shadowRect = contentRect.adjusted(-blur, -blur, blur, blur);
         shadowRect.translate(Dimensions::ShadowOffsetX, Dimensions::ShadowOffsetY);
-        painter.setBrush(QColor(0, 0, 0, alpha));
+        painter.setBrush(withAlpha(Colors::Black, alpha));
         painter.drawRoundedRect(shadowRect, cornerRadius + blur / 2, cornerRadius + blur / 2);
     }
 }
 
 void drawHaloText(QPainter &painter, const QPointF &baseline, const QString &text, const QColor &color) {
-    // WHY 60% black, not opaque: a solid ring turns every glyph into a black blob at 10-12 px and
-    // hides the trace under the label; 60% keeps ≥ 4.5:1 for white text even over the brightest
-    // waterfall colour while the spectrum still shows through.
     painter.save();
-    painter.setPen(QColor(0, 0, 0, 153));
+    painter.setPen(withAlpha(Colors::Black, Colors::Alpha::Halo));
     for (int dx = -1; dx <= 1; ++dx) {
         for (int dy = -1; dy <= 1; ++dy) {
             if (dx != 0 || dy != 0)
@@ -278,11 +285,11 @@ QString checkboxButton(int size) {
         }
     )")
         .arg(QString::number(size), QString::number(size - 4), // Font size slightly smaller than box
-             normalGradientCss(), Colors::BorderNormal, hoverGradientCss(), Colors::BorderHover, Colors::TextWhite,
+             normalGradientCss(), Colors::BorderNormal, hoverGradientCss(), Colors::BorderHover, Colors::TextPrimary,
              gradientCss(Colors::DisabledGradientTop, Colors::DisabledGradientMid1, Colors::DisabledGradientMid2,
                          Colors::DisabledGradientBottom),
              Colors::BorderDisabled)
-        .arg(Colors::InactiveGray);
+        .arg(Colors::TextDisabled);
 }
 
 QString radioButton() {
@@ -307,8 +314,9 @@ QString radioButton() {
             border: 2px solid %9;
         }
     )")
-        .arg(normalGradientCss(), Colors::TextWhite, Colors::BorderNormal, QString::number(Dimensions::PopupButtonSize),
-             hoverGradientCss(), Colors::BorderHover, selectedGradientCss(), Colors::TextDark, Colors::BorderSelected);
+        .arg(normalGradientCss(), Colors::TextPrimary, Colors::BorderNormal, QString::number(Dimensions::FontSizeBody),
+             hoverGradientCss(), Colors::BorderHover, selectedGradientCss(), Colors::TextOnLight,
+             Colors::BorderSelected);
 }
 
 QString compactButton() {
@@ -336,13 +344,13 @@ QString compactButton() {
     )")
         .arg(gradientCss(Colors::GradientTop, Colors::GradientMid1, Colors::GradientMid2, Colors::GradientBottom))
         .arg(Colors::BorderNormal)
-        .arg(Colors::TextWhite)
-        .arg(Dimensions::FontSizeNormal)
+        .arg(Colors::TextPrimary)
+        .arg(Dimensions::FontSizeCaption)
         .arg(gradientCss(Colors::HoverTop, Colors::HoverMid1, Colors::HoverMid2, Colors::HoverBottom))
         .arg(gradientCssReversed(Colors::GradientTop, Colors::GradientMid1, Colors::GradientMid2,
                                  Colors::GradientBottom))
         .arg(gradientCss(Colors::SelectedTop, Colors::SelectedMid1, Colors::SelectedMid2, Colors::SelectedBottom))
-        .arg(Colors::TextDark)
+        .arg(Colors::TextOnLight)
         .arg(Colors::BorderSelected)
         .arg(Dimensions::SideCompactBorderWidth)
         .arg(Dimensions::SideCompactBorderRadius);
@@ -369,11 +377,11 @@ QString sidePanelButton() {
         }
     )")
         .arg(gradientCss(Colors::GradientTop, Colors::GradientMid1, Colors::GradientMid2, Colors::GradientBottom))
-        .arg(Colors::TextWhite)
+        .arg(Colors::TextPrimary)
         .arg(Dimensions::BorderWidth)
         .arg(Colors::BorderNormal)
         .arg(Dimensions::BorderRadius)
-        .arg(Dimensions::FontSizeNormal)
+        .arg(Dimensions::FontSizeCaption)
         .arg(gradientCss(Colors::HoverTop, Colors::HoverMid1, Colors::HoverMid2, Colors::HoverBottom))
         .arg(Colors::BorderHover)
         .arg(gradientCssReversed(Colors::GradientTop, Colors::GradientMid1, Colors::GradientMid2,
@@ -403,11 +411,11 @@ QString sidePanelButtonActive() {
         }
     )")
         .arg(gradientCss(Colors::HoverTop, Colors::HoverMid1, Colors::HoverMid2, Colors::HoverBottom))
-        .arg(Colors::TextWhite)
+        .arg(Colors::TextPrimary)
         .arg(Dimensions::BorderWidth)
         .arg(Colors::AccentAmber)
         .arg(Dimensions::BorderRadius)
-        .arg(Dimensions::FontSizeNormal)
+        .arg(Dimensions::FontSizeCaption)
         .arg(gradientCssReversed(Colors::HoverTop, Colors::HoverMid1, Colors::HoverMid2, Colors::HoverBottom));
 }
 
@@ -431,11 +439,11 @@ QString sidePanelButtonLight() {
     )")
         .arg(gradientCss(Colors::LightGradientTop, Colors::LightGradientMid1, Colors::LightGradientMid2,
                          Colors::LightGradientBottom))
-        .arg(Colors::TextWhite)
+        .arg(Colors::TextPrimary)
         .arg(Dimensions::BorderWidth)
         .arg(Colors::BorderPressed)
         .arg(Dimensions::BorderRadius)
-        .arg(Dimensions::FontSizeNormal)
+        .arg(Dimensions::FontSizeCaption)
         .arg(Colors::BorderSelected)
         .arg(gradientCssReversed(Colors::LightGradientTop, Colors::LightGradientMid1, Colors::LightGradientMid2,
                                  Colors::LightGradientBottom));
@@ -464,16 +472,16 @@ QString panelButtonWithDisabled() {
         }
     )")
         .arg(gradientCss(Colors::GradientTop, Colors::GradientMid1, Colors::GradientMid2, Colors::GradientBottom))
-        .arg(Colors::TextWhite)
+        .arg(Colors::TextPrimary)
         .arg(Dimensions::BorderWidth)
         .arg(Colors::BorderNormal)
         .arg(Dimensions::BorderRadius)
-        .arg(Dimensions::FontSizeNormal)
+        .arg(Dimensions::FontSizeCaption)
         .arg(gradientCss(Colors::HoverTop, Colors::HoverMid1, Colors::HoverMid2, Colors::HoverBottom))
         .arg(Colors::AccentAmber)
         .arg(gradientCssReversed(Colors::GradientTop, Colors::GradientMid1, Colors::GradientMid2,
                                  Colors::GradientBottom))
-        .arg(Colors::InactiveGray);
+        .arg(Colors::TextDisabled);
 }
 
 QString dialogButton() {
@@ -502,16 +510,16 @@ QString dialogButton() {
         }
     )")
         .arg(gradientCss(Colors::GradientTop, Colors::GradientMid1, Colors::GradientMid2, Colors::GradientBottom))
-        .arg(Colors::TextWhite)
+        .arg(Colors::TextPrimary)
         .arg(Colors::BorderNormal)
-        .arg(Dimensions::PopupButtonSize)
+        .arg(Dimensions::FontSizeBody)
         .arg(gradientCss(Colors::HoverTop, Colors::HoverMid1, Colors::HoverMid2, Colors::HoverBottom))
         .arg(Colors::BorderHover)
         .arg(gradientCssReversed(Colors::GradientTop, Colors::GradientMid1, Colors::GradientMid2,
                                  Colors::GradientBottom))
         .arg(Colors::BorderPressed)
         .arg(gradientCss(Colors::GradientMid1, Colors::GradientMid1, Colors::GradientBottom, Colors::GradientBottom))
-        .arg(Colors::TextGray)
+        .arg(Colors::TextDisabled)
         .arg(Colors::DialogBorder);
 }
 
@@ -535,9 +543,9 @@ QString controlButton(bool selected) {
             }
         )")
             .arg(gradientCss(Colors::SelectedTop, Colors::SelectedMid1, Colors::SelectedMid2, Colors::SelectedBottom))
-            .arg(Colors::TextDark)
+            .arg(Colors::TextOnLight)
             .arg(Colors::BorderSelected)
-            .arg(Dimensions::FontSizeNormal)
+            .arg(Dimensions::FontSizeCaption)
             .arg(Colors::BorderHover)
             .arg(gradientCssReversed(Colors::SelectedTop, Colors::SelectedMid1, Colors::SelectedMid2,
                                      Colors::SelectedBottom));
@@ -566,15 +574,15 @@ QString controlButton(bool selected) {
             }
         )")
             .arg(gradientCss(Colors::GradientTop, Colors::GradientMid1, Colors::GradientMid2, Colors::GradientBottom))
-            .arg(Colors::TextWhite)
+            .arg(Colors::TextPrimary)
             .arg(Colors::BorderNormal)
-            .arg(Dimensions::FontSizeNormal)
+            .arg(Dimensions::FontSizeCaption)
             .arg(gradientCss(Colors::HoverTop, Colors::HoverMid1, Colors::HoverMid2, Colors::HoverBottom))
             .arg(Colors::BorderHover)
             .arg(gradientCssReversed(Colors::GradientTop, Colors::GradientMid1, Colors::GradientMid2,
                                      Colors::GradientBottom))
             .arg(Colors::DisabledBackground)
-            .arg(Colors::InactiveGray);
+            .arg(Colors::TextDisabled);
     }
 }
 
@@ -624,31 +632,34 @@ const QString &separator() {
 const QString &titleLabel() {
     static const QString s = QString("color: %1; font-size: %2px; font-weight: bold;")
                                  .arg(Colors::AccentAmber)
-                                 .arg(Dimensions::FontSizeTitle);
+                                 .arg(Dimensions::FontSizeIndicator);
     return s;
 }
 
 const QString &formLabel() {
     static const QString s =
-        QString("color: %1; font-size: %2px;").arg(Colors::TextGray).arg(Dimensions::FontSizePopup);
+        QString("color: %1; font-size: %2px;").arg(Colors::TextSecondary).arg(Dimensions::FontSizeHeading);
     return s;
 }
 
 const QString &formValue() {
-    static const QString s =
-        QString("color: %1; font-size: %2px; font-weight: bold;").arg(Colors::TextWhite).arg(Dimensions::FontSizePopup);
+    static const QString s = QString("color: %1; font-size: %2px; font-weight: bold;")
+                                 .arg(Colors::TextPrimary)
+                                 .arg(Dimensions::FontSizeHeading);
     return s;
 }
 
 const QString &helpText() {
-    static const QString s =
-        QString("color: %1; font-size: %2px; font-style: italic;").arg(Colors::TextGray).arg(Dimensions::FontSizeLarge);
+    static const QString s = QString("color: %1; font-size: %2px; font-style: italic;")
+                                 .arg(Colors::TextSecondary)
+                                 .arg(Dimensions::FontSizeBody);
     return s;
 }
 
 const QString &sectionHeader() {
-    static const QString s =
-        QString("color: %1; font-size: %2px; font-weight: bold;").arg(Colors::TextWhite).arg(Dimensions::FontSizePopup);
+    static const QString s = QString("color: %1; font-size: %2px; font-weight: bold;")
+                                 .arg(Colors::TextPrimary)
+                                 .arg(Dimensions::FontSizeHeading);
     return s;
 }
 
@@ -657,7 +668,7 @@ const QString &statusLabel(const QString &color) {
     // main thread (verified by grep across ui/pages/*.cpp); the static scratch
     // buffer doesn't need thread_local.
     static QString s;
-    s = QString("color: %1; font-size: %2px; font-weight: bold;").arg(color).arg(Dimensions::FontSizePopup);
+    s = QString("color: %1; font-size: %2px; font-weight: bold;").arg(color).arg(Dimensions::FontSizeHeading);
     return s;
 }
 
@@ -677,8 +688,8 @@ const QString &comboBox() {
                 "QComboBox::drop-down { border: none; width: 20px; }"
                 "QComboBox::down-arrow { image: url(:/icons/arrow-down.svg); width: 10px; height: 6px; }"
                 "QComboBox QAbstractItemView { background-color: %1; color: %2; selection-background-color: %4; }")
-            .arg(Colors::DarkBackground, Colors::TextWhite, Colors::DialogBorder, Colors::AccentAmber)
-            .arg(Dimensions::FontSizePopup)
+            .arg(Colors::DarkBackground, Colors::TextPrimary, Colors::DialogBorder, Colors::AccentAmber)
+            .arg(Dimensions::FontSizeHeading)
             .arg(Dimensions::PaddingSmall)
             .arg(Dimensions::SliderBorderRadius);
     return s;
@@ -689,8 +700,8 @@ const QString &lineEdit() {
         QString("QLineEdit { background-color: %1; color: %2; border: 1px solid %3; "
                 "           padding: %6px; font-size: %5px; border-radius: %7px; }"
                 "QLineEdit:focus { border-color: %4; }")
-            .arg(Colors::DarkBackground, Colors::TextWhite, Colors::DialogBorder, Colors::AccentAmber)
-            .arg(Dimensions::FontSizePopup)
+            .arg(Colors::DarkBackground, Colors::TextPrimary, Colors::DialogBorder, Colors::AccentAmber)
+            .arg(Dimensions::FontSizeHeading)
             .arg(Dimensions::PaddingSmall)
             .arg(Dimensions::SliderBorderRadius);
     return s;
@@ -711,8 +722,8 @@ const QString &spinBox() {
                 "QSpinBox::down-button { subcontrol-position: bottom right; }"
                 "QSpinBox::up-arrow { image: url(:/icons/arrow-up.svg); width: 10px; height: 6px; }"
                 "QSpinBox::down-arrow { image: url(:/icons/arrow-down.svg); width: 10px; height: 6px; }")
-            .arg(Colors::DarkBackground, Colors::TextWhite, Colors::DialogBorder, Colors::AccentAmber)
-            .arg(Dimensions::FontSizePopup)
+            .arg(Colors::DarkBackground, Colors::TextPrimary, Colors::DialogBorder, Colors::AccentAmber)
+            .arg(Dimensions::FontSizeHeading)
             .arg(Dimensions::PaddingSmall)
             .arg(Dimensions::SliderBorderRadius);
     return s;
@@ -730,17 +741,17 @@ const QString &checkBox() {
                                      "QCheckBox::indicator:checked { background-color: %7;"
                                      "  border-color: %7; }"
                                      "QCheckBox::indicator:hover { border-color: %7; }")
-                                 .arg(Colors::TextWhite)
-                                 .arg(Dimensions::FontSizePopup)
+                                 .arg(Colors::TextPrimary)
+                                 .arg(Dimensions::FontSizeHeading)
                                  .arg(Dimensions::BorderRadiusLarge)
                                  .arg(Dimensions::CheckboxSize)
-                                 .arg(Colors::TextGray, Colors::DarkBackground, Colors::AccentAmber);
+                                 .arg(Colors::TextSecondary, Colors::DarkBackground, Colors::AccentAmber);
     return s;
 }
 
 const QString &checkBoxDisabled() {
     // Same indicator problem as checkBox(), and the same fix - but deliberately NOT the same
-    // colours. A disabled control still has to READ as disabled, so the outline is InactiveGray
+    // colours. A disabled control still has to READ as disabled, so the outline is MutedGraphic
     // rather than text grey, a checked box fills with DisabledBackground rather than amber, and
     // there is no hover rule at all. The operator can see what it is set to and see that they
     // cannot change it. Note this is NOT the dialog border grey: at #333 on a #0d0d0d dialog it
@@ -751,11 +762,11 @@ const QString &checkBoxDisabled() {
                                      "  background-color: %6; }"
                                      "QCheckBox::indicator:checked { background-color: %7;"
                                      "  border-color: %7; }")
-                                 .arg(Colors::TextGray)
-                                 .arg(Dimensions::FontSizePopup)
+                                 .arg(Colors::TextSecondary)
+                                 .arg(Dimensions::FontSizeHeading)
                                  .arg(Dimensions::BorderRadiusLarge)
                                  .arg(Dimensions::CheckboxSize)
-                                 .arg(Colors::InactiveGray, Colors::DarkBackground, Colors::DisabledBackground);
+                                 .arg(Colors::MutedGraphic, Colors::DarkBackground, Colors::DisabledBackground);
     return s;
 }
 
@@ -763,8 +774,8 @@ const QString &actionButton() {
     static const QString s = QString("QPushButton { background-color: %1; color: %2; border: 1px solid %3; "
                                      "             padding: 10px 20px; font-size: %4px; border-radius: 4px; }"
                                      "QPushButton:hover { background-color: %5; }")
-                                 .arg(Colors::DarkBackground, Colors::TextWhite, Colors::DialogBorder)
-                                 .arg(Dimensions::FontSizePopup)
+                                 .arg(Colors::DarkBackground, Colors::TextPrimary, Colors::DialogBorder)
+                                 .arg(Dimensions::FontSizeHeading)
                                  .arg(Colors::GradientBottom);
     return s;
 }
@@ -773,8 +784,8 @@ const QString &actionButtonSmall() {
     static const QString s = QString("QPushButton { background-color: %1; color: %2; border: 1px solid %3; "
                                      "             padding: %6px 12px; font-size: %4px; border-radius: %7px; }"
                                      "QPushButton:hover { background-color: %5; }")
-                                 .arg(Colors::DarkBackground, Colors::TextWhite, Colors::DialogBorder)
-                                 .arg(Dimensions::FontSizePopup)
+                                 .arg(Colors::DarkBackground, Colors::TextPrimary, Colors::DialogBorder)
+                                 .arg(Dimensions::FontSizeHeading)
                                  .arg(Colors::GradientBottom)
                                  .arg(Dimensions::PaddingSmall)
                                  .arg(Dimensions::SliderBorderRadius);

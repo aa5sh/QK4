@@ -66,7 +66,7 @@ void FeatureMenuBar::setupUi() {
     m_valueLabel->setFixedHeight(K4Styles::Dimensions::ButtonHeightMedium);
     m_valueLabel->setMinimumWidth(80);
     m_valueLabel->setFocusPolicy(Qt::NoFocus);
-    m_valueLabel->setStyleSheet(K4Styles::popupValueLabel(K4Styles::Colors::TextWhite));
+    m_valueLabel->setStyleSheet(K4Styles::popupValueLabel(K4Styles::Colors::TextPrimary));
 
     // Decrement button
     m_decrementBtn = new QPushButton("-", this);

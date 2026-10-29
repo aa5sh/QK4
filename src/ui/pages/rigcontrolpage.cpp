@@ -24,8 +24,8 @@ RigControlPage::RigControlPage(CatServer *catServer, QWidget *parent) : QWidget(
                                  "to connect using their native Elecraft K4 support. No protocol translation needed.",
                                  this);
     descLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                 .arg(K4Styles::Colors::TextGray)
-                                 .arg(K4Styles::Dimensions::FontSizeButton));
+                                 .arg(K4Styles::Colors::TextSecondary)
+                                 .arg(K4Styles::Dimensions::FontSizeReadout));
     descLabel->setWordWrap(true);
     layout->addWidget(descLabel);
 
@@ -43,7 +43,7 @@ RigControlPage::RigControlPage(CatServer *catServer, QWidget *parent) : QWidget(
     statusTitleLabel->setFixedWidth(K4Styles::Dimensions::FormLabelWidth);
 
     m_catServerStatusLabel = new QLabel("Not running", this);
-    m_catServerStatusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::ErrorRed));
+    m_catServerStatusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::TextRed));
 
     statusLayout->addWidget(statusTitleLabel);
     statusLayout->addWidget(m_catServerStatusLabel);
@@ -58,8 +58,8 @@ RigControlPage::RigControlPage(CatServer *catServer, QWidget *parent) : QWidget(
 
     m_catServerClientsLabel = new QLabel("0 connected", this);
     m_catServerClientsLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                               .arg(K4Styles::Colors::TextWhite)
-                                               .arg(K4Styles::Dimensions::FontSizePopup));
+                                               .arg(K4Styles::Colors::TextPrimary)
+                                               .arg(K4Styles::Dimensions::FontSizeHeading));
 
     clientsLayout->addWidget(clientsTitleLabel);
     clientsLayout->addWidget(m_catServerClientsLabel);
@@ -92,8 +92,8 @@ RigControlPage::RigControlPage(CatServer *catServer, QWidget *parent) : QWidget(
 
     auto *portHint = new QLabel("(default: 9299)", this);
     portHint->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                .arg(K4Styles::Colors::TextGray)
-                                .arg(K4Styles::Dimensions::FontSizeLarge));
+                                .arg(K4Styles::Colors::TextSecondary)
+                                .arg(K4Styles::Dimensions::FontSizeBody));
 
     portLayout->addWidget(portLabel);
     portLayout->addWidget(m_catServerPortEdit);
@@ -167,7 +167,7 @@ void RigControlPage::updateCatServerStatus() {
         m_catServerStatusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::StatusGreen));
     } else {
         m_catServerStatusLabel->setText("Not running");
-        m_catServerStatusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::ErrorRed));
+        m_catServerStatusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::TextRed));
     }
 
     int clientCount = m_catServer ? m_catServer->clientCount() : 0;

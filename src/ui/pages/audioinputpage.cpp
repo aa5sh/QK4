@@ -55,14 +55,14 @@ AudioInputPage::AudioInputPage(AudioController *audioController, QWidget *parent
     m_micGainSlider->setRange(0, 100);
     m_micGainSlider->setValue(RadioSettings::instance()->micGain());
     m_micGainSlider->setStyleSheet(
-        K4Styles::sliderHorizontal(K4Styles::Colors::TextDark, K4Styles::Colors::AccentAmber));
+        K4Styles::sliderHorizontal(K4Styles::Colors::DialogBorder, K4Styles::Colors::AccentAmber));
     connect(m_micGainSlider, &QSlider::valueChanged, this, &AudioInputPage::onMicGainChanged);
     gainLayout->addWidget(m_micGainSlider, 1);
 
     m_micGainValueLabel = new QLabel(QString("%1%").arg(m_micGainSlider->value()), this);
     m_micGainValueLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                           .arg(K4Styles::Colors::TextWhite)
-                                           .arg(K4Styles::Dimensions::FontSizePopup));
+                                           .arg(K4Styles::Colors::TextPrimary)
+                                           .arg(K4Styles::Dimensions::FontSizeHeading));
     m_micGainValueLabel->setFixedWidth(K4Styles::Dimensions::SliderValueLabelWidth);
     m_micGainValueLabel->setAlignment(Qt::AlignRight);
     gainLayout->addWidget(m_micGainValueLabel);

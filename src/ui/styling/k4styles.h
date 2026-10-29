@@ -38,7 +38,7 @@ QString popupButtonNormal();
 QString popupButtonSelected();
 
 /// Read-only value readout in a compact popup row: a QPushButton with no background or visible border
-/// (so its text lines up with the neighbouring buttons), PopupValueSize semibold text in `color`.
+/// (so its text lines up with the neighbouring buttons), FontSizeReadout semibold text in `color`.
 QString popupValueLabel(const QString &color);
 
 // =============================================================================
@@ -204,6 +204,13 @@ QFont dataFont(int pixelSize, QFont::Weight weight = QFont::Bold);
 // Utility Functions
 // =============================================================================
 
+/// A colour token at the given Colors::Alpha:: opacity (0-255), for QPainter.
+QColor withAlpha(const char *color, int alpha);
+
+/// The same, as a style-sheet `rgba(r, g, b, a)` value. Qt style sheets document `#rrggbb` and
+/// `rgba()` with 0-255 or percentage components; they do not document `#aarrggbb` or a 0-1 alpha.
+QString cssRgba(const char *color, int alpha);
+
 /**
  * @brief Draw a soft drop shadow behind popup content.
  *
@@ -285,22 +292,22 @@ const QString &pageBackground();
 /// Horizontal/vertical separator line
 const QString &separator();
 
-/// Amber bold title label (AccentAmber, FontSizeTitle)
+/// Amber bold title label (AccentAmber, FontSizeIndicator)
 const QString &titleLabel();
 
-/// Gray form label (TextGray, FontSizePopup)
+/// Gray form label (TextSecondary, FontSizeHeading)
 const QString &formLabel();
 
-/// White bold value label (TextWhite, FontSizePopup)
+/// White bold value label (TextPrimary, FontSizeHeading)
 const QString &formValue();
 
-/// Gray italic help text (TextGray, FontSizeLarge)
+/// Gray italic help text (TextSecondary, FontSizeBody)
 const QString &helpText();
 
-/// White bold section header (TextWhite, FontSizePopup)
+/// White bold section header (TextPrimary, FontSizeHeading)
 const QString &sectionHeader();
 
-/// Dynamic-color status label (bold, FontSizePopup)
+/// Dynamic-color status label (bold, FontSizeHeading)
 const QString &statusLabel(const QString &color);
 
 /// Generic `color: <c>; font-size: <n>px;` label style. Builds a fresh QString each call (dynamic

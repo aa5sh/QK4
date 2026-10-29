@@ -185,16 +185,18 @@ Optional body with detail — each line becomes a sub-bullet in the release note
 
 ## Styling
 
-**Source of truth:** `src/ui/k4styles.h`. Every color, font, dimension, and stylesheet helper is declared there.
+**Source of truth:** `src/ui/styling/k4constants.h` (colours, alphas, dimensions, the type scale) and `src/ui/styling/k4styles.h` (fonts and stylesheet helpers).
 
 Reference tables (colors, fonts, dimensions, helpers, `Dialog::` namespace): `docs/K4STYLES_REFERENCE.md`.
 
 Rules for new widget code:
-- Use `setPixelSize()` with `K4Styles::Dimensions::FontSize*` constants — never `setPointSize()` (macOS 72 PPI vs Windows 96 PPI divergence).
-- Use `K4Styles::Colors::*` constants — never hardcoded hex strings.
+- Use `setPixelSize()` with one of the six type roles — `FontSizeCaption` 10, `Body` 11, `Readout` 12, `Heading` 14, `Indicator` 18, `Display` 32 — never `setPointSize()` (macOS 72 PPI vs Windows 96 PPI divergence). The older `FontSize*` / `Popup*Size` names are aliases being migrated.
+- Use the colour tokens: `TextPrimary`, `TextSecondary` (informative grey), `TextSecondaryOnRaised` (grey on buttons), `TextDisabled` (disabled controls only), `TextOnLight`, `TextOnAccent`, `TextRed` (`TxRed` is fill-only), surfaces and borders from `K4Styles::Colors::*`. Translucency is `K4Styles::withAlpha()` / `cssRgba()` with a `Colors::Alpha::*` — never a hex string, `QColor(r, g, b[, a])`, `Qt::white`, or a style-sheet `rgba()` literal. A new text/background pair goes into `test_tokenstandard`'s contrast list.
 - For custom-painted widgets, use `K4Styles::Fonts::paintFont()` / `dataFont()` instead of constructing `QFont` directly.
 - For inline stylesheet construction, prefer `K4Styles::Dialog::labelText(color, size)` over `QString("color: %1; font-size: %2px;").arg(...)`.
 - **Never leave a form control to the operating system's theme.** `main()` installs `K4Styles::applicationStyleSheet()` app-wide, so a checkbox, combo box, line edit or spin box with no stylesheet of its own still gets the K4 look. Give each control its `Dialog::` helper anyway — the fallback is the safety net, not the design. A **new** form-control type (a `QRadioButton`, a `QDoubleSpinBox`) needs a rule in `applicationStyleSheet()` first; `test_formcontroltheme` fails until it has one. Why: Windows 11 in dark mode draws unstyled controls dark-on-dark, and no other platform does, so it cannot be caught by eye on a Mac.
+
+`test_tokenstandard` enforces the last two rules over `src/` and checks every text/background pair for 4.5:1.
 
 **Adding a popup menu** follows a fixed recipe — see `PATTERNS.md` → "Adding a Popup Menu".
 

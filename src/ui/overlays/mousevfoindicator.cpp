@@ -54,7 +54,7 @@ void MouseVfoIndicator::paintEvent(QPaintEvent *) {
     p.drawRoundedRect(QRectF(blobX, blobY, blobW, blobH), 1, 1);
 
     // VFO letter below mouse
-    QFont font = K4Styles::Fonts::paintFont(K4Styles::Dimensions::FontSizePopup);
+    QFont font = K4Styles::Fonts::paintFont(K4Styles::Dimensions::FontSizeHeading);
     p.setFont(font);
     p.setPen(vfoColor);
     QRectF textRect(0, mouseY + mouseH, width(), height() - mouseY - mouseH - 1);

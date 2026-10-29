@@ -61,7 +61,7 @@ void setupFonts() {
     // Set Inter Medium as the default application font (crisper than Regular)
     // Use setPixelSize() for consistent sizing across macOS (72 PPI) and Windows (96 PPI)
     QFont defaultFont(K4Styles::Fonts::Primary);
-    defaultFont.setPixelSize(K4Styles::Dimensions::FontSizeLarge);
+    defaultFont.setPixelSize(K4Styles::Dimensions::FontSizeBody);
     defaultFont.setWeight(QFont::Medium);
     defaultFont.setHintingPreference(QFont::PreferFullHinting);
     defaultFont.setStyleStrategy(QFont::PreferAntialias);

@@ -16,16 +16,16 @@ namespace D = K4Styles::Dimensions;
 constexpr int kPad = D::SidePanelMarginH;
 
 QFont headerFont() {
-    return K4Styles::Fonts::paintFont(D::FontSizeMedium, QFont::Bold);
+    return K4Styles::Fonts::paintFont(D::FontSizeCaption, QFont::Bold);
 }
 QFont labelFont() {
-    return K4Styles::Fonts::paintFont(D::FontSizeSmall, QFont::Medium);
+    return K4Styles::Fonts::paintFont(D::FontSizeCaption, QFont::Medium);
 }
 QFont valueFont() {
-    return K4Styles::Fonts::paintFont(D::FontSizeNormal, QFont::Bold);
+    return K4Styles::Fonts::paintFont(D::FontSizeCaption, QFont::Bold);
 }
 QFont lcdFont() {
-    return K4Styles::Fonts::dataFont(D::FontSizeSmall, QFont::Medium);
+    return K4Styles::Fonts::dataFont(D::FontSizeCaption, QFont::Medium);
 }
 
 const char *const kMeterLabels[] = {"FWD", "SWR", "REF", "TMP"};
@@ -242,13 +242,11 @@ void Kpa1500MiniPanel::paintEvent(QPaintEvent *) {
     if (m_connected) {
         // Alpha-channel overlays for the mini-panel connected-state look. Base color (white or
         // black) is semantic only — the alpha is the actual value. Not palette entries.
-        constexpr int kPanelTintAlpha = 18;   // Subtle light fill over dark theme
-        constexpr int kPanelBorderAlpha = 35; // Thin panel border
         p.setPen(Qt::NoPen);
-        p.setBrush(QColor(255, 255, 255, kPanelTintAlpha));
+        p.setBrush(K4Styles::withAlpha(K4Styles::Colors::White, K4Styles::Colors::Alpha::CardTint));
         p.drawRoundedRect(0, 0, w, h, D::BorderRadius, D::BorderRadius);
 
-        p.setPen(QColor(255, 255, 255, kPanelBorderAlpha));
+        p.setPen(K4Styles::withAlpha(K4Styles::Colors::White, K4Styles::Colors::Alpha::CardBorder));
         p.setBrush(Qt::NoBrush);
         p.drawRoundedRect(0, 0, w - 1, h - 1, D::BorderRadius, D::BorderRadius);
     }
@@ -262,7 +260,7 @@ void Kpa1500MiniPanel::paintEvent(QPaintEvent *) {
     p.setPen(QColor(K4Styles::Colors::AccentAmber));
     p.drawText(cx, m_geom.headerY, cw, m_geom.headerHeight, Qt::AlignCenter, "KPA1500");
 
-    p.setPen(QColor(K4Styles::Colors::InactiveGray));
+    p.setPen(QColor(K4Styles::Colors::MutedGraphic));
     p.drawLine(cx, m_geom.ruleY, cx + cw, m_geom.ruleY);
 
     // --- Meters ---
@@ -294,10 +292,10 @@ void Kpa1500MiniPanel::paintEvent(QPaintEvent *) {
         const int y = lineY + (m_geom.meterLineHeight - BAR_HEIGHT) / 2;
         const auto &m = meters[i];
 
-        // WHY TextGray: 5.0:1 on the card (Background under its white tint), over the 4.5:1 small
+        // WHY TextSecondary: 5.0:1 on the card (Background under its white tint), over the 4.5:1 small
         // text needs.
         p.setFont(labelFont());
-        p.setPen(QColor(K4Styles::Colors::TextGray));
+        p.setPen(QColor(K4Styles::Colors::TextSecondary));
         p.drawText(cx, lineY, m_geom.labelWidth, m_geom.meterLineHeight, Qt::AlignLeft | Qt::AlignVCenter, m.label);
 
         // Track background
@@ -320,13 +318,13 @@ void Kpa1500MiniPanel::paintEvent(QPaintEvent *) {
         if (m.hasPeak && peakRatio > ratio + 0.01f) {
             int peakX = barX + 1 + static_cast<int>(peakRatio * (barW - 2));
             peakX = qBound(barX + 1, peakX, barX + barW - 2);
-            p.setPen(QColor(K4Styles::Colors::TextWhite));
+            p.setPen(QColor(K4Styles::Colors::TextPrimary));
             p.drawLine(peakX, y + 1, peakX, y + BAR_HEIGHT - 2);
         }
 
         // Value text (right-aligned within content area)
         p.setFont(valueFont());
-        p.setPen(QColor(K4Styles::Colors::TextWhite));
+        p.setPen(QColor(K4Styles::Colors::TextPrimary));
         QString valStr;
         if (i == 0)
             valStr = QString("%1W").arg(qRound(m_displayForward));
@@ -347,10 +345,8 @@ void Kpa1500MiniPanel::paintEvent(QPaintEvent *) {
         const int rowH = m_geom.lcdRowHeight;
 
         // Alpha-channel overlays matching the panel's card style. Alpha, not palette.
-        constexpr int kLcdBorderAlpha = 20; // White border at low alpha
-        constexpr int kLcdShadeAlpha = 40;  // Black shade fill
-        p.setPen(QColor(255, 255, 255, kLcdBorderAlpha));
-        p.setBrush(QColor(0, 0, 0, kLcdShadeAlpha));
+        p.setPen(K4Styles::withAlpha(K4Styles::Colors::White, K4Styles::Colors::Alpha::LcdBorder));
+        p.setBrush(K4Styles::withAlpha(K4Styles::Colors::Black, K4Styles::Colors::Alpha::LcdShade));
         p.drawRoundedRect(cx, lcdY, cw, lcdH, D::SideCompactBorderRadius, D::SideCompactBorderRadius);
 
         p.setFont(lcdFont());
@@ -375,7 +371,7 @@ void Kpa1500MiniPanel::paintEvent(QPaintEvent *) {
         p.setPen(stateColor);
         p.drawText(textX, line1Y, textW, rowH, Qt::AlignLeft | Qt::AlignVCenter, state);
 
-        p.setPen(QColor(K4Styles::Colors::TextWhite));
+        p.setPen(QColor(K4Styles::Colors::TextPrimary));
         p.drawText(textX, line1Y, textW, rowH, Qt::AlignHCenter | Qt::AlignVCenter,
                    Kpa1500Antennas::label(m_antenna, m_antennaConnector));
         p.drawText(textX, line1Y, textW, rowH, Qt::AlignRight | Qt::AlignVCenter, m_band);

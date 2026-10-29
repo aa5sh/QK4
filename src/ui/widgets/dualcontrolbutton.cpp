@@ -113,15 +113,15 @@ void DualControlButton::paintEvent(QPaintEvent *event) {
 
     // Text setup
     QFont labelFont = font();
-    labelFont.setPixelSize(K4Styles::Dimensions::FontSizeLarge);
+    labelFont.setPixelSize(K4Styles::Dimensions::FontSizeBody);
     labelFont.setBold(true);
 
     QFont valueFont = font();
-    valueFont.setPixelSize(K4Styles::Dimensions::FontSizeButton);
+    valueFont.setPixelSize(K4Styles::Dimensions::FontSizeReadout);
     valueFont.setBold(true);
 
     QFont altFont = font();
-    altFont.setPixelSize(K4Styles::Dimensions::FontSizeNormal);
+    altFont.setPixelSize(K4Styles::Dimensions::FontSizeCaption);
 
     int textLeft = buttonLeft + 6;
     int textRight = w - 6;
@@ -143,7 +143,7 @@ void DualControlButton::paintEvent(QPaintEvent *event) {
 
     // Primary label (left side, white) - e.g., "WPM"
     painter.setFont(labelFont);
-    painter.setPen(QColor(K4Styles::Colors::TextWhite));
+    painter.setPen(QColor(K4Styles::Colors::TextPrimary));
     painter.drawText(textLeft, primaryBaseline, m_primaryLabel);
 
     // Primary value (right side, white) - e.g., "15"

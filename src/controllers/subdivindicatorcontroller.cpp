@@ -15,7 +15,7 @@ namespace {
 QString badgeStyle(const char *background, const char *color) {
     return QString("background-color: %1; color: %2; font-size: %3px; font-weight: bold; border-radius: 2px;")
         .arg(background, color)
-        .arg(K4Styles::Dimensions::FontSizeNormal);
+        .arg(K4Styles::Dimensions::FontSizeCaption);
 }
 
 } // namespace
@@ -53,22 +53,22 @@ void SubDivIndicatorController::onDiversityChanged(bool enabled) {
 }
 
 void SubDivIndicatorController::setSubLabelActive(bool active) {
-    m_subLabel->setStyleSheet(
-        active ? badgeStyle(K4Styles::Colors::StatusGreen, "black")
-               : badgeStyle(K4Styles::Colors::DisabledBackground, K4Styles::Colors::LightGradientTop));
+    m_subLabel->setStyleSheet(active
+                                  ? badgeStyle(K4Styles::Colors::StatusGreen, K4Styles::Colors::TextOnAccent)
+                                  : badgeStyle(K4Styles::Colors::DisabledBackground, K4Styles::Colors::TextSecondary));
 }
 
 void SubDivIndicatorController::setDivLabelActive(bool active) {
-    m_divLabel->setStyleSheet(
-        active ? badgeStyle(K4Styles::Colors::StatusGreen, "black")
-               : badgeStyle(K4Styles::Colors::DisabledBackground, K4Styles::Colors::LightGradientTop));
+    m_divLabel->setStyleSheet(active
+                                  ? badgeStyle(K4Styles::Colors::StatusGreen, K4Styles::Colors::TextOnAccent)
+                                  : badgeStyle(K4Styles::Colors::DisabledBackground, K4Styles::Colors::TextSecondary));
 }
 
 void SubDivIndicatorController::setVfoBDimmed(bool dimmed) {
-    const char *color = dimmed ? K4Styles::Colors::InactiveGray : K4Styles::Colors::TextWhite;
+    const char *color = dimmed ? K4Styles::Colors::TextSecondary : K4Styles::Colors::TextPrimary;
     m_vfoB->frequencyDisplay()->setNormalColor(QColor(color));
     m_modeBLabel->setStyleSheet(
-        QString("color: %1; font-size: %2px; font-weight: bold;").arg(color).arg(K4Styles::Dimensions::FontSizeLarge));
+        QString("color: %1; font-size: %2px; font-weight: bold;").arg(color).arg(K4Styles::Dimensions::FontSizeBody));
 }
 
 void SubDivIndicatorController::reset() {

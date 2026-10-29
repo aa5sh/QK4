@@ -104,7 +104,7 @@ AboutPage::AboutPage(RadioState *radioState, QWidget *parent) : QWidget(parent),
     auto *optionsTitle = new QLabel("Installed Options", rightWidget);
     optionsTitle->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
                                     .arg(K4Styles::Colors::AccentAmber)
-                                    .arg(K4Styles::Dimensions::FontSizePopup));
+                                    .arg(K4Styles::Dimensions::FontSizeHeading));
     rightColumn->addWidget(optionsTitle);
 
     m_optionsWidget = new QWidget(rightWidget);
@@ -127,7 +127,7 @@ AboutPage::AboutPage(RadioState *radioState, QWidget *parent) : QWidget(parent),
     auto *versionsTitle = new QLabel("Software Versions", this);
     versionsTitle->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
                                      .arg(K4Styles::Colors::AccentAmber)
-                                     .arg(K4Styles::Dimensions::FontSizePopup));
+                                     .arg(K4Styles::Dimensions::FontSizeHeading));
     layout->addWidget(versionsTitle);
 
     auto *line2 = new QFrame(this);
@@ -163,23 +163,23 @@ void AboutPage::refresh() {
         if (options.isEmpty()) {
             auto *label = new QLabel("No additional options", m_optionsWidget);
             label->setStyleSheet(QString("color: %1; font-size: %2px; font-style: italic;")
-                                     .arg(K4Styles::Colors::TextGray)
-                                     .arg(K4Styles::Dimensions::FontSizeButton));
+                                     .arg(K4Styles::Colors::TextSecondary)
+                                     .arg(K4Styles::Dimensions::FontSizeReadout));
             optLayout->addWidget(label);
         } else {
             for (const QString &opt : options) {
                 auto *label = new QLabel(QString::fromUtf8("\u2022 ") + opt, m_optionsWidget);
                 label->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                         .arg(K4Styles::Colors::TextWhite)
-                                         .arg(K4Styles::Dimensions::FontSizeButton));
+                                         .arg(K4Styles::Colors::TextPrimary)
+                                         .arg(K4Styles::Dimensions::FontSizeReadout));
                 optLayout->addWidget(label);
             }
         }
     } else {
         auto *label = new QLabel("Not connected", m_optionsWidget);
         label->setStyleSheet(QString("color: %1; font-size: %2px; font-style: italic;")
-                                 .arg(K4Styles::Colors::TextGray)
-                                 .arg(K4Styles::Dimensions::FontSizeButton));
+                                 .arg(K4Styles::Colors::TextSecondary)
+                                 .arg(K4Styles::Dimensions::FontSizeReadout));
         optLayout->addWidget(label);
     }
 
@@ -201,13 +201,13 @@ void AboutPage::refresh() {
             rowLayout->setContentsMargins(0, 0, 0, 0);
             auto *nameLabel = new QLabel(componentNames.value(it.key(), it.key()) + ":", row);
             nameLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                         .arg(K4Styles::Colors::TextGray)
-                                         .arg(K4Styles::Dimensions::FontSizeButton));
+                                         .arg(K4Styles::Colors::TextSecondary)
+                                         .arg(K4Styles::Dimensions::FontSizeReadout));
             nameLabel->setFixedWidth(K4Styles::Dimensions::InputFieldWidthMedium);
             auto *valueLabel = new QLabel(it.value(), row);
             valueLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                          .arg(K4Styles::Colors::TextWhite)
-                                          .arg(K4Styles::Dimensions::FontSizeButton));
+                                          .arg(K4Styles::Colors::TextPrimary)
+                                          .arg(K4Styles::Dimensions::FontSizeReadout));
             rowLayout->addWidget(nameLabel);
             rowLayout->addWidget(valueLabel);
             rowLayout->addStretch();
@@ -216,8 +216,8 @@ void AboutPage::refresh() {
     } else {
         auto *label = new QLabel("Connect to a radio to view version information", m_versionsWidget);
         label->setStyleSheet(QString("color: %1; font-size: %2px; font-style: italic;")
-                                 .arg(K4Styles::Colors::TextGray)
-                                 .arg(K4Styles::Dimensions::FontSizeButton));
+                                 .arg(K4Styles::Colors::TextSecondary)
+                                 .arg(K4Styles::Dimensions::FontSizeReadout));
         verLayout->addWidget(label);
     }
 }

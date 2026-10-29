@@ -8,11 +8,11 @@
 #include <QFontMetrics>
 
 FrequencyDisplayWidget::FrequencyDisplayWidget(QWidget *parent)
-    : QWidget(parent), m_digits(QString(kDigits, '0')), m_normalColor(K4Styles::Colors::TextWhite),
+    : QWidget(parent), m_digits(QString(kDigits, '0')), m_normalColor(K4Styles::Colors::TextPrimary),
       m_editColor(K4Styles::Colors::VfoACyan) {
 
     // Set up font with tabular figures for consistent digit widths
-    m_font = K4Styles::Fonts::dataFont(K4Styles::Dimensions::FontSizeFrequency);
+    m_font = K4Styles::Fonts::dataFont(K4Styles::Dimensions::FontSizeDisplay);
 
     // Calculate character widths for click detection
     QFontMetrics fm(m_font);
@@ -309,7 +309,7 @@ void FrequencyDisplayWidget::paintEvent(QPaintEvent *) {
             // rate indicator the user reads to know the current tuning step.
             int posFromRight = kMaxDigitIndex - digitIdx;
             if (m_tuningRateDigit >= 0 && posFromRight < m_tuningRateDigit) {
-                charColor = QColor(K4Styles::Colors::TextGray);
+                charColor = QColor(K4Styles::Colors::TextSecondary);
             } else {
                 charColor = m_normalColor;
             }

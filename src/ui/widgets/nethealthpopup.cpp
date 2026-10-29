@@ -131,8 +131,8 @@ void NetHealthPopup::drawSparklineRow(QPainter &painter, const QRect &rowRect, c
     const int colW = K4Styles::Dimensions::ChartValueColumnWidth;
 
     // --- Left column: legend dot + label (top), current value (below) ---
-    QFont labelFont = K4Styles::Fonts::paintFont(K4Styles::Dimensions::FontSizeSmall);
-    QFont valueFont = K4Styles::Fonts::dataFont(K4Styles::Dimensions::FontSizePopup);
+    QFont labelFont = K4Styles::Fonts::paintFont(K4Styles::Dimensions::FontSizeCaption);
+    QFont valueFont = K4Styles::Fonts::dataFont(K4Styles::Dimensions::FontSizeHeading);
     QFontMetrics lfm(labelFont);
     QFontMetrics vfm(valueFont);
 
@@ -147,11 +147,11 @@ void NetHealthPopup::drawSparklineRow(QPainter &painter, const QRect &rowRect, c
     painter.drawEllipse(rowRect.left(), dotY, dot, dot);
 
     painter.setFont(labelFont);
-    painter.setPen(QColor(K4Styles::Colors::TextGray));
+    painter.setPen(QColor(K4Styles::Colors::TextSecondary));
     painter.drawText(textX, labelBaselineY, label);
 
     painter.setFont(valueFont);
-    painter.setPen(QColor(K4Styles::Colors::TextWhite));
+    painter.setPen(QColor(K4Styles::Colors::TextPrimary));
     painter.drawText(textX, valueBaselineY, valueText);
 
     // --- Plot area ---
@@ -252,7 +252,7 @@ void NetHealthPopup::drawSparklineRow(QPainter &painter, const QRect &rowRect, c
     // --- Scale labels (drawn last) ---
     // Right-aligned in the gutter between the value column and the plot (clean card background, off
     // the trace) so they read clearly. Larger bright-neutral font for readability.
-    QFont scaleFont = K4Styles::Fonts::paintFont(K4Styles::Dimensions::FontSizeMedium, QFont::Normal);
+    QFont scaleFont = K4Styles::Fonts::paintFont(K4Styles::Dimensions::FontSizeCaption, QFont::Normal);
     QFontMetrics sfm(scaleFont);
     painter.setFont(scaleFont);
     const int gutterRight = plot.left() - K4Styles::Dimensions::ChartPlotMargin; // just left of the plot/tick

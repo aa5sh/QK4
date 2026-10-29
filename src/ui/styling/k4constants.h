@@ -16,56 +16,79 @@
 namespace K4Styles {
 
 namespace Colors {
+// Every hex value appears once in this namespace; a second name for the same colour aliases the first.
+// Text tokens carry their WCAG contrast on Background (#1a1a1a). TokenStandardTests checks every text and
+// background pair in use, and that no hex is repeated.
+
 // =============================================================================
-// App-Level Theme Colors (consolidated from K4Colors namespaces)
+// Base neutrals
 // =============================================================================
+constexpr const char *White = "#FFFFFF"; // Lit fills, overlay strokes over the spectrum (with an Alpha::)
+constexpr const char *Black = "#000000"; // Halos, shadows, scrims (with an Alpha::), unrendered clear
 
-// Backgrounds
-constexpr const char *Background = "#1a1a1a";
-constexpr const char *DarkBackground = "#0d0d0d";
-constexpr const char *PopupBackground = "#1e1e1e";
-constexpr const char *SpectrumBackground = "#141414"; // Panadapter GPU clear color (spectrum bg)
-constexpr const char *DisabledBackground = "#444444"; // Disabled indicator backgrounds
+// =============================================================================
+// Surfaces
+// =============================================================================
+constexpr const char *DarkBackground = "#0d0d0d";     // Dialogs, inputs, mini-pan clear
+constexpr const char *SpectrumBackground = "#141414"; // Panadapter GPU clear colour
+constexpr const char *Background = "#1a1a1a";         // Main window
+constexpr const char *PopupBackground = "#1e1e1e";    // Floating popups (raised one step)
 
-// App Accent Color
-constexpr const char *AccentAmber = "#FFB000"; // TX indicators, labels, highlights
+// =============================================================================
+// Text
+// =============================================================================
+constexpr const char *TextPrimary = White;               // 17.4:1
+constexpr const char *TextSecondary = "#999999";         // 6.11:1 - labels, units, idle values, status text
+constexpr const char *TextSecondaryOnRaised = "#AAAAAA"; // TextSecondary on buttons and nav keys (≥4.6:1 there)
+constexpr const char *TextDisabled = "#666666";          // 3.03:1 - disabled controls only (WCAG-exempt)
+constexpr const char *TextOnLight = "#333333";           // Text on selected/lit fills (6.4:1 on SelectedBottom)
+constexpr const char *TextOnAccent = Black;              // Text on saturated fills (status green, VFO badges)
+// WHY a separate red for text: TxRed (#FF0000) is 4.35:1 on Background, under the 4.5:1 that small
+// text needs.
+constexpr const char *TextRed = "#FF6666"; // 6.09:1 - over-S9 scale, errors, warnings
 
-// VFO Theme Colors (square, passband, markers, overlays)
-constexpr const char *VfoACyan = "#00BFFF";  // VFO A: cyan theme
-constexpr const char *VfoBGreen = "#00FF00"; // VFO B: green theme
+// =============================================================================
+// Accent and status
+// =============================================================================
+constexpr const char *AccentAmber = "#FFB000"; // 9.5:1 - TX indicators, titles, highlights
+constexpr const char *VfoACyan = "#00BFFF";    // VFO A theme
+constexpr const char *StatusGreen = "#00FF00"; // Active/on/connected; VFO B theme
+constexpr const char *VfoBGreen = StatusGreen;
+constexpr const char *TxRed = "#FF0000"; // Fills, LEDs, markers - never text; see TextRed
 
-// Status Colors
-constexpr const char *TxRed = "#FF0000"; // Fills, LEDs, markers — never text (4.35:1 on Background); see TextRed
-constexpr const char *StatusGreen = "#00FF00"; // Active/on/connected status indicators
-// Meter Gradient Colors (green → yellow → red progression)
+// Meter gradient (green -> yellow -> red). Data colours.
 constexpr const char *MeterGreenDark = "#00CC00";
-constexpr const char *MeterGreen = "#00FF00";
+constexpr const char *MeterGreen = StatusGreen;
 constexpr const char *MeterYellowGreen = "#CCFF00";
 constexpr const char *MeterYellow = "#FFFF00";
 constexpr const char *MeterOrange = "#FF6600";
 constexpr const char *MeterOrangeRed = "#FF3300";
-constexpr const char *MeterRed = "#FF0000";
+constexpr const char *MeterRed = TxRed;
 
 // Id Meter Colors (PA drain current - subtle green theme)
 constexpr const char *MeterIdDark = "#2E7D32";  // Muted forest green
 constexpr const char *MeterIdLight = "#66BB6A"; // Lighter sage green
 
-// Text Colors
-constexpr const char *TextWhite = "#FFFFFF";
-constexpr const char *TextDark = "#333333";
-constexpr const char *TextGray = "#999999";
-// WHY #828282: the darkest grey that keeps WCAG AA 4.5:1 on Background and the overlay row
-// background. #808080 measured 4.41:1. Checked by FormControlThemeTests.
-constexpr const char *TextFaded = "#828282"; // Faded text (e.g., auto mode values)
-// WHY a separate red for text: TxRed (#FF0000) is 4.35:1 on Background, under the 4.5:1 that
-// small text needs. Same value as ErrorRed (6.09:1).
-constexpr const char *TextRed = "#FF6666"; // Red text: over-S9 meter scale, warnings
-constexpr const char *InactiveGray = "#666666";
+// =============================================================================
+// Borders and non-text strokes
+// =============================================================================
+constexpr const char *DialogBorder = TextOnLight; // Dialog borders, separators, slider grooves
+constexpr const char *PanelBorder = "#444444";    // Frame around panadapter/VFO panels
+constexpr const char *BorderDisabled = PanelBorder;
+constexpr const char *DisabledBackground = PanelBorder; // Off-state badges, disabled fills
+constexpr const char *BorderNormal = "#606060";
+// WHY #666 and not BorderNormal: these strokes sit straight on Background, where #606060 is 2.8:1, under
+// the 3:1 that WCAG 1.4.11 asks of graphics. #666 is 3.03:1.
+constexpr const char *MutedGraphic = TextDisabled; // Idle frames, ticks, unlit bars, unknown-state glyphs
+constexpr const char *BorderHover = "#808080";
+constexpr const char *BorderPressed = "#909090";
+constexpr const char *BorderSelected = TextSecondaryOnRaised;
 
-// Overlay/Indicator Colors
-constexpr const char *OverlayBackground = "#707070"; // VFO indicator badges
-
-// Overlay Panel Colors (Menu, Macros, and similar full-screen overlays)
+// =============================================================================
+// Overlay panels (Menu, Macros)
+// =============================================================================
+// WHY bluish: these five near-blacks carry a slight blue cast that sets the full-screen overlays
+// apart from the neutral main window. Not merged into the neutral surfaces; see K4STYLES_REFERENCE.md.
 constexpr const char *OverlayContentBg = "#18181C";        // Main content area background
 constexpr const char *OverlayHeaderBg = "#222228";         // Header bar + nav panel background
 constexpr const char *OverlayColumnHeaderBg = "#1E1E24";   // Column header background
@@ -79,58 +102,47 @@ constexpr const char *OverlayDividerLight = "#3C3C41";     // Lighter divider (d
 constexpr const char *SelectionLight = "#DCDCDC"; // Light panel (selected zone)
 constexpr const char *SelectionDark = "#505055";  // Dark panel (value zone)
 
-// =============================================================================
-// Button Gradient Colors
-// =============================================================================
+// WHY #777: black text on the old #707070 was 4.24:1; #777777 is 4.69:1.
+constexpr const char *OverlayBackground = "#777777"; // VFO A/B badges on the waterfall (TextOnAccent)
 
-// Normal state gradients
+// =============================================================================
+// Button Gradient Stops
+// =============================================================================
 constexpr const char *GradientTop = "#4a4a4a";
 constexpr const char *GradientMid1 = "#3a3a3a";
 constexpr const char *GradientMid2 = "#353535";
 constexpr const char *GradientBottom = "#2a2a2a";
 
-// Hover state gradients
 constexpr const char *HoverTop = "#5a5a5a";
-constexpr const char *HoverMid1 = "#4a4a4a";
+constexpr const char *HoverMid1 = GradientTop;
 constexpr const char *HoverMid2 = "#454545";
-constexpr const char *HoverBottom = "#3a3a3a";
+constexpr const char *HoverBottom = GradientMid1;
 
 // Lighter button gradients (for TX function buttons, REC/STORE/RCL)
 constexpr const char *LightGradientTop = "#888888";
-constexpr const char *LightGradientMid1 = "#777777";
+constexpr const char *LightGradientMid1 = OverlayBackground;
 constexpr const char *LightGradientMid2 = "#6a6a6a";
-constexpr const char *LightGradientBottom = "#606060";
+constexpr const char *LightGradientBottom = BorderNormal;
 
-// Selected button gradients
 constexpr const char *SelectedTop = "#E0E0E0";
 constexpr const char *SelectedMid1 = "#D0D0D0";
 constexpr const char *SelectedMid2 = "#C8C8C8";
 constexpr const char *SelectedBottom = "#B8B8B8";
 
-// Selected button hover gradients
 constexpr const char *SelectedHoverTop = "#F0F0F0";
-constexpr const char *SelectedHoverMid1 = "#E0E0E0";
+constexpr const char *SelectedHoverMid1 = SelectedTop;
 constexpr const char *SelectedHoverMid2 = "#D8D8D8";
-constexpr const char *SelectedHoverBottom = "#C8C8C8";
+constexpr const char *SelectedHoverBottom = SelectedMid2;
 
-// Disabled button gradients
-constexpr const char *DisabledGradientTop = "#3a3a3a";
-constexpr const char *DisabledGradientMid1 = "#2a2a2a";
+constexpr const char *DisabledGradientTop = GradientMid1;
+constexpr const char *DisabledGradientMid1 = GradientBottom;
 constexpr const char *DisabledGradientMid2 = "#252525";
-constexpr const char *DisabledGradientBottom = "#1a1a1a";
+constexpr const char *DisabledGradientBottom = Background;
 
-// Borders
-constexpr const char *BorderNormal = "#606060";
-constexpr const char *BorderHover = "#808080";
-constexpr const char *BorderPressed = "#909090";
-constexpr const char *BorderSelected = "#AAAAAA";
-constexpr const char *BorderDisabled = "#404040";
-
-// Dialog-specific colors
-constexpr const char *DialogBorder = "#333333"; // Dialog borders and separators
-constexpr const char *PanelBorder = "#444444";  // Subtle frame border for panadapter/VFO panels
-constexpr const char *ErrorRed = "#FF6666";     // Error/not connected status indicators
-constexpr const char *ErrorBgDark = "#331111";  // Muted dark-red background for error toasts (pairs with ErrorRed)
+// =============================================================================
+// Feature colours
+// =============================================================================
+constexpr const char *ErrorBgDark = "#331111"; // Muted dark-red background for error toasts (with TextRed)
 
 // Filter-edge indicator gold. Distinct from AccentAmber (#FFB000): brighter/yellower so it reads
 // clearly against the panadapter's amber passband fill. Used by FilterIndicatorWidget only.
@@ -144,13 +156,40 @@ constexpr const char *ChartSeriesBuffer = MeterIdLight; // buffer trace (soft sa
 
 // Band-plan overlay colors. Mode-segment fills (rendered translucent over the spectrum), the
 // out-of-band fill under its hatching, and the band-name tag.
-constexpr const char *BandPlanCw = "#CB3B45";        // CW / Morse (crimson red)
-constexpr const char *BandPlanData = "#E0852F";      // Digital / data (RTTY, PSK, FT8...) orange
-constexpr const char *BandPlanPhone = "#6E83A6";     // SSB / phone (voice) slate blue
-constexpr const char *BandPlanBeacon = "#AB47BC";    // Beacons (exclusive) purple
-constexpr const char *BandPlanAll = "#90A4AE";       // All modes share (CW/data/phone) blue-grey
-constexpr const char *BandPlanOutOfBand = "#3A3A3A"; // Past the band edge (under the hatch)
-constexpr const char *BandPlanTag = "#0F0F0F";       // Band-name tag ("20m")
+constexpr const char *BandPlanCw = "#CB3B45";           // CW / Morse (crimson red)
+constexpr const char *BandPlanData = "#E0852F";         // Digital / data (RTTY, PSK, FT8...) orange
+constexpr const char *BandPlanPhone = "#6E83A6";        // SSB / phone (voice) slate blue
+constexpr const char *BandPlanBeacon = "#AB47BC";       // Beacons (exclusive) purple
+constexpr const char *BandPlanAll = "#90A4AE";          // All modes share (CW/data/phone) blue-grey
+constexpr const char *BandPlanOutOfBand = GradientMid1; // Past the band edge (under the hatch)
+constexpr const char *BandPlanTag = DarkBackground;     // Band-name tag ("20m")
+
+// =============================================================================
+// Alpha (0-255) for translucent uses of the colours above: K4Styles::withAlpha() for QPainter,
+// K4Styles::cssRgba() for style sheets.
+// =============================================================================
+namespace Alpha {
+// WHY 60% black, not opaque: a solid ring turns every glyph into a black blob at 10-12 px and hides the
+// trace under the label; 60% keeps >= 4.5:1 for white text even over the brightest waterfall colour.
+constexpr int Halo = 153;
+constexpr int SpanButtonScrim = 153; // Span +/- buttons over the spectrum
+constexpr int SpanButtonHover = 204;
+// WHY 210: TextSecondary on the scrim must stay >= 4.5:1 over a white waterfall pixel; 160 gave 2.2:1.
+constexpr int LabelScrim = 210;      // Mini-pan +/- kHz labels over the waterfall
+constexpr int CloseButtonHover = 51; // Text-decode title-bar close button
+constexpr int BandPlanSegment = 120; // Mode-segment fill, spectrum shows through
+constexpr int BandPlanOutOfBand = 200;
+constexpr int BandPlanHatch = 40;
+constexpr int BandPlanDivider = 70;
+constexpr int BandPlanMarker = 220;
+constexpr int BandPlanCaret = 235;
+constexpr int PassbandFill = 64; // Secondary VFO passband over the spectrum
+constexpr int CardTint = 18;     // KPA1500 card: white tint over the panel background
+constexpr int CardBorder = 35;   // KPA1500 card outline (white)
+constexpr int LcdBorder = 20;    // KPA1500 status box outline (white)
+constexpr int LcdShade = 40;     // KPA1500 status box fill (black)
+} // namespace Alpha
+
 } // namespace Colors
 
 namespace Dimensions {
@@ -245,55 +284,38 @@ constexpr int NavPanelWidth = 130;    // Menu overlay navigation/search panel
 constexpr int MemoryButtonWidth = 42; // M1-M4, REC, STORE, RCL buttons
 
 // =============================================================================
-// Font Sizes (in pixels) - use with QFont::setPixelSize() or paintFont()
+// Type scale (pixels) - use with QFont::setPixelSize(), paintFont() or dataFont()
 // =============================================================================
-// WHY a floor of 10 px: 7–9 px text was unreadable on a 27" 1440p display (0.23 mm/px) and is smaller
-// still once a small screen shrinks the interface. Nothing is drawn below it; text at the floor uses
-// Medium weight or bolder on the dark background. FontSizeTiny/Small/Normal keep their names until the
-// type-scale rename and sit at the floor.
+// WHY a floor of 10 px: 7-9 px text was unreadable on a 27" 1440p display (0.23 mm/px) and is smaller
+// still once a small screen shrinks the interface. Nothing is drawn below it; text at or below
+// FontSizeReadout on the dark background is Medium weight or bolder.
 constexpr int FontSizeFloor = 10;
-constexpr int FontSizeTiny = FontSizeFloor;   // Sub-labels (BANK, AF REC, MESSAGE)
-constexpr int FontSizeSmall = FontSizeFloor;  // Scale fonts, secondary text
-constexpr int FontSizeNormal = FontSizeFloor; // Alt/secondary button text
-constexpr int FontSizeMedium = 10;            // Labels, descriptions
-constexpr int FontSizeLarge = 11;             // Feature labels, primary labels
-constexpr int FontSizeButton = 12;            // Button text, value displays
-constexpr int FontSizeNotification = 13;      // Toast / macro-dialog notifications (between Button and Popup)
-constexpr int FontSizePopup = 14;             // Notifications, popup titles
-constexpr int FontSizeTitle = 16;             // Large control buttons (+/-)
-constexpr int FontSizeIndicator = 18;         // TX/RX/SPLIT indicator labels
-constexpr int FontSizeFrequency = 32;         // VFO frequency displays (FrequencyDisplayWidget, VfoWidget)
+constexpr int FontSizeCaption = FontSizeFloor; // Sub-labels, scales, secondary and compact button text
+constexpr int FontSizeBody = 11;               // Labels, popup selection buttons, help text
+constexpr int FontSizeReadout = 12;            // Values, button text, popup titles, status bar
+constexpr int FontSizeHeading = 14;            // Dialog forms, menu rows, notifications
+constexpr int FontSizeIndicator = 18;          // TX/RX/SPLIT, VFO A/B badges, +/- and arrow keys, page titles
+constexpr int FontSizeDisplay = 32;            // VFO frequency
 
-// DX cluster spot labels — user-configurable in Options → DX Cluster (FontSizeSpotMin..FontSizeSpotMax).
-constexpr int FontSizeSpot = 11;
+// DX cluster spot labels - user-configurable in Options -> DX Cluster (FontSizeSpotMin..FontSizeSpotMax).
+constexpr int FontSizeSpot = FontSizeBody;
 constexpr int FontSizeSpotMin = FontSizeFloor;
 constexpr int FontSizeSpotMax = 16;
 
 // Text Decode window font, adjusted with its A-/A+ buttons and saved per receiver.
-constexpr int FontSizeTextDecode = 11;
+constexpr int FontSizeTextDecode = FontSizeBody;
 constexpr int FontSizeTextDecodeMin = FontSizeFloor;
 constexpr int FontSizeTextDecodeMax = 24;
 
-static_assert(FontSizeTiny >= FontSizeFloor && FontSizeSmall >= FontSizeFloor && FontSizeNormal >= FontSizeFloor &&
-                  FontSizeMedium >= FontSizeFloor && FontSizeLarge >= FontSizeFloor &&
-                  FontSizeButton >= FontSizeFloor && FontSizeNotification >= FontSizeFloor &&
-                  FontSizePopup >= FontSizeFloor && FontSizeTitle >= FontSizeFloor &&
-                  FontSizeIndicator >= FontSizeFloor && FontSizeFrequency >= FontSizeFloor,
-              "no fixed font size may be below FontSizeFloor");
+static_assert(FontSizeCaption >= FontSizeFloor && FontSizeCaption < FontSizeBody && FontSizeBody < FontSizeReadout &&
+                  FontSizeReadout < FontSizeHeading && FontSizeHeading < FontSizeIndicator &&
+                  FontSizeIndicator < FontSizeDisplay,
+              "the six type roles start at the floor and strictly increase");
 static_assert(FontSizeSpotMin >= FontSizeFloor && FontSizeSpotMin <= FontSizeSpot && FontSizeSpot <= FontSizeSpotMax,
               "DX spot font range must start at the floor and contain the default");
 static_assert(FontSizeTextDecodeMin >= FontSizeFloor && FontSizeTextDecodeMin <= FontSizeTextDecode &&
                   FontSizeTextDecode <= FontSizeTextDecodeMax,
               "text-decode font range must start at the floor and contain the default");
-
-// =============================================================================
-// Popup Menu Font Sizes (standardized for horizontal control bar popups)
-// =============================================================================
-constexpr int PopupTitleSize = 12;  // Popup title labels (e.g., "MIC INPUT", "ATTENUATOR")
-constexpr int PopupButtonSize = 11; // Popup selection buttons (e.g., "FRONT", "REAR")
-constexpr int PopupValueSize = 12;  // Value displays (e.g., "6 dB", "184 Hz")
-static_assert(PopupTitleSize >= FontSizeFloor && PopupButtonSize >= FontSizeFloor && PopupValueSize >= FontSizeFloor,
-              "popup font sizes may not be below FontSizeFloor");
 
 // =============================================================================
 // Slider Dimensions

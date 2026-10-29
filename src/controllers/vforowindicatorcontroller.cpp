@@ -11,9 +11,7 @@
 namespace {
 
 QString largeBoldColor(const char *color) {
-    return QString("color: %1; font-size: %2px; font-weight: bold;")
-        .arg(color)
-        .arg(K4Styles::Dimensions::FontSizeLarge);
+    return QString("color: %1; font-size: %2px; font-weight: bold;").arg(color).arg(K4Styles::Dimensions::FontSizeBody);
 }
 
 } // namespace
@@ -37,7 +35,7 @@ VfoRowIndicatorController::VfoRowIndicatorController(RadioState *radioState, Spe
 void VfoRowIndicatorController::onSplitChanged(bool enabled) {
     const QString splitStyle = QString("color: %1; font-size: %2px;")
                                    .arg(K4Styles::Colors::AccentAmber)
-                                   .arg(K4Styles::Dimensions::FontSizeButton);
+                                   .arg(K4Styles::Dimensions::FontSizeReadout);
     m_labels.splitLabel->setStyleSheet(splitStyle);
     m_labels.splitLabel->setText(enabled ? "SPLIT ON" : "SPLIT OFF");
 
@@ -69,12 +67,12 @@ void VfoRowIndicatorController::onVoxChanged() {
     // for "is VOX on for the currently-tuned mode" and color accordingly.
     const bool voxOn = m_radioState->voxForCurrentMode();
     m_labels.voxLabel->setStyleSheet(
-        largeBoldColor(voxOn ? K4Styles::Colors::AccentAmber : K4Styles::Colors::TextGray));
+        largeBoldColor(voxOn ? K4Styles::Colors::AccentAmber : K4Styles::Colors::TextSecondary));
 }
 
 void VfoRowIndicatorController::onQskEnabledChanged(bool enabled) {
     m_labels.qskLabel->setStyleSheet(
-        largeBoldColor(enabled ? K4Styles::Colors::TextWhite : K4Styles::Colors::TextGray));
+        largeBoldColor(enabled ? K4Styles::Colors::TextPrimary : K4Styles::Colors::TextSecondary));
 }
 
 void VfoRowIndicatorController::onTestModeChanged(bool enabled) {
@@ -84,7 +82,7 @@ void VfoRowIndicatorController::onTestModeChanged(bool enabled) {
 void VfoRowIndicatorController::onAtuModeChanged(int mode) {
     // ATU mode 2 = AUTO; anything else renders greyed.
     m_labels.atuLabel->setStyleSheet(
-        largeBoldColor(mode == 2 ? K4Styles::Colors::AccentAmber : K4Styles::Colors::TextGray));
+        largeBoldColor(mode == 2 ? K4Styles::Colors::AccentAmber : K4Styles::Colors::TextSecondary));
 }
 
 void VfoRowIndicatorController::onMessageBankChanged(int bank) {
@@ -94,15 +92,15 @@ void VfoRowIndicatorController::onMessageBankChanged(int bank) {
 void VfoRowIndicatorController::reset() {
     const QString amberButton = QString("color: %1; font-size: %2px;")
                                     .arg(K4Styles::Colors::AccentAmber)
-                                    .arg(K4Styles::Dimensions::FontSizeButton);
+                                    .arg(K4Styles::Dimensions::FontSizeReadout);
     m_labels.splitLabel->setText("SPLIT OFF");
     m_labels.splitLabel->setStyleSheet(amberButton);
     if (m_labels.bSetLabel)
         m_labels.bSetLabel->setVisible(false);
     m_labels.msgBankLabel->setText("MSG: I");
     m_labels.msgBankLabel->setStyleSheet(amberButton);
-    m_labels.atuLabel->setStyleSheet(largeBoldColor(K4Styles::Colors::TextGray));
-    m_labels.voxLabel->setStyleSheet(largeBoldColor(K4Styles::Colors::TextGray));
-    m_labels.qskLabel->setStyleSheet(largeBoldColor(K4Styles::Colors::TextGray));
+    m_labels.atuLabel->setStyleSheet(largeBoldColor(K4Styles::Colors::TextSecondary));
+    m_labels.voxLabel->setStyleSheet(largeBoldColor(K4Styles::Colors::TextSecondary));
+    m_labels.qskLabel->setStyleSheet(largeBoldColor(K4Styles::Colors::TextSecondary));
     m_vfoRow->setTestVisible(false);
 }

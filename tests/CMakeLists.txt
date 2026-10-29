@@ -554,6 +554,17 @@ target_link_libraries(test_formcontroltheme Qt6::Core Qt6::Gui Qt6::Widgets Qt6:
 add_test(NAME FormControlThemeTests COMMAND test_formcontroltheme)
 set_tests_properties(FormControlThemeTests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
+# Typography and colour standard: token contrast, no repeated hex values, and a source scan that keeps
+# literal sizes and colours out of src/.
+add_executable(test_tokenstandard
+    test_tokenstandard.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/styling/k4styles.cpp
+)
+target_include_directories(test_tokenstandard PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_compile_definitions(test_tokenstandard PRIVATE QK4_SOURCE_DIR="${CMAKE_SOURCE_DIR}/src")
+target_link_libraries(test_tokenstandard Qt6::Core Qt6::Gui Qt6::Test)
+add_test(NAME TokenStandardTests COMMAND test_tokenstandard)
+
 # Main-window sizing - pure logic on sizes, no screen needed.
 add_executable(test_windowfit test_windowfit.cpp)
 target_include_directories(test_windowfit PRIVATE ${CMAKE_SOURCE_DIR}/src)

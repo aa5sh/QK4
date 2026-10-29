@@ -28,8 +28,8 @@ CwKeyerPage::CwKeyerPage(HalikeyDevice *halikeyDevice, RadioState *radioState, C
     // Description (dynamic based on device type)
     m_cwKeyerDescLabel = new QLabel(this);
     m_cwKeyerDescLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                          .arg(K4Styles::Colors::TextGray)
-                                          .arg(K4Styles::Dimensions::FontSizeButton));
+                                          .arg(K4Styles::Colors::TextSecondary)
+                                          .arg(K4Styles::Dimensions::FontSizeReadout));
     m_cwKeyerDescLabel->setWordWrap(true);
     layout->addWidget(m_cwKeyerDescLabel);
 
@@ -77,7 +77,7 @@ CwKeyerPage::CwKeyerPage(HalikeyDevice *halikeyDevice, RadioState *radioState, C
     statusTitleLabel->setFixedWidth(K4Styles::Dimensions::FormLabelWidth);
 
     m_cwKeyerStatusLabel = new QLabel("Not Connected", this);
-    m_cwKeyerStatusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::ErrorRed));
+    m_cwKeyerStatusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::TextRed));
 
     statusLayout->addWidget(statusTitleLabel);
     statusLayout->addWidget(m_cwKeyerStatusLabel);
@@ -173,8 +173,8 @@ CwKeyerPage::CwKeyerPage(HalikeyDevice *halikeyDevice, RadioState *radioState, C
         K4Styles::sliderHorizontal(K4Styles::Colors::DarkBackground, K4Styles::Colors::AccentAmber));
     auto *ditMemValue = new QLabel(QString("%1%").arg(ditMemSlider->value()), this);
     ditMemValue->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                   .arg(K4Styles::Colors::TextWhite)
-                                   .arg(K4Styles::Dimensions::FontSizePopup));
+                                   .arg(K4Styles::Colors::TextPrimary)
+                                   .arg(K4Styles::Dimensions::FontSizeHeading));
     ditMemValue->setFixedWidth(K4Styles::Dimensions::SliderValueLabelWidth);
     // WHY applied on release, not on every value: each setting is a full save of every setting.
     // Keyboard and click steps arrive with the slider up and are applied at once.
@@ -230,8 +230,8 @@ CwKeyerPage::CwKeyerPage(HalikeyDevice *halikeyDevice, RadioState *radioState, C
 
     m_sidetoneVolumeValueLabel = new QLabel(QString("%1%").arg(RadioSettings::instance()->sidetoneVolume()), this);
     m_sidetoneVolumeValueLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                                  .arg(K4Styles::Colors::TextWhite)
-                                                  .arg(K4Styles::Dimensions::FontSizePopup));
+                                                  .arg(K4Styles::Colors::TextPrimary)
+                                                  .arg(K4Styles::Dimensions::FontSizeHeading));
     m_sidetoneVolumeValueLabel->setFixedWidth(K4Styles::Dimensions::SliderValueLabelWidth);
 
     // Applied on release for the same reason as Dit Memory Delay above.
@@ -281,8 +281,8 @@ CwKeyerPage::CwKeyerPage(HalikeyDevice *halikeyDevice, RadioState *radioState, C
 
     m_keyDownDelayValueLabel = new QLabel(this);
     m_keyDownDelayValueLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                                .arg(K4Styles::Colors::TextWhite)
-                                                .arg(K4Styles::Dimensions::FontSizePopup));
+                                                .arg(K4Styles::Colors::TextPrimary)
+                                                .arg(K4Styles::Dimensions::FontSizeHeading));
     m_keyDownDelayValueLabel->setFixedWidth(K4Styles::Dimensions::SliderValueLabelWidth);
 
     // WHY send on release, not on every value: a drag would otherwise put dozens of KZL SETs on the
@@ -453,7 +453,7 @@ void CwKeyerPage::updateCwKeyerStatus() {
         m_cwKeyerConnectBtn->setText("Disconnect");
     } else {
         m_cwKeyerStatusLabel->setText("Not Connected");
-        m_cwKeyerStatusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::ErrorRed));
+        m_cwKeyerStatusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::TextRed));
         m_cwKeyerConnectBtn->setText("Connect");
     }
 }

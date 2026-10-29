@@ -55,7 +55,7 @@ void NetHealthWidget::paintEvent(QPaintEvent *) {
         }
     }
 
-    QColor dimColor(K4Styles::Colors::InactiveGray);
+    QColor dimColor(K4Styles::Colors::MutedGraphic);
 
     int barWidth = 3;
     int gap = 2;

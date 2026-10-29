@@ -11,7 +11,7 @@ The split exists so files that touch only constants (panadapter renderers, hardw
 Keep this doc in sync when you add a constant or helper. Quick cross-check:
 
 ```bash
-rg 'constexpr const char \*' src/ui/styling/k4constants.h   # all color constants
+rg 'constexpr const char \*' src/ui/styling/k4constants.h   # all color constants (Alpha:: are ints)
 rg '^constexpr int' src/ui/styling/k4constants.h            # all dimension constants
 rg '^\s*QString\s+\w+\(' src/ui/styling/k4styles.h          # free-function stylesheet helpers
 rg '^\s*const QString &\w+' src/ui/styling/k4styles.h       # Dialog:: cached-QString helpers
@@ -22,72 +22,83 @@ rg 'constexpr const char \*' src/ui/styling/k4styles.h      # font-family consta
 
 ## Colors (`K4Styles::Colors::*`)
 
-### Backgrounds
+Every hex value is written **once**; a second name for the same colour aliases the first (`HoverMid1 = GradientTop`).
+`TokenStandardTests` fails on a repeated hex. Contrast ratios are WCAG 2.x against `Background` (`#1a1a1a`) unless
+another surface is named.
+
+### Base Neutrals
 
 | Constant | Value | Usage |
 |----------|-------|-------|
-| `Background` | `#1a1a1a` | Main app background |
-| `DarkBackground` | `#0d0d0d` | Darker areas, panel backgrounds |
-| `PopupBackground` | `#1e1e1e` | Popup menu fill |
-| `DisabledBackground` | `#444444` | Disabled indicator backgrounds (SUB/DIV off state) |
+| `White` | `#FFFFFF` | Lit fills (active menu-bar button, AUTO on), strokes over the spectrum with an `Alpha::` |
+| `Black` | `#000000` | Halos, shadows, scrims with an `Alpha::`; clear colour before the mini-pan renders |
 
-### App Accent Color
+### Surfaces
 
 | Constant | Value | Usage |
 |----------|-------|-------|
-| `AccentAmber` | `#FFB000` | TX indicators, labels, highlights |
+| `DarkBackground` | `#0d0d0d` | Dialogs, inputs, mini-pan clear |
+| `SpectrumBackground` | `#141414` | Panadapter GPU clear colour |
+| `Background` | `#1a1a1a` | Main window |
+| `PopupBackground` | `#1e1e1e` | Floating popups, one step raised |
 
-### VFO Theme Colors
+### Text
+
+| Constant | Value | Contrast | Usage |
+|----------|-------|----------|-------|
+| `TextPrimary` | = `White` | 17.4:1 | Primary text, button labels |
+| `TextSecondary` | `#999999` | 6.11:1 | Labels, units, idle values (RIT/XIT off), status-bar text, dimmed-but-meaningful indicators |
+| `TextSecondaryOnRaised` | `#AAAAAA` | 4.60:1 on the button face, 4.83:1 on `OverlayNavButton` | Secondary text drawn on buttons and nav keys (auto value, EDIT, NORM, empty EQ preset) |
+| `TextDisabled` | `#666666` | 3.03:1 (exempt) | Disabled controls **only** — WCAG 1.4.3 does not apply to inactive components |
+| `TextOnLight` | `#333333` | 12.6:1 on `White`, 6.37:1 on `SelectedBottom` | Text on selected / lit fills |
+| `TextOnAccent` | = `Black` | 15.3:1 on `StatusGreen`, 4.69:1 on `OverlayBackground` | Text on saturated fills (B SET, SUB/DIV on, VFO A/B badges and squares) |
+| `TextRed` | `#FF6666` | 6.09:1 | All red text: over-S9 scale, errors, warnings |
+
+`TxRed` is never text (4.35:1). The "button face" is `GradientTop` → `GradientMid1` at 0.75, the lightest point behind
+the glyph band of a gradient button.
+
+### Accent and Status
 
 | Constant | Value | Usage |
 |----------|-------|-------|
+| `AccentAmber` | `#FFB000` | TX indicators, titles, highlights (9.5:1) |
 | `VfoACyan` | `#00BFFF` | VFO A: square, passband, markers, overlays |
-| `VfoBGreen` | `#00FF00` | VFO B: square, passband, markers, overlays |
-
-### Status Indicator Colors
-
-| Constant | Value | Usage |
-|----------|-------|-------|
-| `TxRed` | `#FF0000` | TX indicator, transmit state — fills, LEDs and markers only, never text (4.35:1 on `Background`); text uses `TextRed` |
 | `StatusGreen` | `#00FF00` | Active/on/connected status indicators |
+| `VfoBGreen` | = `StatusGreen` | VFO B theme |
+| `TxRed` | `#FF0000` | TX fills, LEDs, markers — never text |
 
-### Meter Gradient Colors (S/Po Meter)
+### Meter Gradient Colors (S/Po Meter) — data colours
 
 | Constant | Value | Usage |
 |----------|-------|-------|
 | `MeterGreenDark` | `#00CC00` | Low signal (green start) |
-| `MeterGreen` | `#00FF00` | Normal signal range |
+| `MeterGreen` | = `StatusGreen` | Normal signal range |
 | `MeterYellowGreen` | `#CCFF00` | Transition to yellow |
 | `MeterYellow` | `#FFFF00` | Moderate signal |
 | `MeterOrange` | `#FF6600` | High signal |
 | `MeterOrangeRed` | `#FF3300` | Approaching max |
-| `MeterRed` | `#FF0000` | Peak/overload signal |
+| `MeterRed` | = `TxRed` | Peak/overload signal |
+| `MeterIdDark` | `#2E7D32` | Id meter low range |
+| `MeterIdLight` | `#66BB6A` | Id meter high range |
 
-### PA Drain Current Meter (Id Meter)
-
-| Constant | Value | Usage |
-|----------|-------|-------|
-| `MeterIdDark` | `#2E7D32` | Muted forest green (Id meter low range) |
-| `MeterIdLight` | `#66BB6A` | Lighter sage green (Id meter high range) |
-
-### Text Colors
+### Borders and Non-text Strokes
 
 | Constant | Value | Usage |
 |----------|-------|-------|
-| `TextWhite` | `#FFFFFF` | Primary text, button labels |
-| `TextDark` | `#333333` | Text on light/selected buttons |
-| `TextGray` | `#999999` | Secondary text, labels |
-| `TextFaded` | `#828282` | Faded text (e.g., auto mode values). 4.53:1 on `Background`, the darkest grey at WCAG AA 4.5:1 (was `#808080`, 4.41:1) |
-| `TextRed` | `#FF6666` | Red text (over-S9 meter scale, warnings). 6.09:1 on `Background`; same value as `ErrorRed` |
-| `InactiveGray` | `#666666` | Inactive/disabled elements |
-
-### Overlay / Indicator Colors
-
-| Constant | Value | Usage |
-|----------|-------|-------|
-| `OverlayBackground` | `#707070` | VFO indicator badges |
+| `DialogBorder` | = `TextOnLight` (`#333333`) | Dialog borders, separators, slider grooves, menu-bar hover |
+| `PanelBorder` | `#444444` | Frame around panadapter / VFO panels |
+| `BorderDisabled` | = `PanelBorder` | Disabled checkbox-button border (was `#404040`) |
+| `DisabledBackground` | = `PanelBorder` | Off-state badges, disabled fills |
+| `BorderNormal` | `#606060` | Default button border |
+| `MutedGraphic` | = `TextDisabled` (`#666666`) | Idle frames, ticks, unlit bars, unknown-state glyphs, input borders — 3.03:1 meets the 3:1 non-text rule (`#606060` would be 2.8:1) |
+| `BorderHover` | `#808080` | Button border on hover |
+| `BorderPressed` | `#909090` | Button border when pressed |
+| `BorderSelected` | = `TextSecondaryOnRaised` (`#AAAAAA`) | Selected/active button border |
 
 ### Overlay Panel Colors (Menu, Macros, full-screen overlays)
+
+The five near-blacks below carry a slight blue cast. They are kept apart from the neutral surfaces on purpose
+until the maintainer decides; see *Bluish overlay surfaces* below.
 
 | Constant | Value | Usage |
 |----------|-------|-------|
@@ -99,92 +110,62 @@ rg 'constexpr const char \*' src/ui/styling/k4styles.h      # font-family consta
 | `OverlayNavButtonPressed` | `#505060` | Nav button pressed state |
 | `OverlayDivider` | `#28282D` | Divider lines between items |
 | `OverlayDividerLight` | `#3C3C41` | Lighter divider (demarcation) |
+| `SelectionLight` | `#DCDCDC` | Menu selection, light zone |
+| `SelectionDark` | `#505055` | Menu selection, dark zone |
+| `OverlayBackground` | `#777777` | VFO A/B badges on the waterfall (was `#707070`: black text was 4.24:1) |
 
-### Selection Highlighting (K4-style Dual Panel)
+#### Bluish overlay surfaces
 
-| Constant | Value | Usage |
-|----------|-------|-------|
-| `SelectionLight` | `#DCDCDC` | Selected item text/highlight (light) |
-| `SelectionDark` | `#505055` | Selected item background (dark) |
+| Value | Name | Nearest neutral | Used by |
+|-------|------|-----------------|---------|
+| `#18181C` | `OverlayContentBg` | `#1a1a1a` Background | MenuOverlay and MacroDialog content area |
+| `#19191E` | `OverlayItemBg` | `#1a1a1a` Background | Menu and macro item rows |
+| `#1E1E24` | `OverlayColumnHeaderBg` | `#1e1e1e` PopupBackground | Macro column header |
+| `#222228` | `OverlayHeaderBg` | `#222222` (none) | Menu/macro header bar and nav panel |
+| `#28282D` | `OverlayDivider` | `#2a2a2a` GradientBottom | Row dividers |
 
-### Button Gradient — Normal State
+### Button Gradient Stops
 
-| Constant | Value | Position |
-|----------|-------|----------|
-| `GradientTop` | `#4a4a4a` | 0% (top) |
-| `GradientMid1` | `#3a3a3a` | 33% |
-| `GradientMid2` | `#353535` | 66% |
-| `GradientBottom` | `#2a2a2a` | 100% (bottom) |
+| Stop | Normal | Hover | Light | Selected | Selected hover | Disabled |
+|------|--------|-------|-------|----------|----------------|----------|
+| 0 (Top) | `GradientTop` `#4a4a4a` | `HoverTop` `#5a5a5a` | `LightGradientTop` `#888888` | `SelectedTop` `#E0E0E0` | `SelectedHoverTop` `#F0F0F0` | `DisabledGradientTop` = `GradientMid1` |
+| 0.4 (Mid1) | `GradientMid1` `#3a3a3a` | `HoverMid1` = `GradientTop` | `LightGradientMid1` = `OverlayBackground` | `SelectedMid1` `#D0D0D0` | `SelectedHoverMid1` = `SelectedTop` | `DisabledGradientMid1` = `GradientBottom` |
+| 0.6 (Mid2) | `GradientMid2` `#353535` | `HoverMid2` `#454545` | `LightGradientMid2` `#6a6a6a` | `SelectedMid2` `#C8C8C8` | `SelectedHoverMid2` `#D8D8D8` | `DisabledGradientMid2` `#252525` |
+| 1 (Bottom) | `GradientBottom` `#2a2a2a` | `HoverBottom` = `GradientMid1` | `LightGradientBottom` = `BorderNormal` | `SelectedBottom` `#B8B8B8` | `SelectedHoverBottom` = `SelectedMid2` | `DisabledGradientBottom` = `Background` |
 
-### Button Gradient — Hover State
-
-| Constant | Value | Position |
-|----------|-------|----------|
-| `HoverTop` | `#5a5a5a` | 0% (top) |
-| `HoverMid1` | `#4a4a4a` | 33% |
-| `HoverMid2` | `#454545` | 66% |
-| `HoverBottom` | `#3a3a3a` | 100% (bottom) |
-
-### Button Gradient — Light (TX function buttons, REC/STORE/RCL)
-
-| Constant | Value | Position |
-|----------|-------|----------|
-| `LightGradientTop` | `#888888` | 0% (top) |
-| `LightGradientMid1` | `#777777` | 33% |
-| `LightGradientMid2` | `#6a6a6a` | 66% |
-| `LightGradientBottom` | `#606060` | 100% (bottom) |
-
-### Button Gradient — Selected State
-
-| Constant | Value | Position |
-|----------|-------|----------|
-| `SelectedTop` | `#E0E0E0` | 0% (top) |
-| `SelectedMid1` | `#D0D0D0` | 33% |
-| `SelectedMid2` | `#C8C8C8` | 66% |
-| `SelectedBottom` | `#B8B8B8` | 100% (bottom) |
-
-### Button Gradient — Selected Hover State
-
-| Constant | Value | Position |
-|----------|-------|----------|
-| `SelectedHoverTop` | `#F0F0F0` | 0% (top) |
-| `SelectedHoverMid1` | `#E0E0E0` | 33% |
-| `SelectedHoverMid2` | `#D8D8D8` | 66% |
-| `SelectedHoverBottom` | `#C8C8C8` | 100% (bottom) |
-
-### Button Gradient — Disabled State
-
-| Constant | Value | Position |
-|----------|-------|----------|
-| `DisabledGradientTop` | `#3a3a3a` | 0% (top) |
-| `DisabledGradientMid1` | `#2a2a2a` | 33% |
-| `DisabledGradientMid2` | `#252525` | 66% |
-| `DisabledGradientBottom` | `#1a1a1a` | 100% (bottom) |
-
-### Border Colors
+### Feature Colours
 
 | Constant | Value | Usage |
 |----------|-------|-------|
-| `BorderNormal` | `#606060` | Default button border |
-| `BorderHover` | `#808080` | Button border on hover |
-| `BorderPressed` | `#909090` | Button border when pressed |
-| `BorderSelected` | `#AAAAAA` | Selected/active button border |
-| `BorderDisabled` | `#404040` | Disabled checkbox-button border |
+| `ErrorBgDark` | `#331111` | Error toast background (with `TextRed`, 5.7:1) |
+| `FilterIndicatorGold` | `#FFD040` | Filter-edge indicator; brighter than `AccentAmber` against the amber passband. `FilterIndicatorWidget` only |
+| `ChartSeriesRtt` / `Jitter` / `Buffer` | = `VfoACyan` / `AccentAmber` / `MeterIdLight` | NetHealthPopup traces |
+| `BandPlanCw` `Data` `Phone` `Beacon` `All` | `#CB3B45` `#E0852F` `#6E83A6` `#AB47BC` `#90A4AE` | Band-plan segment fills (data colours) |
+| `BandPlanOutOfBand` | = `GradientMid1` | Past the band edge, under the hatch |
+| `BandPlanTag` | = `DarkBackground` | Band-name tag (was `#0F0F0F`) |
 
-### Dialog & Panel Borders
+### Alpha (`K4Styles::Colors::Alpha::*`, 0–255)
 
-| Constant | Value | Usage |
-|----------|-------|-------|
-| `DialogBorder` | `#333333` | Dialog borders and separators |
-| `PanelBorder` | `#444444` | Subtle frame border for panadapter / VFO panels |
-| `ErrorRed` | `#FF6666` | Error / not-connected status indicators |
-| `ErrorBgDark` | `#331111` | Muted dark-red background for error toasts (pairs with `ErrorRed`) |
-
-### Filter Indicator
+Translucency is a named alpha applied to a token, never a literal `QColor(r, g, b, a)` or `rgba()`:
+`K4Styles::withAlpha(Colors::Black, Alpha::Halo)` for QPainter, `K4Styles::cssRgba(...)` for style sheets.
 
 | Constant | Value | Usage |
 |----------|-------|-------|
-| `FilterIndicatorGold` | `#FFD040` | Filter-edge indicator gold (brighter/yellower than `AccentAmber`; reads clearly against the panadapter's amber passband fill). Used by `FilterIndicatorWidget` only. |
+| `Halo` | `153` | `drawHaloText` ring and axis-tick halo |
+| `SpanButtonScrim` / `SpanButtonHover` | `153` / `204` | Span +/- buttons over the spectrum (`Black` / `GradientTop`) |
+| `LabelScrim` | `210` | Mini-pan ±kHz labels (was 160: 2.2:1 over a white pixel, now 4.8:1) |
+| `CloseButtonHover` | `51` | Text-decode close button hover |
+| `BandPlanSegment` / `BandPlanOutOfBand` | `120` / `200` | Band-plan fills |
+| `BandPlanHatch` / `BandPlanDivider` / `BandPlanMarker` / `BandPlanCaret` | `40` / `70` / `220` / `235` | White strokes in the band-plan strip |
+| `PassbandFill` | `64` | Secondary VFO passband |
+| `CardTint` / `CardBorder` | `18` / `35` | KPA1500 card: white tint and outline |
+| `LcdBorder` / `LcdShade` | `20` / `40` | KPA1500 status box: white outline, black fill |
+
+### Removed Names
+
+These no longer exist; for reading older code: `TextWhite` → `TextPrimary`, `TextGray` / `TextFaded` →
+`TextSecondary`, `TextDark` → `TextOnLight`, `ErrorRed` → `TextRed`, `InactiveGray` → `TextSecondary` where it was
+informative text, `MutedGraphic` where it was a border or tick, `TextDisabled` where the control was disabled.
 
 ---
 
@@ -284,57 +265,39 @@ the panels differ per platform.
 | `NavPanelWidth` | `130` | Menu overlay navigation/search panel (px) |
 | `MemoryButtonWidth` | `42` | M1–M4, REC, STORE, RCL buttons (px) |
 
-### Font Sizes
+### Type Scale
 
-All font sizes are in **pixels** — use with `QFont::setPixelSize()` or `K4Styles::Fonts::paintFont()`. This ensures consistent rendering across macOS (72 PPI) and Windows (96 PPI).
+All font sizes are in **pixels** — use with `QFont::setPixelSize()`, `K4Styles::Fonts::paintFont()` or
+`dataFont()`, never `setPointSize()` (points scale with the platform's logical DPI: 72 on macOS, 96 on Windows).
 
-**Floor:** no text is drawn below `FontSizeFloor` (10 px). `static_assert`s in `k4constants.h` hold every
-`FontSize*`, `Popup*Size` and the user-adjustable minimums to it. Text at 12 px or smaller on the dark
-background uses Medium (500) weight or bolder — the app font is Inter Medium, so stylesheet labels get it
-by default; custom-painted text passes `QFont::Medium` to `paintFont()`/`dataFont()`.
+Six roles. `static_assert`s in `k4constants.h` hold them to the floor and in strictly increasing order, and hold
+every old name equal to its role. Text at `FontSizeReadout` or smaller on the dark background uses Medium (500)
+weight or bolder — the app font is Inter Medium, so stylesheet labels get it by default; custom-painted text
+passes `QFont::Medium` to `paintFont()`/`dataFont()`.
 
-| Constant | Value | Usage |
-|----------|-------|-------|
-| `FontSizeFloor` | `10` | Smallest text size anywhere (px) |
-| `FontSizeTiny` | `10` (= floor; was 7) | Sub-labels (BANK, AF REC, MESSAGE) (px) |
-| `FontSizeSmall` | `10` (= floor; was 8) | Scale fonts, secondary text (px) |
-| `FontSizeNormal` | `10` (= floor; was 9) | Alt/secondary button text (px) |
-| `FontSizeMedium` | `10` | Labels, descriptions (px) |
-| `FontSizeLarge` | `11` | Feature labels, primary labels (px) |
-| `FontSizeButton` | `12` | Button text, value displays (px) |
-| `FontSizeNotification` | `13` | Toast / macro-dialog notifications (between Button and Popup) (px) |
-| `FontSizePopup` | `14` | Notifications, popup titles (px) |
-| `FontSizeTitle` | `16` | Large control buttons (+/-) (px) |
-| `FontSizeIndicator` | `18` | TX/RX/SPLIT indicator labels (px) |
-| `FontSizeFrequency` | `32` | VFO frequency displays (px) |
+| Role | Constant | px | Usage |
+|------|----------|----|-------|
+| floor | `FontSizeFloor` | `10` | Nothing is drawn smaller |
+| caption | `FontSizeCaption` | `10` | Sub-labels, scales, secondary and compact button text |
+| body | `FontSizeBody` | `11` | Labels, popup selection buttons, help text |
+| readout | `FontSizeReadout` | `12` | Values, button text, popup titles, status bar |
+| heading | `FontSizeHeading` | `14` | Dialog forms, menu rows, notifications |
+| indicator | `FontSizeIndicator` | `18` | TX/RX/SPLIT, VFO A/B badges, +/- and arrow keys, page titles |
+| display | `FontSizeDisplay` | `32` | VFO frequency |
 
-### DX Cluster Spot Label Font Sizes
+Removed names, for reading older code: `FontSizeTiny` / `Small` / `Normal` / `Medium` → caption; `FontSizeLarge`,
+`PopupButtonSize` → body; `FontSizeButton`, `PopupTitleSize`, `PopupValueSize` → readout; `FontSizeNotification`
+(was 13), `FontSizePopup` → heading; `FontSizeTitle` (was 16) → indicator; `FontSizeFrequency` → display.
 
-User-configurable in Options → DX Cluster (the slider runs `FontSizeSpotMin..FontSizeSpotMax`).
+### User-adjustable Ranges
 
 | Constant | Value | Usage |
 |----------|-------|-------|
-| `FontSizeSpot` | `11` | Default DX cluster spot-label size (px) |
-| `FontSizeSpotMin` | `10` (= floor) | Slider minimum for spot label size (px) |
-| `FontSizeSpotMax` | `16` | Slider maximum for spot label size (px) |
+| `FontSizeSpot` | = body (`11`) | Default DX cluster spot-label size (Options → DX Cluster) |
+| `FontSizeSpotMin` / `Max` | `10` / `16` | Spot slider range |
+| `FontSizeTextDecode` | = body (`11`) | Default decoded-text size (A−/A+, saved per receiver) |
+| `FontSizeTextDecodeMin` / `Max` | `10` / `24` | A−/A+ range |
 
-### Text Decode Font Sizes
-
-The decode window's A−/A+ buttons, persisted per receiver by `RadioSettings::textDecodeFontSize()`.
-
-| Constant | Value | Usage |
-|----------|-------|-------|
-| `FontSizeTextDecode` | `11` | Default decoded-text size (px; was 9) |
-| `FontSizeTextDecodeMin` | `10` (= floor) | Smallest A− allows (px; was 7) |
-| `FontSizeTextDecodeMax` | `24` | Largest A+ allows (px) |
-
-### Popup Menu Font Sizes (horizontal control-bar popups)
-
-| Constant | Value | Usage |
-|----------|-------|-------|
-| `PopupTitleSize` | `12` | Popup title labels (e.g., "MIC INPUT", "ATTENUATOR") (px) |
-| `PopupButtonSize` | `11` | Popup selection buttons (e.g., "FRONT", "REAR") (px) |
-| `PopupValueSize` | `12` | Value displays (e.g., "6 dB", "184 Hz") (px) |
 
 ### Slider Dimensions
 
@@ -451,6 +414,8 @@ QLinearGradient K4Styles::selectedGradient(int top, int bottom);
 QLinearGradient K4Styles::meterGradient(qreal x1, qreal y1, qreal x2, qreal y2);
 
 // Colors
+QColor K4Styles::withAlpha(const char *color, int alpha);  // token at an Alpha:: opacity
+QString K4Styles::cssRgba(const char *color, int alpha);   // same, as a style-sheet rgba() value
 QColor K4Styles::borderColor();          // BorderNormal (#606060)
 QColor K4Styles::borderColorSelected();  // BorderSelected (#AAAAAA)
 
@@ -470,11 +435,11 @@ Under `K4Styles::Dialog::`. Each returns a `const QString &` to a static cached 
 // Static/cached — `const QString &`
 const QString &K4Styles::Dialog::pageBackground();   // Page background-color
 const QString &K4Styles::Dialog::separator();        // Horizontal/vertical separator line
-const QString &K4Styles::Dialog::titleLabel();       // Amber bold title (AccentAmber, FontSizeTitle)
-const QString &K4Styles::Dialog::formLabel();        // Gray form label (TextGray, FontSizePopup)
-const QString &K4Styles::Dialog::formValue();        // White bold value (TextWhite, FontSizePopup)
-const QString &K4Styles::Dialog::helpText();         // Gray italic help (TextGray, FontSizeLarge)
-const QString &K4Styles::Dialog::sectionHeader();    // White bold header (TextWhite, FontSizePopup)
+const QString &K4Styles::Dialog::titleLabel();       // Amber bold title (AccentAmber, FontSizeIndicator)
+const QString &K4Styles::Dialog::formLabel();        // Gray form label (TextSecondary, FontSizeHeading)
+const QString &K4Styles::Dialog::formValue();        // White bold value (TextPrimary, FontSizeHeading)
+const QString &K4Styles::Dialog::helpText();         // Gray italic help (TextSecondary, FontSizeBody)
+const QString &K4Styles::Dialog::sectionHeader();    // White bold header (TextPrimary, FontSizeHeading)
 const QString &K4Styles::Dialog::comboBox();         // Full combo box styling (dark bg, arrow, item view)
 const QString &K4Styles::Dialog::lineEdit();         // Full line edit (dark bg, focus border)
 const QString &K4Styles::Dialog::spinBox();          // Full spin box (dark bg, focus border, drawn arrows)
@@ -524,7 +489,7 @@ void MyWidget::paintEvent(QPaintEvent *) {
                            K4Styles::Dimensions::BorderRadius);
 
     // Draw text
-    painter.setPen(QColor(K4Styles::Colors::TextWhite));
+    painter.setPen(QColor(K4Styles::Colors::TextPrimary));
     painter.drawText(rect(), Qt::AlignCenter, "Label");
 }
 ```
@@ -562,89 +527,18 @@ edit->setStyleSheet(K4Styles::Dialog::lineEdit());
 
 ---
 
-## Color Palette Visual Reference
+## Enforcement
 
-```
-Backgrounds:
-  #1a1a1a ████ Background
-  #0d0d0d ████ DarkBackground
-  #1e1e1e ████ PopupBackground
-  #444444 ████ DisabledBackground
+`tests/test_tokenstandard.cpp` (`TokenStandardTests`):
 
-Accent & VFO Colors:
-  #FFB000 ████ AccentAmber (TX indicators, highlights)
-  #00BFFF ████ VfoACyan (VFO A theme)
-  #00FF00 ████ VfoBGreen (VFO B theme)
-
-Status:
-  #FF0000 ████ TxRed
-  #00FF00 ████ StatusGreen
-
-Text:
-  #FFFFFF ████ TextWhite
-  #333333 ████ TextDark
-  #999999 ████ TextGray
-  #828282 ████ TextFaded
-  #FF6666 ████ TextRed
-  #666666 ████ InactiveGray
-
-Normal Gradient (top→bottom):
-  #4a4a4a ████ GradientTop
-  #3a3a3a ████ GradientMid1
-  #353535 ████ GradientMid2
-  #2a2a2a ████ GradientBottom
-
-Selected Gradient (top→bottom):
-  #E0E0E0 ████ SelectedTop
-  #D0D0D0 ████ SelectedMid1
-  #C8C8C8 ████ SelectedMid2
-  #B8B8B8 ████ SelectedBottom
-
-Borders:
-  #606060 ████ BorderNormal
-  #808080 ████ BorderHover
-  #909090 ████ BorderPressed
-  #AAAAAA ████ BorderSelected
-
-Dialog / Panel Borders:
-  #333333 ████ DialogBorder
-  #444444 ████ PanelBorder
-  #FF6666 ████ ErrorRed
-  #331111 ████ ErrorBgDark (muted red error-toast background)
-
-Filter Indicator:
-  #FFD040 ████ FilterIndicatorGold
-
-Meter Gradient (green→yellow→red):
-  #00CC00 ████ MeterGreenDark
-  #00FF00 ████ MeterGreen
-  #CCFF00 ████ MeterYellowGreen
-  #FFFF00 ████ MeterYellow
-  #FF6600 ████ MeterOrange
-  #FF3300 ████ MeterOrangeRed
-  #FF0000 ████ MeterRed
-
-PA Drain Meter (Id):
-  #2E7D32 ████ MeterIdDark (muted forest green)
-  #66BB6A ████ MeterIdLight (lighter sage green)
-
-VFO Indicator Badges:
-  #707070 ████ OverlayBackground
-
-Overlay Panels (menu/macro full-screen overlays):
-  #18181C ████ OverlayContentBg
-  #222228 ████ OverlayHeaderBg
-  #1E1E24 ████ OverlayColumnHeaderBg
-  #19191E ████ OverlayItemBg
-  #3A3A45 ████ OverlayNavButton
-  #505060 ████ OverlayNavButtonPressed
-  #28282D ████ OverlayDivider
-  #3C3C41 ████ OverlayDividerLight
-
-Selection:
-  #DCDCDC ████ SelectionLight
-  #505055 ████ SelectionDark
-```
+- every (text token, background) pair the UI draws meets 4.5:1, scrims and translucent fills judged as composited;
+  pairs that do not (disabled text, the SUB/DIV off badge, PTT pressed, the light side-panel buttons) are listed
+  with their reason and must stay below 4.5:1, so a fixed pair has to leave the list;
+- no hex value is repeated in `k4constants.h`;
+- outside `k4constants.h` (comments excluded): no `setPointSize`, no literal size in `setPixelSize` / `paintFont` /
+  `dataFont` / `font-size:`, no hex colour, no `QColor(<digit>` or `QColor::fromRgb[F](<digit>`, no
+  `Qt::white`/`Qt::black`, no style-sheet `rgb()`/`rgba()` literal or `black`/`white` keyword. Exceptions are an
+  explicit per-file, per-rule allow-list in the test.
 
 ---
 

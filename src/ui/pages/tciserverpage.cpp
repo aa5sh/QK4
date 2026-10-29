@@ -35,9 +35,9 @@ QString clientTableStyle() {
                    "QTableWidget::item { padding: 2px 6px; }"
                    "QHeaderView::section { background-color: %5; color: %6; border: 0px; "
                    "               border-bottom: 1px solid %3; padding: 2px 6px; font-size: %4px; }")
-        .arg(K4Styles::Colors::DarkBackground, K4Styles::Colors::TextWhite, K4Styles::Colors::DialogBorder)
-        .arg(K4Styles::Dimensions::FontSizeLarge)
-        .arg(K4Styles::Colors::Background, K4Styles::Colors::TextGray);
+        .arg(K4Styles::Colors::DarkBackground, K4Styles::Colors::TextPrimary, K4Styles::Colors::DialogBorder)
+        .arg(K4Styles::Dimensions::FontSizeBody)
+        .arg(K4Styles::Colors::Background, K4Styles::Colors::TextSecondary);
 }
 
 } // namespace
@@ -59,8 +59,8 @@ TciServerPage::TciServerPage(TciController *tciController, AudioController *audi
                                  "control and audio over one connection. No loopback sound card is needed.",
                                  this);
     descLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                 .arg(K4Styles::Colors::TextGray)
-                                 .arg(K4Styles::Dimensions::FontSizeButton));
+                                 .arg(K4Styles::Colors::TextSecondary)
+                                 .arg(K4Styles::Dimensions::FontSizeReadout));
     descLabel->setWordWrap(true);
     layout->addWidget(descLabel);
 
@@ -77,7 +77,7 @@ TciServerPage::TciServerPage(TciController *tciController, AudioController *audi
     statusTitleLabel->setFixedWidth(K4Styles::Dimensions::FormLabelWidth);
 
     m_statusLabel = new QLabel("Not running", this);
-    m_statusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::ErrorRed));
+    m_statusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::TextRed));
 
     statusLayout->addWidget(statusTitleLabel);
     statusLayout->addWidget(m_statusLabel);
@@ -92,8 +92,8 @@ TciServerPage::TciServerPage(TciController *tciController, AudioController *audi
 
     m_clientsLabel = new QLabel("0 connected", this);
     m_clientsLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                      .arg(K4Styles::Colors::TextWhite)
-                                      .arg(K4Styles::Dimensions::FontSizePopup));
+                                      .arg(K4Styles::Colors::TextPrimary)
+                                      .arg(K4Styles::Dimensions::FontSizeHeading));
 
     clientsLayout->addWidget(clientsTitleLabel);
     clientsLayout->addWidget(m_clientsLabel);
@@ -150,8 +150,8 @@ TciServerPage::TciServerPage(TciController *tciController, AudioController *audi
 
     auto *portHint = new QLabel("(default: 50001)", this);
     portHint->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                .arg(K4Styles::Colors::TextGray)
-                                .arg(K4Styles::Dimensions::FontSizeLarge));
+                                .arg(K4Styles::Colors::TextSecondary)
+                                .arg(K4Styles::Dimensions::FontSizeBody));
 
     portLayout->addWidget(portLabel);
     portLayout->addWidget(m_portEdit);
@@ -187,14 +187,14 @@ TciServerPage::TciServerPage(TciController *tciController, AudioController *audi
     m_txGainSlider->setRange(0, 100);
     m_txGainSlider->setValue(RadioSettings::instance()->tciTxGain());
     m_txGainSlider->setStyleSheet(
-        K4Styles::sliderHorizontal(K4Styles::Colors::TextDark, K4Styles::Colors::AccentAmber));
+        K4Styles::sliderHorizontal(K4Styles::Colors::DialogBorder, K4Styles::Colors::AccentAmber));
     connect(m_txGainSlider, &QSlider::valueChanged, this, &TciServerPage::onTciTxGainChanged);
     txGainLayout->addWidget(m_txGainSlider, 1);
 
     m_txGainValueLabel = new QLabel(QString("%1%").arg(m_txGainSlider->value()), this);
     m_txGainValueLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                          .arg(K4Styles::Colors::TextWhite)
-                                          .arg(K4Styles::Dimensions::FontSizePopup));
+                                          .arg(K4Styles::Colors::TextPrimary)
+                                          .arg(K4Styles::Dimensions::FontSizeHeading));
     m_txGainValueLabel->setFixedWidth(K4Styles::Dimensions::SliderValueLabelWidth);
     m_txGainValueLabel->setAlignment(Qt::AlignRight);
     txGainLayout->addWidget(m_txGainValueLabel);
@@ -282,7 +282,7 @@ void TciServerPage::updateStatus() {
         m_statusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::StatusGreen));
     } else {
         m_statusLabel->setText("Not running");
-        m_statusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::ErrorRed));
+        m_statusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::TextRed));
     }
 
     const int clients = m_tciController ? m_tciController->clientCount() : 0;
@@ -303,7 +303,7 @@ void TciServerPage::updateClients(const QVector<TciClientInfo> &clients) {
         // One row saying so, rather than an empty box that reads as broken.
         m_clientsTable->setRowCount(1);
         auto *item = new QTableWidgetItem("No clients connected");
-        item->setForeground(QColor(K4Styles::Colors::TextGray));
+        item->setForeground(QColor(K4Styles::Colors::TextSecondary));
         m_clientsTable->setItem(0, ColAddress, item);
         m_clientsTable->setItem(0, ColLastSeen, new QTableWidgetItem(QString()));
         m_clientsTable->setItem(0, ColLastMessage, new QTableWidgetItem(QString()));

@@ -8,7 +8,7 @@ namespace {
 // Notification theme — pulled from K4Styles so color/dimension changes propagate globally.
 const QString BackgroundColor = K4Styles::Colors::GradientBottom; // #2a2a2a
 const QString BorderColor = K4Styles::Colors::AccentAmber;        // #FFB000
-const QString TextColor = K4Styles::Colors::TextWhite;            // #FFFFFF
+const QString TextColor = K4Styles::Colors::TextPrimary;          // #FFFFFF
 constexpr int Padding = 20;
 constexpr int BorderRadius = K4Styles::Dimensions::BorderRadiusLarge; // 8
 constexpr int BorderWidth = K4Styles::Dimensions::BorderWidth;        // 2
@@ -24,7 +24,7 @@ NotificationWidget::NotificationWidget(QWidget *parent) : QWidget(parent), m_tim
     m_label->setStyleSheet(QString("QLabel { color: %1; background: transparent; }").arg(TextColor));
 
     QFont font = m_label->font();
-    font.setPixelSize(K4Styles::Dimensions::FontSizePopup);
+    font.setPixelSize(K4Styles::Dimensions::FontSizeHeading);
     font.setBold(true);
     m_label->setFont(font);
 

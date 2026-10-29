@@ -29,7 +29,7 @@ void LineOutPopupWidget::setupUi() {
     m_leftValueLabel = new QPushButton(QString::number(m_leftLevel), this);
     m_leftValueLabel->setFixedSize(K4Styles::Dimensions::NavButtonWidth, K4Styles::Dimensions::ButtonHeightMedium);
     m_leftValueLabel->setFocusPolicy(Qt::NoFocus);
-    m_leftValueLabel->setStyleSheet(K4Styles::popupValueLabel(K4Styles::Colors::TextWhite));
+    m_leftValueLabel->setStyleSheet(K4Styles::popupValueLabel(K4Styles::Colors::TextPrimary));
 
     m_rightBtn = new QPushButton("RIGHT", this);
     m_rightBtn->setFixedSize(K4Styles::Dimensions::PopupButtonWidth, K4Styles::Dimensions::ButtonHeightMedium);
@@ -39,7 +39,7 @@ void LineOutPopupWidget::setupUi() {
     m_rightValueLabel = new QPushButton(QString::number(m_rightLevel), this);
     m_rightValueLabel->setFixedSize(K4Styles::Dimensions::NavButtonWidth, K4Styles::Dimensions::ButtonHeightMedium);
     m_rightValueLabel->setFocusPolicy(Qt::NoFocus);
-    m_rightValueLabel->setStyleSheet(K4Styles::popupValueLabel(K4Styles::Colors::TextWhite));
+    m_rightValueLabel->setStyleSheet(K4Styles::popupValueLabel(K4Styles::Colors::TextPrimary));
 
     m_rightEqualsLeftBtn = new QPushButton("RIGHT\n=LEFT", this);
     m_rightEqualsLeftBtn->setFixedSize(K4Styles::Dimensions::PopupButtonWidth,
@@ -104,7 +104,7 @@ void LineOutPopupWidget::updateButtonStyles() {
 
     if (m_rightEqualsLeft) {
         m_rightBtn->setStyleSheet(K4Styles::popupButtonNormal() +
-                                  QString("QPushButton { color: %1; }").arg(K4Styles::Colors::TextGray));
+                                  QString("QPushButton { color: %1; }").arg(K4Styles::Colors::TextDisabled));
     } else {
         m_rightBtn->setStyleSheet(m_rightBtn->isChecked() ? K4Styles::popupButtonSelected()
                                                           : K4Styles::popupButtonNormal());
@@ -114,7 +114,7 @@ void LineOutPopupWidget::updateButtonStyles() {
                                                           : K4Styles::popupButtonNormal());
 
     m_rightValueLabel->setStyleSheet(
-        K4Styles::popupValueLabel(m_rightEqualsLeft ? K4Styles::Colors::TextGray : K4Styles::Colors::TextWhite));
+        K4Styles::popupValueLabel(m_rightEqualsLeft ? K4Styles::Colors::TextSecondary : K4Styles::Colors::TextPrimary));
 }
 
 void LineOutPopupWidget::updateValueLabels() {

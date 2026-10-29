@@ -189,7 +189,7 @@ void SideControlPanel::setupUi() {
     m_volumeLabel = new QLabel("MAIN", this);
     m_volumeLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
                                      .arg(K4Styles::Colors::VfoACyan)
-                                     .arg(K4Styles::Dimensions::FontSizeMedium));
+                                     .arg(K4Styles::Dimensions::FontSizeCaption));
     m_volumeLabel->setAlignment(Qt::AlignCenter);
     layout->addWidget(m_volumeLabel);
 
@@ -209,7 +209,7 @@ void SideControlPanel::setupUi() {
     m_subVolumeLabel = new QLabel("SUB", this);
     m_subVolumeLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
                                         .arg(K4Styles::Colors::VfoBGreen)
-                                        .arg(K4Styles::Dimensions::FontSizeMedium));
+                                        .arg(K4Styles::Dimensions::FontSizeCaption));
     m_subVolumeLabel->setAlignment(Qt::AlignCenter);
     layout->addWidget(m_subVolumeLabel);
 
@@ -231,8 +231,8 @@ void SideControlPanel::setupUi() {
     // ===== Status Area (mirrors header data) =====
     m_timeLabel = new QLabel("00:00:00 Z", this);
     m_timeLabel->setStyleSheet(QString("color: %1; font-size: %2px; font-weight: bold;")
-                                   .arg(K4Styles::Colors::TextWhite)
-                                   .arg(K4Styles::Dimensions::FontSizeLarge));
+                                   .arg(K4Styles::Colors::TextPrimary)
+                                   .arg(K4Styles::Dimensions::FontSizeBody));
     layout->addWidget(m_timeLabel);
 
     // WHY: setTime() was historically never wired from any controller, leaving the side panel
@@ -246,14 +246,14 @@ void SideControlPanel::setupUi() {
 
     m_powerSwrLabel = new QLabel("0.0W  1.0:1", this);
     m_powerSwrLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                       .arg(K4Styles::Colors::TextWhite)
-                                       .arg(K4Styles::Dimensions::FontSizeLarge));
+                                       .arg(K4Styles::Colors::TextPrimary)
+                                       .arg(K4Styles::Dimensions::FontSizeBody));
     layout->addWidget(m_powerSwrLabel);
 
     m_voltageCurrentLabel = new QLabel("--.-V  -.-A", this);
     m_voltageCurrentLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                             .arg(K4Styles::Colors::TextWhite)
-                                             .arg(K4Styles::Dimensions::FontSizeLarge));
+                                             .arg(K4Styles::Colors::TextPrimary)
+                                             .arg(K4Styles::Dimensions::FontSizeBody));
     layout->addWidget(m_voltageCurrentLabel);
 
     layout->addSpacing(K4Styles::Dimensions::SidePanelMinorGap);
@@ -274,8 +274,8 @@ void SideControlPanel::setupUi() {
 
     auto *versionLabel = new QLabel(QString("QK4 V.%1").arg(QK4_VERSION), this);
     versionLabel->setStyleSheet(QString("color: %1; font-size: %2px;")
-                                    .arg(K4Styles::Colors::InactiveGray)
-                                    .arg(K4Styles::Dimensions::FontSizeSmall));
+                                    .arg(K4Styles::Colors::TextSecondary)
+                                    .arg(K4Styles::Dimensions::FontSizeCaption));
     layout->addWidget(versionLabel);
 
     // Connect icon button signals

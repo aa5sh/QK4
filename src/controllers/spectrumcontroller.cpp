@@ -3,7 +3,7 @@
 #include "dsp/panadapter_rhi.h"
 #include "dsp/spectrumgeometry.h"
 #include "models/radiostate.h"
-#include "ui/styling/k4constants.h"
+#include "ui/styling/k4styles.h"
 #include "ui/widgets/vfowidget.h"
 #include "dxclustercontroller.h"
 #include "settings/radiosettings.h"
@@ -97,7 +97,7 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
     // Primary VFO A uses default cyan passband
     // Secondary VFO B uses green passband
     QColor vfoBPassbandAlpha(K4Styles::Colors::VfoBGreen);
-    vfoBPassbandAlpha.setAlpha(64);
+    vfoBPassbandAlpha.setAlpha(K4Styles::Colors::Alpha::PassbandFill);
     m_panA.pad->setSecondaryPassbandColor(vfoBPassbandAlpha);
     m_panA.pad->setSecondaryMarkerColor(QColor(K4Styles::Colors::VfoBGreen));
     m_panA.pad->setSecondaryVisible(true);
@@ -123,7 +123,7 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
     m_panB.pad->setFrequencyMarkerColor(QColor(K4Styles::Colors::VfoBGreen));
     // Secondary VFO A uses cyan passband
     QColor vfoAPassbandAlpha(K4Styles::Colors::VfoACyan);
-    vfoAPassbandAlpha.setAlpha(64);
+    vfoAPassbandAlpha.setAlpha(K4Styles::Colors::Alpha::PassbandFill);
     m_panB.pad->setSecondaryPassbandColor(vfoAPassbandAlpha);
     m_panB.pad->setSecondaryMarkerColor(QColor(K4Styles::Colors::VfoACyan));
     m_panB.pad->setSecondaryVisible(true);
@@ -131,23 +131,26 @@ void SpectrumController::setupSpectrumUI(QWidget *parentWidget, VFOWidget *vfoA,
     m_panB.pad->hide(); // Start hidden (MainOnly mode)
 
     // Span control buttons - overlay on panadapter (lower right, above freq labels)
-    // Note: rgba used intentionally for transparent overlay effect on spectrum
-    const QString btnStyle = QString("QPushButton { background: rgba(0,0,0,0.6); color: %1; "
-                                     "border: 1px solid %2; border-radius: 4px; "
-                                     "font-size: %3px; font-weight: bold; min-width: 28px; min-height: 24px; }"
-                                     "QPushButton:hover { background: rgba(80,80,80,0.8); }")
-                                 .arg(K4Styles::Colors::TextWhite)
-                                 .arg(K4Styles::Colors::InactiveGray)
-                                 .arg(K4Styles::Dimensions::FontSizePopup);
+    const QString btnStyle =
+        QString("QPushButton { background: %4; color: %1; "
+                "border: 1px solid %2; border-radius: 4px; "
+                "font-size: %3px; font-weight: bold; min-width: 28px; min-height: 24px; }"
+                "QPushButton:hover { background: %5; }")
+            .arg(K4Styles::Colors::TextPrimary)
+            .arg(K4Styles::Colors::MutedGraphic)
+            .arg(K4Styles::Dimensions::FontSizeHeading)
+            .arg(K4Styles::cssRgba(K4Styles::Colors::Black, K4Styles::Colors::Alpha::SpanButtonScrim))
+            .arg(K4Styles::cssRgba(K4Styles::Colors::GradientTop, K4Styles::Colors::Alpha::SpanButtonHover));
 
     // VFO indicator badges - bottom-left corner of waterfall, tab shape with top-right rounded
-    const QString vfoIndicatorStyle = QString("QLabel { background: %1; color: black; "
+    const QString vfoIndicatorStyle = QString("QLabel { background: %1; color: %4; "
                                               "font-size: %2px; font-weight: bold; "
                                               "border-top-left-radius: 0px; border-top-right-radius: %3px; "
                                               "border-bottom-left-radius: 0px; border-bottom-right-radius: 0px; }")
                                           .arg(K4Styles::Colors::OverlayBackground)
-                                          .arg(K4Styles::Dimensions::FontSizeTitle)
-                                          .arg(K4Styles::Dimensions::BorderRadiusLarge);
+                                          .arg(K4Styles::Dimensions::FontSizeIndicator)
+                                          .arg(K4Styles::Dimensions::BorderRadiusLarge)
+                                          .arg(K4Styles::Colors::TextOnAccent);
 
     createPanOverlays(m_panA, btnStyle, vfoIndicatorStyle);
     createPanOverlays(m_panB, btnStyle, vfoIndicatorStyle);

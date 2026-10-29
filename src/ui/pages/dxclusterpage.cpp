@@ -23,7 +23,7 @@ DxClusterPage::DxClusterPage(DxClusterController *controller, QWidget *parent)
     statusTitleLabel->setStyleSheet(K4Styles::Dialog::formLabel());
     statusTitleLabel->setFixedWidth(K4Styles::Dimensions::FormLabelWidth);
     m_statusLabel = new QLabel("Disconnected", this);
-    m_statusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::TextGray));
+    m_statusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::TextSecondary));
     statusLayout->addWidget(statusTitleLabel);
     statusLayout->addWidget(m_statusLabel);
     statusLayout->addStretch();
@@ -52,8 +52,8 @@ DxClusterPage::DxClusterPage(DxClusterController *controller, QWidget *parent)
         QString("QListWidget { background-color: %1; color: %2; border: 1px solid %3; font-size: %4px; }"
                 "QListWidget::item { padding: 6px 8px; }"
                 "QListWidget::item:selected { background-color: %5; color: %1; }")
-            .arg(K4Styles::Colors::DarkBackground, K4Styles::Colors::TextWhite, K4Styles::Colors::DialogBorder)
-            .arg(K4Styles::Dimensions::FontSizeMedium)
+            .arg(K4Styles::Colors::DarkBackground, K4Styles::Colors::TextPrimary, K4Styles::Colors::DialogBorder)
+            .arg(K4Styles::Dimensions::FontSizeCaption)
             .arg(K4Styles::Colors::AccentAmber));
     m_clusterList->setMinimumHeight(100);
     auto loadEntry = [this]() {
@@ -162,7 +162,7 @@ DxClusterPage::DxClusterPage(DxClusterController *controller, QWidget *parent)
         QString callsign = RadioSettings::instance()->dxClusterCallsign();
         if (callsign.isEmpty()) {
             m_statusLabel->setText("Set your callsign in Cluster Settings below");
-            m_statusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::ErrorRed));
+            m_statusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::TextRed));
             return;
         }
         m_controller->connectCluster(row, clusters[row].host, clusters[row].port, callsign);
@@ -281,8 +281,8 @@ DxClusterPage::DxClusterPage(DxClusterController *controller, QWidget *parent)
     m_consoleOutput->setStyleSheet(
         QString("QPlainTextEdit { background-color: %1; color: %2; border: 1px solid %3; "
                 "font-family: 'Menlo', 'Consolas', monospace; font-size: %4px; }")
-            .arg(K4Styles::Colors::DarkBackground, K4Styles::Colors::TextWhite, K4Styles::Colors::DialogBorder)
-            .arg(K4Styles::Dimensions::FontSizePopup));
+            .arg(K4Styles::Colors::DarkBackground, K4Styles::Colors::TextPrimary, K4Styles::Colors::DialogBorder)
+            .arg(K4Styles::Dimensions::FontSizeHeading));
     m_consoleOutput->setMinimumHeight(80);
     layout->addWidget(m_consoleOutput, 1);
 
@@ -318,7 +318,7 @@ DxClusterPage::DxClusterPage(DxClusterController *controller, QWidget *parent)
         connect(m_controller, &DxClusterController::clusterError, this, [this](int index, const QString &error) {
             if (index == m_clusterList->currentRow()) {
                 m_statusLabel->setText("Error: " + error);
-                m_statusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::ErrorRed));
+                m_statusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::TextRed));
             }
         });
         // Per-cluster console lines — only append if this cluster is selected
@@ -368,7 +368,7 @@ void DxClusterPage::updateListIndicators() {
         } else if (state == DxClusterClient::Connecting) {
             item->setForeground(QColor(K4Styles::Colors::AccentAmber));
         } else {
-            item->setForeground(QColor(K4Styles::Colors::TextWhite));
+            item->setForeground(QColor(K4Styles::Colors::TextPrimary));
         }
     }
 }
@@ -464,7 +464,7 @@ void DxClusterPage::updateStatus() {
 
     if (connectedCount == 0) {
         m_statusLabel->setText("Disconnected");
-        m_statusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::TextGray));
+        m_statusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::TextSecondary));
     } else if (connectedCount == 1) {
         m_statusLabel->setText("1 cluster connected");
         m_statusLabel->setStyleSheet(K4Styles::Dialog::statusLabel(K4Styles::Colors::StatusGreen));

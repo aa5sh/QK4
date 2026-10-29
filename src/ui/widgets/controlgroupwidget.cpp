@@ -100,46 +100,48 @@ void ControlGroupWidget::paintEvent(QPaintEvent *event) {
 
     m_plusRect = QRect(x, 2, buttonWidth, height() - 4);
 
+    const QColor textPrimary(K4Styles::Colors::TextPrimary);
+
     // Draw label
     QFont labelFont = font();
-    labelFont.setPixelSize(K4Styles::Dimensions::FontSizeLarge);
+    labelFont.setPixelSize(K4Styles::Dimensions::FontSizeBody);
     labelFont.setBold(true);
     painter.setFont(labelFont);
-    painter.setPen(Qt::white);
+    painter.setPen(textPrimary);
     painter.drawText(labelRect, Qt::AlignCenter, m_label);
 
     // Draw AUTO button if shown
     if (m_showAutoButton) {
         if (m_autoEnabled) {
-            painter.fillRect(m_autoRect, Qt::white);
-            painter.setPen(QColor(K4Styles::Colors::InactiveGray));
+            painter.fillRect(m_autoRect, QColor(K4Styles::Colors::White));
+            painter.setPen(QColor(K4Styles::Colors::TextOnLight));
         } else {
-            painter.setPen(Qt::white);
+            painter.setPen(textPrimary);
         }
         QFont autoFont = font();
-        autoFont.setPixelSize(K4Styles::Dimensions::FontSizeMedium);
+        autoFont.setPixelSize(K4Styles::Dimensions::FontSizeCaption);
         autoFont.setBold(true);
         painter.setFont(autoFont);
         painter.drawText(m_autoRect, Qt::AlignCenter, "AUTO");
         painter.setFont(labelFont);
-        painter.setPen(Qt::white);
+        painter.setPen(textPrimary);
     }
 
-    // Draw value (faded grey when auto mode)
+    // Draw value (grey when auto mode sets it)
     if (m_valueFaded) {
-        painter.setPen(QColor(K4Styles::Colors::TextFaded));
+        painter.setPen(QColor(K4Styles::Colors::TextSecondaryOnRaised));
     } else {
-        painter.setPen(Qt::white);
+        painter.setPen(textPrimary);
     }
     painter.drawText(valueRect, Qt::AlignCenter, m_value);
-    painter.setPen(Qt::white); // Reset for buttons
+    painter.setPen(textPrimary); // Reset for buttons
 
     // Draw minus/plus buttons (faded when auto mode disables them)
     QFont buttonFont = font();
-    buttonFont.setPixelSize(K4Styles::Dimensions::FontSizeTitle);
+    buttonFont.setPixelSize(K4Styles::Dimensions::FontSizeIndicator);
     buttonFont.setBold(true);
     painter.setFont(buttonFont);
-    painter.setPen(m_autoEnabled ? QColor(K4Styles::Colors::TextFaded) : Qt::white);
+    painter.setPen(m_autoEnabled ? QColor(K4Styles::Colors::TextDisabled) : textPrimary);
     painter.drawText(m_minusRect, Qt::AlignCenter, "-");
     painter.drawText(m_plusRect, Qt::AlignCenter, "+");
 }
