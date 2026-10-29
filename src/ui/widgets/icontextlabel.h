@@ -48,6 +48,7 @@ signals:
     void clicked();
 
 protected:
+    bool event(QEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
 
 private:
@@ -60,6 +61,7 @@ private:
     QLabel *m_unitLabel;
     QColor m_valueColor;
     QColor m_glyphColor;
+    QColor m_renderedGlyphColor;
     K4Glyphs::Glyph m_glyph;
     bool m_clickable = false;
 };

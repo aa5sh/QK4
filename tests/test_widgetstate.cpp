@@ -7,6 +7,7 @@
 #include "ui/dialogs/macrodialog.h"
 #include "ui/overlays/dxspotoverlay.h"
 #include "ui/popups/confirmpopup.h"
+#include "ui/styling/k4glyphs.h"
 #include "ui/popups/lineoutpopup.h"
 #include "ui/widgets/dualcontrolbutton.h"
 #include "ui/widgets/featuremenubar.h"
@@ -14,6 +15,8 @@
 #include "ui/widgets/sidecontrolpanel.h"
 
 #include <QApplication>
+#include <QIcon>
+#include <QtMath>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSettings>
@@ -36,6 +39,26 @@ private:
     }
 
 private slots:
+    void glyphsRenderAtTheDevicePixelRatio() {
+        // The glyphs were drawn into a 1x pixmap and stretched, so at 125% on a Retina screen (2.5x) the
+        // power, thermometer and lightning icons were blurred. Each must come back at the ratio asked for.
+        const QColor green(Qt::green);
+        for (const K4Glyphs::Glyph &glyph : {K4Glyphs::power(22), K4Glyphs::thermometer(16), K4Glyphs::lightning(16)}) {
+            const QIcon icon = glyph(green);
+            for (const qreal dpr : {1.0, 2.0, 2.5}) {
+                const QPixmap pm = icon.pixmap(QSize(20, 20), dpr);
+                QCOMPARE(pm.devicePixelRatio(), dpr);
+                QCOMPARE(pm.size(), QSize(qCeil(20 * dpr), qCeil(20 * dpr)));
+                const QImage img = pm.toImage();
+                int opaque = 0;
+                for (int y = 0; y < img.height(); ++y)
+                    for (int x = 0; x < img.width(); ++x)
+                        opaque += qAlpha(img.pixel(x, y)) > 128;
+                QVERIFY2(opaque > 0, "glyph drew nothing at this ratio");
+            }
+        }
+    }
+
     void initTestCase() {
         // Macro and side-panel code read saved settings; keep them off the real preferences.
         QVERIFY(m_tempDir.isValid());

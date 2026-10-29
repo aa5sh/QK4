@@ -4,6 +4,7 @@
 
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QEvent>
 #include <QMouseEvent>
 
 namespace {
@@ -72,7 +73,17 @@ void IconTextLabel::setGlyphColor(const QColor &color) {
 void IconTextLabel::renderGlyph(const QColor &color) {
     if (!m_glyph)
         return;
-    m_iconLabel->setPixmap(m_glyph(color));
+    m_renderedGlyphColor = color;
+    m_iconLabel->setPixmap(m_glyph(color).pixmap(QSize(kIconSize, kIconSize), m_iconLabel->devicePixelRatioF()));
+}
+
+bool IconTextLabel::event(QEvent *event) {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 6, 0)
+    // WHY: the pixmap carries the ratio it was drawn at; moving to a screen with another ratio redraws it.
+    if (event->type() == QEvent::DevicePixelRatioChange)
+        renderGlyph(m_renderedGlyphColor);
+#endif
+    return QWidget::event(event);
 }
 
 void IconTextLabel::setLabel(const QString &label) {

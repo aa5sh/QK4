@@ -599,6 +599,7 @@ set_tests_properties(SideControlPanelLayoutTests PROPERTIES ENVIRONMENT "QT_QPA_
 # Widgets whose screen must match their own state (review findings D-019..D-043), offscreen.
 add_executable(test_widgetstate
     test_widgetstate.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/styling/k4glyphs.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/widgets/frequencydisplaywidget.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/widgets/sidecontrolpanel.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/widgets/sidepanelbutton.cpp
