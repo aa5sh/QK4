@@ -53,7 +53,7 @@ void KPA1500Client::connectToHost(const QString &host, quint16 port) {
     m_host = host;
     m_port = port;
     m_receiveBuffer.clear();
-    resetAntennaState();
+    resetCachedState();
 
     setState(Connecting);
     m_socket->connectToHost(host, port);
@@ -108,9 +108,19 @@ void KPA1500Client::requestEnableMap() {
         sendCommand(QStringLiteral("^AE%1ALL;").arg(m_bandNumber, 2, 10, QLatin1Char('0')));
 }
 
-void KPA1500Client::resetAntennaState() {
+void KPA1500Client::resetCachedState() {
     m_bandNumber = -1;
     m_enableMap.clear();
+    m_forwardPower = kUnknownReading;
+    m_reflectedPower = kUnknownReading;
+    m_drivePower = kUnknownReading;
+    m_swr = kUnknownReading;
+    m_paTemperature = kUnknownReading;
+    m_operatingState = StateUnknown;
+    m_faultStatus = FaultNone;
+    m_faultCode.clear();
+    m_serialNumber.clear();
+    m_firmwareVersion.clear();
 }
 
 void KPA1500Client::startPolling(int intervalMs) {
@@ -145,6 +155,7 @@ void KPA1500Client::onSocketConnected() {
 void KPA1500Client::onSocketDisconnected() {
     qCDebug(netKpa) << "KPA1500Client: Disconnected";
     stopPolling();
+    resetCachedState();
     setState(Disconnected);
     emit disconnected();
 }

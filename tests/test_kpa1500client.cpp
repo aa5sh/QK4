@@ -77,6 +77,37 @@ private slots:
 
         client.disconnectFromHost();
     }
+
+    void aReadingUnchangedAcrossAReconnectIsReportedAgain() {
+        // The mini panel clears its gauges on disconnect. A steady reading (the PA temperature is
+        // the usual one) must therefore reach it again after a reconnect, or TMP sits at 0 degrees.
+        QTcpServer amp;
+        KPA1500Client client;
+        QTcpSocket *peer = connectToFakeAmp(amp, client);
+        QVERIFY(peer);
+        QSignalSpy temperature(&client, &KPA1500Client::paTemperatureChanged);
+        QSignalSpy state(&client, &KPA1500Client::operatingStateChanged);
+
+        peer->write("^TM024;^OS0;");
+        peer->flush();
+        QTRY_COMPARE(temperature.count(), 1);
+        QTRY_COMPARE(state.count(), 1);
+
+        client.disconnectFromHost();
+        QTRY_VERIFY(!client.isConnected());
+        amp.close();
+
+        QTcpServer amp2;
+        peer = connectToFakeAmp(amp2, client);
+        QVERIFY(peer);
+        peer->write("^TM024;^OS0;");
+        peer->flush();
+        QTRY_COMPARE(temperature.count(), 2);
+        QCOMPARE(temperature.at(1).at(0).toDouble(), 24.0);
+        QTRY_COMPARE(state.count(), 2);
+
+        client.disconnectFromHost();
+    }
 };
 
 QTEST_MAIN(TestKpa1500Client)

@@ -44,7 +44,8 @@ public:
     void startPolling(int intervalMs);
     void stopPolling();
 
-    // State getters
+    // State getters. Power, SWR and temperature read kUnknownReading (-999) until the amplifier has
+    // reported them on the current connection.
     QString bandName() const { return m_bandName; }
     int bandNumber() const { return m_bandNumber; } // ^BN: 0-10, -1 until known
     double forwardPower() const { return m_forwardPower; }
@@ -95,7 +96,9 @@ private:
     void parseResponse(const QString &response);
     void parseSingleResponse(const QString &response);
     void requestEnableMap();
-    void resetAntennaState();
+    // Forget every cached reading, so the first report after a (re)connect is emitted even when the
+    // amplifier's value has not changed since the last session.
+    void resetCachedState();
 
     QTcpSocket *m_socket;
     QTimer *m_pollTimer;
@@ -108,15 +111,20 @@ private:
     // Poll command string
     static const QString POLL_COMMANDS;
 
+    // WHY: every reading is emitted only when it changes, while the mini panel clears its display on
+    // disconnect. A cache that outlived the connection kept a steady value (the PA temperature) from
+    // ever reaching the panel again after a reconnect. "Unknown" is a value no report can match.
+    static constexpr double kUnknownReading = -999.0;
+
     // Cached state values
     QString m_bandName;
     int m_bandNumber = -1;
     QVector<int> m_enableMap; // connector per antenna 1-32 for m_bandNumber; empty until read
-    double m_forwardPower = 0.0;
-    double m_reflectedPower = 0.0;
-    double m_drivePower = 0.0;
-    double m_swr = 1.0;
-    double m_paTemperature = 0.0;
+    double m_forwardPower = kUnknownReading;
+    double m_reflectedPower = kUnknownReading;
+    double m_drivePower = kUnknownReading;
+    double m_swr = kUnknownReading;
+    double m_paTemperature = kUnknownReading;
     OperatingState m_operatingState = StateUnknown;
     FaultStatus m_faultStatus = FaultNone;
     QString m_faultCode;
