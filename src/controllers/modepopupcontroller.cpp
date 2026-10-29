@@ -8,7 +8,7 @@
 #include <QRegularExpression>
 #include <QWidget>
 
-Q_LOGGING_CATEGORY(qk4ModePopup, "qk4.modepopup")
+Q_LOGGING_CATEGORY(qk4ModePopup, "qk4.modepopup", QtInfoMsg)
 
 ModePopupController::ModePopupController(RadioState *radioState, ConnectionController *connection,
                                          QWidget *parentWidget, QObject *parent)

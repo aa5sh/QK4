@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <cstring>
 
-Q_LOGGING_CATEGORY(catRx, "CAT.RX")
+Q_LOGGING_CATEGORY(catRx, "CAT.RX", QtInfoMsg)
 
 Protocol::Protocol(QObject *parent) : QObject(parent) {}
 

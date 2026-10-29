@@ -20,7 +20,7 @@
 #include <cstring>
 #include <utility>
 
-Q_LOGGING_CATEGORY(qk4Dsp, "qk4.dsp")
+Q_LOGGING_CATEGORY(qk4Dsp, "qk4.dsp", QtInfoMsg)
 
 // Waterfall diagnostics: tier-boundary crossings and render geometry. Enable with
 //     QT_LOGGING_RULES="qk4.pan.diag.debug=true"

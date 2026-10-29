@@ -9,7 +9,7 @@
 #include <sys/socket.h>
 #endif
 
-Q_LOGGING_CATEGORY(k4discovery, "K4Discovery")
+Q_LOGGING_CATEGORY(k4discovery, "K4Discovery", QtInfoMsg)
 
 const char *K4Discovery::DISCOVERY_MESSAGE = "findk4";
 const char *K4Discovery::K4_RESPONSE_PREFIX = "k4";

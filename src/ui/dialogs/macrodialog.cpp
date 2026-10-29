@@ -11,7 +11,7 @@
 #include <QScrollBar>
 #include <QTimer>
 
-Q_LOGGING_CATEGORY(uiMacro, "ui.macro")
+Q_LOGGING_CATEGORY(uiMacro, "ui.macro", QtInfoMsg)
 
 namespace {
 // Layout constants

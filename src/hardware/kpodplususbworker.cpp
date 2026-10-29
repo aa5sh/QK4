@@ -14,7 +14,7 @@
 // pkg-config is unavailable.
 static_assert(LIBUSB_API_VERSION >= 0x01000105, "libusb >= 1.0.21 required");
 
-Q_LOGGING_CATEGORY(hwKpodPlus, "hw.kpodplus")
+Q_LOGGING_CATEGORY(hwKpodPlus, "hw.kpodplus", QtInfoMsg)
 
 // =============================================================================
 // Pure helpers

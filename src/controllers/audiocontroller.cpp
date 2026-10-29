@@ -10,9 +10,9 @@
 #include "settings/radiosettings.h"
 #include "utils/radioutils.h"
 
-Q_LOGGING_CATEGORY(qk4Audio, "qk4.audio")
-Q_LOGGING_CATEGORY(qk4AudioTx, "qk4.audio.tx")
-Q_LOGGING_CATEGORY(qk4AudioRx, "qk4.audio.rx")
+Q_LOGGING_CATEGORY(qk4Audio, "qk4.audio", QtInfoMsg)
+Q_LOGGING_CATEGORY(qk4AudioTx, "qk4.audio.tx", QtInfoMsg)
+Q_LOGGING_CATEGORY(qk4AudioRx, "qk4.audio.rx", QtInfoMsg)
 
 AudioController::AudioController(ConnectionController *connController, RadioState *radioState, QObject *parent)
     : QObject(parent), m_connectionController(connController), m_radioState(radioState),

@@ -8,7 +8,7 @@
 #include <QLoggingCategory>
 #include <QString>
 
-Q_LOGGING_CATEGORY(qk4BandNav, "qk4.bandnav")
+Q_LOGGING_CATEGORY(qk4BandNav, "qk4.bandnav", QtInfoMsg)
 
 BandNavigationController::BandNavigationController(RadioState *radioState, ConnectionController *connection,
                                                    PopupManager *popupManager, QObject *parent)

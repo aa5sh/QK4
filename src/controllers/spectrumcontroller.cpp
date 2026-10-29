@@ -20,7 +20,7 @@
 #include <QResizeEvent>
 #include <limits>
 
-Q_LOGGING_CATEGORY(qk4Spectrum, "qk4.spectrum")
+Q_LOGGING_CATEGORY(qk4Spectrum, "qk4.spectrum", QtInfoMsg)
 
 // ============== SpectrumController Implementation ==============
 

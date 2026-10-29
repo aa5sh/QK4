@@ -3,7 +3,7 @@
 #include <QDebug>
 #include <QtMath>
 
-Q_LOGGING_CATEGORY(netDxCluster, "net.dxcluster")
+Q_LOGGING_CATEGORY(netDxCluster, "net.dxcluster", QtInfoMsg)
 
 // "DX de K3GMQ-#:  14031.00  K0RX           CW    18 dB  24 WPM  CQ      1902Z"
 const QRegularExpression

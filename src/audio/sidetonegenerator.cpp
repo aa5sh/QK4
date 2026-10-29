@@ -13,7 +13,7 @@
 // Sidetone timing, one line per tone onset: how far ahead the block was filled (lead), what was
 // queued ahead of it, and the keying-to-hearing delay the scheduler is holding. Off by default.
 //     QT_LOGGING_RULES="qk4.audio.sidetone.debug=true"
-Q_LOGGING_CATEGORY(qk4Sidetone, "qk4.audio.sidetone")
+Q_LOGGING_CATEGORY(qk4Sidetone, "qk4.audio.sidetone", QtInfoMsg)
 
 namespace {
 constexpr double kPi = 3.14159265358979323846; // not M_PI: MSVC hides it behind _USE_MATH_DEFINES

@@ -2,7 +2,7 @@
 #include "kpa1500antennas.h"
 #include <QLoggingCategory>
 
-Q_LOGGING_CATEGORY(netKpa, "net.kpa")
+Q_LOGGING_CATEGORY(netKpa, "net.kpa", QtInfoMsg)
 
 // KPA1500 band number to label (same numbering as K4 BN command)
 static QString bandNumberToLabel(const QString &bn) {

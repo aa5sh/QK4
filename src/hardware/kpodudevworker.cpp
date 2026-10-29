@@ -13,7 +13,7 @@
 #include <poll.h>
 #include <unistd.h>
 
-Q_LOGGING_CATEGORY(hwKpodUdev, "hw.kpod.udev")
+Q_LOGGING_CATEGORY(hwKpodUdev, "hw.kpod.udev", QtInfoMsg)
 
 // WHY: hidapi's hid_enumerate() on Linux calls libusb_get_device_list() and opens each
 // candidate device to read descriptor strings. Polling that every 2 s for hotplug detection

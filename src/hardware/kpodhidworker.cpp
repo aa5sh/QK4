@@ -9,7 +9,7 @@
 #include "kpodudevworker.h"
 #endif
 
-Q_LOGGING_CATEGORY(hwKpod, "hw.kpod")
+Q_LOGGING_CATEGORY(hwKpod, "hw.kpod", QtInfoMsg)
 
 static void kpodLog(const QString &msg) {
     qCDebug(hwKpod) << "KPOD:" << msg;

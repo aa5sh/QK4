@@ -6,8 +6,8 @@
 // Shared logging category for the audio subsystem (AudioController, AudioEngine,
 // OpusDecoder, OpusEncoder, SidetoneGenerator). Definition lives in audiocontroller.cpp.
 //
-// Runtime filter example:
-//     QT_LOGGING_RULES="qk4.audio.debug=false"
+// Debug output is off by default (every QK4 category defaults to QtInfoMsg). Turn it on with:
+//     QT_LOGGING_RULES="qk4.audio.debug=true"
 Q_DECLARE_LOGGING_CATEGORY(qk4Audio)
 
 // TX wire-format diagnostic, separate so it can be switched on without the rest of the

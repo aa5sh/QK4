@@ -10,7 +10,7 @@
 #include <QLoggingCategory>
 #include <QString>
 
-Q_LOGGING_CATEGORY(qk4Kpa, "qk4.kpa1500")
+Q_LOGGING_CATEGORY(qk4Kpa, "qk4.kpa1500", QtInfoMsg)
 
 KPA1500UiController::KPA1500UiController(StatusBarController *statusBar, RightSidePanel *rightSidePanel,
                                          QObject *parent)

@@ -7,7 +7,7 @@
 #include <QLoggingCategory>
 #include <QWidget>
 
-Q_LOGGING_CATEGORY(qk4TextDecode, "qk4.textdecode")
+Q_LOGGING_CATEGORY(qk4TextDecode, "qk4.textdecode", QtInfoMsg)
 
 namespace {
 

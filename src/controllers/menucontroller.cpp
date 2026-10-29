@@ -9,7 +9,7 @@
 #include <QPoint>
 #include <QWidget>
 
-Q_LOGGING_CATEGORY(qk4Menu, "qk4.menu")
+Q_LOGGING_CATEGORY(qk4Menu, "qk4.menu", QtInfoMsg)
 
 MenuController::MenuController(ConnectionController *connection, SpectrumController *spectrum, QWidget *parentWidget,
                                QObject *parent)

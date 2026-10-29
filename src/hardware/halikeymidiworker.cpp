@@ -4,7 +4,7 @@
 #include <QLoggingCategory>
 #include <QTimer>
 
-Q_LOGGING_CATEGORY(hwMidi, "hw.midi")
+Q_LOGGING_CATEGORY(hwMidi, "hw.midi", QtInfoMsg)
 
 namespace {
 // How often to check the port is still enumerated, and how many consecutive misses count as gone.

@@ -8,8 +8,8 @@
 #include <QSslSocket>
 #include <QTime>
 
-Q_LOGGING_CATEGORY(catTx, "CAT.TX")
-Q_LOGGING_CATEGORY(netTcp, "net.tcp")
+Q_LOGGING_CATEGORY(catTx, "CAT.TX", QtInfoMsg)
+Q_LOGGING_CATEGORY(netTcp, "net.tcp", QtInfoMsg)
 
 // ConnectFailure::Phase mirrors ConnectionState rather than reusing it, so connect_failure.h - and
 // the test that links it alone - stays clear of QSslSocket. These keep the two from drifting.

@@ -11,7 +11,7 @@
 #include <array>
 #include <cmath>
 
-Q_LOGGING_CATEGORY(dspMiniPan, "dsp.minipan")
+Q_LOGGING_CATEGORY(dspMiniPan, "dsp.minipan", QtInfoMsg)
 
 MiniPanRhiWidget::MiniPanRhiWidget(QWidget *parent) : QRhiWidget(parent) {
     setFixedHeight(K4Styles::Dimensions::VfoPanelHeight);

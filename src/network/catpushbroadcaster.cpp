@@ -4,7 +4,7 @@
 
 #include <QLoggingCategory>
 
-Q_LOGGING_CATEGORY(netCatPush, "net.catpush")
+Q_LOGGING_CATEGORY(netCatPush, "net.catpush", QtInfoMsg)
 
 CatPushBroadcaster::CatPushBroadcaster(RadioState *state, QObject *parent) : QObject(parent), m_radioState(state) {
     connect(m_radioState, &RadioState::frequencyChanged, this, &CatPushBroadcaster::onFrequencyChanged);

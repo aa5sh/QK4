@@ -12,7 +12,7 @@
 #include "network/tcpclient.h"
 #include "settings/radiosettings.h"
 
-Q_LOGGING_CATEGORY(cwKeyer, "cw.keyer")
+Q_LOGGING_CATEGORY(cwKeyer, "cw.keyer", QtInfoMsg)
 
 CwController::CwController(RadioState *radioState, ConnectionController *connection, PaddleKeyer *keyer,
                            FunctionLink *link, SidetoneGenerator *sidetone, HalikeyDevice *halikey,

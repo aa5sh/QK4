@@ -7,7 +7,7 @@
 
 #include <QLoggingCategory>
 
-Q_LOGGING_CATEGORY(txOwner, "tx.owner")
+Q_LOGGING_CATEGORY(txOwner, "tx.owner", QtInfoMsg)
 
 // TransmitOwner::AudioSource is declared without including audiocontroller.h, so the arbiter — and
 // the test that links it alone — stays clear of the controller layer. These keep the two from

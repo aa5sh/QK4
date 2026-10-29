@@ -66,7 +66,7 @@
 #include <QShortcut>
 #include <QStyle>
 
-Q_LOGGING_CATEGORY(qk4Main, "qk4.main")
+Q_LOGGING_CATEGORY(qk4Main, "qk4.main", QtInfoMsg)
 
 // ============== MainWindow Implementation ==============
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), m_radioState(new RadioState(this)) {

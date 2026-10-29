@@ -12,7 +12,7 @@
 #include "utils/radioutils.h"
 #include <QLoggingCategory>
 
-Q_LOGGING_CATEGORY(qk4Hardware, "qk4.hardware")
+Q_LOGGING_CATEGORY(qk4Hardware, "qk4.hardware", QtInfoMsg)
 
 namespace {
 // The K4 reports no stuck-key timeout; push this fixed default to the KPOD+.

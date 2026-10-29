@@ -7,7 +7,7 @@
 
 // Transport-level events only - liveness probes and backpressure. What a client actually said
 // belongs to net.tci, which sits above this.
-Q_LOGGING_CATEGORY(netWs, "net.ws")
+Q_LOGGING_CATEGORY(netWs, "net.ws", QtInfoMsg)
 
 namespace {
 

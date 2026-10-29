@@ -9,7 +9,7 @@
 #include <QMessageBox>
 #include <QString>
 
-Q_LOGGING_CATEGORY(qk4Macro, "qk4.macro")
+Q_LOGGING_CATEGORY(qk4Macro, "qk4.macro", QtInfoMsg)
 
 MacroController::MacroController(ConnectionController *connection, PopupManager *popupManager, QWidget *dialogParent,
                                  QObject *parent)

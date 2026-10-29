@@ -13,7 +13,7 @@
 #include <QLoggingCategory>
 #include <QTimer>
 
-Q_LOGGING_CATEGORY(netCat, "net.cat")
+Q_LOGGING_CATEGORY(netCat, "net.cat", QtInfoMsg)
 
 CatServer::CatServer(RadioState *state, QObject *parent)
     : QObject(parent), m_server(new QTcpServer(this)), m_radioState(state) {

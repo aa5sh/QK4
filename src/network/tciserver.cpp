@@ -11,7 +11,7 @@
 #include "network/tciaudioframe.h"
 #include "network/websocketserver.h"
 
-Q_LOGGING_CATEGORY(netTci, "net.tci")
+Q_LOGGING_CATEGORY(netTci, "net.tci", QtInfoMsg)
 
 using namespace TciServerInternal;
 

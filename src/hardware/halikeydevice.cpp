@@ -5,7 +5,7 @@
 #include <QDebug>
 #include <RtMidi.h>
 
-Q_LOGGING_CATEGORY(hwHalikey, "hw.halikey")
+Q_LOGGING_CATEGORY(hwHalikey, "hw.halikey", QtInfoMsg)
 
 HalikeyDevice::HalikeyDevice(int deviceType, QObject *parent)
     : QObject(parent), m_midiSink(std::make_shared<HaliKeyMidiSink>()), m_deviceType(deviceType) {}

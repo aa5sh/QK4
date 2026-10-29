@@ -4,7 +4,7 @@
 #include "utils/macroids.h"
 #include <QLoggingCategory>
 
-Q_LOGGING_CATEGORY(qk4Connection, "qk4.connection")
+Q_LOGGING_CATEGORY(qk4Connection, "qk4.connection", QtInfoMsg)
 
 ConnectionController::ConnectionController(QObject *parent) : QObject(parent), m_tcpClient(new TcpClient(nullptr)) {
     // Move TcpClient (+ Protocol, socket, timers as children) to dedicated I/O thread
